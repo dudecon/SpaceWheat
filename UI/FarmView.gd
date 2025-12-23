@@ -63,11 +63,11 @@ func _ready() -> void:
 		add_child(farm)
 		print("✅ Farm added to scene tree")
 
-		# Use REAL Biome but in static mode (creates quantum states but doesn't evolve them)
-		# This is better than NullBiome which returns null for quantum states
+		# Use REAL Biome with full quantum evolution enabled
+		# Quantum states evolve over time, sun/moon cycles, icons influence growth
 		if farm.biome:
-			farm.biome.is_static = true
-			print("   🌍 Biome set to static mode (quantum states created, no evolution)")
+			farm.biome.is_static = false
+			print("   🌍 Biome enabled with full quantum evolution")
 
 		# Wrap farm with adapter to implement ControlsInterface
 		var AdapterClass = load("res://UI/FarmControlsAdapter.gd")

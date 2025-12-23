@@ -10,6 +10,15 @@ extends Control
 ##
 ## This controller is the ONLY thing that touches both the UI systems and Farm simulation.
 ## It acts as a clean boundary/facade between user interaction and simulation machinery.
+##
+## WIRING PATTERN (Phase 2+):
+## All components declare their farm dependencies via a standardized wire_to_farm(farm) method.
+## FarmUIController calls _wire_components_to_farm() which loops through all components
+## and calls wire_to_farm() on each one. This ensures:
+## - No hidden dependencies (all wiring is explicit)
+## - Consistent initialization order (all components wired before farm is "live")
+## - Self-documenting contracts (component declares what it needs)
+## - Easy debugging (one place to see all component initialization)
 
 # Preload the two subsystems
 const FarmUILayoutManager = preload("res://UI/FarmUILayoutManager.gd")
@@ -95,7 +104,19 @@ func inject_controls(controls_interface: Node) -> void:
 
 
 func inject_farm(farm_ref: Node, faction_mgr: Node = null, vocab_sys: Node = null, conspiracy_net: Node = null) -> void:
-	"""Inject farm and related systems (backward compatibility)"""
+	"""Inject farm and related systems, wire all UI components
+
+	Initialization flow:
+	1. Store farm reference and related systems
+	2. Inject farm into layout_manager (for PlotGridDisplay direct signals)
+	3. Inject UIState if available
+	4. Connect controls_manager signals
+	5. Wire all components via _wire_components_to_farm()
+	   - QuantumForceGraph.wire_to_farm() initializes quantum bubble visualization
+	   - PlotGridDisplay.wire_to_farm() connects to farm signals
+
+	After this returns, all systems are ready and farm is "live".
+	"""
 	farm = farm_ref
 	faction_manager = faction_mgr
 	vocabulary_evolution = vocab_sys
@@ -124,6 +145,9 @@ func inject_farm(farm_ref: Node, faction_mgr: Node = null, vocab_sys: Node = nul
 			layout_manager.plot_grid_display.inject_ui_state(farm_ref.ui_state)
 			print("   📡 UIState injected into PlotGridDisplay")
 
+	# Wire all components to farm (standardized initialization contract)
+	_wire_components_to_farm(farm_ref)
+
 
 func inject_farm_late(farm_ref: Node) -> void:
 	"""Inject farm data after UI is already initialized (via MemoryManager)"""
@@ -150,6 +174,26 @@ func inject_farm_late(farm_ref: Node) -> void:
 			layout_manager.quantum_graph.create_sun_qubit_node()
 
 	print("✅ Farm systems reinitialized")
+
+
+func _wire_components_to_farm(farm_ref: Node) -> void:
+	"""Wire all components using standardized wire_to_farm() interface
+
+	This is the central place where all components are initialized with farm data.
+	Each component declares its dependencies via the wire_to_farm(farm) method.
+	"""
+	if not farm_ref:
+		return
+
+	# Wire QuantumForceGraph (quantum bubble visualization)
+	if layout_manager and layout_manager.quantum_graph and layout_manager.quantum_graph.has_method("wire_to_farm"):
+		layout_manager.quantum_graph.wire_to_farm(farm_ref)
+
+	# Wire PlotGridDisplay (classical plot tiles)
+	if layout_manager and layout_manager.plot_grid_display and layout_manager.plot_grid_display.has_method("wire_to_farm"):
+		layout_manager.plot_grid_display.wire_to_farm(farm_ref)
+
+	print("✅ All components wired to farm")
 
 
 func _wire_multi_select_components() -> void:

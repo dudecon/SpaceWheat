@@ -119,12 +119,16 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float):
 					var angle = TAU * (x / float(grid.grid_width))
 					var distance = graph_radius
 					var screen_pos = center_position + Vector2(cos(angle), sin(angle)) * distance
-					classical_plot_positions[grid_pos] = screen_pos
+
+					# Offset anchor position UPWARD (negative Y) so bubbles float above like balloons
+					# Home position is 2 bubble diameters above the base plot (60 pixels)
+					var home_pos = screen_pos + Vector2(0, -60)
+					classical_plot_positions[grid_pos] = home_pos
 
 		# Create quantum nodes for all plots
 		if classical_plot_positions.size() > 0:
 			create_quantum_nodes(classical_plot_positions)
-			print("⚛️ QuantumForceGraph initialized with %d quantum nodes" % quantum_nodes.size())
+			print("⚛️ QuantumForceGraph initialized with %d quantum nodes (tethered above plots)" % quantum_nodes.size())
 		else:
 			print("⚠️ QuantumForceGraph: No plots found to create quantum nodes")
 
@@ -198,6 +202,32 @@ func set_biome(biome_ref):
 	"""Set reference to Biome for sun_qubit access"""
 	biome = biome_ref
 	print("⚛️ QuantumForceGraph connected to Biome (sun_qubit)")
+
+
+func wire_to_farm(farm: Node) -> void:
+	"""Standard wiring interface for FarmUIController
+
+	This method encapsulates all initialization needed when a farm is injected.
+	Called by FarmUIController during farm injection phase.
+	"""
+	if not farm or not farm.has_meta("grid"):
+		print("⚠️ QuantumForceGraph.wire_to_farm(): farm has no grid metadata")
+		return
+
+	# Calculate visualization parameters
+	var play_rect = get_viewport().get_visible_rect()
+	var center = play_rect.get_center()
+	var radius = play_rect.size.length() * 0.3
+
+	# Initialize quantum graph with farm data
+	initialize(farm.grid, center, radius)
+
+	# Set up biome for sun qubit rendering
+	if farm.has_meta("biome"):
+		set_biome(farm.get_meta("biome"))
+		create_sun_qubit_node()
+
+	print("⚛️ QuantumForceGraph wired to farm")
 
 
 func set_plot_tether_colors(colors: Dictionary):

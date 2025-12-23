@@ -134,6 +134,16 @@ func inject_ui_controller(controller: Node) -> void:
 	print("📡 UI controller injected into PlotGridDisplay")
 
 
+func wire_to_farm(farm_ref: Node) -> void:
+	"""Standard wiring interface for FarmUIController
+
+	This method encapsulates all initialization needed when a farm is injected.
+	Called by FarmUIController during farm injection phase.
+	"""
+	inject_farm(farm_ref)
+	print("📡 PlotGridDisplay wired to farm")
+
+
 func set_selected_plot(pos: Vector2i) -> void:
 	"""Update visual selection to show which plot is selected"""
 	# Clear previous selection
