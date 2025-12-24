@@ -57,7 +57,8 @@ var time_elapsed: float = 0.0
 func _ready():
 	# Seed with initial vocabulary
 	_seed_initial_vocabulary()
-	print("🧬 Vocabulary Evolution initialized with %d seed concepts" % evolving_qubits.size())
+	if VerboseConfig.is_verbose("vocabulary"):
+		print("🧬 Vocabulary Evolution initialized with %d seed concepts" % evolving_qubits.size())
 
 
 func _seed_initial_vocabulary():
@@ -125,7 +126,7 @@ func _maybe_spawn_from_fiber(delta: float):
 		evolving_qubits.append(new_qb)
 		total_spawned += 1
 
-		if DEBUG_MODE:
+		if VerboseConfig.is_verbose("vocabulary"):
 			print("🧬 Spawned: %s ↔ %s (region: %s)" % [new_qb.north_emoji, new_qb.south_emoji, region])
 
 
@@ -212,7 +213,7 @@ func _quantum_cannibalize():
 	if min_purity < cannibalism_threshold:
 		var consumed = evolving_qubits[weakest_index]
 
-		if DEBUG_MODE:
+		if VerboseConfig.is_verbose("vocabulary"):
 			print("🍽️ Cannibalized: %s ↔ %s (purity: %.2f)" % [
 				consumed.north_emoji,
 				consumed.south_emoji,
@@ -248,14 +249,15 @@ func _harvest_mature_concepts():
 
 			discovered_vocabulary.append(discovery)
 
+		if VerboseConfig.is_verbose("vocabulary"):
 			print("✨ DISCOVERED: %s ↔ %s (Berry phase: %.2f)" % [
 				qb.north_emoji,
 				qb.south_emoji,
 				coherence
-			])
+				])
 
-			# Remove from evolution pool (graduated!)
-			evolving_qubits.remove_at(i)
+		# Remove from evolution pool (graduated!)
+		evolving_qubits.remove_at(i)
 
 
 func get_discovered_vocabulary() -> Array[Dictionary]:
@@ -292,8 +294,6 @@ func get_evolution_stats() -> Dictionary:
 	}
 
 
-# Debug
-const DEBUG_MODE = false
 
 func get_debug_info() -> String:
 	return "Vocabulary: %d evolving, %d discovered, %d spawned, %d eaten" % [

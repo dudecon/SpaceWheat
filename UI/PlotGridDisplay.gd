@@ -158,16 +158,18 @@ func inject_farm(farm_ref: Node) -> void:
 	for pos in tiles.keys():
 		update_tile_from_farm(pos)
 
-	# PHASE 4: Connect directly to farm signals (bypass FarmUIState transformation)
-	# CRITICAL: Check if signals are already connected before connecting
-	if farm.has_signal("plot_planted"):
-		if not farm.plot_planted.is_connected(_on_farm_plot_planted):
-			farm.plot_planted.connect(_on_farm_plot_planted)
-			print("   📡 Connected to farm.plot_planted")
-	if farm.has_signal("plot_harvested"):
-		if not farm.plot_harvested.is_connected(_on_farm_plot_harvested):
-			farm.plot_harvested.connect(_on_farm_plot_harvested)
-			print("   📡 Connected to farm.plot_harvested")
+	# PHASE 4: DO NOT connect to farm signals - QuantumForceGraph is now primary visualization
+	# PlotGridDisplay is hidden and replaced by QuantumForceGraph for plot visualization
+	# These connections would create haunted double-updates and conflicts
+	# Keeping this code commented for reference if we ever switch back to classical mode
+	#if farm.has_signal("plot_planted"):
+	#	if not farm.plot_planted.is_connected(_on_farm_plot_planted):
+	#		farm.plot_planted.connect(_on_farm_plot_planted)
+	#		print("   📡 Connected to farm.plot_planted")
+	#if farm.has_signal("plot_harvested"):
+	#	if not farm.plot_harvested.is_connected(_on_farm_plot_harvested):
+	#		farm.plot_harvested.connect(_on_farm_plot_harvested)
+	#		print("   📡 Connected to farm.plot_harvested")
 
 	print("💉 Farm injected into PlotGridDisplay")
 
@@ -181,17 +183,16 @@ func inject_ui_state(ui_state_ref) -> void:  # RefCounted, not Node
 	ui_state = ui_state_ref
 	print("💉 UIState injected into PlotGridDisplay")
 
-	# Connect to UIState signals for reactive updates
-	if ui_state.has_signal("plot_updated"):
-		ui_state.plot_updated.connect(_on_plot_updated)
-		print("   📡 Connected to plot_updated signal")
-
-	if ui_state.has_signal("grid_refreshed"):
-		ui_state.grid_refreshed.connect(_on_grid_refreshed)
-		print("   📡 Connected to grid_refreshed signal")
-
-	# Populate tiles from initial UIState
-	_on_grid_refreshed()
+	# DO NOT connect to UIState signals - QuantumForceGraph is primary visualization
+	# These connections would create haunted double-updates
+	# Commenting for reference if we switch back to classical mode
+	#if ui_state.has_signal("plot_updated"):
+	#	ui_state.plot_updated.connect(_on_plot_updated)
+	#	print("   📡 Connected to plot_updated signal")
+	#if ui_state.has_signal("grid_refreshed"):
+	#	ui_state.grid_refreshed.connect(_on_grid_refreshed)
+	#	print("   📡 Connected to grid_refreshed signal")
+	#_on_grid_refreshed()
 
 
 func inject_ui_controller(controller: Node) -> void:

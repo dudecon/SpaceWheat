@@ -185,7 +185,8 @@ func create_w_state():
 
 	cluster_type = ClusterType.W_STATE
 
-	print("💫 Created %d-qubit W state (robust shared excitation)" % N)
+	if VerboseConfig.is_verbose("quantum"):
+		print("💫 Created %d-qubit W state (robust shared excitation)" % N)
 
 
 func create_cluster_state_1d():
@@ -211,7 +212,8 @@ func create_cluster_state_1d():
 
 	cluster_type = ClusterType.CLUSTER
 
-	print("🌐 Created %d-qubit 1D cluster state (MBQC ready)" % N)
+	if VerboseConfig.is_verbose("quantum"):
+		print("🌐 Created %d-qubit 1D cluster state (MBQC ready)" % N)
 
 
 func _initialize_all_plus():
@@ -264,7 +266,8 @@ func entangle_new_qubit_cnot(new_qubit, new_plot_id: String, control_index: int 
 	# Apply CNOT to create entanglement
 	_apply_cnot_expansion(old_density, old_N, control_index)
 
-	print("🔗 Applied CNOT: control=%d, target=%d (new)" % [control_index, old_N])
+	if VerboseConfig.is_verbose("quantum"):
+		print("🔗 Applied CNOT: control=%d, target=%d" % [control_index, old_N])
 
 
 func _apply_cnot_expansion(old_density: Array, old_N: int, control_bit: int):
@@ -382,8 +385,9 @@ func measure_qubit(qubit_index: int) -> int:
 	# Collapse state
 	_collapse_to_outcome(qubit_index, outcome)
 
-	print("📊 Measured qubit %d: %d (p₀=%.2f, p₁=%.2f)" %
-	      [qubit_index, outcome, prob_0, prob_1])
+	if VerboseConfig.is_verbose("quantum"):
+		print("📊 Measured qubit %d: %d (p₀=%.2f, p₁=%.2f)" %
+		      [qubit_index, outcome, prob_0, prob_1])
 
 	return outcome
 

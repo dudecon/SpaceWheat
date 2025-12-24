@@ -160,18 +160,31 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float):
 			var biome_config = biome_obj.get_visual_config()
 			var biome_center = center_position + biome_config.center_offset * graph_radius
 
+			# CRITICAL: Only create nodes for PLANTED plots (have quantum_state)
+			# This prevents the "haunted empty bubbles" of unplanted plots
+			var planted_plots = []
+			for grid_pos in plots_by_biome[biome_name]:
+				var plot = farm_grid.get_plot(grid_pos) if farm_grid else null
+				if plot and plot.quantum_state:
+					planted_plots.append(grid_pos)
+
 			# Get parametric ring positions from biome (with viewport scaling for consistency)
 			var plot_positions = biome_obj.get_plot_positions_in_oval(
-				plots_by_biome[biome_name].size(),
+				planted_plots.size(),
 				biome_center,
 				viewport_scale
 			)
 
-			print("🔵 Biome '%s': %d plots → %d positions" % [biome_name, plots_by_biome[biome_name].size(), plot_positions.size()])
+			print("🔵 Biome '%s': %d plots → %d planted → %d positions" % [
+				biome_name,
+				plots_by_biome[biome_name].size(),
+				planted_plots.size(),
+				plot_positions.size()
+			])
 
-			# Assign positions to plots (in grid order for consistency)
+			# Assign positions to PLANTED plots only (in grid order for consistency)
 			var plot_idx = 0
-			for grid_pos in plots_by_biome[biome_name]:
+			for grid_pos in planted_plots:
 				if plot_idx < plot_positions.size():
 					var screen_pos = plot_positions[plot_idx]
 

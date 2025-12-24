@@ -63,7 +63,8 @@ func create_bell_phi_plus():
 	density_matrix[3][0] = Vector2(half, 0.0)  # ⟨11|Φ+⟩⟨Φ+|00⟩
 	density_matrix[3][3] = Vector2(half, 0.0)  # ⟨11|Φ+⟩⟨Φ+|11⟩
 
-	print("🔗 Created Bell state |Φ+⟩ for %s ↔ %s" % [qubit_a_id, qubit_b_id])
+	if VerboseConfig.is_verbose("quantum"):
+		print("🔗 Created Bell state |Φ+⟩ for %s ↔ %s" % [qubit_a_id, qubit_b_id])
 
 
 func create_bell_phi_minus():
@@ -80,7 +81,8 @@ func create_bell_phi_minus():
 	density_matrix[3][0] = Vector2(-half, 0.0)
 	density_matrix[3][3] = Vector2(half, 0.0)
 
-	print("🔗 Created Bell state |Φ-⟩ for %s ↔ %s" % [qubit_a_id, qubit_b_id])
+	if VerboseConfig.is_verbose("quantum"):
+		print("🔗 Created Bell state |Φ-⟩ for %s ↔ %s" % [qubit_a_id, qubit_b_id])
 
 
 func create_bell_psi_plus():
@@ -96,7 +98,8 @@ func create_bell_psi_plus():
 	density_matrix[2][1] = Vector2(half, 0.0)  # |10⟩⟨01|
 	density_matrix[2][2] = Vector2(half, 0.0)  # |10⟩⟨10|
 
-	print("🔗 Created Bell state |Ψ+⟩ for %s ↔ %s" % [qubit_a_id, qubit_b_id])
+	if VerboseConfig.is_verbose("quantum"):
+		print("🔗 Created Bell state |Ψ+⟩ for %s ↔ %s" % [qubit_a_id, qubit_b_id])
 
 
 func create_bell_psi_minus():
@@ -113,7 +116,8 @@ func create_bell_psi_minus():
 	density_matrix[2][1] = Vector2(-half, 0.0)
 	density_matrix[2][2] = Vector2(half, 0.0)
 
-	print("🔗 Created Bell state |Ψ-⟩ for %s ↔ %s" % [qubit_a_id, qubit_b_id])
+	if VerboseConfig.is_verbose("quantum"):
+		print("🔗 Created Bell state |Ψ-⟩ for %s ↔ %s" % [qubit_a_id, qubit_b_id])
 
 
 func _clear_matrix():
@@ -150,7 +154,8 @@ func measure_qubit_a() -> String:
 	# Collapse full state based on measurement
 	_collapse_qubit_a(result)
 
-	print("📏 Measured qubit A: %s (P=%.2f)" % [result_emoji, prob_north if result_north else (1.0 - prob_north)])
+	if VerboseConfig.is_verbose("quantum"):
+		print("📏 Measured qubit A: %s (P=%.2f)" % [result_emoji, prob_north if result_north else (1.0 - prob_north)])
 
 	return result_emoji
 
@@ -169,7 +174,8 @@ func measure_qubit_b() -> String:
 
 	_collapse_qubit_b(result)
 
-	print("📏 Measured qubit B: %s (P=%.2f)" % [result_emoji, prob_north if result_north else (1.0 - prob_north)])
+	if VerboseConfig.is_verbose("quantum"):
+		print("📏 Measured qubit B: %s (P=%.2f)" % [result_emoji, prob_north if result_north else (1.0 - prob_north)])
 
 	return result_emoji
 
@@ -204,7 +210,8 @@ func measure_both() -> Dictionary:
 	# Collapse to product state
 	_collapse_to_product_state(a_result, b_result)
 
-	print("📏 Measured both: A=%s, B=%s" % [a_emoji, b_emoji])
+	if VerboseConfig.is_verbose("quantum"):
+		print("📏 Measured both: A=%s, B=%s" % [a_emoji, b_emoji])
 
 	return {"a": a_emoji, "b": b_emoji}
 
