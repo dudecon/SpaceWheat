@@ -211,8 +211,14 @@ func _create_menu_button(text: String, color: Color) -> Button:
 func _input(event):
 	"""Handle keyboard navigation - CONSUME ALL INPUT when menu is visible"""
 	# If menu is visible, consume ALL input to prevent other handlers from seeing it
-	if visible and event is InputEventKey and event.pressed and not event.echo:
-		# First, handle specific keys
+	if not visible:
+		return
+
+	# CRITICAL: Consume ALL input events (KeyEventKey, InputEventAction, etc.)
+	# This prevents InputController and other handlers from seeing any input
+	# when SaveLoadMenu is open
+	if event is InputEventKey and event.pressed and not event.echo:
+		# Handle raw key events
 		match event.keycode:
 			# Arrow keys: Navigate between slots and debug environments
 			KEY_UP:
@@ -250,8 +256,13 @@ func _input(event):
 				get_viewport().set_input_as_handled()
 				return
 
-		# CRITICAL: For ANY other key press when menu is visible, consume it
-		# This prevents InputController from handling ESC and opening pause menu
+		# For any other key event, consume it (prevents unmapped keys from bubbling)
+		get_viewport().set_input_as_handled()
+
+	elif event is InputEventAction and event.pressed:
+		# CRITICAL: Also consume InputEventAction events (for mapped actions like Q, E, R, etc.)
+		# This prevents InputController from handling quit, restart, etc.
+		print("🔒 SaveLoadMenu blocking action: " + event.action)
 		get_viewport().set_input_as_handled()
 
 
