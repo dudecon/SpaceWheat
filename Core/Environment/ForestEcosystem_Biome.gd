@@ -106,7 +106,7 @@ func _ready():
 	# Configure visual properties for QuantumForceGraph
 	visual_color = Color(0.3, 0.7, 0.3, 0.3)  # Green
 	visual_label = "🌲 Forest"
-	visual_center_offset = Vector2(0.8, -0.7)   # Far edge - suggests bigger scope
+	visual_center_offset = Vector2(0.2, -0.5)   # UPPER-CENTER (moved to upper area)
 	visual_oval_width = 350.0   # Larger oval
 	visual_oval_height = 216.0  # Golden ratio: 350/1.618
 

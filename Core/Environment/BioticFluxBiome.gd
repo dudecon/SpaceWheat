@@ -96,7 +96,7 @@ func _ready():
 	# Configure visual properties for QuantumForceGraph
 	visual_color = Color(0.4, 0.6, 0.8, 0.3)  # Blue
 	visual_label = "🌿 Biotic Flux"
-	visual_center_offset = Vector2(0, 0)       # CENTER - primary biome
+	visual_center_offset = Vector2(0, 0.5)    # BOTTOM-CENTER (moved down from center)
 	visual_oval_width = 450.0   # Larger oval (increased from 350)
 	visual_oval_height = 278.0  # Golden ratio: 450/1.618
 
