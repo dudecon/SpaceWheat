@@ -143,20 +143,39 @@ func _plant_varied_mushrooms() -> void:
 
 
 func _get_plot_positions() -> Dictionary:
-	"""Get screen positions for each plot (grid layout)"""
+	"""Get screen positions for all qubits scattered randomly on screen"""
 	var positions = {}
-	var spacing = 80.0
-	# Use fixed viewport size if can't get actual size
+
+	# Get actual window size or use fallback
+	# Use a reasonable default for headless mode (typically 64×64)
 	var viewport_size = Vector2(1920, 1080)
-	var center = viewport_size / 2.0
+	if get_window():
+		var actual = get_window().get_size()
+		# Only use if it's a reasonable size (not headless 64×64)
+		if actual.x > 200 and actual.y > 200:
+			viewport_size = actual
 
-	# Position wheat
+	# Margin from edges (pixels)
+	var margin = 100.0
+	var valid_width = viewport_size.x - (margin * 2)
+	var valid_height = viewport_size.y - (margin * 2)
+
+	print("   Screen resolution: %.0f × %.0f" % [viewport_size.x, viewport_size.y])
+
+	# Scatter sun at top-center
+	positions[Vector2i(0, 0)] = Vector2(viewport_size.x / 2.0, margin + 50)
+
+	# Scatter wheat randomly
 	for pos in wheat_positions:
-		positions[pos] = center + Vector2(pos.x * spacing, pos.y * spacing)
+		var random_x = margin + randf() * valid_width
+		var random_y = margin + randf() * valid_height
+		positions[pos] = Vector2(random_x, random_y)
 
-	# Position mushrooms
+	# Scatter mushrooms randomly
 	for pos in mushroom_positions:
-		positions[pos] = center + Vector2(pos.x * spacing, pos.y * spacing)
+		var random_x = margin + randf() * valid_width
+		var random_y = margin + randf() * valid_height
+		positions[pos] = Vector2(random_x, random_y)
 
 	return positions
 

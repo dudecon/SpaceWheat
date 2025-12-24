@@ -16,16 +16,15 @@ const ToolSelectionRow = preload("res://UI/Panels/ToolSelectionRow.gd")
 const ActionPreviewRow = preload("res://UI/Panels/ActionPreviewRow.gd")
 const ResourcePanel = preload("res://UI/Panels/ResourcePanel.gd")
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
-const QuantumVisualizationController = preload("res://Core/Visualization/QuantumVisualizationController.gd")
 
 var farm: Node
 var grid_config: GridConfig
-var plot_grid_display: PlotGridDisplay
-var input_handler: FarmInputHandler
-var tool_selection_row: ToolSelectionRow
-var action_preview_row: ActionPreviewRow
-var resource_panel: ResourcePanel
-var quantum_visualization: QuantumVisualizationController
+var plot_grid_display = null  # From scene
+var input_handler = null  # Created dynamically
+var tool_selection_row = null  # From scene
+var action_preview_row = null  # From scene
+var resource_panel = null  # From scene
+var quantum_visualization = null  # Optional - only if needed later
 var current_tool: int = 1
 
 
@@ -63,13 +62,13 @@ func setup_farm(farm_ref: Node) -> void:
 			plot_grid_display.inject_biomes(farm.grid.biomes)
 		print("   ✅ PlotGridDisplay wired to farm")
 
-	# Wire QuantumVisualization to biomes
-	if farm and farm.grid and farm.grid.biomes and quantum_visualization:
-		for biome_name in farm.grid.biomes.keys():
-			var biome = farm.grid.biomes[biome_name]
-			quantum_visualization.connect_to_biome(biome, {})
-			print("   ✅ Quantum visualization connected to biome: %s" % biome_name)
-			break
+	# Quantum visualization optional - skip for now
+	# TODO: Wire QuantumVisualization to biomes when needed
+	#if farm and farm.grid and farm.grid.biomes and quantum_visualization:
+	#	for biome_name in farm.grid.biomes.keys():
+	#		var biome = farm.grid.biomes[biome_name]
+	#		quantum_visualization.connect_to_biome(biome, {})
+	#		break
 
 	# Wire tool selection
 	if tool_selection_row:

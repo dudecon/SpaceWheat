@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://cdxfwm3p04laq"]
+[gd_scene load_steps=6 format=3 uid="uid://cdxfwm3p04laq"]
 
 [ext_resource type="Script" path="res://UI/FarmUI.gd" id="1_farmui"]
+[ext_resource type="Script" path="res://UI/Panels/ResourcePanel.gd" id="2_resourcepanel"]
+[ext_resource type="Script" path="res://UI/PlotGridDisplay.gd" id="3_plotgrid"]
+[ext_resource type="Script" path="res://UI/Panels/ToolSelectionRow.gd" id="4_toolrow"]
+[ext_resource type="Script" path="res://UI/Panels/ActionPreviewRow.gd" id="5_actionrow"]
 
 [node name="FarmUI" type="Control"]
 layout_mode = 2
@@ -18,13 +22,25 @@ offset_right = 0.0
 offset_bottom = 0.0
 separation = 0
 
-[node name="ResourcePanel" type="Control" parent="MainContainer"]
+[node name="ResourcePanel" type="HBoxContainer" parent="MainContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 50)
+script = ExtResource("2_resourcepanel")
 
 [node name="PlotGridDisplay" type="Control" parent="MainContainer"]
 layout_mode = 2
 size_flags_vertical = 3
+script = ExtResource("3_plotgrid")
+
+[node name="ToolSelectionRow" type="HBoxContainer" parent="MainContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 60)
+script = ExtResource("4_toolrow")
+
+[node name="ActionPreviewRow" type="HBoxContainer" parent="MainContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)
+script = ExtResource("5_actionrow")
 
 [node name="QuantumVisualizationController" type="Control" parent="."]
 layout_mode = 1
@@ -37,11 +53,3 @@ offset_top = 0.0
 offset_right = 0.0
 offset_bottom = 0.0
 z_index = 1
-
-[node name="ToolSelectionRow" type="Control" parent="MainContainer"]
-layout_mode = 2
-custom_minimum_size = Vector2(0, 60)
-
-[node name="ActionPreviewRow" type="Control" parent="MainContainer"]
-layout_mode = 2
-custom_minimum_size = Vector2(0, 80)

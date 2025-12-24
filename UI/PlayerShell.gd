@@ -29,7 +29,6 @@ func _ready() -> void:
 	# Create overlay manager and add to overlay layer
 	overlay_manager = OverlayManager.new()
 	overlay_layer.add_child(overlay_manager)
-	overlay_manager.initialize()
 
 	print("   ✅ Overlay manager created")
 	print("✅ PlayerShell ready")
