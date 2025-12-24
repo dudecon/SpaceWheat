@@ -218,7 +218,7 @@ func render_biome_content(graph: Node2D, center: Vector2, radius: float) -> void
 	pass  # Subclasses override to add custom drawing
 
 
-func get_plot_positions_in_oval(plot_count: int, center: Vector2) -> Array[Vector2]:
+func get_plot_positions_in_oval(plot_count: int, center: Vector2, viewport_scale: float = 1.0) -> Array[Vector2]:
 	"""Calculate parametric ring pattern positions for plots within this biome's oval
 
 	Returns Array[Vector2] of screen positions arranged in concentric oval rings.
@@ -227,6 +227,7 @@ func get_plot_positions_in_oval(plot_count: int, center: Vector2) -> Array[Vecto
 	Args:
 		plot_count: Number of plots to position
 		center: Center point of the biome oval
+		viewport_scale: Scale factor based on graph_radius (default 1.0 for no scaling)
 
 	Returns: Array of screen positions for each plot
 	"""
@@ -234,6 +235,10 @@ func get_plot_positions_in_oval(plot_count: int, center: Vector2) -> Array[Vecto
 
 	if plot_count == 0:
 		return positions
+
+	# Apply viewport scaling to oval dimensions for consistency with rendering
+	var scaled_oval_width = visual_oval_width * viewport_scale
+	var scaled_oval_height = visual_oval_height * viewport_scale
 
 	# Calculate number of rings needed (inner to outer)
 	# Rule: innermost ring has 1-3 plots, each ring adds ~6 plots
@@ -254,10 +259,11 @@ func get_plot_positions_in_oval(plot_count: int, center: Vector2) -> Array[Vecto
 		var scale = 0.3 + (0.6 * float(ring_idx) / float(max(1, rings - 1)))
 
 		# Parametric oval equation: x = a*cos(t), y = b*sin(t)
+		# Uses SCALED oval dimensions for consistency with rendering
 		for plot_in_ring in range(num_plots):
 			var t = (float(plot_in_ring) / float(num_plots)) * TAU
-			var x = center.x + visual_oval_width * cos(t) * scale
-			var y = center.y + visual_oval_height * sin(t) * scale
+			var x = center.x + scaled_oval_width * cos(t) * scale
+			var y = center.y + scaled_oval_height * sin(t) * scale
 			positions.append(Vector2(x, y))
 
 		ring_idx += 1

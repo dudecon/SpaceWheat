@@ -114,11 +114,15 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float):
 		# Build classical plot positions dictionary from grid
 		var classical_plot_positions: Dictionary = {}
 
+		# Calculate viewport scaling factor for consistent oval sizing
+		# graph_radius of 300 is "normal" - scale proportionally for other sizes
+		var viewport_scale = graph_radius / 300.0
+
 		# Group plots by biome for parametric ring distribution
 		var plots_by_biome: Dictionary = {}  # biome_name -> Array[Vector2i]
 
 		# First pass: group all plots by their assigned biome
-		print("🔍 Grouping plots by biome (grid size: %dx%d)" % [grid.grid_width, grid.grid_height])
+		print("🔍 Grouping plots by biome (grid size: %dx%d, scale=%.2f)" % [grid.grid_width, grid.grid_height, viewport_scale])
 		print("   plot_biome_assignments has %d entries" % grid.plot_biome_assignments.size())
 
 		for y in range(grid.grid_height):
@@ -156,10 +160,11 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float):
 			var biome_config = biome_obj.get_visual_config()
 			var biome_center = center_position + biome_config.center_offset * graph_radius
 
-			# Get parametric ring positions from biome
+			# Get parametric ring positions from biome (with viewport scaling for consistency)
 			var plot_positions = biome_obj.get_plot_positions_in_oval(
 				plots_by_biome[biome_name].size(),
-				biome_center
+				biome_center,
+				viewport_scale
 			)
 
 			print("🔵 Biome '%s': %d plots → %d positions" % [biome_name, plots_by_biome[biome_name].size(), plot_positions.size()])

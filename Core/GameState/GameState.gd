@@ -26,15 +26,16 @@ extends Resource
 @export var grid_width: int = 6
 @export var grid_height: int = 1
 
-## Economy - All resource inventories
-@export var credits: int = 20
-@export var wheat_inventory: int = 0
-@export var labor_inventory: int = 0  # 👥 Labor/people resource
-@export var flour_inventory: int = 0
-@export var flower_inventory: int = 0  # 🌻 Flower resource
-@export var mushroom_inventory: int = 0  # 🍄 Lunar harvest
-@export var detritus_inventory: int = 0  # 🌱 Compost resource
-@export var imperium_resource: int = 0  # 🏰 Imperial currency
+## Quantum Energy Economy - All resources are emoji-quantum currencies
+## Starting with minimal amounts forces strategic gameplay
+@export var wheat_inventory: int = 2          # 🌾 Quantum energy (primary harvest)
+@export var labor_inventory: int = 1          # 👥 Quantum energy (labor/people)
+@export var flour_inventory: int = 0          # 🍞 Quantum energy (processed grain)
+@export var flower_inventory: int = 0         # 🌻 Quantum energy (rare yields)
+@export var mushroom_inventory: int = 1       # 🍄 Quantum energy (nocturnal)
+@export var detritus_inventory: int = 1       # 🍂 Quantum energy (compost)
+@export var imperium_resource: int = 0        # 👑 Quantum energy (imperial influence)
+@export var credits: int = 1                  # 💰 Quantum energy (exchange medium)
 @export var tributes_paid: int = 0
 @export var tributes_failed: int = 0
 

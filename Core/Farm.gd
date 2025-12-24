@@ -63,12 +63,16 @@ const BUILD_CONFIGS = {
 		"south_emoji": "🍂"
 	},
 	"mill": {
-		"cost": {"wheat": 10},
+		"cost": {"wheat": 3},
 		"type": "build"
+		# Reduced from 10 → 3 wheat to match new scarcity economy
+		# Achievable in ~2 harvest cycles with base yields of 2 wheat
 	},
 	"market": {
-		"cost": {"wheat": 10},
+		"cost": {"wheat": 3},
 		"type": "build"
+		# Reduced from 10 → 3 wheat to match new scarcity economy
+		# Achievable in ~2 harvest cycles with base yields of 2 wheat
 	}
 }
 

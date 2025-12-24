@@ -1,34 +1,36 @@
 class_name FarmEconomy
 extends Node
 
-## Farm Economy Singleton
-## Manages wheat currency, inventory, and byproducts
+## Farm Economy Singleton - Quantum Energy Currency System
+## ALL resources are "units of quantum energy" tied to emoji states
+## Starting with minimal resources forces strategic gameplay
 
-signal wheat_changed(new_amount: int)
-signal labor_changed(new_amount: int)  # 👥 Labor/people resource
-signal flour_changed(new_amount: int)
-signal flower_changed(new_amount: int)  # 🌻 Flower resource
-signal imperium_changed(new_amount: int)
+signal wheat_changed(new_amount: int)          # 🌾 Quantum energy (wheat state)
+signal labor_changed(new_amount: int)          # 👥 Quantum energy (labor/people)
+signal flour_changed(new_amount: int)          # 🍞 Quantum energy (processed grain)
+signal flower_changed(new_amount: int)         # 🌻 Quantum energy (flowers)
+signal imperium_changed(new_amount: int)       # 👑 Quantum energy (order/structure)
+signal credits_changed(new_amount: int)        # 💰 Quantum energy (exchange/value)
+signal mushroom_changed(new_amount: int)       # 🍄 Quantum energy (fungi)
+signal detritus_changed(new_amount: int)       # 🍂 Quantum energy (decay)
 signal purchase_failed(reason: String)
-signal flour_processed(wheat_used: int, flour_gained: int)
-signal mushroom_changed(new_amount: int)
-signal detritus_changed(new_amount: int)
-signal emoji_resource_changed(emoji: String, new_amount: int)  # Dynamic emoji resources
-signal credits_changed(new_amount: int)  # Classical resource currency
-signal flour_sold(flour_amount: int, credits_earned: int)  # Market transaction
+signal flour_processed(wheat_amount: int, flour_produced: int)  # Mill processing event
+signal flour_sold(flour_amount: int, credits_received: int)     # Flour sale event
+signal emoji_resource_changed(emoji: String, new_amount: int)   # Generic emoji resource change
 
-# Economy state - Quantum Resources (from harvest)
-var wheat_inventory: int = 100  # Starting wheat (primary currency in wheat-based economy)
-var labor_inventory: int = 0  # 👥 Labor/people resource (from measuring 👥 state)
-var flour_inventory: int = 0  # 💨 Processed wheat (mill output)
-var flower_inventory: int = 0  # 🌻 Flower resource
-var mushroom_inventory: int = 0  # 🍄 Mushroom resource (from moon phase harvest)
-var detritus_inventory: int = 0  # 🍂 Detritus (mushroom byproduct, compost)
-var imperium_resource: int = 0  # 🏰 Influence with the Imperium
-var emoji_resources: Dictionary = {}  # Dynamic emoji resources (emoji -> amount)
+# Quantum Energy Currency System - Each emoji represents one type of quantum energy
+# Starting with VERY LITTLE forces strategic choices and makes growth meaningful
+var wheat_inventory: int = 2          # 🌾 Quantum energy (primary harvest)
+var labor_inventory: int = 1          # 👥 Quantum energy (from 👥 measurements)
+var flour_inventory: int = 0          # 🍞 Quantum energy (from mill processing)
+var flower_inventory: int = 0         # 🌻 Quantum energy (rare yields)
+var mushroom_inventory: int = 1       # 🍄 Quantum energy (nocturnal growth)
+var detritus_inventory: int = 1       # 🍂 Quantum energy (compost/decay)
+var imperium_resource: int = 0        # 👑 Quantum energy (imperial influence)
+var credits: int = 1                  # 💰 Quantum energy (exchange medium, very scarce)
 
-# Economy state - Classical Resources (from production chain)
-var credits: int = 50  # Starting classical credits (from mill + market)
+# Generic emoji resources dictionary (for extensible resource system)
+var emoji_resources: Dictionary = {}  # Map emoji strings to integer quantities
 
 # Stats
 var total_wheat_harvested: int = 0  # For contract tracking
@@ -38,9 +40,9 @@ var imperium_icon = null  # Set by FarmView or whoever manages Icons
 
 
 func _ready():
-	print("🌾 Farm Economy initialized")
-	print("  Quantum resources - Wheat: %d (harvest currency)" % wheat_inventory)
-	print("  Classical resources - Credits: %d (processed currency)" % credits)
+	print("⚛️  Quantum Energy Economy initialized - All resources are emoji-quantum currencies")
+	print("  🌾 Wheat: %d | 👥 Labor: %d | 🍄 Mushroom: %d | 🍂 Detritus: %d" % [wheat_inventory, labor_inventory, mushroom_inventory, detritus_inventory])
+	print("  💰 Credits: %d (exchange medium) | Starting minimal to force strategic growth" % credits)
 
 
 ## Wheat Management (Primary Currency)

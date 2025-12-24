@@ -72,8 +72,10 @@ func harvest_wheat() -> Dictionary:
 	has_been_measured = true
 	theta_frozen = true
 
-	# Base yield for wheat
-	var base_yield = 1
+	# Base yield for wheat (quantum energy units)
+	# QUANTUM ECONOMY: Starting with 2 wheat, need 2x yield to sustain growth
+	# With this yield (2), players can: plant 2 → harvest 4 → build mill (cost 3) in 2 cycles
+	var base_yield = 2
 
 	# Wheat-specific bonuses
 	var bonus = 0.0
