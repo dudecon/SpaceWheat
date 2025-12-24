@@ -24,13 +24,18 @@ var test_farm: Node = null  # For test mode access
 ## INITIALIZATION
 
 func _ready() -> void:
-	"""Initialize FarmView by creating and configuring the UI controller"""
+	"""Initialize FarmView by creating and configuring the UI controller
+
+	REFACTORING: "Ready Means Ready" principle
+	When this function returns, everything is fully initialized and ready to use.
+	No async gaps, no deferred setup, no waiting for injections.
+	"""
 	print("🎮 FarmView initializing...")
 
 	# Set anchors first to avoid Godot warnings about anchor/size conflicts
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
-	# Then size FarmView to match viewport
+	# Size FarmView to match viewport
 	var viewport_size = get_viewport().get_visible_rect().size
 	size = viewport_size
 	position = Vector2.ZERO
@@ -38,68 +43,49 @@ func _ready() -> void:
 
 	print("📐 FarmView sized to viewport: %s" % size)
 
-	# Create the orchestration layer
+	# ═════════════════════════════════════════════════════════════════════════════
+	# STEP 1: Create Farm FIRST (synchronously)
+	# ═════════════════════════════════════════════════════════════════════════════
+	var farm: Node
+
+	if has_meta("farm"):
+		# Farm provided by GameController
+		farm = get_meta("farm")
+		test_farm = farm
+		print("✅ Farm provided by GameController")
+	else:
+		# No farm provided - create default synchronously (not via call_deferred!)
+		print("📝 Creating default farm (6x2 grid)...")
+		farm = FarmBuilder.create_default_farm()
+		test_farm = farm
+
+	# Add farm to scene tree
+	# This triggers Farm._ready(), which validates grid_config
+	add_child(farm)
+	print("   ✅ Farm added to scene tree, _ready() called")
+
+	# ═════════════════════════════════════════════════════════════════════════════
+	# STEP 2: Create UI controller
+	# ═════════════════════════════════════════════════════════════════════════════
 	ui_controller = FarmUIController.new()
 	add_child(ui_controller)
-	# UI controller should fill FarmView (set after adding to tree)
 	ui_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
+	print("   ✅ UI controller created and added")
 
-	# Inject dependencies (farm and systems created by GameController)
-	if has_meta("farm"):
-		var farm = get_meta("farm")
-		test_farm = farm
-		var faction_manager = get_meta("faction_manager") if has_meta("faction_manager") else null
-		var vocabulary_system = get_meta("vocabulary_system") if has_meta("vocabulary_system") else null
-		var conspiracy_network = get_meta("conspiracy_network") if has_meta("conspiracy_network") else null
-
+	# ═════════════════════════════════════════════════════════════════════════════
+	# STEP 3: Wire everything together
+	# By this point, Farm is fully initialized and all UI components are created
+	# ═════════════════════════════════════════════════════════════════════════════
+	if has_meta("faction_manager"):
+		var faction_manager = get_meta("faction_manager")
+		var vocabulary_system = get_meta("vocabulary_system")
+		var conspiracy_network = get_meta("conspiracy_network")
 		ui_controller.inject_farm(farm, faction_manager, vocabulary_system, conspiracy_network)
 	else:
-		# No farm provided - create a default simple farm for testing
-		print("📝 No farm provided - creating default UIOP farm (6x1)...")
+		ui_controller.inject_farm(farm)
 
-		# Use call_deferred to ensure FarmView is ready before initializing farm
-		call_deferred("_initialize_default_farm")
+	print("✅ FarmView initialization complete - all systems ready")
 
-	# UI controller will initialize everything in its _ready()
-	print("✅ FarmView ready - delegating to FarmUIController")
-
-
-func _initialize_default_farm() -> void:
-	"""Initialize the default farm after FarmView is fully ready"""
-	var farm = Farm.new()
-	test_farm = farm
-
-	# Add farm to scene tree (needed for _ready() to be called)
-	add_child(farm)
-	print("✅ Farm added to scene tree")
-
-	# Wait for farm._ready() to complete by waiting for a process frame
-	# _ready() is called during add_child(), completes in this frame
-	await get_tree().process_frame
-	print("   ✅ Farm _ready() completed - grid is now initialized")
-
-	# Biomes are automatically initialized when farm._ready() is called
-	# Quantum states evolve over time, sun/moon cycles, icons influence growth
-	print("   🌍 Biomes initialized with full quantum evolution")
-
-	# Wrap farm with adapter to implement ControlsInterface
-	var AdapterClass = load("res://UI/FarmControlsAdapter.gd")
-	var controls = AdapterClass.new(farm)
-
-	# Bridge signals immediately after creation
-	controls.bridge_farm_signals()
-
-	# Inject into UI controller - BOTH the adapter AND the farm
-	# CRITICAL: Now farm.grid is guaranteed to be initialized
-	ui_controller.inject_controls(controls)
-	ui_controller.inject_farm(farm)  # This triggers signal connections in controls_manager
-
-	print("✅ Default farm created with FarmControlsAdapter")
-
-	# Check if auto-play test mode is enabled
-	if OS.get_environment("GODOT_TEST_AUTOPLAY") == "1":
-		print("\n🎬 AUTO-PLAY TEST MODE DETECTED - Starting automatic demo...")
-		call_deferred("_run_autoplay_test")
 
 
 ## VIEWPORT HANDLING
