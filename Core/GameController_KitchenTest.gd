@@ -117,7 +117,7 @@ func _phase_3_measure_harvest():
 			var yield_amount = harvest_result.get("yield", 0)
 			print("  ✓ Harvested %s: %d units" % [pos, yield_amount])
 
-	print("  🌾 Wheat: %d" % farm.economy.wheat)
+	print("  🌾 Wheat: %d" % farm.economy.wheat_inventory)
 	await get_tree().create_timer(0.5).timeout
 
 
@@ -125,7 +125,7 @@ func _phase_4_mill():
 	print("\n🏭 PHASE 4: Mill wheat")
 	var farm = get_node("/root/FarmView/Farm")
 
-	if farm.economy.wheat >= 10:
+	if farm.economy.wheat_inventory >= 10:
 		var result = farm.do_action("mill", {"wheat_amount": 10})
 		if result.get("success", false):
 			var flour = result.get("flour_produced", 0)
@@ -149,6 +149,6 @@ func _phase_5_market():
 
 	print("  Final state:")
 	print("    💰 Credits: %d" % farm.economy.credits)
-	print("    🌾 Wheat: %d" % farm.economy.wheat)
+	print("    🌾 Wheat: %d" % farm.economy.wheat_inventory)
 	print("    🌻 Flour: %d" % farm.economy.flour)
 	await get_tree().create_timer(0.5).timeout

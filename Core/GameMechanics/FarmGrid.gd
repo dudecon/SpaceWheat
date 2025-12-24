@@ -558,9 +558,6 @@ func harvest_wheat(position: Vector2i) -> Dictionary:
 	if yield_data["success"]:
 		total_wheat_harvested += yield_data["yield"]
 
-		# Add wheat to economy inventory
-		if farm_economy:
-			farm_economy.record_harvest(yield_data["yield"])
 
 		plot_harvested.emit(position, yield_data)
 
@@ -600,9 +597,6 @@ func harvest_energy_tap(position: Vector2i) -> Dictionary:
 	# Reset accumulator (keep fractional part for next accumulation)
 	plot.tap_accumulated_resource = accumulated - resource_amount
 
-	# Optional: Add to economy if available
-	if farm_economy and resource_amount > 0:
-		farm_economy.record_harvest(resource_amount)
 
 	plot_harvested.emit(position, {
 		"success": true,

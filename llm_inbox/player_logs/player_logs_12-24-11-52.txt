@@ -1,0 +1,162 @@
+🛠️  ToolSelectionRow initialized with 6 tools - beveled touch-friendly buttons
+⚡ ActionPreviewRow updated for Tool 1: Grower
+   ✅ ToolSelectionRow created
+⌨️  FarmInputHandler initialized (Tool Mode System)
+
+============================================================
+⌨️  FARM KEYBOARD CONTROLS (Tool Mode System)
+============================================================
+
+🛠️  TOOL SELECTION (Numbers 1-4):
+  1 = Grower
+  2 = Quantum
+  3 = Industry
+  4 = Energy
+
+⚡ ACTIONS (Q/E/R - Context-sensitive):
+  Current Tool: Grower
+  Q = Plant (wheat/mushroom/tomato)
+  E = Entangle (Bell φ+)
+  R = Measure + Harvest
+
+📍 MULTI-SELECT PLOTS (NEW):
+  T/Y/U/I/O/P = Toggle checkbox on plots 1-6
+  [ = Deselect all plots
+  ] = Restore previous selection state
+  Q/E/R = Apply current tool action to ALL selected plots
+
+🎮 MOVEMENT (Legacy - for focus/cursor):
+  WASD = Move cursor (up/left/down/right)
+
+📋 DEBUG:
+  ? = Show this help
+  I = Toggle info panel
+============================================================
+
+💉 GridConfig injected into FarmInputHandler (6x2 grid)
+   📡 Connected to input_handler.tool_changed
+   📡 Connected to plot selection changes
+✅ FarmUI ready
+   ✅ FarmUI created and added
+✅ FarmView ready - game started!
+🌍 BioticFlux | Temp: 398K | ☀️8.3° | 🌾0.0° | Energy: 1.0 | Qubits: 1
+✅ Input processing enabled (UI ready)
+   📊 PlotGridDisplay has 10 tiles ready
+⌨️  Toggle plot (3, 1)
+☑️  Plot (3, 1) selected (total selected: 1)
+✅ 1 plot(s) selected - Q/E/R actions available
+⌨️  Toggle plot (3, 1)
+☑️  Plot (3, 1) deselected (total selected: 0)
+ERROR: String formatting error: not all arguments converted during string formatting.
+   at: validated_evaluate (core/variant/variant_op.h:1012)
+   GDScript backtrace (most recent call first):
+       [0] _on_selection_changed (res://UI/FarmUI.gd:160)
+       [1] toggle_plot_selection (res://UI/PlotGridDisplay.gd:417)
+       [2] _toggle_plot_selection (res://UI/FarmInputHandler.gd:381)
+       [3] _input (res://UI/FarmInputHandler.gd:135)
+❌ No plots selected - Q/E/R actions disabled
+⌨️  Toggle plot (2, 1)
+☑️  Plot (2, 1) selected (total selected: 1)
+✅ 1 plot(s) selected - Q/E/R actions available
+⌨️  Toggle plot (1, 1)
+☑️  Plot (1, 1) selected (total selected: 2)
+✅ 2 plot(s) selected - Q/E/R actions available
+⌨️  Toggle plot (0, 1)
+☑️  Plot (0, 1) selected (total selected: 3)
+✅ 3 plot(s) selected - Q/E/R actions available
+⌨️  Toggle plot (3, 1)
+☑️  Plot (3, 1) selected (total selected: 4)
+✅ 4 plot(s) selected - Q/E/R actions available
+🌍 BioticFlux | Temp: 399K | ☀️173.3° | 🌾0.0° | Energy: 1.0 | Qubits: 1
+⚡ Tool 1 (Grower) | Key Q | Action: Plant (wheat/mushroom/tomato) | Plots: 4 selected
+🌱 Batch planting wheat at 4 plots: [(2, 1), (1, 1), (0, 1), (3, 1)]
+💸 Spent 1 wheat on wheat (remaining: 1)
+🌱 Plot.plant(): injected quantum state at (2, 1)
+   ✅ Plot (2, 1) now planted=true, quantum_state exists=true
+🌱 Farm.plot_planted received at PlotGridDisplay
+   ✓ update_tile_from_farm((2, 1)): found plot, transforming data...
+  🌾 PlotGridDisplay updating tile for plot (2, 1)
+💸 Spent 1 wheat on wheat (remaining: 0)
+🌱 Plot.plant(): injected quantum state at (1, 1)
+   ✅ Plot (1, 1) now planted=true, quantum_state exists=true
+🌱 Farm.plot_planted received at PlotGridDisplay
+   ✓ update_tile_from_farm((1, 1)): found plot, transforming data...
+  🌾 PlotGridDisplay updating tile for plot (1, 1)
+⚡ Tool 1 (Grower) | Key Q | Action: Plant (wheat/mushroom/tomato) | Plots: 4 selected
+🌱 Batch planting wheat at 4 plots: [(2, 1), (1, 1), (0, 1), (3, 1)]
+🌍 BioticFlux | Temp: 302K | ☀️97.7° | 🌾0.0° | Energy: 0.1 | Qubits: 1
+⌨️  Toggle plot (5, 0)
+☑️  Plot (5, 0) selected (total selected: 5)
+✅ 5 plot(s) selected - Q/E/R actions available
+⌨️  Toggle plot (4, 0)
+☑️  Plot (4, 0) selected (total selected: 6)
+✅ 6 plot(s) selected - Q/E/R actions available
+⌨️  Toggle plot (3, 0)
+☑️  Plot (3, 0) selected (total selected: 7)
+✅ 7 plot(s) selected - Q/E/R actions available
+⌨️  Toggle plot (2, 0)
+☑️  Plot (2, 0) selected (total selected: 8)
+✅ 8 plot(s) selected - Q/E/R actions available
+⚡ Tool 1 (Grower) | Key Q | Action: Plant (wheat/mushroom/tomato) | Plots: 8 selected
+🌱 Batch planting wheat at 8 plots: [(2, 1), (1, 1), (0, 1), (3, 1), (5, 0), (4, 0), (3, 0), (2, 0)]
+⚡ Tool 1 (Grower) | Key Q | Action: Plant (wheat/mushroom/tomato) | Plots: 8 selected
+🌱 Batch planting wheat at 8 plots: [(2, 1), (1, 1), (0, 1), (3, 1), (5, 0), (4, 0), (3, 0), (2, 0)]
+🌍 BioticFlux | Temp: 399K | ☀️4.9° | 🌾0.0° | Energy: 1.0 | Qubits: 1
+🛠️  Tool switched to: Quantum
+🔄 Tool changed via input: 2 (Quantum)
+⚡ ActionPreviewRow updated for Tool 2: Quantum
+⚡ Tool 2 (Quantum) | Key Q | Action: Cluster (GHZ/W/3+qubits) | Plots: 8 selected
+🔗 Creating cluster state for 8 plots...
+🏗️ Plot infrastructure: (2, 1) ↔ (1, 1) (entanglement gate installed)
+🔔 Bell gate created at biome ForestEcosystem: [(2, 1), (1, 1)]
+SCRIPT ERROR: Invalid call. Nonexistent function 'create_entanglement' in base 'Resource (FarmPlot)'.
+          at: FarmGrid._create_quantum_entanglement (res://Core/GameMechanics/FarmGrid.gd:1211)
+          GDScript backtrace (most recent call first):
+              [0] _create_quantum_entanglement (res://Core/GameMechanics/FarmGrid.gd:1211)
+              [1] create_entanglement (res://Core/GameMechanics/FarmGrid.gd:1264)
+              [2] _action_cluster (res://UI/FarmInputHandler.gd:641)
+              [3] _execute_tool_action (res://UI/FarmInputHandler.gd:304)
+              [4] _input (res://UI/FarmInputHandler.gd:207)
+🏗️ Plot infrastructure: (1, 1) ↔ (0, 1) (entanglement gate installed)
+🔔 Bell gate created at biome ForestEcosystem: [(1, 1), (0, 1)]
+  → Infrastructure ready. Quantum entanglement will auto-activate when both plots are planted.
+🏗️ Plot infrastructure: (0, 1) ↔ (3, 1) (entanglement gate installed)
+🔔 Bell gate created at biome ForestEcosystem: [(0, 1), (3, 1)]
+  → Infrastructure ready. Quantum entanglement will auto-activate when both plots are planted.
+🏗️ Plot infrastructure: (3, 1) ↔ (5, 0) (entanglement gate installed)
+🔔 Bell gate created at biome ForestEcosystem: [(3, 1), (5, 0)]
+  → Infrastructure ready. Quantum entanglement will auto-activate when both plots are planted.
+🏗️ Plot infrastructure: (5, 0) ↔ (4, 0) (entanglement gate installed)
+🔔 Bell gate created at biome BioticFlux: [(5, 0), (4, 0)]
+  → Infrastructure ready. Quantum entanglement will auto-activate when both plots are planted.
+🏗️ Plot infrastructure: (4, 0) ↔ (3, 0) (entanglement gate installed)
+🔔 Bell gate created at biome BioticFlux: [(4, 0), (3, 0)]
+  → Infrastructure ready. Quantum entanglement will auto-activate when both plots are planted.
+🏗️ Plot infrastructure: (3, 0) ↔ (2, 0) (entanglement gate installed)
+🔔 Bell gate created at biome BioticFlux: [(3, 0), (2, 0)]
+  → Infrastructure ready. Quantum entanglement will auto-activate when both plots are planted.
+🛠️  Tool switched to: Grower
+🔄 Tool changed via input: 1 (Grower)
+⚡ ActionPreviewRow updated for Tool 1: Grower
+⚡ Tool 1 (Grower) | Key R | Action: Measure + Harvest | Plots: 8 selected
+🔬✂️  Batch measuring and harvesting 8 plots: [(2, 1), (1, 1), (0, 1), (3, 1), (5, 0), (4, 0), (3, 0), (2, 0)]
+🔬 Plot (2, 1) measured: outcome=🌾
+✂️  Plot (2, 1) harvested: yield=3, outcome=🌾
+✂️  Farm.plot_harvested received at PlotGridDisplay
+   ✓ update_tile_from_farm((2, 1)): found plot, transforming data...
+  🌾 PlotGridDisplay updating tile for plot (2, 1)
+🔬 Plot (1, 1) measured: outcome=👥
+✂️  Plot (1, 1) harvested: yield=3, outcome=👥
+✂️  Farm.plot_harvested received at PlotGridDisplay
+   ✓ update_tile_from_farm((1, 1)): found plot, transforming data...
+  🌾 PlotGridDisplay updating tile for plot (1, 1)
+⚡ Tool 1 (Grower) | Key Q | Action: Plant (wheat/mushroom/tomato) | Plots: 8 selected
+🌱 Batch planting wheat at 8 plots: [(2, 1), (1, 1), (0, 1), (3, 1), (5, 0), (4, 0), (3, 0), (2, 0)]
+🌍 BioticFlux | Temp: 399K | ☀️175.6° | 🌾0.0° | Energy: 1.0 | Qubits: 1
+⚡ Tool 1 (Grower) | Key R | Action: Measure + Harvest | Plots: 8 selected
+🔬✂️  Batch measuring and harvesting 8 plots: [(2, 1), (1, 1), (0, 1), (3, 1), (5, 0), (4, 0), (3, 0), (2, 0)]
+⚡ Tool 1 (Grower) | Key Q | Action: Plant (wheat/mushroom/tomato) | Plots: 8 selected
+🌱 Batch planting wheat at 8 plots: [(2, 1), (1, 1), (0, 1), (3, 1), (5, 0), (4, 0), (3, 0), (2, 0)]
+⚡ Tool 1 (Grower) | Key R | Action: Measure + Harvest | Plots: 8 selected
+🔬✂️  Batch measuring and harvesting 8 plots: [(2, 1), (1, 1), (0, 1), (3, 1), (5, 0), (4, 0), (3, 0), (2, 0)]
+🎯 PlotTile._gui_input() CALLED at grid_pos (3, 1), event type: InputEventMouseMotion

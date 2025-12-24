@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3tp5pnm4o7ygvq7"]
+
+[ext_resource type="Script" path="res://Tests/QuantumGlyphTest.gd" id="1_abcde"]
+
+[node name="QuantumGlyphTestScene" type="Node"]
+script = ExtResource("1_abcde")

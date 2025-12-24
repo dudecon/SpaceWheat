@@ -98,7 +98,12 @@ func _ready():
 
 
 func select_tool(tool_num: int) -> void:
-	"""Select a tool and update button styling"""
+	"""Select a tool and update button styling (internal - use for UI sync without emitting signal)"""
+	_update_tool_visual(tool_num)
+
+
+func _update_tool_visual(tool_num: int) -> void:
+	"""Internal: Update visual state without emitting signal (called by button handler)"""
 	if tool_num < 1 or tool_num > 6:
 		return
 
@@ -115,8 +120,6 @@ func select_tool(tool_num: int) -> void:
 		else:
 			# Unselected: normal gray
 			button.modulate = normal_color
-
-	tool_selected.emit(tool_num)
 
 
 func set_tool_enabled(tool_num: int, enabled: bool) -> void:
@@ -144,5 +147,6 @@ func set_layout_manager(mgr) -> void:
 
 func _on_tool_button_pressed(tool_num: int) -> void:
 	"""Handle tool button press"""
-	select_tool(tool_num)
+	_update_tool_visual(tool_num)
+	tool_selected.emit(tool_num)  # Explicitly emit signal after visual update
 	print("⌨️  Tool %d selected [%s button]" % [tool_num, TOOL_ACTIONS[tool_num]["name"]])

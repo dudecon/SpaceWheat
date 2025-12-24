@@ -19,6 +19,7 @@ var network_overlay: ConspiracyNetworkOverlay
 var network_info_panel: NetworkInfoPanel
 var escape_menu: EscapeMenu
 var save_load_menu
+var keyboard_hint_button: Control  # Keyboard help display
 
 # Dependencies
 var layout_manager
@@ -111,6 +112,15 @@ func create_overlays(parent: Control) -> void:
 	escape_menu.load_pressed.connect(_on_load_pressed)
 	escape_menu.reload_last_save_pressed.connect(_on_reload_last_save_pressed)
 	# Note: EscapeMenu doesn't have debug_environment_selected - removed this connection
+	print("🎮 Escape menu created (ESC to toggle)")
+
+	# Create Keyboard Hint Button (K key help)
+	const KeyboardHintButton = preload("res://UI/Panels/KeyboardHintButton.gd")
+	keyboard_hint_button = KeyboardHintButton.new()
+	if layout_manager:
+		keyboard_hint_button.set_layout_manager(layout_manager)
+	parent.add_child(keyboard_hint_button)
+	print("⌨️  Keyboard hint button created (K to toggle)")
 
 	# Create Save/Load Menu
 	print("💾 Creating Save/Load menu...")
@@ -291,6 +301,18 @@ func toggle_escape_menu() -> void:
 			hide_overlay("escape_menu")
 		else:
 			show_overlay("escape_menu")
+
+
+func toggle_keyboard_help() -> void:
+	"""Toggle keyboard help panel visibility (K key)"""
+	if keyboard_hint_button:
+		if keyboard_hint_button.has_method("toggle_hints"):
+			keyboard_hint_button.toggle_hints()
+			print("⌨️  Keyboard help toggled via K key")
+		else:
+			print("⚠️  keyboard_hint_button missing toggle_hints() method")
+	else:
+		print("⚠️  Keyboard help not initialized")
 
 
 func _create_vocabulary_overlay() -> Control:

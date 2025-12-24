@@ -1,280 +1,57 @@
+## FarmView - Simplified entry point
+## Creates the farm and loads it into PlayerShell
+##
+## This used to be 50+ lines of orchestration.
+## Now it's just: create farm, load into shell.
+
 extends Control
 
-## FarmView - Main UI scene for the quantum wheat farming game
-## Acts as a simple coordinator that delegates to FarmUIController
-##
-## Phase 4a: Decentralized Architecture
-## - Removed ~2,400 lines of implementation
-## - Now ~50 lines of simple coordination
-## - All heavy lifting delegated to FarmUIController
-
-# Import the orchestration layer
-const FarmUIController = preload("res://UI/FarmUIController.gd")
 const Farm = preload("res://Core/Farm.gd")
-const FactionManager = preload("res://Core/GameMechanics/FactionManager.gd")
-const VocabularyEvolution = preload("res://Core/QuantumSubstrate/VocabularyEvolution.gd")
-const TomatoConspiracyNetwork = preload("res://Core/QuantumSubstrate/TomatoConspiracyNetwork.gd")
+const PlayerShell = preload("res://UI/PlayerShell.gd")
+const InputController = preload("res://UI/Controllers/InputController.gd")
 
+var shell: PlayerShell = null
+var farm: Node = null
+var input_controller: InputController = null
 
-# The UI controller that handles all orchestration
-var ui_controller: FarmUIController
-var test_farm: Node = null  # For test mode access
-
-
-## INITIALIZATION
 
 func _ready() -> void:
-	"""Initialize FarmView by creating and configuring the UI controller
+	"""Initialize: create farm and shell, wire them together"""
+	print("🌾 FarmView starting...")
 
-	REFACTORING: "Ready Means Ready" principle
-	When this function returns, everything is fully initialized and ready to use.
-	No async gaps, no deferred setup, no waiting for injections.
-	"""
-	print("🎮 FarmView initializing...")
-
-	# Set anchors first to avoid Godot warnings about anchor/size conflicts
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-
-	# Size FarmView to match viewport
-	var viewport_size = get_viewport().get_visible_rect().size
-	size = viewport_size
-	position = Vector2.ZERO
-	custom_minimum_size = Vector2.ZERO
-
-	print("📐 FarmView sized to viewport: %s" % size)
-
-	# ═════════════════════════════════════════════════════════════════════════════
-	# STEP 1: Create Farm FIRST (synchronously)
-	# ═════════════════════════════════════════════════════════════════════════════
-	var farm: Node
-
-	if has_meta("farm"):
-		# Farm provided by GameController
-		farm = get_meta("farm")
-		test_farm = farm
-		print("✅ Farm provided by GameController")
-	else:
-		# No farm provided - create default synchronously (not via call_deferred!)
-		print("📝 Creating default farm (6x2 grid)...")
-		farm = FarmBuilder.create_default_farm()
-		test_farm = farm
-
-	# Add farm to scene tree
-	# This triggers Farm._ready(), which validates grid_config
+	# Create farm (synchronous, no deferred)
+	print("📝 Creating farm...")
+	farm = Farm.new()
 	add_child(farm)
-	print("   ✅ Farm added to scene tree, _ready() called")
+	print("   ✅ Farm created and added to tree")
 
-	# ═════════════════════════════════════════════════════════════════════════════
-	# STEP 2: Create UI controller (but DON'T add to tree yet!)
-	# ═════════════════════════════════════════════════════════════════════════════
-	ui_controller = FarmUIController.new()
-	print("   ✅ UI controller created")
+	# Create player shell
+	print("🎪 Creating player shell...")
+	shell = PlayerShell.new()
+	add_child(shell)
+	print("   ✅ Player shell created")
 
-	# ═════════════════════════════════════════════════════════════════════════════
-	# STEP 3: Wire dependencies BEFORE adding to tree
-	# This way, when add_child() triggers _ready(), all dependencies are available
-	# ═════════════════════════════════════════════════════════════════════════════
-	if has_meta("faction_manager"):
-		var faction_manager = get_meta("faction_manager")
-		var vocabulary_system = get_meta("vocabulary_system")
-		var conspiracy_network = get_meta("conspiracy_network")
-		ui_controller.inject_farm(farm, faction_manager, vocabulary_system, conspiracy_network)
-	else:
-		ui_controller.inject_farm(farm)
+	# Load farm into shell (this creates FarmUI internally)
+	shell.load_farm(farm)
 
-	print("   ✅ UI wired (dependencies injected)")
+	# Create input controller and wire signals
+	print("🎮 Creating input controller...")
+	input_controller = InputController.new()
+	add_child(input_controller)
 
-	# ═════════════════════════════════════════════════════════════════════════════
-	# STEP 4: NOW add UI controller to tree
-	# When _ready() is called, all dependencies are already set up
-	# ═════════════════════════════════════════════════════════════════════════════
-	add_child(ui_controller)
-	ui_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Wire keyboard help signal to shell
+	if input_controller.has_signal("keyboard_help_requested"):
+		input_controller.keyboard_help_requested.connect(shell._toggle_keyboard_help)
+		print("   ✅ K key (keyboard help) connected")
 
-	print("✅ FarmView initialization complete - all systems ready")
+	print("✅ FarmView ready - game started!")
 
 
-
-## VIEWPORT HANDLING
-
-func _on_viewport_resized() -> void:
-	"""Handle viewport resize"""
-	if ui_controller:
-		ui_controller._on_viewport_size_changed()
+func get_farm() -> Node:
+	"""Get the current farm (for external access)"""
+	return farm
 
 
-## PUBLIC API (Delegated to UI Controller)
-
-func show_message(text: String) -> void:
-	"""Show informational message"""
-	if ui_controller:
-		ui_controller.show_message(text)
-
-
-func show_error(text: String) -> void:
-	"""Show error message"""
-	if ui_controller:
-		ui_controller.show_error(text)
-
-
-func get_selected_plot() -> Vector2i:
-	"""Get current keyboard-selected plot"""
-	if ui_controller:
-		return ui_controller.get_current_selected_plot()
-	return Vector2i(-1, -1)
-
-
-func inject_farm(farm_ref) -> void:
-	"""Inject farm data after UI initialized (called by GameStateManager)"""
-	if ui_controller:
-		ui_controller.inject_farm_late(farm_ref)
-
-
-## AUTO-PLAY TEST MODE
-
-func _run_autoplay_test() -> void:
-	"""Run automated test sequence to demonstrate Q/E/R gameplay loop"""
-	var header_line = ""
-	for _i in range(70):
-		header_line += "="
-	print("\n" + header_line)
-	print("🎬 STARTING AUTOMATED GAMEPLAY DEMO")
-	print(header_line + "\n")
-
-	# Wait for UI to fully render
-	await get_tree().create_timer(2.0).timeout
-
-	# Get the input handler from the UI controller
-	if not ui_controller or not ui_controller.controls_manager:
-		print("ERROR: Could not find controls manager")
-		return
-
-	var input_handler = ui_controller.controls_manager.get_input_handler()
-	if not input_handler:
-		print("ERROR: Could not find input handler")
-		return
-
-	print("✅ Input handler found - beginning test sequence...\n")
-
-	# Test sequence
-	await _test_step_1(input_handler)
-	await _test_step_2(input_handler)
-	await _test_step_3(input_handler)
-	await _test_step_4(input_handler)
-	await _test_step_5(input_handler)
-	await _test_step_6(input_handler)
-	await _test_step_7(input_handler)
-	await _test_step_8(input_handler)
-	await _test_step_9(input_handler)
-	await _test_step_10(input_handler)
-	await _test_step_11(input_handler)
-
-	var equals_line = ""
-	for _i in range(70):
-		equals_line += "="
-	print("\n" + equals_line)
-	print("✅ AUTOPLAY TEST COMPLETE!")
-	print(equals_line)
-	print("\nAll Q/E/R actions executed successfully.")
-	print("Check the console above and watch the UI for state changes.\n")
-
-	await get_tree().create_timer(2.0).timeout
-	get_tree().quit()
-
-
-func _print_test_header(step: int, title: String) -> void:
-	var line = ""
-	for _i in range(70):
-		line += "-"
-	print("\n" + line)
-	print("STEP %d: %s" % [step, title])
-	print(line)
-
-
-func _wait_and_display(seconds: float) -> void:
-	"""Wait with visual feedback"""
-	for i in range(int(seconds * 10)):
-		await get_tree().process_frame
-
-
-func _test_step_1(handler: Node) -> void:
-	_print_test_header(1, "Select Tool 1 (Plant Tool)")
-	print("Action: Emit tool_changed for tool 1")
-	handler._select_tool(1)
-	await _wait_and_display(1.5)
-
-
-func _test_step_2(handler: Node) -> void:
-	_print_test_header(2, "Select Plot Y (Position 1,0)")
-	print("Action: Set selection to Y")
-	handler._set_selection(Vector2i(1, 0))
-	await _wait_and_display(1.5)
-
-
-func _test_step_3(handler: Node) -> void:
-	_print_test_header(3, "Execute Q Action (Plant Wheat)")
-	print("Action: Plant wheat at selected position")
-	print("Expected: 5 credits deducted, plot shows planted")
-	handler._execute_tool_action("Q")
-	await _wait_and_display(2.0)
-
-
-func _test_step_4(handler: Node) -> void:
-	_print_test_header(4, "Select Plot U (Position 2,0)")
-	print("Action: Move selection to U")
-	handler._set_selection(Vector2i(2, 0))
-	await _wait_and_display(1.5)
-
-
-func _test_step_5(handler: Node) -> void:
-	_print_test_header(5, "Execute E Action (Plant Mushroom)")
-	print("Action: Plant mushroom at position 2,0")
-	handler._execute_tool_action("E")
-	await _wait_and_display(2.0)
-
-
-func _test_step_6(handler: Node) -> void:
-	_print_test_header(6, "Switch to Tool 2 (Quantum Ops)")
-	print("Action: Change tool to Quantum Ops")
-	print("Expected: Action menu updates to Q=Entangle, E=Measure, R=Harvest")
-	handler._select_tool(2)
-	await _wait_and_display(1.5)
-
-
-func _test_step_7(handler: Node) -> void:
-	_print_test_header(7, "Select Plot Y Again (Position 1,0 with wheat)")
-	print("Action: Select the wheat plot we planted earlier")
-	handler._set_selection(Vector2i(1, 0))
-	await _wait_and_display(1.5)
-
-
-func _test_step_8(handler: Node) -> void:
-	_print_test_header(8, "Execute E Action (Measure)")
-	print("Action: Measure the quantum state of the wheat")
-	print("Expected: Shows measurement result (🌾 or 👥)")
-	handler._execute_tool_action("E")
-	await _wait_and_display(2.0)
-
-
-func _test_step_9(handler: Node) -> void:
-	_print_test_header(9, "Execute R Action (Harvest)")
-	print("Action: Harvest the wheat plot")
-	print("Expected: Wheat added to inventory, plot becomes empty")
-	handler._execute_tool_action("R")
-	await _wait_and_display(2.0)
-
-
-func _test_step_10(handler: Node) -> void:
-	_print_test_header(10, "Switch to Tool 3 (Economy)")
-	print("Action: Change tool to Economy")
-	print("Expected: Action menu updates to Q=Mill, E=Market, R=Sell All")
-	handler._select_tool(3)
-	await _wait_and_display(1.5)
-
-
-func _test_step_11(handler: Node) -> void:
-	_print_test_header(11, "Execute R Action (Sell All Wheat)")
-	print("Action: Sell all harvested wheat")
-	print("Expected: Wheat inventory → 0, credits increase")
-	handler._execute_tool_action("R")
-	await _wait_and_display(2.0)
+func get_shell() -> Node:
+	"""Get the shell (for external access)"""
+	return shell

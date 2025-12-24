@@ -17,8 +17,6 @@ var sun_moon_label: Label
 var biome_label: Label  # 🌍 Temperature/Biome info
 var tribute_timer_label: Label
 
-# Dynamic resource containers - keyed by emoji
-var resource_containers: Dictionary = {}  # emoji -> {container: HBoxContainer, label: Label}
 var resources_hbox: HBoxContainer  # Container for all dynamic resources
 
 
@@ -29,6 +27,51 @@ func _ready():
 func set_layout_manager(manager: Node):
 	"""Set the layout manager reference for dynamic scaling"""
 	layout_manager = manager
+
+
+func connect_to_economy(economy: Node) -> void:
+	"""Connect to economy signals for real-time resource updates
+
+	This is the ONLY way ResourcePanel gets data - directly from the simulation engine.
+	Graphics layer (ResourcePanel) does NOT store state, only displays it.
+	"""
+	if not economy:
+		print("⚠️  ResourcePanel: economy is null, cannot connect signals")
+		return
+
+	# Connect to all economy signals for live updates
+	if economy.has_signal("wheat_changed"):
+		economy.wheat_changed.connect(_on_wheat_changed)
+		print("✅ ResourcePanel connected to economy.wheat_changed")
+
+	if economy.has_signal("credits_changed"):
+		economy.credits_changed.connect(_on_credits_changed)
+		print("✅ ResourcePanel connected to economy.credits_changed")
+
+	if economy.has_signal("flour_changed"):
+		economy.flour_changed.connect(_on_flour_changed)
+		print("✅ ResourcePanel connected to economy.flour_changed")
+
+	# Initialize with current values
+	wheat_label.text = str(economy.wheat_inventory)
+	credits_label.text = str(economy.credits)
+	flour_label.text = str(economy.flour_inventory)
+
+
+## Signal handlers - update display when economy changes
+func _on_wheat_changed(new_amount: int) -> void:
+	"""Handle wheat_changed signal from economy"""
+	wheat_label.text = str(new_amount)
+
+
+func _on_credits_changed(new_amount: int) -> void:
+	"""Handle credits_changed signal from economy"""
+	credits_label.text = str(new_amount)
+
+
+func _on_flour_changed(new_amount: int) -> void:
+	"""Handle flour_changed signal from economy"""
+	flour_label.text = str(new_amount)
 
 
 func _create_ui():
@@ -56,7 +99,7 @@ func _create_ui():
 	wheat_icon.add_theme_font_size_override("font_size", icon_font_size)
 	wheat_container.add_child(wheat_icon)
 	wheat_label = Label.new()
-	wheat_label.text = "100"
+	wheat_label.text = "0"  # Start at 0, will be updated via signals
 	wheat_label.add_theme_font_size_override("font_size", label_font_size)
 	wheat_container.add_child(wheat_label)
 	resources_hbox.add_child(wheat_container)
@@ -68,7 +111,7 @@ func _create_ui():
 	credits_icon.add_theme_font_size_override("font_size", icon_font_size)
 	credits_container.add_child(credits_icon)
 	credits_label = Label.new()
-	credits_label.text = "50"
+	credits_label.text = "0"  # Start at 0, will be updated via signals
 	credits_label.add_theme_font_size_override("font_size", label_font_size)
 	credits_container.add_child(credits_label)
 	resources_hbox.add_child(credits_container)
@@ -80,7 +123,7 @@ func _create_ui():
 	flour_icon.add_theme_font_size_override("font_size", icon_font_size)
 	flour_container.add_child(flour_icon)
 	flour_label = Label.new()
-	flour_label.text = "0"
+	flour_label.text = "0"  # Start at 0, will be updated via signals
 	flour_label.add_theme_font_size_override("font_size", label_font_size)
 	flour_container.add_child(flour_label)
 	resources_hbox.add_child(flour_container)
@@ -91,83 +134,6 @@ func _create_ui():
 	add_child(resources_hbox)
 
 
-## Public API - Update Methods
-
-func update_resources(wheat: int, credits: int = 0, flour: int = 0, resources: Dictionary = {}):
-	"""Update resource displays dynamically
-
-	Args:
-		wheat: Current wheat amount (primary currency)
-		credits: Current credits amount (classical economy currency)
-		flour: Current flour amount (intermediate product)
-		resources: Dictionary of {emoji: amount} sorted by amount descending
-			Example: {"👥": 3, "💨": 1, "🌻": 0, "🏰": 2}
-	"""
-	# Update primary currencies
-	wheat_label.text = str(wheat)
-	credits_label.text = str(credits)
-	flour_label.text = str(flour)
-
-	# Remove resources no longer present
-	for emoji in resource_containers.keys():
-		if not resources.has(emoji):
-			resource_containers[emoji].container.queue_free()
-			resource_containers.erase(emoji)
-
-	# Sort resources by amount (descending) and add/update displays
-	var sorted_resources = resources.keys()
-	sorted_resources.sort_custom(func(a, b): return resources[a] > resources[b])
-
-	for emoji in sorted_resources:
-		var amount = resources[emoji]
-		if amount <= 0:
-			# Hide if zero or remove
-			if resource_containers.has(emoji):
-				resource_containers[emoji].container.visible = false
-			continue
-
-		if not resource_containers.has(emoji):
-			# Create new resource container
-			_create_resource_container(emoji)
-
-		# Update amount and visibility
-		var container_data = resource_containers[emoji]
-		container_data.label.text = str(amount)
-		container_data.container.visible = true
-
-
-func update_credits(new_amount: int) -> void:
-	"""Update credits display when signal received"""
-	credits_label.text = str(new_amount)
-
-
-func update_flour(new_amount: int) -> void:
-	"""Update flour display when signal received"""
-	flour_label.text = str(new_amount)
-
-
-func _create_resource_container(emoji: String) -> void:
-	"""Create a new resource container for an emoji with dynamic font sizing"""
-	var icon_font_size = layout_manager.get_scaled_font_size(24) if layout_manager else 24
-	var label_font_size = layout_manager.get_scaled_font_size(20) if layout_manager else 20
-
-	var container = HBoxContainer.new()
-	var icon = Label.new()
-	icon.text = emoji
-	icon.add_theme_font_size_override("font_size", icon_font_size)
-	container.add_child(icon)
-
-	var label = Label.new()
-	label.text = "0"
-	label.add_theme_font_size_override("font_size", label_font_size)
-	container.add_child(label)
-
-	# Insert before tribute timer (keep tribute timer at end)
-	var insert_position = resources_hbox.get_child_count() - 2  # Before tribute icon/timer
-	resources_hbox.add_child(container)
-	resources_hbox.move_child(container, insert_position)
-
-	resource_containers[emoji] = {"container": container, "label": label}
 
 
 func update_sun_moon(is_sun: bool, time_remaining: float):

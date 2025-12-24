@@ -32,9 +32,6 @@ var ui_state: FarmUIState  # UI State abstraction layer
 var grid_config: GridConfig = null  # Single source of truth for grid layout
 
 # Configuration
-var grid_width: int = 6
-var grid_height: int = 2  # Expanded from 1 to 2 rows for multi-biome support
-var use_neutral_biome: bool = false  # Use static NeutralBiome (no quantum evolution) for testing
 
 # Biome availability (may fail to load if icon dependencies are missing)
 var biome_enabled: bool = false
@@ -96,9 +93,6 @@ func _ready():
 			push_error("  - %s" % error)
 		return
 
-	# TODO: Enable when VerboseConfig is fully integrated
-	#if VerboseConfig.is_verbose("farm"):
-	#	grid_config.print_summary()
 
 	# Create core systems
 	economy = FarmEconomy.new()
@@ -324,9 +318,6 @@ func build(pos: Vector2i, build_type: String) -> bool:
 				const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 				qubit = DualEmojiQubit.new(config["north_emoji"], config["south_emoji"], PI/2)
 				qubit.energy = 0.3  # Stays at minimum without biome evolution
-				# TODO: Enable when VerboseConfig is fully integrated
-				#if VerboseConfig.is_verbose("farm"):
-				#	print("Created local qubit (no biome) at %s" % pos)
 
 			success = grid.plant(pos, config["plant_type"], qubit)
 		"build":
@@ -361,8 +352,6 @@ func do_action(action: String, params: Dictionary) -> Dictionary:
 	- entangle: {position_a, position_b} → entangles two plots
 	- measure: {position} → measures plot
 	- harvest: {position} → harvests plot
-	- mill: {wheat_amount} → mills wheat to flour
-	- market: {flour_amount} → sells flour at market
 
 	Returns: Dictionary with {success: bool, message: String, ...action-specific data}
 	"""
@@ -407,55 +396,6 @@ func do_action(action: String, params: Dictionary) -> Dictionary:
 			result["message"] = "Harvest " + ("succeeded" if result.get("success", false) else "failed")
 			return result
 
-		"mill":
-			var wheat_amount = params.get("wheat_amount", 1)
-			if economy.wheat >= wheat_amount:
-				economy.wheat -= wheat_amount
-				var flour_produced = wheat_amount  # 1 wheat -> 1 flour
-				var credits_earned = flour_produced * 5  # 1 flour -> 5 credits
-				economy.flour += flour_produced
-				economy.credits += credits_earned
-				_emit_state_changed()
-				return {
-					"success": true,
-					"wheat_amount": wheat_amount,
-					"flour_produced": flour_produced,
-					"credits_earned": credits_earned,
-					"message": "Milled %d wheat → %d flour + %d credits" % [wheat_amount, flour_produced, credits_earned]
-				}
-			else:
-				return {
-					"success": false,
-					"wheat_amount": wheat_amount,
-					"flour_produced": 0,
-					"credits_earned": 0,
-					"message": "Not enough wheat! Need %d, have %d" % [wheat_amount, economy.wheat]
-				}
-
-		"market":
-			var flour_amount = params.get("flour_amount", 1)
-			if economy.flour >= flour_amount:
-				economy.flour -= flour_amount
-				var market_price = 80  # 1 flour = 80 credits at market
-				var margin = int(flour_amount * market_price * 0.20)  # 20% margin
-				var credits_received = int(flour_amount * market_price * 0.80)  # 80% base price
-				economy.credits += credits_received + margin
-				_emit_state_changed()
-				return {
-					"success": true,
-					"flour_amount": flour_amount,
-					"credits_received": credits_received,
-					"market_margin": margin,
-					"message": "Sold %d flour → %d credits" % [flour_amount, credits_received + margin]
-				}
-			else:
-				return {
-					"success": false,
-					"flour_amount": flour_amount,
-					"credits_received": 0,
-					"market_margin": 0,
-					"message": "Not enough flour! Need %d, have %d" % [flour_amount, economy.flour]
-				}
 
 		_:
 			return {
@@ -478,9 +418,6 @@ func measure_plot(pos: Vector2i) -> String:
 	# No biome mode: use random outcome for testing (no quantum evolution happened)
 	if not outcome and not biome_enabled:
 		outcome = "🌾" if randf() > 0.5 else "👥"
-		# TODO: Enable when VerboseConfig is fully integrated
-		#if VerboseConfig.is_verbose("farm"):
-		#	print("No-biome mode: random outcome %s at %s" % [outcome, pos])
 
 	plot_measured.emit(pos, outcome)
 	_emit_state_changed()
@@ -758,7 +695,7 @@ func get_state() -> Dictionary:
 				state["plots"].append({
 					"position": pos,
 					"is_planted": plot.is_planted,
-					"emoji": plot.get_emoji() if plot.is_planted else ""
+					"emoji": plot.get_semantic_emoji() if plot.is_planted else ""
 				})
 
 	return state
@@ -878,8 +815,8 @@ func capture_game_state(state: Resource) -> Resource:
 
 	# Capture plots
 	var plots_array = []
-	for y in range(grid_height):
-		for x in range(grid_width):
+	for y in range(grid.grid_height):
+		for x in range(grid.grid_width):
 			var pos = Vector2i(x, y)
 			var plot = grid.get_plot(pos)
 

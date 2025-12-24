@@ -9,14 +9,11 @@ extends Control
 ## QuantumForceGraph reads these positions and tethers quantum bubbles to them
 
 const PlotTile = preload("res://UI/PlotTile.gd")
-const PlotSelectionManager = preload("res://UI/PlotSelectionManager.gd")
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
-const FarmUIState = preload("res://Core/GameState/FarmUIState.gd")
 const ParametricPlotPositioner = preload("res://UI/ParametricPlotPositioner.gd")
 
 # References
 var farm: Node = null
-var ui_state = null  # FarmUIState - abstraction layer (Phase 5, RefCounted not Node)
 var ui_controller: Node = null
 var layout_manager: Node = null
 var grid_config: GridConfig = null  # Grid configuration (Phase 7)
@@ -29,8 +26,9 @@ var tiles: Dictionary = {}
 var parametric_positioner: ParametricPlotPositioner = null
 var classical_plot_positions: Dictionary = {}  # Vector2i (grid) → Vector2 (screen position)
 
-# Multi-select management (NEW)
-var selection_manager: PlotSelectionManager = null
+# Multi-select management (INLINED - no separate SelectionManager)
+var selected_plots: Dictionary = {}  # Vector2i -> true (which plots are selected)
+var previous_selection: Dictionary = {}  # For restoring selection state
 
 # Backward compatibility: also track last single-click for operations
 var current_selection: Vector2i = Vector2i.ZERO
@@ -54,13 +52,18 @@ func _ready():
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	clip_contents = false  # Allow tiles to extend beyond container (they're spread around field)
 
-	# Create selection manager early (doesn't need positions)
-	_create_selection_manager()
+	# Initialize selection (inlined - no separate manager)
+	selected_plots = {}
+	previous_selection = {}
 
 	# REFACTORING: Create tiles immediately in _ready()
 	# Dependencies (grid_config, biomes) are injected BEFORE add_child(), so they're available now
-	assert(grid_config != null, "PlotGridDisplay requires grid_config before _ready()")
-	assert(not biomes.is_empty(), "PlotGridDisplay requires biomes before _ready()")
+	if grid_config == null:
+		print("⚠️  PlotGridDisplay: grid_config is null - will be set later")
+		return
+	if biomes.is_empty():
+		print("⚠️  PlotGridDisplay: biomes is empty - will be set later")
+		return
 
 	# Calculate positions and create tiles SYNCHRONOUSLY
 	_calculate_parametric_positions()
@@ -195,13 +198,6 @@ func _create_tiles() -> void:
 	print("✅ Created %d plot tiles: %d positioned parametrically, %d without positions" % [tiles.size(), positioned_count, fallback_count])
 
 
-func _create_selection_manager() -> void:
-	"""Create multi-select manager"""
-	selection_manager = PlotSelectionManager.new()
-	selection_manager.selection_changed.connect(_on_selection_changed)
-	print("  🔄 PlotSelectionManager created")
-
-
 func inject_farm(farm_ref: Node) -> void:
 	"""Inject farm reference and connect to plot change signals"""
 	farm = farm_ref
@@ -227,25 +223,6 @@ func inject_farm(farm_ref: Node) -> void:
 	print("💉 Farm injected into PlotGridDisplay")
 
 
-func inject_ui_state(ui_state_ref) -> void:  # RefCounted, not Node
-	"""Inject FarmUIState - the abstraction layer (Phase 5)"""
-	if not ui_state_ref:
-		push_error("PlotGridDisplay: Attempted to inject null UIState!")
-		return
-
-	ui_state = ui_state_ref
-	print("💉 UIState injected into PlotGridDisplay")
-
-	# DO NOT connect to UIState signals - QuantumForceGraph is primary visualization
-	# These connections would create haunted double-updates
-	# Commenting for reference if we switch back to classical mode
-	#if ui_state.has_signal("plot_updated"):
-	#	ui_state.plot_updated.connect(_on_plot_updated)
-	#	print("   📡 Connected to plot_updated signal")
-	#if ui_state.has_signal("grid_refreshed"):
-	#	ui_state.grid_refreshed.connect(_on_grid_refreshed)
-	#	print("   📡 Connected to grid_refreshed signal")
-	#_on_grid_refreshed()
 
 
 func inject_ui_controller(controller: Node) -> void:
@@ -314,47 +291,42 @@ func update_tile_from_farm(pos: Vector2i) -> void:
 	print("  🌾 PlotGridDisplay updating tile for plot %s" % pos)
 
 
-func update_tile_from_ui_state(pos: Vector2i) -> void:
-	"""Update tile visual state from UIState plot data (Phase 5)"""
-	if not tiles.has(pos) or not ui_state:
-		return
-
-	var tile = tiles[pos]
-
-	# Get plot data from UIState
-	if ui_state.plot_states.has(pos):
-		var plot_ui_data = ui_state.plot_states[pos]
-		# Don't pass index - only set position and data (label was already set during _ready)
-		tile.set_plot_data(plot_ui_data, pos, -1)
-		print("  🔄 Updated tile at %s: %s" % [pos, plot_ui_data.plot_type if plot_ui_data.is_planted else "empty"])
-	else:
-		# Empty plot
-		# Don't pass index - preserve keyboard label
-		tile.set_plot_data(null, pos, -1)
-
-
 ## PHASE 4: PLOT TRANSFORMATION HELPER
 
-func _transform_plot_to_ui_data(pos: Vector2i, plot) -> FarmUIState.PlotUIData:
-	"""Transform WheatPlot state → PlotUIData (mirrors FarmUIState logic)
+func _transform_plot_to_ui_data(pos: Vector2i, plot) -> Dictionary:
+	"""Transform WheatPlot state → PlotUIData dictionary
 
 	This inline transformation replaces the FarmUIState layer for real-time updates.
 	"""
-	var ui_data = FarmUIState.PlotUIData.new()
-	ui_data.position = pos
-	ui_data.is_planted = plot.is_planted
-	ui_data.plot_type = _get_plot_type_string(plot.plot_type)
+	var ui_data = {
+		"position": pos,
+		"is_planted": plot.is_planted,
+		"plot_type": _get_plot_type_string(plot.plot_type),
+		"north_emoji": "",
+		"south_emoji": "",
+		"north_probability": 0.0,
+		"south_probability": 0.0,
+		"energy_level": 0.0,
+		"coherence": 0.0,
+		"has_been_measured": plot.has_been_measured,
+		"entangled_plots": []
+	}
 
 	# Transform quantum state (if exists)
 	if plot.quantum_state:
 		var emojis = plot.get_plot_emojis()
-		ui_data.north_emoji = emojis["north"]
-		ui_data.south_emoji = emojis["south"]
-		ui_data.north_probability = plot.quantum_state.get_north_probability()
-		ui_data.south_probability = plot.quantum_state.get_south_probability()
-		ui_data.energy_level = plot.quantum_state.energy
+		ui_data["north_emoji"] = emojis["north"]
+		ui_data["south_emoji"] = emojis["south"]
+		ui_data["north_probability"] = plot.quantum_state.get_north_probability()
+		ui_data["south_probability"] = plot.quantum_state.get_south_probability()
+		ui_data["energy_level"] = plot.quantum_state.energy
 
-	ui_data.has_been_measured = plot.has_been_measured
+		# Get coherence (quantum state purity)
+		if plot.quantum_state.has_method("get_coherence"):
+			ui_data["coherence"] = plot.quantum_state.get_coherence()
+		else:
+			# Fallback: use energy as proxy for coherence
+			ui_data["coherence"] = plot.quantum_state.energy
 
 	return ui_data
 
@@ -392,21 +364,6 @@ func _on_farm_plot_harvested(pos: Vector2i, yield_data: Dictionary) -> void:
 	update_tile_from_farm(pos)
 
 
-## UI STATE SIGNAL HANDLERS (Phase 5 - Reactive Updates)
-
-func _on_plot_updated(position: Vector2i, plot_data) -> void:
-	"""Handle plot changes from UIState - update tile visually"""
-	print("🌱 Plot updated via UIState: %s" % position)
-	update_tile_from_ui_state(position)
-
-
-func _on_grid_refreshed() -> void:
-	"""Handle bulk grid refresh from UIState (save/load)"""
-	print("🔄 Grid refreshed via UIState - updating all tiles")
-	for pos in tiles.keys():
-		update_tile_from_ui_state(pos)
-
-
 ## KEYBOARD SELECTION SUPPORT
 
 func select_plot_by_key(action: String) -> void:
@@ -437,68 +394,64 @@ func toggle_plot_selection(pos: Vector2i) -> void:
 		print("⚠️  Invalid plot position: %s" % pos)
 		return
 
-	if not selection_manager:
-		print("⚠️  SelectionManager not initialized!")
-		return
-
 	if not tiles[pos]:
 		print("⚠️  Tile at %s not found!" % pos)
 		return
 
 	# Save state before toggling (for ] restoration)
-	selection_manager.save_state()
+	previous_selection = selected_plots.duplicate()
 
-	# Toggle in manager
-	var now_selected = selection_manager.toggle_plot(pos)
+	# Toggle selection
+	var now_selected: bool
+	if selected_plots.has(pos):
+		selected_plots.erase(pos)
+		now_selected = false
+	else:
+		selected_plots[pos] = true
+		now_selected = true
 
 	# Update visual
 	tiles[pos].set_checkbox_selected(now_selected)
 
-	print("☑️  Plot %s %s (total selected: %d)" % [pos, "selected" if now_selected else "deselected", selection_manager.get_count()])
+	print("☑️  Plot %s %s (total selected: %d)" % [pos, "selected" if now_selected else "deselected", selected_plots.size()])
+	selection_count_changed.emit(selected_plots.size())
 
 
 func clear_all_selection() -> void:
 	"""Clear all plot selections ([ key)"""
-	selection_manager.clear_selection()
+	selected_plots.clear()
 
 	# Update all tiles
 	for pos in tiles.keys():
 		tiles[pos].set_checkbox_selected(false)
 
 	print("🗑️  All selections cleared")
+	selection_count_changed.emit(0)
 
 
 func restore_previous_selection() -> void:
 	"""Restore previous selection state (] key)"""
-	selection_manager.restore_state()
+	selected_plots = previous_selection.duplicate()
 
 	# Update all tiles to match
 	for pos in tiles.keys():
-		var is_selected = selection_manager.is_selected(pos)
+		var is_selected = selected_plots.has(pos)
 		tiles[pos].set_checkbox_selected(is_selected)
+
+	selection_count_changed.emit(selected_plots.size())
 
 
 func get_selected_plots() -> Array[Vector2i]:
 	"""Get all currently selected plots (NEW)"""
-	return selection_manager.get_selected()
+	var result: Array[Vector2i] = []
+	for pos in selected_plots.keys():
+		result.append(pos)
+	return result
 
 
 func get_selected_plot_count() -> int:
 	"""Get number of selected plots (NEW)"""
-	return selection_manager.get_count()
-
-
-func _on_selection_changed(selected_plots: Array[Vector2i], count: int) -> void:
-	"""Handle selection manager change signal (NEW)"""
-	# This is called when SelectionManager emits selection_changed
-	# Could be used to notify other systems about selection state
-	if count > 0:
-		print("📍 Selection changed: %d plots selected" % count)
-	else:
-		print("📍 Selection cleared")
-
-	# Emit signal for UI systems to update button highlights
-	selection_count_changed.emit(count)
+	return selected_plots.size()
 
 
 func get_selected_plot() -> Vector2i:
