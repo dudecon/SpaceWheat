@@ -158,18 +158,17 @@ func inject_farm(farm_ref: Node) -> void:
 	for pos in tiles.keys():
 		update_tile_from_farm(pos)
 
-	# PHASE 4: DO NOT connect to farm signals - QuantumForceGraph is now primary visualization
-	# PlotGridDisplay is hidden and replaced by QuantumForceGraph for plot visualization
-	# These connections would create haunted double-updates and conflicts
-	# Keeping this code commented for reference if we ever switch back to classical mode
-	#if farm.has_signal("plot_planted"):
-	#	if not farm.plot_planted.is_connected(_on_farm_plot_planted):
-	#		farm.plot_planted.connect(_on_farm_plot_planted)
-	#		print("   📡 Connected to farm.plot_planted")
-	#if farm.has_signal("plot_harvested"):
-	#	if not farm.plot_harvested.is_connected(_on_farm_plot_harvested):
-	#		farm.plot_harvested.connect(_on_farm_plot_harvested)
-	#		print("   📡 Connected to farm.plot_harvested")
+	# PHASE 4: Connect to farm signals so PlotGridDisplay updates when plots change
+	# Since PlotGridDisplay is now the primary visualization (QuantumForceGraph not integrated),
+	# we need these connections to show emoji updates when planting/harvesting
+	if farm.has_signal("plot_planted"):
+		if not farm.plot_planted.is_connected(_on_farm_plot_planted):
+			farm.plot_planted.connect(_on_farm_plot_planted)
+			print("   📡 Connected to farm.plot_planted")
+	if farm.has_signal("plot_harvested"):
+		if not farm.plot_harvested.is_connected(_on_farm_plot_harvested):
+			farm.plot_harvested.connect(_on_farm_plot_harvested)
+			print("   📡 Connected to farm.plot_harvested")
 
 	print("💉 Farm injected into PlotGridDisplay")
 
