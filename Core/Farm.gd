@@ -104,7 +104,6 @@ func _ready():
 
 	# Instantiate BioticFlux Biome
 	biotic_flux_biome = BioticFluxBiome.new()
-	biotic_flux_biome.is_static = false
 	add_child(biotic_flux_biome)
 	# HAUNTED UI FIX: Removed manual ._ready() call - add_child() triggers _ready() automatically
 	# biotic_flux_biome._ready()  # Removed - causes double initialization
@@ -112,7 +111,6 @@ func _ready():
 
 	# Instantiate Market Biome
 	market_biome = MarketBiome.new()
-	market_biome.is_static = false
 	add_child(market_biome)
 	# HAUNTED UI FIX: Removed manual ._ready() call - add_child() triggers _ready() automatically
 	# market_biome._ready()  # Removed - causes double initialization
@@ -120,7 +118,6 @@ func _ready():
 
 	# Instantiate Forest Ecosystem Biome
 	forest_biome = ForestBiome.new()
-	forest_biome.is_static = false
 	add_child(forest_biome)
 	# HAUNTED UI FIX: Removed manual ._ready() call - add_child() triggers _ready() automatically
 	# forest_biome._ready()  # Removed - causes double initialization

@@ -2,6 +2,7 @@ class_name ForestEcosystem_Biome
 extends "res://Core/Environment/BiomeBase.gd"
 
 const BiomePlot = preload("res://Core/GameMechanics/BiomePlot.gd")
+const QuantumOrganism = preload("res://Core/Environment/QuantumOrganism.gd")
 
 ## Quantum Forest Ecosystem Biome
 ##

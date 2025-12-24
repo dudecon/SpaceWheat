@@ -138,7 +138,8 @@ func refresh_all(farm: Node) -> void:
 			if plot:
 				update_plot(pos, plot)
 
-	update_biome(farm.biome)
+	# Note: Biome state updates are now handled individually by each biome
+	# via their own update cycles and visual rendering
 	grid_refreshed.emit()
 
 

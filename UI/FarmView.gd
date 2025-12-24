@@ -56,34 +56,45 @@ func _ready() -> void:
 	else:
 		# No farm provided - create a default simple farm for testing
 		print("📝 No farm provided - creating default UIOP farm (6x1)...")
-		var farm = Farm.new()
-		test_farm = farm
 
-		# Add farm to scene tree (needed for _ready() to be called)
-		add_child(farm)
-		print("✅ Farm added to scene tree")
-
-		# Use REAL Biome with full quantum evolution enabled
-		# Quantum states evolve over time, sun/moon cycles, icons influence growth
-		if farm.biome:
-			farm.biome.is_static = false
-			print("   🌍 Biome enabled with full quantum evolution")
-
-		# Wrap farm with adapter to implement ControlsInterface
-		var AdapterClass = load("res://UI/FarmControlsAdapter.gd")
-		var controls = AdapterClass.new(farm)
-
-		# Bridge signals immediately after creation
-		controls.bridge_farm_signals()
-
-		# Inject into UI controller - BOTH the adapter AND the farm
-		ui_controller.inject_controls(controls)
-		ui_controller.inject_farm(farm)  # This triggers signal connections in controls_manager
-
-		print("✅ Default farm created with FarmControlsAdapter")
+		# Use call_deferred to ensure FarmView is ready before initializing farm
+		call_deferred("_initialize_default_farm")
 
 	# UI controller will initialize everything in its _ready()
 	print("✅ FarmView ready - delegating to FarmUIController")
+
+
+func _initialize_default_farm() -> void:
+	"""Initialize the default farm after FarmView is fully ready"""
+	var farm = Farm.new()
+	test_farm = farm
+
+	# Add farm to scene tree (needed for _ready() to be called)
+	add_child(farm)
+	print("✅ Farm added to scene tree")
+
+	# Wait for farm._ready() to complete by waiting for a process frame
+	# _ready() is called during add_child(), completes in this frame
+	await get_tree().process_frame
+	print("   ✅ Farm _ready() completed - grid is now initialized")
+
+	# Biomes are automatically initialized when farm._ready() is called
+	# Quantum states evolve over time, sun/moon cycles, icons influence growth
+	print("   🌍 Biomes initialized with full quantum evolution")
+
+	# Wrap farm with adapter to implement ControlsInterface
+	var AdapterClass = load("res://UI/FarmControlsAdapter.gd")
+	var controls = AdapterClass.new(farm)
+
+	# Bridge signals immediately after creation
+	controls.bridge_farm_signals()
+
+	# Inject into UI controller - BOTH the adapter AND the farm
+	# CRITICAL: Now farm.grid is guaranteed to be initialized
+	ui_controller.inject_controls(controls)
+	ui_controller.inject_farm(farm)  # This triggers signal connections in controls_manager
+
+	print("✅ Default farm created with FarmControlsAdapter")
 
 	# Check if auto-play test mode is enabled
 	if OS.get_environment("GODOT_TEST_AUTOPLAY") == "1":

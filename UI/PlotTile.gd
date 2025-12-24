@@ -76,7 +76,6 @@ func _ready():
 	mouse_filter = Control.MOUSE_FILTER_STOP  # Explicitly enable mouse input
 
 	# Explicitly layout elements since NOTIFICATION_RESIZED may not fire in all cases
-	await get_tree().process_frame
 	_layout_elements()
 
 	# Update visuals
