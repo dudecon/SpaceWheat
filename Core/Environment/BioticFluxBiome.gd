@@ -59,7 +59,7 @@ func _ready():
 		return
 
 	# Initialize celestial sun/moon qubit (immutable, eternal)
-	sun_qubit = BiomeUtilities.create_qubit("☀️", "🌙", 0.0)  # Start at north (☀️ = full day)
+	sun_qubit = BiomeUtilities.create_qubit("☀️", "🌑", 0.0)  # Start at north (☀️ = full day, 🌑 = full night)
 	sun_qubit.radius = 1.0  # Always pure, never decoheres
 	plots_by_type[PlotType.CELESTIAL].append(Vector2i(-1, -1))  # Special position
 	plot_types[Vector2i(-1, -1)] = PlotType.CELESTIAL
@@ -83,8 +83,7 @@ func _ready():
 		"spring_constant": 0.5,
 		"internal_qubit": wheat_internal
 	}
-	# Boost wheat influence so icon-aligned wheat grows visibly
-	wheat_energy_influence = 0.15  # 8x boost to show icon effect
+	# Keep wheat_energy_influence at tuned 0.017 for 3-day 30%→90% growth (don't override)
 
 	# MUSHROOM ICON - Create fallback directly
 	mushroom_icon = {
@@ -389,7 +388,7 @@ func get_sun_visualization() -> Dictionary:
 			"emoji": String  # ☀️ (day) or 🌙 (night)
 		}
 	"""
-	var emoji = "☀️" if sun_display_theta < PI/2.0 else "🌙"
+	var emoji = sun_qubit.north_emoji if sun_display_theta < PI/2.0 else sun_qubit.south_emoji
 	return {
 		"color": sun_color,
 		"theta": sun_display_theta,
@@ -544,9 +543,10 @@ func _apply_spring_attraction(dt: float) -> void:
 		if position in plot_types and plot_types[position] == PlotType.CELESTIAL:
 			continue
 
-		# Detect hybrid crops
-		var is_hybrid = (qubit.north_emoji == "🌾" and qubit.south_emoji == "🍄") or \
-		                (qubit.north_emoji == "🍄" and qubit.south_emoji == "🌾")
+		# Detect hybrid crops (wheat + mushroom emojis together)
+		var is_wheat = qubit.north_emoji == "🌾" or qubit.south_emoji == "🌾" or qubit.north_emoji == "💧" or qubit.south_emoji == "💧"
+		var is_mushroom = qubit.north_emoji == "🍄" or qubit.south_emoji == "🍄" or qubit.north_emoji == "🍂" or qubit.south_emoji == "🍂"
+		var is_hybrid = is_wheat and is_mushroom
 
 		# Calculate total spring torque (can come from both icons for hybrids)
 		var total_spring_torque = 0.0
@@ -581,7 +581,8 @@ func _apply_spring_attraction(dt: float) -> void:
 		else:
 			# SPECIALIST: Attracted to single stable point
 			var icon = null
-			if qubit.north_emoji == "🍄":
+			# Check if this is a mushroom (🍄 or 🍂 emojis)
+			if qubit.north_emoji == "🍄" or qubit.north_emoji == "🍂" or qubit.south_emoji == "🍄" or qubit.south_emoji == "🍂":
 				icon = mushroom_icon
 			else:
 				icon = wheat_icon

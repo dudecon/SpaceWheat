@@ -41,6 +41,9 @@ func _ready() -> void:
 
 	print("   ✅ All child nodes referenced")
 
+	# Apply parametric sizing based on viewport
+	_apply_parametric_sizing()
+
 
 func setup_farm(farm_ref: Node) -> void:
 	"""Configure FarmUI for a specific farm (called after scene instantiation)"""
@@ -146,3 +149,39 @@ func _on_selection_changed(count: int) -> void:
 			print("✅ %d plot(s) selected - Q/E/R actions available" % count)
 		else:
 			print("❌ No plots selected - Q/E/R actions disabled" % count)
+
+
+func _apply_parametric_sizing() -> void:
+	"""Apply parametric sizing to UI components based on viewport dimensions"""
+	var viewport_size = get_viewport_rect().size
+	var viewport_height = viewport_size.y
+
+	# Parametric layout: divide viewport into zones
+	# 0-6% (Top): ResourcePanel
+	# 6-72% (Middle): PlotGridDisplay
+	# 72-87% (Bottom1): ActionPreviewRow
+	# 87-100% (Bottom2): ToolSelectionRow
+
+	var resource_panel_height = viewport_height * 0.06
+	var plot_grid_height = viewport_height * 0.66  # 72% - 6%
+	var action_row_height = viewport_height * 0.15  # 87% - 72%
+	var tool_row_height = viewport_height * 0.13   # 100% - 87%
+
+	# Apply to MainContainer children
+	if resource_panel:
+		resource_panel.custom_minimum_size = Vector2(0, resource_panel_height)
+
+	if plot_grid_display:
+		plot_grid_display.custom_minimum_size = Vector2(0, plot_grid_height)
+
+	if action_preview_row:
+		action_preview_row.custom_minimum_size = Vector2(0, action_row_height)
+
+	if tool_selection_row:
+		tool_selection_row.custom_minimum_size = Vector2(0, tool_row_height)
+
+	print("📐 FarmUI parametric sizing applied:")
+	print("  ResourcePanel: %.0fpx (6%% of %.0f)" % [resource_panel_height, viewport_height])
+	print("  PlotGridDisplay: %.0fpx (66%%)" % plot_grid_height)
+	print("  ActionPreviewRow: %.0fpx (15%%)" % action_row_height)
+	print("  ToolSelectionRow: %.0fpx (13%%)" % tool_row_height)

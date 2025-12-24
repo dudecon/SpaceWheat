@@ -55,7 +55,7 @@ func _ready():
 	# Container setup
 	# Note: Don't use anchors in container children - let parent handle layout
 	add_theme_constant_override("separation", 10)
-	alignment = BoxContainer.ALIGNMENT_CENTER
+	alignment = BoxContainer.ALIGNMENT_BEGIN
 
 	# Ensure container doesn't block keyboard input
 	mouse_filter = MOUSE_FILTER_IGNORE

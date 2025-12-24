@@ -1,5 +1,5 @@
 class_name SaveLoadMenu
-extends PanelContainer
+extends Control
 
 ## Save/Load Menu
 ## Shows 3 save slots with save information
@@ -36,6 +36,9 @@ var debug_environments = {
 
 
 func _init():
+	# Set name for reference by EscapeMenu
+	name = "SaveLoadMenu"
+
 	# Full screen overlay - fill entire screen
 	anchor_left = 0.0
 	anchor_top = 0.0
@@ -45,6 +48,7 @@ func _init():
 	offset_top = 0
 	offset_right = 0
 	offset_bottom = 0
+	layout_mode = 1  # LAYOUT_MODE_FULLRECT - ensures we fill viewport
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Process even when game is paused
@@ -57,7 +61,7 @@ func _init():
 	background.anchor_top = 0.0
 	background.anchor_right = 1.0
 	background.anchor_bottom = 1.0
-	background.layout_mode = Control.LAYOUT_MODE_FILL_PARENT
+	background.layout_mode = 1  # LAYOUT_MODE_FULLRECT
 	add_child(background)
 
 	# Center container - child of THIS node for proper centering
@@ -66,11 +70,12 @@ func _init():
 	center.anchor_top = 0.0
 	center.anchor_right = 1.0
 	center.anchor_bottom = 1.0
-	center.layout_mode = Control.LAYOUT_MODE_FILL_PARENT
+	center.layout_mode = 1  # LAYOUT_MODE_FULLRECT
 	add_child(center)
 
-	# Menu panel
+	# Menu panel - will be sized parametrically when shown
 	var menu_panel = PanelContainer.new()
+	# Default size (will be overridden when shown)
 	menu_panel.custom_minimum_size = Vector2(600, 500)
 	center.add_child(menu_panel)
 
@@ -146,6 +151,7 @@ func _init():
 func _create_slot_button(slot: int) -> Button:
 	var btn = Button.new()
 	btn.name = "SlotButton" + str(slot)
+	# Default sizing (will be adjusted when shown)
 	btn.custom_minimum_size = Vector2(550, 80)
 	btn.add_theme_font_size_override("font_size", 20)
 

@@ -1,5 +1,5 @@
 class_name EscapeMenu
-extends PanelContainer
+extends Control
 
 ## Escape Menu
 ## Shows when ESC is pressed, provides restart and quit options
@@ -29,6 +29,7 @@ func _init():
 	offset_top = 0
 	offset_right = 0
 	offset_bottom = 0
+	layout_mode = 1  # LAYOUT_MODE_FULLRECT - ensures we fill viewport
 	mouse_filter = Control.MOUSE_FILTER_STOP  # Block input to game
 
 	# Process even when game is paused (so menu still works)
@@ -41,7 +42,7 @@ func _init():
 	background.anchor_top = 0.0
 	background.anchor_right = 1.0
 	background.anchor_bottom = 1.0
-	background.layout_mode = Control.LAYOUT_MODE_FILL_PARENT
+	background.layout_mode = 1  # LAYOUT_MODE_FULLRECT
 	add_child(background)
 
 	# Center container for menu - child of THIS node for proper centering
@@ -50,12 +51,13 @@ func _init():
 	center.anchor_top = 0.0
 	center.anchor_right = 1.0
 	center.anchor_bottom = 1.0
-	center.layout_mode = Control.LAYOUT_MODE_FILL_PARENT
+	center.layout_mode = 1  # LAYOUT_MODE_FULLRECT
 	add_child(center)
 
-	# Menu box
+	# Menu box - will be sized parametrically when shown
 	var menu_panel = PanelContainer.new()
-	menu_panel.custom_minimum_size = Vector2(400, 600)  # Increased for extra buttons
+	# Default size (will be overridden when menu is shown)
+	menu_panel.custom_minimum_size = Vector2(400, 600)
 	center.add_child(menu_panel)
 
 	menu_vbox = VBoxContainer.new()
@@ -117,6 +119,7 @@ func _init():
 func _create_menu_button(text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
+	# Default sizing (will be adjusted when shown)
 	btn.custom_minimum_size = Vector2(300, 60)
 	btn.add_theme_font_size_override("font_size", 24)
 
@@ -143,6 +146,14 @@ func _input(event):
 	"""Handle keyboard navigation in menu"""
 	if not visible or not event is InputEventKey or not event.pressed or event.echo:
 		return
+
+	# Check if SaveLoadMenu is visible - if so, don't process ESC (let SaveLoadMenu handle it)
+	var parent = get_parent()
+	if parent:
+		for child in parent.get_children():
+			if child.name == "SaveLoadMenu" and child.visible:
+				# SaveLoadMenu is open, don't process input here
+				return
 
 	match event.keycode:
 		KEY_ESCAPE:

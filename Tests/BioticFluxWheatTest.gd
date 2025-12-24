@@ -47,20 +47,18 @@ func _ready() -> void:
 	_plant_varied_mushrooms()  # Mushrooms scattered at θ ≈ π
 	print("   ✓ Planted %d mushroom qubits" % mushroom_positions.size())
 
-	# Create visualization overlay
-	print("\n📊 Creating quantum visualization...")
+	# Create force-directed quantum visualization
+	print("\n📊 Creating force-directed quantum visualization...")
 	visualization = SimpleQuantumVisualizationController.new()
 	visualization.set_anchors_preset(Control.PRESET_FULL_RECT)
 	container.add_child(visualization)
 
-	# Add sun/moon qubit to visualization (with scatter positioning)
-	print("\n☀️ Adding sun/moon qubit to visualization...")
-
-	# Connect biome to visualization (includes sun/moon from quantum_states)
+	# Get random scatter positions and connect biome
+	print("\n☀️ Initializing force-directed graph with scattered nodes...")
 	var plot_positions = _get_plot_positions()
 	visualization.connect_biome(biome, plot_positions)
-	print("   ✓ Visualization connected to biome")
-	print("   ✓ Glyphs created: %d (sun + wheat + mushrooms)" % visualization.glyphs.size())
+	print("   ✓ Force-directed graph initialized with physics")
+	print("   ✓ Nodes: %d (wheat + mushrooms with forces + sun celestial)" % visualization.nodes.size())
 
 	print("\n⚡ ENERGY TRANSFER DYNAMICS")
 	print("   Energy formula: rate = base × cos²(θ/2) × cos²((θ-θ_sun)/2) × icon_influence")
@@ -116,16 +114,18 @@ func _plant_varied_mushrooms() -> void:
 	]
 
 	for pos in positions:
-		# Create mushroom qubit (🍄 = south pole)
+		# Create mushroom qubit (🍂 = north/day, 🍄 = south/night)
 		var mushroom = DualEmojiQubit.new()
-		mushroom.north_emoji = "🍄"
-		mushroom.south_emoji = "🌍"  # Soil reference
+		mushroom.north_emoji = "🍂"  # Detritus/decay during day
+		mushroom.south_emoji = "🍄"  # Mushroom active at night
 
-		# Vary theta around π (mushroom-leaning states)
-		# Random variation around π ± π/4 for visual diversity
-		var angle_offset = randf_range(-PI/4, PI/4)
-		mushroom.theta = PI + angle_offset
+		# Start at dusk theta (π/2 = evening/transition) with variation
+		# This lets them evolve toward night (π) as energy flows
+		var dusk_angle = PI / 2.0
+		var angle_offset = randf_range(-PI/8, PI/8)  # Smaller variation around dusk
+		mushroom.theta = dusk_angle + angle_offset
 
+		# Random azimuthal angle
 		mushroom.phi = randf() * TAU
 		mushroom.radius = 0.3  # Initial energy
 		mushroom.energy = 0.3

@@ -7,7 +7,11 @@
 [ext_resource type="Script" path="res://UI/Panels/ActionPreviewRow.gd" id="5_actionrow"]
 
 [node name="FarmUI" type="Control"]
-layout_mode = 2
+layout_mode = 1
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
 script = ExtResource("1_farmui")
 
 [node name="MainContainer" type="VBoxContainer" parent="."]
@@ -21,9 +25,12 @@ offset_top = 0.0
 offset_right = 0.0
 offset_bottom = 0.0
 separation = 0
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="ResourcePanel" type="HBoxContainer" parent="MainContainer"]
 layout_mode = 2
+size_flags_horizontal = 3
 custom_minimum_size = Vector2(0, 50)
 script = ExtResource("2_resourcepanel")
 
