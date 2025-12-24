@@ -4,6 +4,7 @@ extends Control
 ## Displays colorful qubits with force-directed layout and entanglement
 
 const QuantumForceGraphScript = preload("res://Core/Visualization/QuantumForceGraph.gd")
+const QuantumNodeScript = preload("res://Core/Visualization/QuantumNode.gd")
 const DualEmojiQubitScript = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 
 @onready var graph_node = $QuantumForceGraph
@@ -48,37 +49,24 @@ func _create_sample_qubits():
 	var radius = 250.0
 
 	for i in range(emojis.size()):
-		# Create a mock plot with qubit
-		var plot = {
-			"plot_id": "test_plot_%d" % i,
-			"grid_position": Vector2i(i % 5, i / 5),
-			"quantum_state": DualEmojiQubitScript.new(emojis[i], emojis[(i + 1) % emojis.size()]),
-			"entangled_plots": {},
-			"has_been_measured": false
-		}
+		# Create a qubit
+		var qubit = DualEmojiQubitScript.new(emojis[i], emojis[(i + 1) % emojis.size()])
+		qubit.theta = randf_range(0.0, PI)
+		qubit.phi = randf_range(0.0, TAU)
+		qubit.radius = randf_range(0.4, 1.0)
 
-		# Random quantum state
-		plot.quantum_state.theta = randf_range(0.0, PI)
-		plot.quantum_state.phi = randf_range(0.0, TAU)
-		plot.quantum_state.radius = randf_range(0.4, 1.0)
+		# Create a QuantumNode object
+		var quantum_node = QuantumNodeScript.new()
+		quantum_node.plot_id = "test_plot_%d" % i
+		quantum_node.plot = null  # No actual plot
+		quantum_node.position = center + Vector2(cos(i * TAU / emojis.size()) * radius, sin(i * TAU / emojis.size()) * radius)
+		quantum_node.velocity = Vector2.ZERO
+		quantum_node.radius = 30.0
+		quantum_node.color = Color.from_hsv(float(i) / emojis.size(), 0.8, 0.9)
 
-		# Create QuantumNode for the graph
-		var quantum_node = {
-			"plot_id": plot["plot_id"],
-			"plot": plot,
-			"position": center + Vector2(cos(i * TAU / emojis.size()) * radius, sin(i * TAU / emojis.size()) * radius),
-			"velocity": Vector2.ZERO,
-			"radius": 30.0,
-			"color": Color.from_hsv(float(i) / emojis.size(), 0.8, 0.9)
-		}
-
-		# Randomly entangle some qubits
-		if i > 0 and randf() < 0.5:
-			var prev_idx = i - 1
-			plot["entangled_plots"]["test_plot_%d" % prev_idx] = {
-				"entanglement_strength": randf_range(0.3, 0.9),
-				"bell_gate": "CNOT"
-			}
+		# Set the quantum state on the node (if it has this property)
+		if quantum_node.has_meta("quantum_state"):
+			quantum_node.set_meta("quantum_state", qubit)
 
 		qubits.append(quantum_node)
 
@@ -100,16 +88,18 @@ func _update_metrics():
 	if qubits.is_empty():
 		return
 
-	# Count qubits and entanglements
+	# Count qubits
 	var qubit_count = qubits.size()
 	var entangled_count = 0
 	var total_coherence = 0.0
 
 	for quantum_node in qubits:
-		var plot = quantum_node["plot"]
-		if plot and "quantum_state" in plot and plot.quantum_state:
-			total_coherence += plot.quantum_state.radius
-			entangled_count += plot["entangled_plots"].size()
+		# Count entanglements if plot exists
+		if quantum_node.plot and quantum_node.plot.has_method("get_entanglement_count"):
+			entangled_count += quantum_node.plot.entangled_plots.size()
+
+		# Get coherence from qubit radius
+		total_coherence += quantum_node.radius  # Use node.radius as proxy for coherence
 
 	# Update labels
 	qubit_count_label.text = "Qubits: %d" % qubit_count
@@ -117,6 +107,6 @@ func _update_metrics():
 
 	if qubit_count > 0:
 		var avg_coherence = total_coherence / qubit_count
-		coherence_label.text = "Avg Coherence: %.2f" % avg_coherence
+		coherence_label.text = "Avg Coherence: %.2f" % (avg_coherence / 30.0)  # Normalize from radius scale
 	else:
 		coherence_label.text = "Avg Coherence: ────"

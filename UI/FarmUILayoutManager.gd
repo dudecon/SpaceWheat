@@ -40,6 +40,13 @@ var vocabulary_evolution: Node = null
 var conspiracy_network: Node = null
 var grid_config: GridConfig = null  # Grid configuration (Phase 7)
 
+## REFACTORING: Store dependencies for injection into plot_grid_display
+## plot_grid_display is created in _create_ui_structure() (during _ready())
+## But inject_farm() / inject_grid_config() are called BEFORE _ready(), so we store them and inject later
+var _pending_farm: Node = null
+var _pending_ui_controller: Node = null
+var _pending_grid_config: GridConfig = null
+
 ## UI Components
 var plot_grid_display: PlotGridDisplay
 var resource_panel: ResourcePanel
@@ -107,34 +114,65 @@ func inject_dependencies(faction_mgr: Node = null, vocab_sys: Node = null, consp
 
 
 func inject_farm(farm: Node, ui_controller: Node) -> void:
-	"""Inject farm and ui_controller into plot grid display"""
-	if plot_grid_display:
-		plot_grid_display.inject_farm(farm)
-		plot_grid_display.inject_ui_controller(ui_controller)
+	"""Store farm/ui_controller for injection into plot_grid_display
+
+	REFACTORING NOTE: plot_grid_display is created during _ready(), which is called
+	when add_child() is invoked. Since inject_farm() is called BEFORE add_child(),
+	we store the dependencies here and inject them after plot_grid_display is created
+	in _create_ui_structure().
+	"""
+	_pending_farm = farm
+	_pending_ui_controller = ui_controller
+	print("💉 Farm/UI dependencies stored for plot grid display injection")
+
+
+func _inject_pending_farm_dependencies() -> void:
+	"""Inject stored farm/ui_controller/grid_config into plot_grid_display after it's created
+
+	Called from _create_ui_structure() after plot_grid_display is created.
+	This method applies all dependencies that were stored before plot_grid_display existed.
+	"""
+	if not plot_grid_display:
+		print("⚠️  Cannot inject pending dependencies: plot_grid_display not created yet")
+		return
+
+	# Inject farm and dependencies
+	if _pending_farm:
+		plot_grid_display.inject_farm(_pending_farm)
+		plot_grid_display.inject_ui_controller(_pending_ui_controller)
 
 		# PHASE 8: Inject biomes for parametric positioning
-		if farm and farm.grid and farm.grid.biomes:
-			plot_grid_display.inject_biomes(farm.grid.biomes)
-			print("💉 Biomes injected into PlotGridDisplay for parametric positioning")
+		if _pending_farm.grid and _pending_farm.grid.biomes:
+			plot_grid_display.inject_biomes(_pending_farm.grid.biomes)
+			print("   💉 Biomes injected into PlotGridDisplay for parametric positioning")
 
-		print("💉 Farm injected into PlotGridDisplay")
+		print("   💉 Farm injected into PlotGridDisplay")
+		_pending_farm = null
+		_pending_ui_controller = null
+
+	# Inject grid config
+	if _pending_grid_config:
+		plot_grid_display.inject_grid_config(_pending_grid_config)
+		print("   💉 GridConfig injected into PlotGridDisplay")
+		_pending_grid_config = null
 
 
 func inject_grid_config(config: GridConfig) -> void:
-	"""Inject GridConfig into PlotGridDisplay (Phase 7)"""
+	"""Store GridConfig for injection into PlotGridDisplay (Phase 7)
+
+	REFACTORING NOTE: plot_grid_display is created during _ready(), which happens
+	after inject_grid_config() is called. We store the config here and inject it later
+	in _inject_pending_farm_dependencies().
+	"""
 	if not config:
 		push_error("FarmUILayoutManager: Attempted to inject null GridConfig!")
 		return
 
 	grid_config = config
-	print("💉 GridConfig injected into FarmUILayoutManager")
+	_pending_grid_config = config
+	print("💉 GridConfig stored for plot grid display injection")
 
-	# Pass to PlotGridDisplay
-	if plot_grid_display and plot_grid_display.has_method("inject_grid_config"):
-		plot_grid_display.inject_grid_config(config)
-		print("   📡 GridConfig → PlotGridDisplay")
-
-	# Pass to layout manager for dynamic sizing
+	# Pass to layout manager for dynamic sizing (if it exists)
 	if layout_manager and layout_manager.has_method("inject_grid_config"):
 		layout_manager.inject_grid_config(config)
 		print("   📡 GridConfig → UILayoutManager")
@@ -266,6 +304,11 @@ func _create_ui_components() -> void:
 	plot_grid_display = PlotGridDisplay.new()
 	plot_grid_display.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	plot_grid_display.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	# REFACTORING: Inject farm dependencies BEFORE adding to tree
+	# This ensures they're available in plot_grid_display._ready()
+	_inject_pending_farm_dependencies()
+
 	play_area.add_child(plot_grid_display)
 	# Show PlotGridDisplay for visualization
 	plot_grid_display.show()
