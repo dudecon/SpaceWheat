@@ -1,7 +1,47 @@
 [gd_scene load_steps=2 format=3 uid="uid://cdxfwm3p04laq"]
 
-[ext_resource type="Script" path="res://UI/FarmUI.gd" id="1_o7r2q"]
+[ext_resource type="Script" path="res://UI/FarmUI.gd" id="1_farmui"]
 
-[node name="FarmUI" type="Control" node_unique_name="true"]
-script = ExtResource("1_o7r2q")
+[node name="FarmUI" type="Control"]
 layout_mode = 2
+script = ExtResource("1_farmui")
+
+[node name="MainContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+separation = 0
+
+[node name="ResourcePanel" type="Control" parent="MainContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 50)
+
+[node name="PlotGridDisplay" type="Control" parent="MainContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="QuantumVisualizationController" type="Control" parent="."]
+layout_mode = 1
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+z_index = 1
+
+[node name="ToolSelectionRow" type="Control" parent="MainContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 60)
+
+[node name="ActionPreviewRow" type="Control" parent="MainContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)

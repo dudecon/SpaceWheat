@@ -4,13 +4,15 @@ extends Node
 ## Shows real-time quantum evolution with sun/moon cycling and energy growth
 
 const SimpleQuantumVisualizationController = preload("res://Core/Visualization/SimpleQuantumVisualizationController.gd")
+const QuantumGlyph = preload("res://Core/Visualization/QuantumGlyph.gd")
 const BioticFluxBiome = preload("res://Core/Environment/BioticFluxBiome.gd")
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 
 var biome = null
 var visualization: SimpleQuantumVisualizationController = null
 var frame_count: int = 0
-var wheat_positions: Array = []  # Track wheat positions for debugging
+var wheat_positions: Array = []  # Track wheat positions
+var mushroom_positions: Array = []  # Track mushroom positions
 
 
 func _ready() -> void:
@@ -36,10 +38,14 @@ func _ready() -> void:
 	print("   ✓ Base temperature: %.0fK" % biome.base_temperature)
 	print("   ✓ Base energy rate: %.3f" % biome.base_energy_rate)
 
-	# Add wheat to farm plots
-	print("\n🌾 Planting wheat in farm plots...")
-	_plant_wheat_grid(3, 3)  # 3x3 grid of wheat
+	# Add wheat and mushrooms with varied theta angles
+	print("\n🌾 Planting wheat with varied theta angles...")
+	_plant_varied_wheat(3, 3)  # 3x3 grid of wheat at different angles
 	print("   ✓ Planted %d wheat qubits" % wheat_positions.size())
+
+	print("\n🍄 Planting mushrooms with varied theta angles...")
+	_plant_varied_mushrooms()  # Mushrooms scattered at θ ≈ π
+	print("   ✓ Planted %d mushroom qubits" % mushroom_positions.size())
 
 	# Create visualization overlay
 	print("\n📊 Creating quantum visualization...")
@@ -47,11 +53,18 @@ func _ready() -> void:
 	visualization.set_anchors_preset(Control.PRESET_FULL_RECT)
 	container.add_child(visualization)
 
+	# Add sun/moon qubit to visualization
+	print("\n☀️ Adding sun/moon qubit to visualization...")
+	var sun_glyph = QuantumGlyph.new()
+	sun_glyph.qubit = biome.sun_qubit
+	sun_glyph.position = Vector2(100, 100)  # Top-left position
+	visualization.glyphs.append(sun_glyph)
+
 	# Connect biome to visualization
 	var plot_positions = _get_plot_positions()
 	visualization.connect_biome(biome, plot_positions)
 	print("   ✓ Visualization connected to biome")
-	print("   ✓ Glyphs created: %d" % visualization.glyphs.size())
+	print("   ✓ Glyphs created: %d (sun + wheat + mushrooms)" % visualization.glyphs.size())
 
 	print("\n⚡ ENERGY TRANSFER DYNAMICS")
 	print("   Energy formula: rate = base × cos²(θ/2) × cos²((θ-θ_sun)/2) × icon_influence")
@@ -65,8 +78,8 @@ func _ready() -> void:
 	print("   ✓ Berry bar filling (evolution history)\n")
 
 
-func _plant_wheat_grid(width: int, height: int) -> void:
-	"""Plant wheat qubits in a grid pattern"""
+func _plant_varied_wheat(width: int, height: int) -> void:
+	"""Plant wheat qubits at different theta angles"""
 	var center_x = -width / 2
 	var center_y = -height / 2
 
@@ -74,11 +87,16 @@ func _plant_wheat_grid(width: int, height: int) -> void:
 		for y in range(height):
 			var pos = Vector2i(center_x + x, center_y + y)
 
-			# Create wheat qubit (🌾 = north, 💧 = south for water availability)
+			# Create wheat qubit (🌾 = north, 💧 = south)
 			var wheat = DualEmojiQubit.new()
 			wheat.north_emoji = "🌾"
 			wheat.south_emoji = "💧"
-			wheat.theta = 0.0  # Start at wheat state (north pole)
+
+			# Vary theta from -π/4 to π/4 (wheat-leaning states)
+			# Use position to determine angle for visual effect
+			var angle_variation = (x - center_x) * PI / (width * 2.0)  # -π/4 to π/4
+			wheat.theta = angle_variation
+
 			wheat.phi = randf() * TAU
 			wheat.radius = 0.3  # Initial energy
 			wheat.energy = 0.3
@@ -91,6 +109,39 @@ func _plant_wheat_grid(width: int, height: int) -> void:
 			wheat_positions.append(pos)
 
 
+func _plant_varied_mushrooms() -> void:
+	"""Plant mushroom qubits scattered at different theta angles (near π)"""
+	var positions = [
+		Vector2i(-2, -2),
+		Vector2i(0, -2),
+		Vector2i(2, -2),
+		Vector2i(-1, 2),
+		Vector2i(1, 2),
+	]
+
+	for pos in positions:
+		# Create mushroom qubit (🍄 = south pole)
+		var mushroom = DualEmojiQubit.new()
+		mushroom.north_emoji = "🍄"
+		mushroom.south_emoji = "🌍"  # Soil reference
+
+		# Vary theta around π (mushroom-leaning states)
+		# Random variation around π ± π/4 for visual diversity
+		var angle_offset = randf_range(-PI/4, PI/4)
+		mushroom.theta = PI + angle_offset
+
+		mushroom.phi = randf() * TAU
+		mushroom.radius = 0.3  # Initial energy
+		mushroom.energy = 0.3
+
+		# Register with biome
+		biome.quantum_states[pos] = mushroom
+		biome.plots_by_type[biome.PlotType.FARM].append(pos)
+		biome.plot_types[pos] = biome.PlotType.FARM
+
+		mushroom_positions.append(pos)
+
+
 func _get_plot_positions() -> Dictionary:
 	"""Get screen positions for each plot (grid layout)"""
 	var positions = {}
@@ -99,7 +150,12 @@ func _get_plot_positions() -> Dictionary:
 	var viewport_size = Vector2(1920, 1080)
 	var center = viewport_size / 2.0
 
+	# Position wheat
 	for pos in wheat_positions:
+		positions[pos] = center + Vector2(pos.x * spacing, pos.y * spacing)
+
+	# Position mushrooms
+	for pos in mushroom_positions:
 		positions[pos] = center + Vector2(pos.x * spacing, pos.y * spacing)
 
 	return positions
@@ -152,22 +208,36 @@ func _print_energy_state() -> void:
 		biome.base_temperature
 	])
 
-	# Statistics across all wheat
+	# Statistics across all crops
 	var total_energy = 0.0
 	var max_energy = 0.0
-	var avg_theta = 0.0
+	var wheat_avg_theta = 0.0
+	var mushroom_count = 0
+	var mushroom_avg_theta = 0.0
+
 	for pos in wheat_positions:
 		var q = biome.quantum_states.get(pos)
 		if q:
 			total_energy += q.energy
 			max_energy = max(max_energy, q.energy)
-			avg_theta += q.theta
+			wheat_avg_theta += q.theta
 
-	avg_theta /= wheat_positions.size()
+	wheat_avg_theta /= wheat_positions.size()
+
+	for pos in mushroom_positions:
+		var q = biome.quantum_states.get(pos)
+		if q:
+			total_energy += q.energy
+			max_energy = max(max_energy, q.energy)
+			mushroom_avg_theta += q.theta
+			mushroom_count += 1
+
+	if mushroom_count > 0:
+		mushroom_avg_theta /= mushroom_count
+
 	print("   📈 Aggregate Stats:")
-	print("      Total energy: %.3f | Max: %.3f | Avg θ: %.3f" % [
-		total_energy, max_energy, avg_theta
-	])
+	print("      Total energy (wheat+mushroom): %.3f | Max: %.3f" % [total_energy, max_energy])
+	print("      Wheat avg θ: %.3f rad | Mushroom avg θ: %.3f rad" % [wheat_avg_theta, mushroom_avg_theta])
 	print()
 
 

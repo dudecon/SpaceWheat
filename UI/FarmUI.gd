@@ -29,109 +29,78 @@ var quantum_visualization: QuantumVisualizationController
 var current_tool: int = 1
 
 
+func _ready() -> void:
+	"""FarmUI scene is ready - get references to child nodes from scene definition"""
+	print("🎮 FarmUI initializing from scene...")
+
+	# Get references to scene-defined child nodes
+	resource_panel = get_node("MainContainer/ResourcePanel")
+	plot_grid_display = get_node("MainContainer/PlotGridDisplay")
+	quantum_visualization = get_node("QuantumVisualizationController")
+	tool_selection_row = get_node("MainContainer/ToolSelectionRow")
+	action_preview_row = get_node("MainContainer/ActionPreviewRow")
+
+	print("   ✅ All child nodes referenced")
+
+
 func setup_farm(farm_ref: Node) -> void:
-	"""Initialize with the farm"""
+	"""Configure FarmUI for a specific farm (called after scene instantiation)"""
+	print("📂 Loading farm into FarmUI...")
+
 	farm = farm_ref
 	grid_config = farm.grid_config if farm else null
 
-
-func _ready() -> void:
-	"""Set up farm UI synchronously"""
-	print("🎮 FarmUI initializing...")
-
-	# Fill parent
-	size = get_parent().size
-	position = Vector2.ZERO
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-
-	# Create main layout container (VBox for stacking resources, action preview, plots, tool selection)
-	var main_container = VBoxContainer.new()
-	main_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(main_container)
-
-	# ========== RESOURCE PANEL (Top) ==========
-	resource_panel = ResourcePanel.new()
-	resource_panel.custom_minimum_size = Vector2(0, 50)
-	main_container.add_child(resource_panel)
-
-	# Wire ResourcePanel to listen to economy signals (single accounting system)
-	if farm and farm.economy:
+	# Wire ResourcePanel to economy
+	if farm and farm.economy and resource_panel:
 		resource_panel.connect_to_economy(farm.economy)
-	else:
-		print("⚠️  Farm or economy not available for ResourcePanel")
+		print("   ✅ ResourcePanel wired to economy")
 
-	print("   ✅ ResourcePanel created")
-
-	# ========== PLOT GRID DISPLAY (Middle - expand) ==========
-	plot_grid_display = PlotGridDisplay.new()
-	plot_grid_display.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_container.add_child(plot_grid_display)
-
-	# Inject farm data into plot display
-	if farm:
+	# Wire PlotGridDisplay to farm
+	if farm and plot_grid_display:
 		plot_grid_display.inject_farm(farm)
-		plot_grid_display.inject_grid_config(farm.grid_config)
+		plot_grid_display.inject_grid_config(grid_config)
 		if farm.grid and farm.grid.biomes:
 			plot_grid_display.inject_biomes(farm.grid.biomes)
+		print("   ✅ PlotGridDisplay wired to farm")
 
-	print("   ✅ PlotGridDisplay created")
-
-	# ========== QUANTUM VISUALIZATION OVERLAY (On top of grid) ==========
-	quantum_visualization = QuantumVisualizationController.new()
-	quantum_visualization.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(quantum_visualization)
-
-	# Connect quantum viz to biome if available
-	if farm and farm.grid and farm.grid.biomes:
+	# Wire QuantumVisualization to biomes
+	if farm and farm.grid and farm.grid.biomes and quantum_visualization:
 		for biome_name in farm.grid.biomes.keys():
 			var biome = farm.grid.biomes[biome_name]
-			# For now, connect to first biome
 			quantum_visualization.connect_to_biome(biome, {})
 			print("   ✅ Quantum visualization connected to biome: %s" % biome_name)
-			break  # Only connect to first biome for MVP
+			break
 
-	print("   ✅ Quantum visualization overlay created")
+	# Wire tool selection
+	if tool_selection_row:
+		if not tool_selection_row.tool_selected.is_connected(_on_tool_selected):
+			tool_selection_row.tool_selected.connect(_on_tool_selected)
+		tool_selection_row.select_tool(1)
 
-	# ========== ACTION PREVIEW ROW (Below grid, above tools) ==========
-	action_preview_row = ActionPreviewRow.new()
-	action_preview_row.custom_minimum_size = Vector2(0, 60)
-	main_container.add_child(action_preview_row)
-	print("   ✅ ActionPreviewRow created (stacked above tools)")
-
-	# ========== TOOL SELECTION ROW (Bottom) ==========
-	tool_selection_row = ToolSelectionRow.new()
-	tool_selection_row.custom_minimum_size = Vector2(0, 70)
-	main_container.add_child(tool_selection_row)
-	tool_selection_row.tool_selected.connect(_on_tool_selected)
-
-	# Initialize with tool 1 to sync UI
-	tool_selection_row.select_tool(1)
-	action_preview_row.update_for_tool(1)
-
-	print("   ✅ ToolSelectionRow created")
+	# Wire action preview
+	if action_preview_row:
+		action_preview_row.update_for_tool(1)
 
 	# Create input handler
 	input_handler = FarmInputHandler.new()
 	add_child(input_handler)
 
-	# Wire input handler to farm and grid
-	if farm:
+	# Wire input handler
+	if farm and input_handler:
 		input_handler.farm = farm
 		input_handler.plot_grid_display = plot_grid_display
 		input_handler.inject_grid_config(grid_config)
-		# NOTE: Do NOT call set_process_input() here - FarmInputHandler manages its own initialization
 
-	# Listen for tool changes from input handler (keyboard presses)
-	if input_handler.has_signal("tool_changed"):
-		input_handler.tool_changed.connect(_on_input_tool_changed)
-		print("   📡 Connected to input_handler.tool_changed")
+		if input_handler.has_signal("tool_changed"):
+			input_handler.tool_changed.connect(_on_input_tool_changed)
+			print("   📡 Connected to input_handler.tool_changed")
 
-	# Listen for selection changes to highlight Q/E/R buttons
-	if plot_grid_display.has_signal("selection_count_changed"):
+	# Wire plot selection changes
+	if plot_grid_display and plot_grid_display.has_signal("selection_count_changed"):
 		plot_grid_display.selection_count_changed.connect(_on_selection_changed)
 		print("   📡 Connected to plot selection changes")
 
-	print("✅ FarmUI ready")
+	print("✅ FarmUI farm setup complete")
 
 
 func _input(event: InputEvent) -> void:

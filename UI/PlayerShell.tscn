@@ -1,0 +1,34 @@
+[gd_scene load_steps=2 format=3 uid="uid://bd4pq6xwme3o8"]
+
+[ext_resource type="Script" path="res://UI/PlayerShell.gd" id="1_abcde"]
+
+[node name="PlayerShell" type="Control"]
+layout_mode = 2
+script = ExtResource("1_abcde")
+
+[node name="FarmUIContainer" type="Control" parent="."]
+layout_mode = 1
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+
+[node name="CityUIContainer" type="Control" parent="."]
+layout_mode = 1
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
+visible = false
+
+[node name="OverlayLayer" type="Control" parent="."]
+layout_mode = 1
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
+z_index = 1000

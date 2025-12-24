@@ -7,10 +7,9 @@
 extends Control
 
 const Farm = preload("res://Core/Farm.gd")
-const PlayerShell = preload("res://UI/PlayerShell.gd")
 const InputController = preload("res://UI/Controllers/InputController.gd")
 
-var shell: PlayerShell = null
+var shell = null  # PlayerShell (from scene)
 var farm: Node = null
 var input_controller: InputController = null
 
@@ -19,19 +18,24 @@ func _ready() -> void:
 	"""Initialize: create farm and shell, wire them together"""
 	print("🌾 FarmView starting...")
 
-	# Create farm (synchronous, no deferred)
+	# Load PlayerShell scene
+	print("🎪 Loading player shell scene...")
+	var shell_scene = load("res://UI/PlayerShell.tscn")
+	if shell_scene:
+		shell = shell_scene.instantiate()
+		add_child(shell)
+		print("   ✅ Player shell loaded and added to tree")
+	else:
+		print("❌ PlayerShell.tscn not found!")
+		return
+
+	# Create farm (synchronous)
 	print("📝 Creating farm...")
 	farm = Farm.new()
 	add_child(farm)
 	print("   ✅ Farm created and added to tree")
 
-	# Create player shell
-	print("🎪 Creating player shell...")
-	shell = PlayerShell.new()
-	add_child(shell)
-	print("   ✅ Player shell created")
-
-	# Load farm into shell (this creates FarmUI internally)
+	# Load farm into shell (this configures FarmUI)
 	shell.load_farm(farm)
 
 	# Create input controller and wire signals

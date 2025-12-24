@@ -10,38 +10,34 @@
 class_name PlayerShell
 extends Control
 
-const FarmUI = preload("res://UI/FarmUI.gd")
 const OverlayManager = preload("res://UI/Managers/OverlayManager.gd")
 
-var current_farm_ui = null  # FarmUI instance (loaded from scene)
+var current_farm_ui = null  # FarmUI instance (from scene)
 var overlay_manager: OverlayManager = null
 var farm: Node = null
+var farm_ui_container: Control = null
 
 
 func _ready() -> void:
-	"""Initialize player shell UI"""
+	"""Initialize player shell UI - children defined in scene"""
 	print("🎪 PlayerShell initializing...")
 
-	# Fill screen
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	size = get_viewport().get_visible_rect().size
+	# Get reference to containers from scene
+	farm_ui_container = get_node("FarmUIContainer")
+	var overlay_layer = get_node("OverlayLayer")
 
-	# Create overlay manager (ESC menu, overlays, etc)
+	# Create overlay manager and add to overlay layer
 	overlay_manager = OverlayManager.new()
-	add_child(overlay_manager)
-
-	# Initialize overlays with minimal dependencies (will be upgraded later if needed)
-	_initialize_overlay_system()
+	overlay_layer.add_child(overlay_manager)
+	overlay_manager.initialize()
 
 	print("   ✅ Overlay manager created")
-
-	# Farm will be loaded by parent (typically GameController or main scene)
 	print("✅ PlayerShell ready")
 
 
 func load_farm(farm_ref: Node) -> void:
-	"""Load a farm (swappable - creates fresh FarmUI)"""
-	print("📂 Loading farm...")
+	"""Load a farm into FarmUIContainer (swappable)"""
+	print("📂 Loading farm into PlayerShell...")
 
 	# Clean up old farm UI if it exists
 	if current_farm_ui:
@@ -51,19 +47,20 @@ func load_farm(farm_ref: Node) -> void:
 	# Store farm reference
 	farm = farm_ref
 
-	# Create fresh FarmUI for this farm
-	# Note: FarmUI extends Control and can't be instantiated with .new() in Godot 4
-	# Instead, load it as a scene
+	# Load FarmUI as scene and add to container
 	var farm_ui_scene = load("res://UI/FarmUI.tscn")
 	if farm_ui_scene:
 		current_farm_ui = farm_ui_scene.instantiate()
-		add_child(current_farm_ui)
-		# Call setup_farm after the node enters the scene tree
-		current_farm_ui.call_deferred("setup_farm", farm_ref)
+		farm_ui_container.add_child(current_farm_ui)
+
+		# Setup farm immediately (no call_deferred - synchronous!)
+		current_farm_ui.setup_farm(farm_ref)
+		print("   ✅ FarmUI loaded and configured")
 	else:
 		print("❌ FarmUI.tscn not found - cannot load farm UI")
+		return
 
-	print("   ✅ FarmUI created and added")
+	print("✅ Farm loaded into PlayerShell")
 
 
 func _input(event: InputEvent) -> void:
