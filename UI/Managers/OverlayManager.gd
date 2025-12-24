@@ -161,59 +161,93 @@ func toggle_overlay(name: String) -> void:
 
 func show_overlay(name: String) -> void:
 	"""Show a specific overlay"""
+	print("🔓 show_overlay('%s') called" % name)
 	match name:
 		"contracts":
 			if contract_panel:
+				print("  → Setting contract_panel.visible = true")
 				contract_panel.visible = true
 				contract_panel.refresh_display()
 				overlay_states["contracts"] = true
 				overlay_toggled.emit("contracts", true)
+				print("  ✅ contract_panel shown")
+			else:
+				print("  ❌ contract_panel is null!")
 		"vocabulary":
 			if vocabulary_overlay:
+				print("  → Setting vocabulary_overlay.visible = true")
 				vocabulary_overlay.visible = true
 				overlay_states["vocabulary"] = true
 				overlay_toggled.emit("vocabulary", true)
+				print("  ✅ vocabulary_overlay shown")
+			else:
+				print("  ❌ vocabulary_overlay is null!")
 		"network":
 			if network_overlay:
+				print("  → Setting network_overlay.visible = true")
 				network_overlay.visible = true
 				if network_info_panel:
 					network_info_panel.visible = true
 				overlay_states["network"] = true
 				overlay_toggled.emit("network", true)
+				print("  ✅ network_overlay shown")
+			else:
+				print("  ❌ network_overlay is null (disabled)")
 		"escape_menu":
 			if escape_menu:
+				print("  → Calling escape_menu.show_menu()")
 				escape_menu.show_menu()
 				overlay_states["escape_menu"] = true
 				overlay_toggled.emit("escape_menu", true)
+				print("  ✅ escape_menu shown")
+			else:
+				print("  ❌ escape_menu is null!")
 		_:
 			push_warning("OverlayManager: Unknown overlay '%s'" % name)
 
 
 func hide_overlay(name: String) -> void:
 	"""Hide a specific overlay"""
+	print("🔐 hide_overlay('%s') called" % name)
 	match name:
 		"contracts":
 			if contract_panel:
+				print("  → Setting contract_panel.visible = false")
 				contract_panel.visible = false
 				overlay_states["contracts"] = false
 				overlay_toggled.emit("contracts", false)
+				print("  ✅ contract_panel hidden")
+			else:
+				print("  ❌ contract_panel is null!")
 		"vocabulary":
 			if vocabulary_overlay:
+				print("  → Setting vocabulary_overlay.visible = false")
 				vocabulary_overlay.visible = false
 				overlay_states["vocabulary"] = false
 				overlay_toggled.emit("vocabulary", false)
+				print("  ✅ vocabulary_overlay hidden")
+			else:
+				print("  ❌ vocabulary_overlay is null!")
 		"network":
 			if network_overlay:
+				print("  → Hiding network panels")
 				network_overlay.visible = false
 				if network_info_panel:
 					network_info_panel.visible = false
 				overlay_states["network"] = false
 				overlay_toggled.emit("network", false)
+				print("  ✅ network_overlay hidden")
+			else:
+				print("  ❌ network_overlay is null (disabled)")
 		"escape_menu":
 			if escape_menu:
+				print("  → Calling escape_menu.hide_menu()")
 				escape_menu.hide_menu()
 				overlay_states["escape_menu"] = false
 				overlay_toggled.emit("escape_menu", false)
+				print("  ✅ escape_menu hidden")
+			else:
+				print("  ❌ escape_menu is null!")
 		_:
 			push_warning("OverlayManager: Unknown overlay '%s'" % name)
 
@@ -269,38 +303,62 @@ func is_menu_open() -> bool:
 
 func toggle_contract_panel() -> void:
 	"""Toggle contract panel visibility"""
+	print("🔄 toggle_contract_panel() called")
 	if contract_panel:
+		print("  contract_panel exists, visible = %s" % contract_panel.visible)
 		if contract_panel.visible:
+			print("    → Panel is visible, calling hide_overlay()")
 			hide_overlay("contracts")
 		else:
+			print("    → Panel is hidden, calling show_overlay()")
 			show_overlay("contracts")
+	else:
+		print("  ❌ contract_panel is null!")
 
 
 func toggle_vocabulary_overlay() -> void:
 	"""Toggle vocabulary overlay visibility"""
+	print("🔄 toggle_vocabulary_overlay() called")
 	if vocabulary_overlay:
+		print("  vocabulary_overlay exists, visible = %s" % vocabulary_overlay.visible)
 		if vocabulary_overlay.visible:
+			print("    → Overlay is visible, calling hide_overlay()")
 			hide_overlay("vocabulary")
 		else:
+			print("    → Overlay is hidden, calling show_overlay()")
 			show_overlay("vocabulary")
+	else:
+		print("  ❌ vocabulary_overlay is null!")
 
 
 func toggle_network_overlay() -> void:
 	"""Toggle network overlay and info panel visibility"""
+	print("🔄 toggle_network_overlay() called")
 	if network_overlay:
+		print("  network_overlay exists, visible = %s" % network_overlay.visible)
 		if network_overlay.visible:
+			print("    → Overlay is visible, calling hide_overlay()")
 			hide_overlay("network")
 		else:
+			print("    → Overlay is hidden, calling show_overlay()")
 			show_overlay("network")
+	else:
+		print("  ❌ network_overlay is null (disabled)")
 
 
 func toggle_escape_menu() -> void:
 	"""Toggle escape menu visibility"""
+	print("🔄 toggle_escape_menu() called")
 	if escape_menu:
+		print("  escape_menu exists, is_visible() = %s" % escape_menu.is_visible())
 		if escape_menu.is_visible():
+			print("    → Menu is visible, calling hide_overlay()")
 			hide_overlay("escape_menu")
 		else:
+			print("    → Menu is hidden, calling show_overlay()")
 			show_overlay("escape_menu")
+	else:
+		print("  ❌ escape_menu is null!")
 
 
 func toggle_keyboard_help() -> void:
