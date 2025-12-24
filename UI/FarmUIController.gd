@@ -81,6 +81,14 @@ func _ready() -> void:
 	# Inject UI controller reference into controls manager
 	controls_manager.inject_ui_controller(self)
 
+	# CRITICAL: Get InputController from controls_manager and inject into SaveLoadMenu
+	# This allows SaveLoadMenu to disable InputController while menu is open
+	# so all input goes to SaveLoadMenu instead of being consumed by InputController
+	var input_controller = controls_manager.input_controller
+	if input_controller and overlay_manager and overlay_manager.save_load_menu:
+		overlay_manager.save_load_menu.inject_input_controller(input_controller)
+		print("🔗 InputController wired to SaveLoadMenu")
+
 	# Cache convenient references to major components
 	overlay_manager = layout_manager.overlay_manager
 	quantum_graph = layout_manager.quantum_graph

@@ -19,6 +19,9 @@ var debug_env_buttons: Array[Button] = []
 var selected_slot_index: int = 0  # Currently selected slot for keyboard navigation
 var selected_is_debug: bool = false  # Track if selected item is a debug environment
 
+# Reference to InputController to disable/enable when menu opens/closes
+var input_controller: Node = null
+
 # Debug environments: name -> display name
 var debug_environments = {
 	"minimal_farm": "🌱 Minimal Farm",
@@ -407,8 +410,19 @@ func _confirm_selection():
 		_on_slot_pressed(selected_slot_index)
 
 
+func inject_input_controller(controller: Node) -> void:
+	"""Inject InputController so we can disable it when menu opens"""
+	input_controller = controller
+	print("💉 InputController injected into SaveLoadMenu")
+
+
 func show_menu(mode: Mode):
 	current_mode = mode
+
+	# CRITICAL: Disable InputController so all input goes to SaveLoadMenu
+	if input_controller:
+		input_controller.set_process_input(false)
+		print("🔒 InputController disabled - SaveLoadMenu now handling all input")
 
 	# Update title
 	var title = menu_vbox.get_node("TitleLabel") as Label
@@ -449,6 +463,12 @@ func show_menu(mode: Mode):
 func hide_menu():
 	visible = false
 	set_process_input(false)  # Disable keyboard input when menu is hidden
+
+	# CRITICAL: Re-enable InputController when menu closes
+	if input_controller:
+		input_controller.set_process_input(true)
+		print("🔓 InputController re-enabled")
+
 	print("📋 Save/Load menu closed")
 
 
