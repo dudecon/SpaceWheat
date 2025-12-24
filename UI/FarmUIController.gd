@@ -81,6 +81,13 @@ func _ready() -> void:
 	# Inject UI controller reference into controls manager
 	controls_manager.inject_ui_controller(self)
 
+	# Cache convenient references to major components
+	overlay_manager = layout_manager.overlay_manager
+	quantum_graph = layout_manager.quantum_graph
+	play_area = layout_manager.play_area
+	plots_row = layout_manager.plots_row
+	actions_row = layout_manager.actions_row
+
 	# CRITICAL: Get InputController from controls_manager and inject into SaveLoadMenu
 	# This allows SaveLoadMenu to disable InputController while menu is open
 	# so all input goes to SaveLoadMenu instead of being consumed by InputController
@@ -88,13 +95,11 @@ func _ready() -> void:
 	if input_controller and overlay_manager and overlay_manager.save_load_menu:
 		overlay_manager.save_load_menu.inject_input_controller(input_controller)
 		print("🔗 InputController wired to SaveLoadMenu")
-
-	# Cache convenient references to major components
-	overlay_manager = layout_manager.overlay_manager
-	quantum_graph = layout_manager.quantum_graph
-	play_area = layout_manager.play_area
-	plots_row = layout_manager.plots_row
-	actions_row = layout_manager.actions_row
+	else:
+		print("⚠️  Could not wire InputController to SaveLoadMenu (missing refs)")
+		print("   input_controller: %s" % input_controller)
+		print("   overlay_manager: %s" % overlay_manager)
+		print("   save_load_menu: %s" % (overlay_manager.save_load_menu if overlay_manager else "N/A"))
 
 	# Inject farm into layout manager (for plot grid display)
 	if farm:
