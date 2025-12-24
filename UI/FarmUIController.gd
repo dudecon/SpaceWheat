@@ -65,21 +65,34 @@ func _ready() -> void:
 	size = get_parent().size
 	position = Vector2.ZERO
 
-	# Create layout manager and add to tree
+	# ═════════════════════════════════════════════════════════════════════════════
+	# REFACTORING: Inject dependencies BEFORE adding to tree
+	# This way, _ready() callbacks run with all dependencies already available
+	# ═════════════════════════════════════════════════════════════════════════════
+
+	# Create layout manager (but DON'T add to tree yet!)
 	layout_manager = FarmUILayoutManager.new()
 	layout_manager.size = size  # Fill FarmUIController
 	layout_manager.position = Vector2.ZERO
-	add_child(layout_manager)
 
-	# Inject dependencies into layout manager (needed by overlay systems)
+	# Inject dependencies BEFORE add_child() so _ready() has them available
 	layout_manager.inject_dependencies(faction_manager, vocabulary_evolution, conspiracy_network)
+	if farm:
+		layout_manager.inject_farm(farm, self)
+
+	# NOW add to tree - layout_manager._ready() will run with dependencies available
+	add_child(layout_manager)
+	print("   ✅ Layout manager added with dependencies injected")
 
 	# Create the controls subsystem (handles input and signals)
 	controls_manager = FarmUIControlsManager.new()
-	add_child(controls_manager)
 
-	# Inject UI controller reference into controls manager
+	# Inject UI controller reference BEFORE add_child()
 	controls_manager.inject_ui_controller(self)
+
+	# NOW add to tree
+	add_child(controls_manager)
+	print("   ✅ Controls manager added with dependencies injected")
 
 	# Cache convenient references to major components
 	overlay_manager = layout_manager.overlay_manager
@@ -100,10 +113,6 @@ func _ready() -> void:
 		print("   input_controller: %s" % input_controller)
 		print("   overlay_manager: %s" % overlay_manager)
 		print("   save_load_menu: %s" % (overlay_manager.save_load_menu if overlay_manager else "N/A"))
-
-	# Inject farm into layout manager (for plot grid display)
-	if farm:
-		layout_manager.inject_farm(farm, self)
 
 	# REFACTOR: Wire multi-select components after all are initialized
 	_wire_multi_select_components()

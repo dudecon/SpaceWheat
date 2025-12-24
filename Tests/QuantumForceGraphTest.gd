@@ -4,8 +4,6 @@ extends Control
 ## Displays colorful qubits with force-directed layout and entanglement
 
 const QuantumForceGraphScript = preload("res://Core/Visualization/QuantumForceGraph.gd")
-const FarmGridScript = preload("res://Core/GameMechanics/FarmGrid.gd")
-const WheatPlotScript = preload("res://Core/GameMechanics/WheatPlot.gd")
 const DualEmojiQubitScript = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 
 @onready var graph_node = $QuantumForceGraph
@@ -14,7 +12,7 @@ const DualEmojiQubitScript = preload("res://Core/QuantumSubstrate/DualEmojiQubit
 @onready var coherence_label = $UI/InfoPanel/MarginContainer/VBoxContainer/CoherenceLabel
 
 var graph: Node2D = null
-var farm_grid: Node = null
+var qubits = []
 var update_timer = 0.0
 
 
@@ -22,71 +20,67 @@ func _ready():
 	"""Initialize the test scene with sample qubits"""
 	print("⚛️  QuantumForceGraph Test Scene initializing...")
 
-	# Create a simple farm grid (5x3 = 15 plots)
-	farm_grid = FarmGridScript.new()
-	farm_grid.grid_width = 5
-	farm_grid.grid_height = 3
-	farm_grid.plots = {}
-
-	# Create sample qubits in plots
-	_create_sample_qubits()
-
-	# Create and initialize the QuantumForceGraph
+	# Create and add the QuantumForceGraph to the scene
 	graph = QuantumForceGraphScript.new()
 	graph_node.add_child(graph)
 
-	# Initialize the graph with our farm grid
-	var center = Vector2(640, 360)  # Center of 1280x720 viewport
-	var radius = 250.0
-	graph.initialize(farm_grid, center, radius)
+	# Create sample qubits directly (without full farm grid)
+	_create_sample_qubits()
+
+	# Manually initialize the graph's visual properties
+	graph.center_position = Vector2(640, 360)
+	graph.graph_radius = 250.0
+	graph.quantum_nodes = qubits
+
+	# Tell graph to set up for rendering
+	graph.set_process(true)
 
 	print("✅ QuantumForceGraph test scene ready")
-	print("   🔵 Colorful qubits with force-directed layout")
+	print("   🔵 15 colorful qubits with force-directed layout")
 	print("   🌀 Entanglement lines between coupled qubits")
 	print("   ✨ Real-time dynamics and coherence visualization")
 
 
 func _create_sample_qubits():
-	"""Create sample qubits in the farm grid"""
-	# Create some plots with qubits
-	var emojis = ["🌿", "🐰", "🐦", "🐺", "💫", "🌟", "⭐", "✨", "🔮", "💎"]
-	var idx = 0
+	"""Create sample qubits directly"""
+	var emojis = ["🌿", "🐰", "🐦", "🐺", "💫", "🌟", "⭐", "✨", "🔮", "💎", "🌻", "🦋", "🐝", "🐛", "🦗"]
+	var center = Vector2(640, 360)
+	var radius = 250.0
 
-	for y in range(farm_grid.grid_height):
-		for x in range(farm_grid.grid_width):
-			if idx >= emojis.size():
-				idx = 0
+	for i in range(emojis.size()):
+		# Create a mock plot with qubit
+		var plot = {
+			"plot_id": "test_plot_%d" % i,
+			"grid_position": Vector2i(i % 5, i / 5),
+			"quantum_state": DualEmojiQubitScript.new(emojis[i], emojis[(i + 1) % emojis.size()]),
+			"entangled_plots": {},
+			"has_been_measured": false
+		}
 
-			var grid_pos = Vector2i(x, y)
-			var plot = farm_grid.get_plot(grid_pos)
+		# Random quantum state
+		plot.quantum_state.theta = randf_range(0.0, PI)
+		plot.quantum_state.phi = randf_range(0.0, TAU)
+		plot.quantum_state.radius = randf_range(0.4, 1.0)
 
-			if plot == null:
-				plot = WheatPlotScript.new()
-				plot.plot_id = "test_plot_%d_%d" % [x, y]
-				plot.grid_position = grid_pos
-				farm_grid.set_plot(grid_pos, plot)
+		# Create QuantumNode for the graph
+		var quantum_node = {
+			"plot_id": plot["plot_id"],
+			"plot": plot,
+			"position": center + Vector2(cos(i * TAU / emojis.size()) * radius, sin(i * TAU / emojis.size()) * radius),
+			"velocity": Vector2.ZERO,
+			"radius": 30.0,
+			"color": Color.from_hsv(float(i) / emojis.size(), 0.8, 0.9)
+		}
 
-			# Create a qubit for this plot
-			var north_emoji = emojis[idx]
-			var south_emoji = emojis[(idx + 1) % emojis.size()]
+		# Randomly entangle some qubits
+		if i > 0 and randf() < 0.5:
+			var prev_idx = i - 1
+			plot["entangled_plots"]["test_plot_%d" % prev_idx] = {
+				"entanglement_strength": randf_range(0.3, 0.9),
+				"bell_gate": "CNOT"
+			}
 
-			var qubit = DualEmojiQubitScript.new(north_emoji, south_emoji)
-			qubit.theta = randf_range(0.0, PI)
-			qubit.phi = randf_range(0.0, TAU)
-			qubit.radius = randf_range(0.4, 1.0)  # Random coherence
-
-			plot.quantum_state = qubit
-
-			# Randomly entangle some qubits
-			if idx > 0 and randf() < 0.4:
-				var prev_plot = farm_grid.get_plot(Vector2i(x - 1 if x > 0 else 0, y))
-				if prev_plot and prev_plot.quantum_state:
-					plot.entangled_plots[prev_plot.plot_id] = {
-						"entanglement_strength": randf_range(0.3, 0.9),
-						"bell_gate": "CNOT"
-					}
-
-			idx += 1
+		qubits.append(quantum_node)
 
 
 func _process(delta):
@@ -103,21 +97,19 @@ func _process(delta):
 
 func _update_metrics():
 	"""Update the displayed metrics"""
-	if not farm_grid:
+	if qubits.is_empty():
 		return
 
-	# Count qubits
-	var qubit_count = 0
+	# Count qubits and entanglements
+	var qubit_count = qubits.size()
 	var entangled_count = 0
 	var total_coherence = 0.0
 
-	for y in range(farm_grid.grid_height):
-		for x in range(farm_grid.grid_width):
-			var plot = farm_grid.get_plot(Vector2i(x, y))
-			if plot and plot.quantum_state:
-				qubit_count += 1
-				total_coherence += plot.quantum_state.radius
-				entangled_count += plot.entangled_plots.size()
+	for quantum_node in qubits:
+		var plot = quantum_node["plot"]
+		if plot and "quantum_state" in plot and plot.quantum_state:
+			total_coherence += plot.quantum_state.radius
+			entangled_count += plot["entangled_plots"].size()
 
 	# Update labels
 	qubit_count_label.text = "Qubits: %d" % qubit_count
