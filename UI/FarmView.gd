@@ -65,16 +65,14 @@ func _ready() -> void:
 	print("   ✅ Farm added to scene tree, _ready() called")
 
 	# ═════════════════════════════════════════════════════════════════════════════
-	# STEP 2: Create UI controller
+	# STEP 2: Create UI controller (but DON'T add to tree yet!)
 	# ═════════════════════════════════════════════════════════════════════════════
 	ui_controller = FarmUIController.new()
-	add_child(ui_controller)
-	ui_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
-	print("   ✅ UI controller created and added")
+	print("   ✅ UI controller created")
 
 	# ═════════════════════════════════════════════════════════════════════════════
-	# STEP 3: Wire everything together
-	# By this point, Farm is fully initialized and all UI components are created
+	# STEP 3: Wire dependencies BEFORE adding to tree
+	# This way, when add_child() triggers _ready(), all dependencies are available
 	# ═════════════════════════════════════════════════════════════════════════════
 	if has_meta("faction_manager"):
 		var faction_manager = get_meta("faction_manager")
@@ -83,6 +81,15 @@ func _ready() -> void:
 		ui_controller.inject_farm(farm, faction_manager, vocabulary_system, conspiracy_network)
 	else:
 		ui_controller.inject_farm(farm)
+
+	print("   ✅ UI wired (dependencies injected)")
+
+	# ═════════════════════════════════════════════════════════════════════════════
+	# STEP 4: NOW add UI controller to tree
+	# When _ready() is called, all dependencies are already set up
+	# ═════════════════════════════════════════════════════════════════════════════
+	add_child(ui_controller)
+	ui_controller.set_anchors_preset(Control.PRESET_FULL_RECT)
 
 	print("✅ FarmView initialization complete - all systems ready")
 
