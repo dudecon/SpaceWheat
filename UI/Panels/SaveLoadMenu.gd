@@ -74,7 +74,7 @@ func _init():
 
 	# Keyboard hints
 	var hints = Label.new()
-	hints.text = "↑↓ or 1-3 to select  |  ENTER to confirm  |  ESC to cancel"
+	hints.text = "↑↓ or 1-3 to select  |  ENTER/SPACE to confirm  |  ESC to cancel"
 	hints.add_theme_font_size_override("font_size", 16)
 	hints.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hints.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
@@ -125,6 +125,7 @@ func _init():
 
 	# Start hidden
 	visible = false
+	set_process_input(false)  # Disable input until menu is shown
 
 
 func _create_slot_button(slot: int) -> Button:
@@ -208,39 +209,50 @@ func _create_menu_button(text: String, color: Color) -> Button:
 
 
 func _input(event):
-	"""Handle keyboard navigation"""
-	if not visible or not event is InputEventKey or not event.pressed or event.echo:
-		return
+	"""Handle keyboard navigation - CONSUME ALL INPUT when menu is visible"""
+	# If menu is visible, consume ALL input to prevent other handlers from seeing it
+	if visible and event is InputEventKey and event.pressed and not event.echo:
+		# First, handle specific keys
+		match event.keycode:
+			# Arrow keys: Navigate between slots and debug environments
+			KEY_UP:
+				_select_previous_slot()
+				get_viewport().set_input_as_handled()
+				return
+			KEY_DOWN:
+				_select_next_slot()
+				get_viewport().set_input_as_handled()
+				return
 
-	match event.keycode:
-		# Arrow keys: Navigate between slots
-		KEY_UP:
-			_select_previous_slot()
-			get_viewport().set_input_as_handled()
-		KEY_DOWN:
-			_select_next_slot()
-			get_viewport().set_input_as_handled()
+			# Number keys: Select slot directly
+			KEY_1:
+				_select_slot(0)
+				get_viewport().set_input_as_handled()
+				return
+			KEY_2:
+				_select_slot(1)
+				get_viewport().set_input_as_handled()
+				return
+			KEY_3:
+				_select_slot(2)
+				get_viewport().set_input_as_handled()
+				return
 
-		# Number keys: Select slot directly
-		KEY_1:
-			_select_slot(0)
-			get_viewport().set_input_as_handled()
-		KEY_2:
-			_select_slot(1)
-			get_viewport().set_input_as_handled()
-		KEY_3:
-			_select_slot(2)
-			get_viewport().set_input_as_handled()
+			# Enter or Space: Confirm selection
+			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+				_confirm_selection()
+				get_viewport().set_input_as_handled()
+				return
 
-		# Enter: Confirm selection
-		KEY_ENTER, KEY_KP_ENTER:
-			_confirm_selection()
-			get_viewport().set_input_as_handled()
+			# Escape: Cancel and return to pause menu (not quit)
+			KEY_ESCAPE:
+				_on_cancel_pressed()
+				get_viewport().set_input_as_handled()
+				return
 
-		# Escape: Cancel
-		KEY_ESCAPE:
-			_on_cancel_pressed()
-			get_viewport().set_input_as_handled()
+		# CRITICAL: For ANY other key press when menu is visible, consume it
+		# This prevents InputController from handling ESC and opening pause menu
+		get_viewport().set_input_as_handled()
 
 
 func _select_slot(slot_index: int):
@@ -265,18 +277,21 @@ func _select_next_slot():
 		_update_visual_selection()
 		return
 
-	# If on a slot, try next slot first
+	# If on a slot, try to move to the next slot
 	var next_slot = (selected_slot_index + 1) % 3
 
+	# Check if we're wrapping around (slot 2 -> slot 0)
+	var is_wrapping = next_slot == 0 and selected_slot_index == 2
+
 	if current_mode == Mode.LOAD:
-		# Skip disabled slots
-		if not slot_buttons[next_slot].disabled:
+		# If not wrapping and next slot is available, move to it
+		if not is_wrapping and not slot_buttons[next_slot].disabled:
 			selected_slot_index = next_slot
 			selected_is_debug = false
 			_update_visual_selection()
 			return
 
-		# If all slots disabled, move to first debug env
+		# If wrapping or next slot disabled, move to first debug env
 		if debug_env_buttons.size() > 0:
 			selected_slot_index = 0
 			selected_is_debug = true
@@ -298,18 +313,21 @@ func _select_previous_slot():
 		_update_visual_selection()
 		return
 
-	# If on a slot, try previous slot first
+	# If on a slot, try to move to the previous slot
 	var prev_slot = (selected_slot_index - 1 + 3) % 3
 
+	# Check if we're wrapping around (slot 0 -> slot 2)
+	var is_wrapping = prev_slot == 2 and selected_slot_index == 0
+
 	if current_mode == Mode.LOAD:
-		# Skip disabled slots
-		if not slot_buttons[prev_slot].disabled:
+		# If not wrapping and previous slot is available, move to it
+		if not is_wrapping and not slot_buttons[prev_slot].disabled:
 			selected_slot_index = prev_slot
 			selected_is_debug = false
 			_update_visual_selection()
 			return
 
-		# If all slots disabled, move to last debug env
+		# If wrapping or previous slot disabled, move to last debug env
 		if debug_env_buttons.size() > 0:
 			selected_slot_index = debug_env_buttons.size() - 1
 			selected_is_debug = true
@@ -413,11 +431,13 @@ func show_menu(mode: Mode):
 	_update_visual_selection()
 
 	visible = true
+	set_process_input(true)  # Enable keyboard input when menu is shown
 	print("📋 Save/Load menu opened - Mode: " + ("SAVE" if mode == Mode.SAVE else "LOAD"))
 
 
 func hide_menu():
 	visible = false
+	set_process_input(false)  # Disable keyboard input when menu is hidden
 	print("📋 Save/Load menu closed")
 
 
