@@ -41,15 +41,17 @@ func _init():
 	background.anchor_top = 0.0
 	background.anchor_right = 1.0
 	background.anchor_bottom = 1.0
+	background.layout_mode = Control.LAYOUT_MODE_FILL_PARENT
 	add_child(background)
 
-	# Center container for menu
+	# Center container for menu - child of THIS node for proper centering
 	var center = CenterContainer.new()
 	center.anchor_left = 0.0
 	center.anchor_top = 0.0
 	center.anchor_right = 1.0
 	center.anchor_bottom = 1.0
-	background.add_child(center)
+	center.layout_mode = Control.LAYOUT_MODE_FILL_PARENT
+	add_child(center)
 
 	# Menu box
 	var menu_panel = PanelContainer.new()

@@ -29,8 +29,8 @@ script = ExtResource("2_resourcepanel")
 
 [node name="PlotGridDisplay" type="Control" parent="MainContainer"]
 layout_mode = 2
-size_flags_vertical = 3
-custom_minimum_size = Vector2(0, 200)
+size_flags_vertical = 1
+custom_minimum_size = Vector2(0, 400)
 script = ExtResource("3_plotgrid")
 
 [node name="ActionPreviewRow" type="HBoxContainer" parent="MainContainer"]
