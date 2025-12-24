@@ -7,6 +7,7 @@
 ##
 ## This layer is swappable - created fresh for each farm
 
+class_name FarmUI
 extends Control
 
 const PlotGridDisplay = preload("res://UI/PlotGridDisplay.gd")

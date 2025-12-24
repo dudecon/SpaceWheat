@@ -7,6 +7,7 @@
 ##
 ## This layer STAYS when farm changes
 
+class_name PlayerShell
 extends Control
 
 const FarmUI = preload("res://UI/FarmUI.gd")

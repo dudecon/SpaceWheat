@@ -385,3 +385,4 @@ func _draw_temperature_field() -> void:
 		var blend_color = corner_tl.lerp(corner_br, progress)
 		var rect_height = height / 10.0
 		draw_rect(Rect2(0, i * rect_height, width, rect_height), blend_color)
+
