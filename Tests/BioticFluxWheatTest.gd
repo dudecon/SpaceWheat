@@ -53,14 +53,10 @@ func _ready() -> void:
 	visualization.set_anchors_preset(Control.PRESET_FULL_RECT)
 	container.add_child(visualization)
 
-	# Add sun/moon qubit to visualization
+	# Add sun/moon qubit to visualization (with scatter positioning)
 	print("\n☀️ Adding sun/moon qubit to visualization...")
-	var sun_glyph = QuantumGlyph.new()
-	sun_glyph.qubit = biome.sun_qubit
-	sun_glyph.position = Vector2(100, 100)  # Top-left position
-	visualization.glyphs.append(sun_glyph)
 
-	# Connect biome to visualization
+	# Connect biome to visualization (includes sun/moon from quantum_states)
 	var plot_positions = _get_plot_positions()
 	visualization.connect_biome(biome, plot_positions)
 	print("   ✓ Visualization connected to biome")
@@ -162,8 +158,8 @@ func _get_plot_positions() -> Dictionary:
 
 	print("   Screen resolution: %.0f × %.0f" % [viewport_size.x, viewport_size.y])
 
-	# Scatter sun at top-center
-	positions[Vector2i(0, 0)] = Vector2(viewport_size.x / 2.0, margin + 50)
+	# Scatter sun/moon at top-center (it's at Vector2i(-1, -1) in quantum_states)
+	positions[Vector2i(-1, -1)] = Vector2(viewport_size.x / 2.0, margin + 50)
 
 	# Scatter wheat randomly
 	for pos in wheat_positions:

@@ -32,15 +32,15 @@ layout_mode = 2
 size_flags_vertical = 3
 script = ExtResource("3_plotgrid")
 
-[node name="ToolSelectionRow" type="HBoxContainer" parent="MainContainer"]
-layout_mode = 2
-custom_minimum_size = Vector2(0, 60)
-script = ExtResource("4_toolrow")
-
 [node name="ActionPreviewRow" type="HBoxContainer" parent="MainContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 80)
 script = ExtResource("5_actionrow")
+
+[node name="ToolSelectionRow" type="HBoxContainer" parent="MainContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 60)
+script = ExtResource("4_toolrow")
 
 [node name="QuantumVisualizationController" type="Control" parent="."]
 layout_mode = 1
