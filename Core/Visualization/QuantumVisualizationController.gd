@@ -6,15 +6,18 @@ extends Control
 
 const QuantumGlyph = preload("res://Core/Visualization/QuantumGlyph.gd")
 const DetailPanel = preload("res://Core/Visualization/DetailPanel.gd")
+const SemanticEdge = preload("res://Core/Visualization/SemanticEdge.gd")
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 
 var glyphs: Array = []
+var edges: Array = []  # SemanticEdge connections
 var detail_panel = null
 var selected_glyph = null
 
 var emoji_font: Font = null
 var biome = null  # Reference to the connected biome
 var plot_positions: Dictionary = {}  # Vector2i (grid) → Vector2 (screen)
+var glyph_map: Dictionary = {}  # Qubit → Glyph for edge lookup
 
 
 func _ready() -> void:
@@ -83,6 +86,11 @@ func connect_to_biome(biome_ref, plot_positions_dict: Dictionary = {}) -> void:
 				glyph.position = _grid_to_screen(patch_pos) + Vector2(idx * 40 - 60, 0)
 
 			glyphs.append(glyph)
+			# Map qubit to glyph for edge lookup
+			glyph_map[qubit] = glyph
+
+	# Build semantic edges from entanglement relationships
+	_build_edges()
 
 
 func _process(delta: float) -> void:
@@ -132,11 +140,29 @@ func _process(delta: float) -> void:
 		if glyph_idx >= glyphs.size():
 			break
 
+	# Update all edges
+	for edge in edges:
+		if glyph_map.size() > 0:
+			# Get qubits from glyph map (need to reverse lookup)
+			var from_qubit = null
+			var to_qubit = null
+			for qubit in glyph_map.keys():
+				if glyph_map[qubit] == edge.from_glyph:
+					from_qubit = qubit
+				if glyph_map[qubit] == edge.to_glyph:
+					to_qubit = qubit
+			if from_qubit and to_qubit:
+				edge.update(delta, from_qubit, to_qubit)
+
 	queue_redraw()
 
 
 func _draw() -> void:
 	"""Render all glyphs and optional detail panel"""
+
+	# Draw edges first (behind glyphs)
+	for edge in edges:
+		edge.draw(self, emoji_font)
 
 	# Draw glyphs
 	for glyph in glyphs:
@@ -176,6 +202,45 @@ func _get_glyph_at(pos: Vector2) -> QuantumGlyph:
 		if pos.distance_to(glyph.position) < 30:
 			return glyph
 	return null
+
+
+func _build_edges() -> void:
+	"""Extract entanglement relationships and create SemanticEdge objects"""
+	edges.clear()
+
+	# Create edges from entanglement_graph in qubits
+	for idx in range(glyphs.size()):
+		for idx2 in range(idx + 1, glyphs.size()):
+			var glyph1 = glyphs[idx]
+			var glyph2 = glyphs[idx2]
+
+			if not glyph1.qubit or not glyph2.qubit:
+				continue
+
+			# Check for entanglement relationships in glyph1's entanglement_graph
+			if "entanglement_graph" in glyph1.qubit:
+				var graph = glyph1.qubit.entanglement_graph
+				for relationship in graph.keys():
+					# Create edge for this relationship
+					var edge = SemanticEdge.new()
+					edge.from_glyph = glyph1
+					edge.to_glyph = glyph2
+					edge.relationship_emoji = relationship
+					edge.coupling_strength = _get_coupling_strength(relationship)
+					edges.append(edge)
+
+
+func _get_coupling_strength(relationship: String) -> float:
+	"""Get default coupling strength for relationship type"""
+	match relationship:
+		"🍴": return 0.8  # Predation (strong)
+		"🌱": return 0.7  # Feeding (strong)
+		"💧": return 0.6  # Production (moderate)
+		"🔄": return 0.5  # Transformation (moderate)
+		"⚡": return 0.9  # Coherence (very strong)
+		"👶": return 0.4  # Reproduction (weak)
+		"🃏": return 0.6  # Escape (moderate)
+		_: return 0.3  # Unknown (weak)
 
 
 func _grid_to_screen(grid_pos: Vector2i) -> Vector2:
