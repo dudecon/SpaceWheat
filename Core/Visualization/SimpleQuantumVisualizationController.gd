@@ -632,6 +632,28 @@ func _draw_sun_node() -> void:
 	bright.a = 0.8 * energy
 	draw_circle(pos - Vector2(visual_radius * 0.25, visual_radius * 0.25), visual_radius * 0.4, bright)
 
+	# Phase indicator ring - Shows position in day/night cycle
+	# Sun is always aligned with itself, so ring shows phase progression (green=day, red=night)
+	var phase_distance = moon_opacity  # 0=day (green), 1=night (red)
+	var phase_ring = Color.GREEN.lerp(Color.RED, phase_distance)
+	phase_ring.a = 0.4 * (1.0 - phase_distance)  # Fade as it approaches night
+	draw_arc(pos, visual_radius * 0.8, 0, TAU, 32, phase_ring, 3.0, true)
+
+	# Phi direction indicator - Shows azimuthal orientation (same as crop nodes)
+	var arrow_distance = visual_radius * 1.5
+	var arrow_angle = qubit.phi
+	var arrow_start = pos + Vector2(cos(arrow_angle), sin(arrow_angle)) * arrow_distance
+	var arrow_end = arrow_start + Vector2(cos(arrow_angle), sin(arrow_angle)) * 10.0
+	var arrow_color = Color.CYAN
+	arrow_color.a = 0.6
+	draw_line(arrow_start, arrow_end, arrow_color, 2.5, true)
+
+	# Arrow head
+	var head_angle1 = arrow_angle + 2.5
+	var head_angle2 = arrow_angle - 2.5
+	draw_line(arrow_end, arrow_end - Vector2(cos(head_angle1), sin(head_angle1)) * 5.0, arrow_color, 2.0, true)
+	draw_line(arrow_end, arrow_end - Vector2(cos(head_angle2), sin(head_angle2)) * 5.0, arrow_color, 2.0, true)
+
 	# Outline (matches current color)
 	var outline = current_color.lightened(0.3)
 	outline.a = 0.95
