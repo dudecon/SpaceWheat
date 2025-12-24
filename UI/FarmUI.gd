@@ -15,6 +15,7 @@ const ToolSelectionRow = preload("res://UI/Panels/ToolSelectionRow.gd")
 const ActionPreviewRow = preload("res://UI/Panels/ActionPreviewRow.gd")
 const ResourcePanel = preload("res://UI/Panels/ResourcePanel.gd")
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
+const QuantumVisualizationController = preload("res://Core/Visualization/QuantumVisualizationController.gd")
 
 var farm: Node
 var grid_config: GridConfig
@@ -23,6 +24,7 @@ var input_handler: FarmInputHandler
 var tool_selection_row: ToolSelectionRow
 var action_preview_row: ActionPreviewRow
 var resource_panel: ResourcePanel
+var quantum_visualization: QuantumVisualizationController
 var current_tool: int = 1
 
 
@@ -76,6 +78,24 @@ func _ready() -> void:
 		plot_grid_display.inject_grid_config(farm.grid_config)
 		if farm.grid and farm.grid.biomes:
 			plot_grid_display.inject_biomes(farm.grid.biomes)
+
+	print("   ✅ PlotGridDisplay created")
+
+	# ========== QUANTUM VISUALIZATION OVERLAY (On top of grid) ==========
+	quantum_visualization = QuantumVisualizationController.new()
+	quantum_visualization.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(quantum_visualization)
+
+	# Connect quantum viz to biome if available
+	if farm and farm.grid and farm.grid.biomes:
+		for biome_name in farm.grid.biomes.keys():
+			var biome = farm.grid.biomes[biome_name]
+			# For now, connect to first biome
+			quantum_visualization.connect_to_biome(biome, {})
+			print("   ✅ Quantum visualization connected to biome: %s" % biome_name)
+			break  # Only connect to first biome for MVP
+
+	print("   ✅ Quantum visualization overlay created")
 
 	# ========== TOOL SELECTION ROW (Bottom) ==========
 	tool_selection_row = ToolSelectionRow.new()
