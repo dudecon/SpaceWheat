@@ -192,7 +192,15 @@ func inject_farm_late(farm_ref: Node) -> void:
 		var play_rect = layout_manager.layout_manager.play_area_rect
 		var center = play_rect.get_center() - play_rect.position
 		var radius = play_rect.size.length() * 0.3
-		layout_manager.quantum_graph.initialize(farm.grid if farm.has_method("get_grid") else null, center, radius)
+
+		# PHASE 8: Get parametric plot positions from PlotGridDisplay
+		# Plots are the foundation - QuantumForceGraph tethers to them
+		var plot_positions: Dictionary = {}
+		if layout_manager.plot_grid_display and layout_manager.plot_grid_display.has_method("get_classical_plot_positions"):
+			plot_positions = layout_manager.plot_grid_display.get_classical_plot_positions()
+			print("⚛️ FarmUIController: Passing %d plot positions to QuantumForceGraph" % plot_positions.size())
+
+		layout_manager.quantum_graph.initialize(farm.grid if farm.has_method("get_grid") else null, center, radius, plot_positions)
 
 		if farm.has_meta("biome"):
 			layout_manager.quantum_graph.set_biome(farm.get_meta("biome"))

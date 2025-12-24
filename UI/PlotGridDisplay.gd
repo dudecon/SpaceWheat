@@ -1,14 +1,18 @@
 class_name PlotGridDisplay
-extends GridContainer
+extends Control
 
-## PlotGridDisplay - Visual representation of the 6x1 farm grid
-## Creates and manages PlotTile instances for each plot
+## PlotGridDisplay - Visual representation of parametric plot grid around biomes
+## Creates and manages PlotTile instances positioned in oval rings around biome centers
 ## Handles selection, planting visualization, and signal updates
+##
+## Architecture: Plots are the FOUNDATION (fixed parametric positions)
+## QuantumForceGraph reads these positions and tethers quantum bubbles to them
 
 const PlotTile = preload("res://UI/PlotTile.gd")
 const PlotSelectionManager = preload("res://UI/PlotSelectionManager.gd")
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
 const FarmUIState = preload("res://Core/GameState/FarmUIState.gd")
+const ParametricPlotPositioner = preload("res://UI/ParametricPlotPositioner.gd")
 
 # References
 var farm: Node = null
@@ -16,9 +20,14 @@ var ui_state = null  # FarmUIState - abstraction layer (Phase 5, RefCounted not 
 var ui_controller: Node = null
 var layout_manager: Node = null
 var grid_config: GridConfig = null  # Grid configuration (Phase 7)
+var biomes: Dictionary = {}  # biome_name -> BiomeBase (injected via layout manager)
 
 # Plot tiles (Vector2i -> PlotTile)
 var tiles: Dictionary = {}
+
+# Parametric positioning
+var parametric_positioner: ParametricPlotPositioner = null
+var classical_plot_positions: Dictionary = {}  # Vector2i (grid) → Vector2 (screen position)
 
 # Multi-select management (NEW)
 var selection_manager: PlotSelectionManager = null
@@ -31,7 +40,7 @@ signal selection_count_changed(count: int)
 
 
 func _ready():
-	"""Initialize plot grid display"""
+	"""Initialize plot grid display with parametric positioning"""
 	print("🌾 PlotGridDisplay._ready() called (Instance: %s, child_count before: %d)" % [get_instance_id(), get_child_count()])
 
 	# Safety check: if tiles already exist, DON'T recreate them
@@ -40,17 +49,22 @@ func _ready():
 		print("   This suggests _ready() was called multiple times on the same instance!")
 		return
 
-	# Create tiles immediately with or without GridConfig
-	# If GridConfig injected, use it; otherwise use default 6x2 layout
-	_initialize_container()
-	_create_tiles()
+	# Configure this Control for absolute positioning
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
+	clip_contents = true  # Prevent tiles from extending beyond container
+
+	# Create selection manager early (doesn't need positions)
 	_create_selection_manager()
 
-	print("✅ PlotGridDisplay ready with GridContainer (child_count after: %d)" % get_child_count())
+	# DEFER tile creation until after biomes are injected
+	# _create_tiles() will be called from inject_biomes() once positions are calculated
+	print("⏳ PlotGridDisplay ready (tiles will be created once biomes are injected)")
+	print("✅ PlotGridDisplay ready with parametric positioning (child_count after: %d)" % get_child_count())
 
 
 func inject_grid_config(config: GridConfig) -> void:
-	"""Inject grid configuration and create tiles (Phase 7)"""
+	"""Inject grid configuration - tiles will be created after biomes are injected"""
 	if not config:
 		push_error("PlotGridDisplay: Attempted to inject null GridConfig!")
 		return
@@ -66,79 +80,113 @@ func inject_grid_config(config: GridConfig) -> void:
 		return
 
 	print("💉 GridConfig injected into PlotGridDisplay")
-
-	# Only create tiles if _ready() already ran
-	if is_node_ready():
-		if tiles.size() == 0:
-			_initialize_container()
-			_create_tiles()
-			_create_selection_manager()
-			print("✅ Tiles created from injected GridConfig (child_count: %d)" % get_child_count())
+	print("   ⏳ Tiles will be created once biomes are injected")
 
 
-func _initialize_container() -> void:
-	"""Initialize GridContainer with grid dimensions from GridConfig"""
-	# Use GridConfig if available, otherwise use default 6x2 layout
-	var width = grid_config.grid_width if grid_config else 6
+func inject_biomes(biomes_dict: Dictionary) -> void:
+	"""Inject biome objects for parametric positioning"""
+	biomes = biomes_dict
+	print("💉 Biomes injected into PlotGridDisplay (%d biomes)" % biomes.size())
 
-	columns = width
-	add_theme_constant_override("h_separation", 8)
-	add_theme_constant_override("v_separation", 8)
-	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Recalculate parametric positions with biome data
+	_calculate_parametric_positions()
 
-	var height = grid_config.grid_height if grid_config else 2
-	print("📐 GridContainer initialized: %dx%d" % [width, height])
+	# Create tiles NOW that we have positions (deferred from _ready())
+	if tiles.size() == 0 and grid_config:
+		print("🎨 Creating tiles with parametric positions...")
+		_create_tiles()
+		print("✅ Tiles created after biome injection")
+
+
+func _calculate_parametric_positions() -> void:
+	"""Calculate parametric plot positions using ParametricPlotPositioner"""
+	if not grid_config:
+		print("⚠️  PlotGridDisplay: GridConfig not available")
+		return
+
+	if biomes.is_empty():
+		print("⚠️  PlotGridDisplay: Biomes not injected yet")
+		return
+
+	print("📐 Calculating parametric positions...")
+	print("   Grid: %dx%d" % [grid_config.grid_width, grid_config.grid_height])
+	print("   Biomes: %d" % biomes.size())
+
+	# Create positioner with current layout parameters
+	var viewport = get_viewport().get_visible_rect().size
+	var graph_center = Vector2(viewport.x / 2.0, viewport.y / 2.0)
+	var graph_radius = min(viewport.x, viewport.y) / 2.5  # Scale radius to viewport
+
+	print("   Viewport: %s" % viewport)
+	print("   Graph center: (%.1f, %.1f)" % [graph_center.x, graph_center.y])
+	print("   Graph radius: %.1f" % graph_radius)
+
+	parametric_positioner = ParametricPlotPositioner.new(
+		grid_config,
+		biomes,
+		viewport,
+		graph_center,
+		graph_radius
+	)
+
+	classical_plot_positions = parametric_positioner.get_classical_plot_positions()
+	print("✅ PlotGridDisplay: Calculated %d parametric plot positions" % classical_plot_positions.size())
 
 
 func _create_tiles() -> void:
-	"""Create plot tiles in grid order (row-major, top to bottom, left to right)"""
-	# Use GridConfig if available, otherwise use default 6x2 layout
-	var width = grid_config.grid_width if grid_config else 6
-	var height = grid_config.grid_height if grid_config else 2
+	"""Create plot tiles with parametric positioning around biomes"""
+	if not grid_config:
+		print("⚠️  PlotGridDisplay._create_tiles(): GridConfig not available")
+		return
 
-	# Create in row-major order (y first, then x)
-	for y in range(height):
-		for x in range(width):
-			var pos = Vector2i(x, y)
-			var plot_config = grid_config.get_plot_at(pos) if grid_config else null
-			var is_active = plot_config == null or plot_config.is_active  # Treat null as active when no GridConfig
+	# Get all active plots
+	var active_plots = grid_config.get_all_active_plots()
+	print("🌾 Creating %d plot tiles with parametric positioning..." % active_plots.size())
+	print("   📍 Classical positions available: %d" % classical_plot_positions.size())
+	print("   🔷 Biomes available: %d" % biomes.size())
+	print("   📏 PlotGridDisplay size: %s" % size)
 
-			# Inactive plots → spacer (invisible placeholder)
-			if not is_active:
-				var spacer = Control.new()
-				spacer.custom_minimum_size = Vector2(90, 90)
-				add_child(spacer)
-				print("  ⬜ Spacer created at position %s" % pos)
-				continue
+	var positioned_count = 0
+	var fallback_count = 0
 
-			# Active plots → tile
-			var tile = PlotTile.new()
-			tile.grid_position = pos  # CRITICAL: Set the tile's grid position so it emits correctly
-			tile.custom_minimum_size = Vector2(90, 90)
-			tile.size_flags_vertical = Control.SIZE_FILL
-			tile.clicked.connect(_on_tile_clicked)
+	for plot_config in active_plots:
+		var pos = plot_config.position
 
-			add_child(tile)
-			tiles[pos] = tile
+		# Create tile
+		var tile = PlotTile.new()
+		tile.grid_position = pos  # CRITICAL: Set the tile's grid position so it emits correctly
+		tile.custom_minimum_size = Vector2(90, 90)
+		tile.clicked.connect(_on_tile_clicked)
 
-			# Set keyboard label from grid config (if available)
-			var label = ""
-			if plot_config and plot_config.keyboard_label:
-				label = plot_config.keyboard_label
-			else:
-				# Default labels for 6x2 grid
-				if y == 0:
-					label = ["T", "Y", "U", "I", "O", "P"][x]
-				elif y == 1:
-					label = ["0", "9", "8", "7", "", ""][x]
+		# Position absolutely based on parametric position
+		if classical_plot_positions.has(pos):
+			var screen_pos = classical_plot_positions[pos]
+			# Convert from screen coordinates to local PlotGridDisplay coordinates
+			var local_pos = get_global_transform().affine_inverse() * screen_pos
+			# Center the tile on the position
+			tile.position = local_pos - tile.custom_minimum_size / 2
+			positioned_count += 1
+			if positioned_count <= 3:  # Only log first 3
+				print("  📍 Tile at grid %s → screen (%.1f, %.1f) → local (%.1f, %.1f)" % [pos, screen_pos.x, screen_pos.y, local_pos.x, local_pos.y])
+		else:
+			# Fallback: position in a temporary grid at origin
+			# This shouldn't happen if biomes are properly injected
+			fallback_count += 1
+			print("  ⚠️  Tile at grid %s NOT in classical_plot_positions!" % pos)
+			print("      Available positions: %s" % classical_plot_positions.keys())
 
-			if label:
-				tile.call_deferred("set_label_text", label)
+		add_child(tile)
+		tiles[pos] = tile
 
-			print("  📍 Plot tile created at position %s (%s)" % [pos, label])
+		# Set keyboard label from grid config
+		var label = plot_config.keyboard_label if plot_config.keyboard_label else ""
+		if label:
+			tile.call_deferred("set_label_text", label)
 
-	print("✅ Created %d active plot tiles" % tiles.size())
+	if positioned_count > 3:
+		print("  📍 ... and %d more tiles positioned parametrically" % (positioned_count - 3))
+
+	print("✅ Created %d plot tiles: %d positioned parametrically, %d without positions" % [tiles.size(), positioned_count, fallback_count])
 
 
 func _create_selection_manager() -> void:
@@ -450,3 +498,21 @@ func _on_selection_changed(selected_plots: Array[Vector2i], count: int) -> void:
 func get_selected_plot() -> Vector2i:
 	"""Get currently selected plot position"""
 	return current_selection
+
+
+## PARAMETRIC POSITIONING - PUBLIC API FOR QUANTUM GRAPH
+
+func get_classical_plot_positions() -> Dictionary:
+	"""Get parametric plot positions for QuantumForceGraph tethering
+
+	Returns: Dictionary mapping Vector2i (grid position) → Vector2 (screen position)
+
+	This allows QuantumForceGraph to read plots as the foundation and tether
+	quantum bubbles to fixed plot positions.
+	"""
+	return classical_plot_positions.duplicate()
+
+
+func get_plot_position(grid_pos: Vector2i) -> Vector2:
+	"""Get parametric screen position for a specific plot"""
+	return classical_plot_positions.get(grid_pos, Vector2.ZERO)

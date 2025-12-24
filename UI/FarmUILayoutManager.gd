@@ -111,6 +111,12 @@ func inject_farm(farm: Node, ui_controller: Node) -> void:
 	if plot_grid_display:
 		plot_grid_display.inject_farm(farm)
 		plot_grid_display.inject_ui_controller(ui_controller)
+
+		# PHASE 8: Inject biomes for parametric positioning
+		if farm and farm.grid and farm.grid.biomes:
+			plot_grid_display.inject_biomes(farm.grid.biomes)
+			print("💉 Biomes injected into PlotGridDisplay for parametric positioning")
+
 		print("💉 Farm injected into PlotGridDisplay")
 
 

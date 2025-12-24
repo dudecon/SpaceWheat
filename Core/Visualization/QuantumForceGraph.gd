@@ -1156,8 +1156,8 @@ func _draw_entanglement_lines():
 			# Calculate interaction strength from node amplitudes
 			var interaction_strength = 0.5  # Fallback
 			if node.plot.quantum_state and partner_node.plot and partner_node.plot.quantum_state:
-				var node_radius = node.plot.quantum_state.radius if "radius" in node.plot.quantum_state else 1.0
-				var partner_radius = partner_node.plot.quantum_state.radius if "radius" in partner_node.plot.quantum_state else 1.0
+				var node_radius = node.plot.quantum_state.radius
+				var partner_radius = partner_node.plot.quantum_state.radius
 				interaction_strength = sqrt(node_radius * partner_radius)  # Geometric mean
 
 			# Animated pulse based on interaction strength
@@ -1455,9 +1455,13 @@ func _draw_quantum_bubble(node: QuantumNode, is_celestial: bool = false) -> void
 
 	# Calculate dynamic radius from qubit coherence
 	var dynamic_radius = node.radius
-	if node.plot and node.plot.quantum_state and "radius" in node.plot.quantum_state:
-		var qubit_coherence = node.plot.quantum_state.radius  # Range [0, 1]
-		dynamic_radius = base_node_radius + qubit_coherence * size_range
+	if node.plot and node.plot.quantum_state:
+		var qubit = node.plot.quantum_state
+		if qubit.has_meta("radius") or "radius" in qubit:
+			dynamic_radius = base_node_radius + qubit.radius * size_range
+		else:
+			# Fallback: use default size if radius not available
+			dynamic_radius = base_node_radius + 0.5 * size_range
 
 	# Use dynamic radius for all subsequent calculations
 	node.radius = dynamic_radius
@@ -1471,7 +1475,7 @@ func _draw_quantum_bubble(node: QuantumNode, is_celestial: bool = false) -> void
 
 	# COLOR BRIGHTNESS ENCODING: brightness ∝ qubit.radius (coherence)
 	var brightness_factor = 0.3
-	if node.plot and node.plot.quantum_state and "radius" in node.plot.quantum_state:
+	if node.plot and node.plot.quantum_state:
 		var qubit_radius = node.plot.quantum_state.radius  # [0, 1]
 		brightness_factor = 0.3 + qubit_radius * 0.7  # Range [0.3, 1.0]
 
