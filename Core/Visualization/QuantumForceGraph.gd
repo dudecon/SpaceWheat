@@ -118,23 +118,38 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float):
 		var plots_by_biome: Dictionary = {}  # biome_name -> Array[Vector2i]
 
 		# First pass: group all plots by their assigned biome
+		print("🔍 Grouping plots by biome (grid size: %dx%d)" % [grid.grid_width, grid.grid_height])
+		print("   plot_biome_assignments has %d entries" % grid.plot_biome_assignments.size())
+
 		for y in range(grid.grid_height):
 			for x in range(grid.grid_width):
 				var grid_pos = Vector2i(x, y)
 				var plot = grid.get_plot(grid_pos)
 				if plot:
 					var biome_name = grid.plot_biome_assignments.get(grid_pos, "")
-					if biome_name == "" and biomes.size() > 0:
-						biome_name = biomes.keys()[0]  # Use first registered biome as default
+					if biome_name == "":
+						if biomes.size() > 0:
+							biome_name = biomes.keys()[0]  # Use first registered biome as default
+							print("   ⚠️  [%s] No assignment, using default biome '%s'" % [grid_pos, biome_name])
+						else:
+							print("   ❌ [%s] No assignment and no biomes registered!" % grid_pos)
 
 					if biome_name != "":
 						if not plots_by_biome.has(biome_name):
 							plots_by_biome[biome_name] = []
 						plots_by_biome[biome_name].append(grid_pos)
 
+		var total_plots_grouped = 0
+		for biome_name in plots_by_biome:
+			total_plots_grouped += plots_by_biome[biome_name].size()
+			print("     - %s: %d plots" % [biome_name, plots_by_biome[biome_name].size()])
+
+		print("   Total: %d biomes with %d plots" % [plots_by_biome.keys().size(), total_plots_grouped])
+
 		# Second pass: calculate parametric positions for each biome's plots
 		for biome_name in plots_by_biome:
 			if not biomes.has(biome_name):
+				print("⚠️ Biome '%s' not found in registry!" % biome_name)
 				continue
 
 			var biome_obj = biomes[biome_name]
@@ -146,6 +161,8 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float):
 				plots_by_biome[biome_name].size(),
 				biome_center
 			)
+
+			print("🔵 Biome '%s': %d plots → %d positions" % [biome_name, plots_by_biome[biome_name].size(), plot_positions.size()])
 
 			# Assign positions to plots (in grid order for consistency)
 			var plot_idx = 0
