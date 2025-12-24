@@ -91,7 +91,7 @@ var plot_tether_colors: Dictionary = {}
 var all_plots: Dictionary = {}  # grid_pos -> PlotBase (FarmPlot, BiomePlot, or CelestialPlot)
 
 # Debug mode (set to false for production)
-const DEBUG_MODE = false
+const DEBUG_MODE = false  # Set to true for debugging node positions and scaling
 var debug_frame_count = 0
 var frame_count = 0
 
@@ -905,6 +905,10 @@ func _draw():
 
 	# 6. Sun qubit node (always on top, celestial)
 	_draw_sun_qubit_node()
+
+	# DEBUG: Draw node position markers to verify scaling
+	if DEBUG_MODE:
+		_draw_debug_node_positions()
 
 
 func _draw_biome_regions():
@@ -1736,6 +1740,23 @@ func get_stats() -> Dictionary:
 		"active_nodes": active_nodes,
 		"total_entanglements": total_entanglements / 2  # Divide by 2 (bidirectional)
 	}
+
+
+func _draw_debug_node_positions():
+	"""Draw small circles at each quantum node position to verify scaling"""
+	var circle_radius = 8.0
+	for node in quantum_nodes:
+		if not node.plot:
+			continue
+		# Draw a small debug circle at the node position
+		var color = Color(0.0, 1.0, 1.0, 0.5)  # Cyan, semi-transparent
+		draw_circle(node.position, circle_radius, color)
+
+		# Draw position text
+		var font = ThemeDB.fallback_font
+		var text_pos = node.position + Vector2(-15, -15)
+		draw_string(font, text_pos, "[%d,%d]" % [node.grid_position.x, node.grid_position.y],
+			HORIZONTAL_ALIGNMENT_CENTER, -1, 8, Color(0, 1, 1, 0.7))
 
 
 func print_snapshot(reason: String = ""):

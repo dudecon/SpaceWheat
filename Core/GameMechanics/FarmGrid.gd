@@ -629,19 +629,16 @@ func get_available_tap_emojis() -> Array[String]:
 	Returns:
 		Array[String] of emoji characters available for tapping
 	"""
-	if not vocabulary_evolution:
-		# Fallback: basic emojis if vocabulary not initialized
-		return ["🌾", "👥", "🍅", "🍄"]
-
 	var available_emojis: Array[String] = []
 
-	# Extract emojis from discovered vocabulary
-	for vocab in vocabulary_evolution.discovered_vocabulary:
-		# Add both north and south emoji from each vocabulary pair
-		if not available_emojis.has(vocab["north"]):
-			available_emojis.append(vocab["north"])
-		if not available_emojis.has(vocab["south"]):
-			available_emojis.append(vocab["south"])
+	if vocabulary_evolution:
+		# Extract emojis from discovered vocabulary
+		for vocab in vocabulary_evolution.discovered_vocabulary:
+			# Add both north and south emoji from each vocabulary pair
+			if not available_emojis.has(vocab["north"]):
+				available_emojis.append(vocab["north"])
+			if not available_emojis.has(vocab["south"]):
+				available_emojis.append(vocab["south"])
 
 	# Always include basic game emojis (starting vocabulary)
 	for basic in ["🌾", "👥", "🍅", "🍄"]:

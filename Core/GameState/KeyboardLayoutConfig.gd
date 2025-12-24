@@ -20,7 +20,10 @@ func get_label_for_position(pos: Vector2i) -> String:
 
 func get_all_actions() -> Array[String]:
 	"""Get all configured input actions"""
-	return action_to_position.keys()
+	var actions: Array[String] = []
+	for action in action_to_position.keys():
+		actions.append(str(action))
+	return actions
 
 
 func is_action_valid(action: String) -> bool:
