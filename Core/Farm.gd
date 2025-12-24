@@ -96,8 +96,9 @@ func _ready():
 			push_error("  - %s" % error)
 		return
 
-	if VerboseConfig.is_verbose("farm"):
-		grid_config.print_summary()
+	# TODO: Enable when VerboseConfig is fully integrated
+	#if VerboseConfig.is_verbose("farm"):
+	#	grid_config.print_summary()
 
 	# Create core systems
 	economy = FarmEconomy.new()
@@ -323,8 +324,9 @@ func build(pos: Vector2i, build_type: String) -> bool:
 				const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 				qubit = DualEmojiQubit.new(config["north_emoji"], config["south_emoji"], PI/2)
 				qubit.energy = 0.3  # Stays at minimum without biome evolution
-				if VerboseConfig.is_verbose("farm"):
-				print("Created local qubit (no biome) at %s" % pos)
+				# TODO: Enable when VerboseConfig is fully integrated
+				#if VerboseConfig.is_verbose("farm"):
+				#	print("Created local qubit (no biome) at %s" % pos)
 
 			success = grid.plant(pos, config["plant_type"], qubit)
 		"build":
@@ -351,6 +353,117 @@ func build(pos: Vector2i, build_type: String) -> bool:
 		return false
 
 
+func do_action(action: String, params: Dictionary) -> Dictionary:
+	"""Universal action dispatcher - routes to appropriate method
+
+	Supported actions:
+	- plant: {position, plant_type} → plants at position
+	- entangle: {position_a, position_b} → entangles two plots
+	- measure: {position} → measures plot
+	- harvest: {position} → harvests plot
+	- mill: {wheat_amount} → mills wheat to flour
+	- market: {flour_amount} → sells flour at market
+
+	Returns: Dictionary with {success: bool, message: String, ...action-specific data}
+	"""
+	match action:
+		"plant":
+			var pos = params.get("position", Vector2i.ZERO)
+			var plant_type = params.get("plant_type", "wheat")
+			var success = build(pos, plant_type)
+			return {
+				"success": success,
+				"position": pos,
+				"plant_type": plant_type,
+				"message": "Plant action " + ("succeeded" if success else "failed")
+			}
+
+		"entangle":
+			var pos_a = params.get("position_a", Vector2i.ZERO)
+			var pos_b = params.get("position_b", Vector2i.ZERO)
+			var bell_state = params.get("bell_state", "phi_plus")
+			var success = entangle_plots(pos_a, pos_b, bell_state)
+			return {
+				"success": success,
+				"position_a": pos_a,
+				"position_b": pos_b,
+				"bell_state": bell_state,
+				"message": "Entangle action " + ("succeeded" if success else "failed")
+			}
+
+		"measure":
+			var pos = params.get("position", Vector2i.ZERO)
+			var outcome = measure_plot(pos)
+			return {
+				"success": outcome != "",
+				"position": pos,
+				"outcome": outcome,
+				"message": "Measured: " + outcome if outcome else "Measurement failed"
+			}
+
+		"harvest":
+			var pos = params.get("position", Vector2i.ZERO)
+			var result = harvest_plot(pos)
+			result["message"] = "Harvest " + ("succeeded" if result.get("success", false) else "failed")
+			return result
+
+		"mill":
+			var wheat_amount = params.get("wheat_amount", 1)
+			if economy.wheat >= wheat_amount:
+				economy.wheat -= wheat_amount
+				var flour_produced = wheat_amount  # 1 wheat -> 1 flour
+				var credits_earned = flour_produced * 5  # 1 flour -> 5 credits
+				economy.flour += flour_produced
+				economy.credits += credits_earned
+				_emit_state_changed()
+				return {
+					"success": true,
+					"wheat_amount": wheat_amount,
+					"flour_produced": flour_produced,
+					"credits_earned": credits_earned,
+					"message": "Milled %d wheat → %d flour + %d credits" % [wheat_amount, flour_produced, credits_earned]
+				}
+			else:
+				return {
+					"success": false,
+					"wheat_amount": wheat_amount,
+					"flour_produced": 0,
+					"credits_earned": 0,
+					"message": "Not enough wheat! Need %d, have %d" % [wheat_amount, economy.wheat]
+				}
+
+		"market":
+			var flour_amount = params.get("flour_amount", 1)
+			if economy.flour >= flour_amount:
+				economy.flour -= flour_amount
+				var market_price = 80  # 1 flour = 80 credits at market
+				var margin = int(flour_amount * market_price * 0.20)  # 20% margin
+				var credits_received = int(flour_amount * market_price * 0.80)  # 80% base price
+				economy.credits += credits_received + margin
+				_emit_state_changed()
+				return {
+					"success": true,
+					"flour_amount": flour_amount,
+					"credits_received": credits_received,
+					"market_margin": margin,
+					"message": "Sold %d flour → %d credits" % [flour_amount, credits_received + margin]
+				}
+			else:
+				return {
+					"success": false,
+					"flour_amount": flour_amount,
+					"credits_received": 0,
+					"market_margin": 0,
+					"message": "Not enough flour! Need %d, have %d" % [flour_amount, economy.flour]
+				}
+
+		_:
+			return {
+				"success": false,
+				"message": "Unknown action: %s" % action
+			}
+
+
 func measure_plot(pos: Vector2i) -> String:
 	"""Measure (collapse) quantum state of plot at position
 
@@ -365,8 +478,9 @@ func measure_plot(pos: Vector2i) -> String:
 	# No biome mode: use random outcome for testing (no quantum evolution happened)
 	if not outcome and not biome_enabled:
 		outcome = "🌾" if randf() > 0.5 else "👥"
-		if VerboseConfig.is_verbose("farm"):
-			print("No-biome mode: random outcome %s at %s" % [outcome, pos])
+		# TODO: Enable when VerboseConfig is fully integrated
+		#if VerboseConfig.is_verbose("farm"):
+		#	print("No-biome mode: random outcome %s at %s" % [outcome, pos])
 
 	plot_measured.emit(pos, outcome)
 	_emit_state_changed()

@@ -57,7 +57,8 @@ const CONSPIRACY_THRESHOLDS = {
 func _ready():
 	_create_12_nodes()
 	_create_15_connections()
-	print("🍅 TomatoConspiracyNetwork initialized with %d nodes and %d connections" % [nodes.size(), connections.size()])
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_NETWORK") == "1":
+		print("🍅 TomatoConspiracyNetwork initialized with %d nodes and %d connections" % [nodes.size(), connections.size()])
 
 
 func _process(dt: float):
@@ -288,9 +289,11 @@ func _evolve_sun_moon_cycle(dt: float):
 
 	# Phase transition detection
 	if was_sun and not is_sun_phase:
-		print("🌙 Moon rises (phase: %.2f)" % sun_moon_phase)
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_NETWORK") == "1":
+					print("🌙 Moon rises (phase: %.2f)" % sun_moon_phase)
 	elif not was_sun and is_sun_phase:
-		print("☀️ Sun rises (phase: %.2f)" % sun_moon_phase)
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_NETWORK") == "1":
+					print("☀️ Sun rises (phase: %.2f)" % sun_moon_phase)
 
 	# Oscillate theta between 0 (sun) and π (moon)
 	# Use smooth sine wave for continuous quantum evolution
@@ -404,12 +407,13 @@ func get_node_energy(node_id: String) -> float:
 
 func print_network_state():
 	"""Debug: Print current state of all nodes"""
-	print("=== TOMATO CONSPIRACY NETWORK STATE ===")
-	print("Total Energy: %.3f" % get_total_energy())
-	print("Active Conspiracies: %d" % active_conspiracies.size())
-	for node in nodes.values():
-		print("  %s" % node.get_debug_string())
-	print("======================================")
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_NETWORK") == "1":
+			print("=== TOMATO CONSPIRACY NETWORK STATE ===")
+			print("Total Energy: %.3f" % get_total_energy())
+			print("Active Conspiracies: %d" % active_conspiracies.size())
+			for node in nodes.values():
+				print("  %s" % node.get_debug_string())
+			print("======================================")
 
 
 ## Icon Management
@@ -418,14 +422,16 @@ func add_icon(icon) -> void:
 	"""Add an Icon to influence the network"""
 	if icon not in active_icons:
 		active_icons.append(icon)
-		print("✨ Added Icon: %s" % icon.get_debug_string())
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_NETWORK") == "1":
+					print("✨ Added Icon: %s" % icon.get_debug_string())
 
 
 func remove_icon(icon) -> void:
 	"""Remove an Icon from the network"""
 	if icon in active_icons:
 		active_icons.erase(icon)
-		print("✨ Removed Icon: %s" % icon.icon_name)
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_NETWORK") == "1":
+					print("✨ Removed Icon: %s" % icon.icon_name)
 
 
 func apply_icon_modulation(dt: float):

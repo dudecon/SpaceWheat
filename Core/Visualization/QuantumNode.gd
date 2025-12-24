@@ -96,14 +96,17 @@ func update_animation(current_time: float, delta: float):
 func update_from_quantum_state():
 	"""Update visual properties from quantum state"""
 	if not plot or not plot.quantum_state:
-		# Default values for empty plot
+		# Default values for empty/unplanted plot
 		energy = 0.0
 		coherence = 1.0
 		radius = MIN_RADIUS
 		color = Color(0.5, 0.5, 0.5, 0.3)  # Gray, semi-transparent
-		emoji_north = ""
-		emoji_south = ""
-		emoji_north_opacity = 0.0
+
+		# Show plot emojis even if unplanted - just with zero opacity
+		var emojis = plot.get_plot_emojis() if plot else {"north": "?", "south": "?"}
+		emoji_north = emojis["north"]
+		emoji_south = emojis["south"]
+		emoji_north_opacity = 0.0  # Invisible until planted
 		emoji_south_opacity = 0.0
 		return
 

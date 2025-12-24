@@ -66,7 +66,7 @@ func add_qubit(qubit, plot_id: String):
 	# Resize density matrix: N → N+1 qubits
 	_expand_density_matrix_product()
 
-	if VerboseConfig.is_verbose("quantum"):
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_QUANTUM") == "1":
 		print("➕ Added qubit %s to cluster (size: %d)" % [plot_id, qubits.size()])
 
 
@@ -147,7 +147,7 @@ func create_ghz_state():
 
 	cluster_type = ClusterType.GHZ
 
-	if VerboseConfig.is_verbose("quantum"):
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_QUANTUM") == "1":
 		print("🌟 Created %d-qubit GHZ state: (|0...0⟩ + |1...1⟩)/√2" % N)
 
 
@@ -185,7 +185,7 @@ func create_w_state():
 
 	cluster_type = ClusterType.W_STATE
 
-	if VerboseConfig.is_verbose("quantum"):
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_QUANTUM") == "1":
 		print("💫 Created %d-qubit W state (robust shared excitation)" % N)
 
 
@@ -212,7 +212,7 @@ func create_cluster_state_1d():
 
 	cluster_type = ClusterType.CLUSTER
 
-	if VerboseConfig.is_verbose("quantum"):
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_QUANTUM") == "1":
 		print("🌐 Created %d-qubit 1D cluster state (MBQC ready)" % N)
 
 
@@ -266,7 +266,7 @@ func entangle_new_qubit_cnot(new_qubit, new_plot_id: String, control_index: int 
 	# Apply CNOT to create entanglement
 	_apply_cnot_expansion(old_density, old_N, control_index)
 
-	if VerboseConfig.is_verbose("quantum"):
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_QUANTUM") == "1":
 		print("🔗 Applied CNOT: control=%d, target=%d" % [control_index, old_N])
 
 
@@ -385,7 +385,7 @@ func measure_qubit(qubit_index: int) -> int:
 	# Collapse state
 	_collapse_to_outcome(qubit_index, outcome)
 
-	if VerboseConfig.is_verbose("quantum"):
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_QUANTUM") == "1":
 		print("📊 Measured qubit %d: %d (p₀=%.2f, p₁=%.2f)" %
 		      [qubit_index, outcome, prob_0, prob_1])
 

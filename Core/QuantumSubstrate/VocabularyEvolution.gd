@@ -57,7 +57,7 @@ var time_elapsed: float = 0.0
 func _ready():
 	# Seed with initial vocabulary
 	_seed_initial_vocabulary()
-	if VerboseConfig.is_verbose("vocabulary"):
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_VOCABULARY") == "1":
 		print("🧬 Vocabulary Evolution initialized with %d seed concepts" % evolving_qubits.size())
 
 
@@ -126,7 +126,7 @@ func _maybe_spawn_from_fiber(delta: float):
 		evolving_qubits.append(new_qb)
 		total_spawned += 1
 
-		if VerboseConfig.is_verbose("vocabulary"):
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_VOCABULARY") == "1":
 			print("🧬 Spawned: %s ↔ %s (region: %s)" % [new_qb.north_emoji, new_qb.south_emoji, region])
 
 
@@ -213,7 +213,7 @@ func _quantum_cannibalize():
 	if min_purity < cannibalism_threshold:
 		var consumed = evolving_qubits[weakest_index]
 
-		if VerboseConfig.is_verbose("vocabulary"):
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_VOCABULARY") == "1":
 			print("🍽️ Cannibalized: %s ↔ %s (purity: %.2f)" % [
 				consumed.north_emoji,
 				consumed.south_emoji,
@@ -249,7 +249,7 @@ func _harvest_mature_concepts():
 
 			discovered_vocabulary.append(discovery)
 
-		if VerboseConfig.is_verbose("vocabulary"):
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_VOCABULARY") == "1":
 			print("✨ DISCOVERED: %s ↔ %s (Berry phase: %.2f)" % [
 				qb.north_emoji,
 				qb.south_emoji,
@@ -353,12 +353,14 @@ func deserialize(data: Dictionary) -> void:
 	Rebuilds DualEmojiQubit objects from Dictionary representation.
 	"""
 	if data.is_empty():
-		print("⚠️  Vocabulary state empty, keeping current pool")
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_VOCABULARY") == "1":
+					print("⚠️  Vocabulary state empty, keeping current pool")
 		return
 
 	# Restore discovered vocabulary
 	if data.has("discovered_vocabulary"):
-		discovered_vocabulary = data["discovered_vocabulary"].duplicate(true) as Array[Dictionary]
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_VOCABULARY") == "1":
+					discovered_vocabulary = data["discovered_vocabulary"].duplicate(true) as Array[Dictionary]
 		print("✨ Restored %d discovered concepts" % discovered_vocabulary.size())
 
 	# Restore parameters
@@ -394,6 +396,8 @@ func deserialize(data: Dictionary) -> void:
 
 			evolving_qubits.append(qb)
 
-		print("🧬 Restored %d evolving qubits" % evolving_qubits.size())
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_VOCABULARY") == "1":
+					print("🧬 Restored %d evolving qubits" % evolving_qubits.size())
 
-	print("📚 Vocabulary deserialized - Ready to continue evolution")
+		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_VOCABULARY") == "1":
+				print("📚 Vocabulary deserialized - Ready to continue evolution")

@@ -42,7 +42,8 @@ func _initialize_couplings():
 	node_couplings["water"] = -0.4
 	node_couplings["ripening"] = -0.3
 
-	print("🌌 Cosmic Chaos Icon initialized with %d node couplings" % node_couplings.size())
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_BIOME") == "1":
+			print("🌌 Cosmic Chaos Icon initialized with %d node couplings" % node_couplings.size())
 
 
 func _initialize_jump_operators():
@@ -66,7 +67,8 @@ func _initialize_jump_operators():
 		"base_rate": 0.05  # Moderate damping
 	})
 
-	print("🌌 Cosmic Chaos: Initialized %d Lindblad operators" % jump_operators.size())
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_BIOME") == "1":
+			print("🌌 Cosmic Chaos: Initialized %d Lindblad operators" % jump_operators.size())
 
 
 ## Calculate activation based on void items or emptiness

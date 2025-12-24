@@ -40,7 +40,8 @@ func _initialize_couplings():
 	node_couplings["seed"] = -0.4         # Disrupts orderly growth
 	node_couplings["solar"] = -0.3        # Reduces stable energy
 
-	print("🍅 Chaos Icon initialized with %d node couplings" % node_couplings.size())
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_BIOME") == "1":
+			print("🍅 Chaos Icon initialized with %d node couplings" % node_couplings.size())
 
 
 ## Temperature Modulation

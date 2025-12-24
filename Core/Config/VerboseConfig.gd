@@ -1,8 +1,8 @@
-class_name VerboseConfig
 extends Node
 
 ## Global verbose logging configuration
-## Set VERBOSE_LOGGING to true to see detailed debug output
+## Access via: VerboseConfig.is_verbose("subsystem")
+## Set VERBOSE_LOGGING=1 env var or --verbose flag to enable
 ## Individual subsystems can be controlled separately
 
 # Main verbose flag
@@ -29,8 +29,24 @@ func _ready():
 			verbose_forest = true
 			print("🌲 VERBOSE FOREST LOGGING ENABLED")
 
+static func safe_is_verbose(subsystem: String = "") -> bool:
+	"""Safe check that works even if VerboseConfig isn't initialized"""
+	# Try to get the VerboseConfig singleton
+	if not is_instance_valid(VerboseConfig):
+		return false
+
+	if not VerboseConfig.is_node_ready():
+		return false
+
+	return VerboseConfig.is_verbose(subsystem)
+
+
 func is_verbose(subsystem: String = "") -> bool:
 	"""Check if we should show verbose output for a subsystem"""
+	# Safety check: if not ready yet, return false
+	if not is_node_ready():
+		return false
+
 	if verbose_logging:
 		return true
 

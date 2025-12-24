@@ -33,6 +33,8 @@ var territory_border: ColorRect  # Shows Icon control
 var number_label: Label
 var checkbox_label: Label  # NEW: Multi-select checkbox (☐/☑)
 var center_state_indicator: Control  # Small indicator showing quantum state at plot center
+var entanglement_indicator: Control  # Visual ring showing entanglement status
+var entanglement_counter: Label  # Shows number of entangled connections
 
 # Colors
 const COLOR_EMPTY = Color(0.15, 0.15, 0.15)
@@ -54,6 +56,10 @@ const COLOR_PCB_COPPER = Color(0.8, 0.5, 0.1)      # Copper traces
 const COLOR_PCB_SOLDER = Color(0.6, 0.6, 0.6)      # Solder pads
 const COLOR_PCB_EDGE_LIGHT = Color(0.25, 0.25, 0.25)  # Edge highlight
 const COLOR_PCB_EDGE_DARK = Color(0.08, 0.08, 0.08)   # Edge shadow
+
+# Entanglement visualization colors
+const COLOR_ENTANGLEMENT_RING = Color(0.0, 1.0, 1.0, 0.8)  # Bright cyan
+const COLOR_ENTANGLEMENT_GLOW = Color(0.0, 1.0, 1.0, 0.3)  # Faint cyan glow
 
 # Reference to territory manager (set by FarmView)
 var territory_manager = null
@@ -175,6 +181,25 @@ func _create_ui_elements():
 	center_state_indicator.custom_minimum_size = Vector2(4, 4)
 	add_child(center_state_indicator)
 
+	# Entanglement indicator (glowing ring when plot is entangled)
+	entanglement_indicator = Control.new()
+	entanglement_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entanglement_indicator.z_index = 2  # Above territory border but below emojis
+	entanglement_indicator.custom_minimum_size = size
+	entanglement_indicator.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(entanglement_indicator)
+
+	# Entanglement counter (shows number of entangled plots in top-right corner)
+	entanglement_counter = Label.new()
+	entanglement_counter.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	entanglement_counter.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	entanglement_counter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entanglement_counter.add_theme_font_size_override("font_size", 14)
+	entanglement_counter.add_theme_color_override("font_color", COLOR_ENTANGLEMENT_RING)
+	entanglement_counter.text = ""
+	entanglement_counter.z_index = 4  # Above entanglement indicator
+	add_child(entanglement_counter)
+
 
 func _process(delta):
 	# Track long press timer
@@ -228,6 +253,9 @@ func _update_visuals():
 
 	# Update territory border based on Icon control
 	_update_territory_border()
+
+	# Update entanglement visualization
+	_update_entanglement_display()
 
 	# Update selection border
 	selection_border.visible = is_selected
@@ -434,7 +462,7 @@ func _layout_elements():
 
 
 func _draw():
-	"""Draw PCB-style borders, solder pads, and traces"""
+	"""Draw PCB-style borders, solder pads, traces, and entanglement indicators"""
 	var rect = get_rect()
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		return
@@ -447,6 +475,14 @@ func _draw():
 
 	# Draw subtle circuit traces
 	_draw_circuit_traces(rect)
+
+	# Draw entanglement ring if plot is entangled
+	if plot_ui_data and plot_ui_data.is_planted:
+		var entangled_count = 0
+		if plot_ui_data.has("entangled_plots"):
+			entangled_count = plot_ui_data.entangled_plots.size()
+		if entangled_count > 0:
+			_draw_entanglement_ring_inline(rect, entangled_count)
 
 
 func _draw_pcb_edges(rect: Rect2):
@@ -540,6 +576,46 @@ func _update_center_indicator():
 	var indicator_color = Color(0.9, 0.9, 0.9)
 	indicator_color.a = biome_energy * 0.8  # Max 80% opacity when energy is high
 	center_state_indicator.color = indicator_color
+
+
+func _update_entanglement_display():
+	"""Update entanglement visual indicators (ring + counter)"""
+	if plot_ui_data == null or not plot_ui_data.is_planted:
+		# No entanglement indicators for empty plots
+		entanglement_indicator.queue_redraw()
+		entanglement_counter.text = ""
+		return
+
+	# Count entangled connections (from plot_ui_data if available)
+	var entangled_count = 0
+	if plot_ui_data.has("entangled_plots"):
+		entangled_count = plot_ui_data.entangled_plots.size()
+
+	# Update counter label
+	if entangled_count > 0:
+		entanglement_counter.text = "🔗%d" % entangled_count
+	else:
+		entanglement_counter.text = ""
+
+	# Trigger redraw of entanglement indicator ring
+	entanglement_indicator.queue_redraw()
+
+
+func _draw_entanglement_ring_inline(rect: Rect2, entangled_count: int):
+	"""Draw the entanglement glow ring inside the plot tile"""
+	if entangled_count == 0:
+		return
+
+	var center = rect.get_center()
+	var ring_radius = min(rect.size.x, rect.size.y) / 2.0 - 2
+
+	# Draw outer glow (faint)
+	draw_circle(center, ring_radius + 2, COLOR_ENTANGLEMENT_GLOW)
+
+	# Draw bright ring (pulsing effect based on entanglement count)
+	var pulse = (sin(Time.get_ticks_msec() * 0.005) + 1.0) / 2.0
+	var bright_color = COLOR_ENTANGLEMENT_RING.lerp(COLOR_ENTANGLEMENT_GLOW, 0.3 + pulse * 0.2)
+	draw_arc(center, ring_radius, 0, TAU, 16, bright_color, 2.0)
 
 
 ## Public API

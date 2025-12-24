@@ -14,6 +14,7 @@ const SemanticCoupling = preload("res://Core/QuantumSubstrate/SemanticCoupling.g
 # Quantum nodes
 var quantum_nodes: Array[QuantumNode] = []
 var node_by_plot_id: Dictionary = {}  # plot_id -> QuantumNode
+var quantum_nodes_by_grid_pos: Dictionary = {}  # grid_pos -> QuantumNode
 var sun_qubit_node: QuantumNode = null  # Special celestial sun node
 
 # Graph properties
@@ -160,31 +161,27 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float):
 			var biome_config = biome_obj.get_visual_config()
 			var biome_center = center_position + biome_config.center_offset * graph_radius
 
-			# CRITICAL: Only create nodes for PLANTED plots (have quantum_state)
-			# This prevents the "haunted empty bubbles" of unplanted plots
-			var planted_plots = []
-			for grid_pos in plots_by_biome[biome_name]:
-				var plot = farm_grid.get_plot(grid_pos) if farm_grid else null
-				if plot and plot.quantum_state:
-					planted_plots.append(grid_pos)
+			# Create nodes for ALL plots (planted and unplanted)
+			# QuantumNode handles visibility based on quantum_state
+			var all_plots = plots_by_biome[biome_name]
 
 			# Get parametric ring positions from biome (with viewport scaling for consistency)
 			var plot_positions = biome_obj.get_plot_positions_in_oval(
-				planted_plots.size(),
+				all_plots.size(),
 				biome_center,
 				viewport_scale
 			)
 
-			print("🔵 Biome '%s': %d plots → %d planted → %d positions" % [
+			print("🔵 Biome '%s': %d plots → %d total → %d positions" % [
 				biome_name,
 				plots_by_biome[biome_name].size(),
-				planted_plots.size(),
+				all_plots.size(),
 				plot_positions.size()
 			])
 
-			# Assign positions to PLANTED plots only (in grid order for consistency)
+			# Assign positions to ALL plots (in grid order for consistency)
 			var plot_idx = 0
-			for grid_pos in planted_plots:
+			for grid_pos in all_plots:
 				if plot_idx < plot_positions.size():
 					var screen_pos = plot_positions[plot_idx]
 
@@ -313,7 +310,31 @@ func wire_to_farm(farm: Node) -> void:
 	# Create sun qubit node (will use biotic_flux_biome)
 	create_sun_qubit_node()
 
+	# Connect to farm signals to update nodes when plots change
+	if farm.has_signal("plot_planted"):
+		farm.plot_planted.connect(_on_plot_planted)
+	if farm.has_signal("plot_harvested"):
+		farm.plot_harvested.connect(_on_plot_harvested)
+
 	print("⚛️ QuantumForceGraph wired to farm with multi-biome support")
+
+
+func _on_plot_planted(grid_pos: Vector2i) -> void:
+	"""Signal handler: Plot was planted - update corresponding quantum node"""
+	if grid_pos in quantum_nodes_by_grid_pos:
+		var node = quantum_nodes_by_grid_pos[grid_pos]
+		if node:
+			node.update_from_quantum_state()
+			print("🌾 QuantumNode updated: plot at %s planted" % grid_pos)
+
+
+func _on_plot_harvested(grid_pos: Vector2i) -> void:
+	"""Signal handler: Plot was harvested - update corresponding quantum node"""
+	if grid_pos in quantum_nodes_by_grid_pos:
+		var node = quantum_nodes_by_grid_pos[grid_pos]
+		if node:
+			node.update_from_quantum_state()
+			print("🌾 QuantumNode updated: plot at %s harvested" % grid_pos)
 
 
 func set_plot_tether_colors(colors: Dictionary):
@@ -353,6 +374,7 @@ func create_quantum_nodes(classical_plot_positions: Dictionary):
 	"""
 	quantum_nodes.clear()
 	node_by_plot_id.clear()
+	quantum_nodes_by_grid_pos.clear()
 
 	if DEBUG_MODE:
 		print("\n⚛️ ===== CREATING QUANTUM NODES =====")
@@ -376,6 +398,7 @@ func create_quantum_nodes(classical_plot_positions: Dictionary):
 		# Pass center_position so nodes start in the center, not at perimeter
 		var node = QuantumNode.new(plot, classical_pos, grid_pos, center_position)
 		quantum_nodes.append(node)
+		quantum_nodes_by_grid_pos[grid_pos] = node  # Index by grid position for quick lookup
 
 		if plot:
 			# Use plot_id if available (PlotBase has it), otherwise get from wrapped plot

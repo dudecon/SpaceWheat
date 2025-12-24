@@ -37,7 +37,8 @@ func _initialize_couplings():
 	node_couplings["meaning"] = -0.3      # Suppresses semantic freedom
 	node_couplings["identity"] = -0.5     # Reduces autonomy
 
-	print("🏰 Imperium Icon initialized with %d node couplings" % node_couplings.size())
+	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_BIOME") == "1":
+			print("🏰 Imperium Icon initialized with %d node couplings" % node_couplings.size())
 
 
 ## Temperature Modulation
