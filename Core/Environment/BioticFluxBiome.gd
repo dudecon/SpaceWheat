@@ -525,12 +525,12 @@ func _compose_total_hamiltonian() -> Dictionary:
 
 
 func _apply_celestial_oscillation(dt: float) -> void:
-	"""Drive sun/moon qubit on tilted ecliptic path (like Earth's orbit)
+	"""Drive sun/moon qubit on tilted circular orbit (Bloch sphere great circle)
 
-	Path: Sun traces a great circle tilted 23.5° from equator (Earth's axial tilt)
-	- θ(φ) = π/2 + tilt·sin(φ) keeps sun on the tilted ecliptic
-	- φ(t) = (t/period) * 2π rotates continuously around the ecliptic
-	- tilt = 23.5° = 0.41 radians (Earth's axial tilt angle)
+	Path: Sun traces a circular great circle tilted 10° from equator
+	- θ(φ) = π/2 + tilt·sin(φ) keeps sun on the tilted great circle
+	- φ(t) = (t/period) * 2π rotates continuously around the orbit
+	- tilt = 10° = 0.175 radians
 
 	Brightness is based on which pole sun's θ points toward (not position on ecliptic):
 	- sun_brightness = cos²(θ/2) - peaks when θ near 0 (north/day)
@@ -545,8 +545,8 @@ func _apply_celestial_oscillation(dt: float) -> void:
 	var cycle_time = fmod(time_tracker.time_elapsed, sun_moon_period)
 	var phi = (cycle_time / sun_moon_period) * TAU  # 0 → 2π full rotation
 
-	# Ecliptic tilt (23.5° - Earth's axial tilt)
-	var ecliptic_tilt = 23.5 * PI / 180.0  # ~0.41 radians
+	# Circular orbit tilt (10° - softer tilt for gameplay)
+	var ecliptic_tilt = 10.0 * PI / 180.0  # ~0.175 radians
 
 	# Position on tilted great circle
 	# θ(φ) = π/2 + tilt·sin(φ) keeps sun on the tilted ecliptic path

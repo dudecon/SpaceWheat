@@ -50,6 +50,22 @@ func _ready() -> void:
 
 	# Trust the layout engine to size this properly
 	# FarmUI anchors (0-1) are already set in scene, so it should fill parent
+
+	# DEBUG: Log parent chain to understand sizing issue
+	await get_tree().process_frame
+	var parent = get_parent()
+	var grandparent = parent.get_parent() if parent else null
+	var great_grandparent = grandparent.get_parent() if grandparent else null
+
+	print("\n📏 PARENT CHAIN SIZES:")
+	print("  Great-grandparent (%s): %.0f × %.0f" % [great_grandparent.name if great_grandparent else "null", great_grandparent.size.x if great_grandparent else 0, great_grandparent.size.y if great_grandparent else 0])
+	print("  Grandparent (%s): %.0f × %.0f" % [grandparent.name if grandparent else "null", grandparent.size.x if grandparent else 0, grandparent.size.y if grandparent else 0])
+	print("  Parent (%s): %.0f × %.0f" % [parent.name if parent else "null", parent.size.x if parent else 0, parent.size.y if parent else 0])
+	print("  FarmUI: %.0f × %.0f" % [size.x, size.y])
+	var main_container = get_node_or_null("MainContainer")
+	if main_container:
+		print("  MainContainer: %.0f × %.0f" % [main_container.size.x, main_container.size.y])
+
 	# DEBUG: Add info about toggling debug display
 	print("💡 Press F3 to toggle layout debug display")
 
