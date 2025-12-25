@@ -525,41 +525,32 @@ func _compose_total_hamiltonian() -> Dictionary:
 
 
 func _apply_celestial_oscillation(dt: float) -> void:
-	"""Drive sun/moon qubit around tilted great circle (ecliptic path)
+	"""Drive sun/moon qubit through day-night cycle on Bloch sphere
 
-	Path: Sun traces a great circle tilted ~23° from equator (like Earth's ecliptic)
-	- φ(t) rotates continuously: 0 → 2π over one sun_moon_period
-	- θ(φ) = π/2 + tilt·sin(φ) stays on the tilted great circle
-	- tilt ≈ 23.5° (Earth's axial tilt) = 0.41 radians
+	Path: Sun traverses from north pole (day) to south pole (night)
+	- θ(t) = (t/period) * π - goes from 0° (north/day) to 180° (south/night)
+	- φ(t) = (t/period) * 2π - continuous azimuthal rotation
 
-	This gives a precessing path that's natural and dynamic:
-	- Full 360° rotation around the Bloch sphere
-	- Crosses the celestial equator at φ=0 and φ=π (ascending/descending nodes)
-	- Reaches maximum northern latitude at φ=π/2, southern at φ=3π/2
-	- No pole singularities since we never reach θ=0 or θ=π
+	This is a true day-night cycle with continuous Bloch sphere dynamics:
+	- At θ=0: Daytime (north pole), sun_brightness=1.0, moon_brightness=0.0
+	- At θ=π/2: Twilight (equator), sun_brightness=0.5, moon_brightness=0.5
+	- At θ=π: Nighttime (south pole), sun_brightness=0.0, moon_brightness=1.0
 
 	This is deterministic - not quantum evolution, but classical driving force
 	"""
 	if not sun_qubit:
 		return
 
-	# Time-based continuous rotation around ecliptic great circle
+	# Time-based progression from day to night
 	var cycle_time = fmod(time_tracker.time_elapsed, sun_moon_period)
-	var phi = (cycle_time / sun_moon_period) * TAU  # 0 → 2π full rotation
+	var phase = cycle_time / sun_moon_period  # 0 → 1 over one period
 
-	# Ecliptic tilt (23.5° - Earth's axial tilt relative to orbital plane)
-	var ecliptic_tilt = 23.5 * PI / 180.0  # ~0.41 radians
+	# Position: traverse from north pole (θ=0) to south pole (θ=π)
+	sun_qubit.theta = phase * PI
+	sun_qubit.phi = phase * TAU  # Continuous azimuthal rotation
 
-	# Position on tilted great circle
-	# θ(φ) = π/2 + tilt·sin(φ) keeps sun on the tilted ecliptic path
-	sun_qubit.phi = phi
-	sun_qubit.theta = PI / 2.0 + ecliptic_tilt * sin(phi)
-
-	# Brightness modulates based on position on ecliptic
-	# Maximum at equator crossings (φ=0, φ=π), minimum at extremes (φ=π/2, φ=3π/2)
-	# This models seasonal intensity: brightest at equinoxes, dimmer at solstices
-	var phase_brightness = pow(cos(phi / 2.0), 2)  # 0→1→0 over half cycle, repeats
-	sun_qubit.radius = 0.7 + 0.3 * phase_brightness  # Ranges 0.7 to 1.0
+	# Radius (magnitude) stays constant for quantum state
+	sun_qubit.radius = 1.0
 
 
 func _apply_hamiltonian_evolution(dt: float) -> void:
@@ -840,9 +831,14 @@ func _apply_energy_transfer(dt: float) -> void:
 		var moon_bloch_angle = _bloch_angle_between(qubit_vector, moon_vector)
 		var moon_alignment = pow(cos(moon_bloch_angle / 2.0), 2)
 
-		# Brightness sources: sun and moon have equal but opposite brightness cycles
-		var sun_brightness = sun_qubit.radius  # Sun bright during day (θ near 0)
-		var moon_brightness = 1.0 - sun_brightness  # Moon bright at night (θ near π)
+		# Brightness sources: based on which pole sun's theta points toward (pure Bloch sphere calculation)
+		# cos²(θ/2) = probability of north pole (day) = sun brightness
+		# sin²(θ/2) = probability of south pole (night) = moon brightness
+		# At θ=0: sun=1.0, moon=0.0 (daytime)
+		# At θ=π/2: sun=0.5, moon=0.5 (twilight)
+		# At θ=π: sun=0.0, moon=1.0 (nighttime)
+		var sun_brightness = pow(cos(sun_qubit.theta / 2.0), 2)
+		var moon_brightness = pow(sin(sun_qubit.theta / 2.0), 2)
 
 		# Calculate total energy rate from applicable icons
 		var energy_rate = 0.0
