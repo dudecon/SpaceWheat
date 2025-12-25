@@ -48,6 +48,9 @@ func _ready():
 	# Toolbar stretches to fill full width
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
+	# DEBUG: Add corner markers to visualize toolbar layout
+	_add_corner_markers()
+
 	# Create buttons for tools 1-6
 	for tool_num in range(1, 7):
 		var button = Button.new()
@@ -158,3 +161,56 @@ func _on_tool_button_pressed(tool_num: int) -> void:
 	_update_tool_visual(tool_num)
 	tool_selected.emit(tool_num)  # Explicitly emit signal after visual update
 	print("⌨️  Tool %d selected [%s button]" % [tool_num, TOOL_ACTIONS[tool_num]["name"]])
+
+
+func _add_corner_markers() -> void:
+	"""Add colored markers at all four corners to visualize toolbar bounds"""
+	var marker_size = 10
+	var colors = {
+		"TL": Color.RED,      # Top-left
+		"TR": Color.GREEN,    # Top-right
+		"BL": Color.BLUE,     # Bottom-left
+		"BR": Color.YELLOW    # Bottom-right
+	}
+
+	# Top-left marker
+	var tl = ColorRect.new()
+	tl.color = colors["TL"]
+	tl.custom_minimum_size = Vector2(marker_size, marker_size)
+	tl.anchor_left = 0
+	tl.anchor_top = 0
+	tl.offset_left = 0
+	tl.offset_top = 0
+	add_child(tl)
+
+	# Top-right marker
+	var tr = ColorRect.new()
+	tr.color = colors["TR"]
+	tr.custom_minimum_size = Vector2(marker_size, marker_size)
+	tr.anchor_left = 1.0
+	tr.anchor_top = 0
+	tr.offset_left = -marker_size
+	tr.offset_top = 0
+	add_child(tr)
+
+	# Bottom-left marker
+	var bl = ColorRect.new()
+	bl.color = colors["BL"]
+	bl.custom_minimum_size = Vector2(marker_size, marker_size)
+	bl.anchor_left = 0
+	bl.anchor_top = 1.0
+	bl.offset_left = 0
+	bl.offset_top = -marker_size
+	add_child(bl)
+
+	# Bottom-right marker
+	var br = ColorRect.new()
+	br.color = colors["BR"]
+	br.custom_minimum_size = Vector2(marker_size, marker_size)
+	br.anchor_left = 1.0
+	br.anchor_top = 1.0
+	br.offset_left = -marker_size
+	br.offset_top = -marker_size
+	add_child(br)
+
+	print("📍 ToolSelectionRow corner markers added: TL=RED, TR=GREEN, BL=BLUE, BR=YELLOW")

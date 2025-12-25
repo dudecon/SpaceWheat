@@ -10,7 +10,7 @@ var biome: BioticFluxBiome
 var measurements: Array = []
 
 func _ready() -> void:
-	var sep = "═" * 100
+	var sep = "═════════════════════════════════════════════════════════════════════════════════════════════════════"
 	print("\n" + sep)
 	print("ICON REST LOCATION DIAGNOSTIC TEST")
 	print("1 Wheat + 1 Mushroom, 3 full sun revolutions (60 seconds)")
@@ -21,27 +21,28 @@ func _ready() -> void:
 	add_child(biome)
 	await get_tree().process_frame
 
-	# Single WHEAT qubit at origin
+	# Get wheat and mushroom already created in biome
+	# (re-use the biome's internal qubits for simplicity)
 	var wheat = DualEmojiQubit.new()
 	wheat.north_emoji = "🌾"
 	wheat.south_emoji = "🏰"
 	wheat.theta = PI / 3.0  # Start at 60°
 	wheat.phi = 0.0
-	wheat.radius = 0.3
-	wheat.energy = 0.3
+	wheat.radius = 0.5
+	wheat.energy = 0.5
 
-	biome.quantum_states[Vector2i(0, 0)] = wheat
-	biome.plots_by_type[biome.PlotType.FARM].append(Vector2i(0, 0))
-	biome.plot_types[Vector2i(0, 0)] = biome.PlotType.FARM
-
-	# Single MUSHROOM qubit nearby
 	var mushroom = DualEmojiQubit.new()
 	mushroom.north_emoji = "🍂"
 	mushroom.south_emoji = "🍄"
 	mushroom.theta = 2.0 * PI / 3.0  # Start at 120°
 	mushroom.phi = PI  # Opposite side
-	mushroom.radius = 0.3
-	mushroom.energy = 0.3
+	mushroom.radius = 0.5
+	mushroom.energy = 0.5
+
+	# Register in biome
+	biome.quantum_states[Vector2i(0, 0)] = wheat
+	biome.plots_by_type[biome.PlotType.FARM] = [Vector2i(0, 0)]
+	biome.plot_types[Vector2i(0, 0)] = biome.PlotType.FARM
 
 	biome.quantum_states[Vector2i(1, 0)] = mushroom
 	biome.plots_by_type[biome.PlotType.FARM].append(Vector2i(1, 0))
@@ -94,6 +95,7 @@ func _ready() -> void:
 		])
 
 	# ANALYSIS
+	sep = "═════════════════════════════════════════════════════════════════════════════════════════════════════"
 	print("\n" + sep)
 	print("ANALYSIS:")
 	print(sep)

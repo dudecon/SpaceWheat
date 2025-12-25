@@ -61,6 +61,9 @@ func _ready():
 	mouse_filter = MOUSE_FILTER_IGNORE
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
+	# DEBUG: Add corner markers to visualize toolbar layout
+	_add_corner_markers()
+
 	# Create Q, E, R action buttons with proper size_flags
 	for action_key in ["Q", "E", "R"]:
 		var button = Button.new()
@@ -164,3 +167,56 @@ func _on_action_button_pressed(action_key: String) -> void:
 	var action_info = tool_info.get(action_key, {})
 	var label = action_info.get("label", "action")
 	print("⚡ Action %s pressed: %s" % [action_key, label])
+
+
+func _add_corner_markers() -> void:
+	"""Add colored markers at all four corners to visualize toolbar bounds"""
+	var marker_size = 10
+	var colors = {
+		"TL": Color.RED,      # Top-left
+		"TR": Color.GREEN,    # Top-right
+		"BL": Color.BLUE,     # Bottom-left
+		"BR": Color.YELLOW    # Bottom-right
+	}
+
+	# Top-left marker
+	var tl = ColorRect.new()
+	tl.color = colors["TL"]
+	tl.custom_minimum_size = Vector2(marker_size, marker_size)
+	tl.anchor_left = 0
+	tl.anchor_top = 0
+	tl.offset_left = 0
+	tl.offset_top = 0
+	add_child(tl)
+
+	# Top-right marker
+	var tr = ColorRect.new()
+	tr.color = colors["TR"]
+	tr.custom_minimum_size = Vector2(marker_size, marker_size)
+	tr.anchor_left = 1.0
+	tr.anchor_top = 0
+	tr.offset_left = -marker_size
+	tr.offset_top = 0
+	add_child(tr)
+
+	# Bottom-left marker
+	var bl = ColorRect.new()
+	bl.color = colors["BL"]
+	bl.custom_minimum_size = Vector2(marker_size, marker_size)
+	bl.anchor_left = 0
+	bl.anchor_top = 1.0
+	bl.offset_left = 0
+	bl.offset_top = -marker_size
+	add_child(bl)
+
+	# Bottom-right marker
+	var br = ColorRect.new()
+	br.color = colors["BR"]
+	br.custom_minimum_size = Vector2(marker_size, marker_size)
+	br.anchor_left = 1.0
+	br.anchor_top = 1.0
+	br.offset_left = -marker_size
+	br.offset_top = -marker_size
+	add_child(br)
+
+	print("📍 ActionPreviewRow corner markers added: TL=RED, TR=GREEN, BL=BLUE, BR=YELLOW")
