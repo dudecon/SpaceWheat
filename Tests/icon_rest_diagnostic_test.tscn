@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://icon_rest_diagnostic"]
+
+[ext_resource type="Script" path="res://Tests/IconRestDiagnosticTest.gd" id="1_test"]
+
+[node name="IconRestDiagnosticTest" type="Node"]
+script = ExtResource("1_test")

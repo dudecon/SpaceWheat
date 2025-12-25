@@ -116,10 +116,15 @@ func setup_farm(farm_ref: Node) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	"""Handle any additional UI input (tool switching is handled by FarmInputHandler via signals)"""
-	# Note: Tool selection (1-4) is handled by FarmInputHandler and triggers tool_changed signal
-	# No need to duplicate handling here
-	pass
+	"""Handle debug display toggle and UI input
+
+	Note: Tool selection (1-4) is handled by FarmInputHandler via signals
+	"""
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F3:  # F3 to toggle debug layout display
+			debug_layout_visible = not debug_layout_visible
+			_update_debug_display()
+			get_viewport().set_input_as_handled()
 
 
 func _select_tool(tool_num: int) -> void:
@@ -159,15 +164,6 @@ func _on_selection_changed(count: int) -> void:
 			print("✅ %d plot(s) selected - Q/E/R actions available" % count)
 		else:
 			print("❌ No plots selected - Q/E/R actions disabled" % count)
-
-
-func _input(event: InputEvent) -> void:
-	"""Handle input for debug display toggle"""
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_F3:  # F3 to toggle debug layout display
-			debug_layout_visible = not debug_layout_visible
-			_update_debug_display()
-			get_viewport().set_input_as_handled()
 
 
 func _apply_parametric_sizing() -> void:
