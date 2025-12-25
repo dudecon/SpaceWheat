@@ -868,7 +868,7 @@ func _apply_energy_transfer(dt: float) -> void:
 
 			# Mushroom component: absorbs energy from NIGHT (opposite to sun = away from ☀️)
 			var mushroom_amplitude = mushroom_prob
-			var mushroom_rate = base_energy_rate * mushroom_amplitude * (1.0 - sun_brightness) * mushroom_energy_influence
+			var mushroom_rate = base_energy_rate * mushroom_amplitude * (1.0 - sun_brightness) * (1.0 - moon_alignment) * mushroom_energy_influence
 
 			# Total: smoothly transitions between wheat and mushroom effects
 			# At θ=0: 100% wheat (day), 0% mushroom (wheat shields mushroom from sun damage)
@@ -889,10 +889,10 @@ func _apply_energy_transfer(dt: float) -> void:
 			# Amplitude: relative to crop's native phase
 			var amplitude_self: float
 			if is_mushroom:
-				# Mushroom: absorbs energy from NIGHT (brightness-based only, no alignment modulation)
+				# Mushroom: absorbs energy from NIGHT (brightness + moon alignment)
 				# Native phase is θ=π (midnight), amplitude peaks when opposite to sun
 				amplitude_self = pow(cos((qubit.theta - PI) / 2.0), 2)
-				energy_rate = base_energy_rate * amplitude_self * (1.0 - sun_brightness) * icon_influence
+				energy_rate = base_energy_rate * amplitude_self * (1.0 - sun_brightness) * (1.0 - moon_alignment) * icon_influence
 				mushroom_exposure = 1.0  # Specialist mushroom is fully exposed to sun damage (still takes damage during day)
 			else:
 				# Wheat: absorbs energy from DAY (aligned with sun)
