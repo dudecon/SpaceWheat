@@ -543,16 +543,14 @@ func _apply_celestial_oscillation(dt: float) -> void:
 	var cycle_time = fmod(time_tracker.time_elapsed, sun_moon_period)
 	var phi = (cycle_time / sun_moon_period) * TAU  # 0 → 2π full rotation
 
-	# Great circle with zenith 10° from north pole
-	# θ ranges from 10° (zenith/brightest day) to 170° (opposite/brightest night)
-	var zenith_theta = 10.0 * PI / 180.0  # 10° from north pole
-
-	# Great circle parametrization: θ = arccos(cos(zenith) * cos(φ))
-	# - At φ=0: θ = zenith (brightest day)
-	# - At φ=π: θ = 180° - zenith (brightest night)
-	# - At φ=π/2, 3π/2: θ = 90° (equator)
+	# Single celestial body oscillates north-to-south with 10° pole offset
+	# θ = 10° (near north): SUN ☀️ - day brightness
+	# θ = π/2: twilight
+	# θ = 170° (near south): MOON 🌑 - night brightness
+	# Avoids coordinate singularities at exact poles (φ undefined at θ=0, π)
+	var pole_offset = 10.0 * PI / 180.0  # 10° offset from poles
 	sun_qubit.phi = phi
-	sun_qubit.theta = acos(cos(zenith_theta) * cos(phi))
+	sun_qubit.theta = (PI / 2.0) + (PI / 2.0 - pole_offset) * sin(phi)
 
 	# Radius (magnitude) stays constant for quantum state
 	sun_qubit.radius = 1.0
@@ -868,7 +866,7 @@ func _apply_energy_transfer(dt: float) -> void:
 
 			# Mushroom component: absorbs energy from NIGHT (opposite to sun = away from ☀️)
 			var mushroom_amplitude = mushroom_prob
-			var mushroom_rate = base_energy_rate * mushroom_amplitude * moon_brightness * moon_alignment * mushroom_energy_influence
+			var mushroom_rate = base_energy_rate * mushroom_amplitude * (1.0 - sun_brightness) * sun_alignment * mushroom_energy_influence
 
 			# Total: smoothly transitions between wheat and mushroom effects
 			# At θ=0: 100% wheat (day), 0% mushroom (wheat shields mushroom from sun damage)
@@ -889,10 +887,10 @@ func _apply_energy_transfer(dt: float) -> void:
 			# Amplitude: relative to crop's native phase
 			var amplitude_self: float
 			if is_mushroom:
-				# Mushroom: attracted to moon (grows at night when moon is bright and aligned)
-				# Native phase is θ=π (midnight), amplitude peaks when aligned with moon
+				# Mushroom: grows at night when south pole is bright and aligned
+				# Native phase is θ=π (midnight), amplitude peaks when aligned with south
 				amplitude_self = pow(cos((qubit.theta - PI) / 2.0), 2)
-				energy_rate = base_energy_rate * amplitude_self * moon_brightness * moon_alignment * icon_influence
+				energy_rate = base_energy_rate * amplitude_self * (1.0 - sun_brightness) * sun_alignment * icon_influence
 				mushroom_exposure = 1.0  # Specialist mushroom is fully exposed to sun damage (still takes damage during day)
 			else:
 				# Wheat: absorbs energy from DAY (aligned with sun)
