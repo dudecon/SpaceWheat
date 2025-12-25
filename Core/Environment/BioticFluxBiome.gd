@@ -110,7 +110,7 @@ func _ready():
 		"preferred_phi": PI / 2.0,    # Mushroom Icon's preferred rest: φ = 90° (pointing up)
 		"target_qubit_pos": Vector2i(-1, -1)
 	}
-	mushroom_energy_influence = 0.20  # Moderate: mushrooms spring up at night but not overwhelming
+	mushroom_energy_influence = 0.40  # Strong: mushrooms spring up well at night
 
 	# TODO: Initialize biotic flux icon when script parsing issues are resolved
 	# For now, sun damage to fungi is applied directly in _apply_energy_transfer()
