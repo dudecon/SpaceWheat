@@ -21,7 +21,7 @@ var imperium_icon = null  # Reference to Imperium Icon (order/extraction)
 # With alignment formula: rate_avg = base * amplitude * alignment_avg * icon_influence
 # Alignment averages to 0.5 over a full day-night cycle
 var base_energy_rate: float = 2.45
-var wheat_energy_influence: float = 0.017  # cos²(165°/2) - weak (wheat grows minimally alone)
+var wheat_energy_influence: float = 0.034  # cos²(165°/2) - weak (wheat grows minimally alone) - 2x for better growth
 var mushroom_energy_influence: float = 0.983  # cos²(15°/2) - strong (mushrooms grow well)
 
 # Plot type system: Biome owns ALL qubits regardless of type
@@ -897,12 +897,12 @@ func _apply_energy_transfer(dt: float) -> void:
 		if is_mushroom or is_hybrid:
 			# Damage based on sun brightness AND alignment with sun
 			# Only strong damage when sun is bright AND aligned with crop
-			# At noon with sun-aligned mushroom: max damage (~0.05/sec)
+			# At noon with sun-aligned mushroom: max damage (~0.20/sec)
 			# At noon with sun-opposite mushroom: negligible damage
 			var sun_brightness_damage = pow(sun_qubit.radius, 2)  # Damage scales with brightness squared
 			var sun_damage_modulation = sun_alignment  # Damage strongest when aligned with sun
-			# Increased damage coefficient to make mushrooms wilt more during day
-			var damage_rate = 0.05 * sun_brightness_damage * sun_damage_modulation * mushroom_exposure
+			# Significantly increased damage coefficient to make mushrooms wilt more during day
+			var damage_rate = 0.20 * sun_brightness_damage * sun_damage_modulation * mushroom_exposure
 			qubit.grow_energy(-damage_rate, dt)  # Negative energy = damage
 
 		# Sync radius with energy
