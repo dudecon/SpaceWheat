@@ -27,6 +27,10 @@ var resource_panel = null  # From scene
 var quantum_visualization = null  # Optional - only if needed later
 var current_tool: int = 1
 
+# DEBUG: Layout visibility
+var debug_layout_visible: bool = false
+var debug_label: Label = null
+
 
 func _ready() -> void:
 	"""FarmUI scene is ready - get references to child nodes"""
@@ -46,6 +50,9 @@ func _ready() -> void:
 
 	# Apply parametric sizing based on viewport
 	_apply_parametric_sizing()
+
+	# DEBUG: Add info about toggling debug display
+	print("💡 Press F3 to toggle layout debug display")
 
 
 func setup_farm(farm_ref: Node) -> void:
@@ -154,6 +161,15 @@ func _on_selection_changed(count: int) -> void:
 			print("❌ No plots selected - Q/E/R actions disabled" % count)
 
 
+func _input(event: InputEvent) -> void:
+	"""Handle input for debug display toggle"""
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F3:  # F3 to toggle debug layout display
+			debug_layout_visible = not debug_layout_visible
+			_update_debug_display()
+			get_viewport().set_input_as_handled()
+
+
 func _apply_parametric_sizing() -> void:
 	"""Apply parametric sizing to UI components based on viewport dimensions"""
 	var viewport_size = get_viewport_rect().size
@@ -188,3 +204,38 @@ func _apply_parametric_sizing() -> void:
 	print("  PlotGridDisplay: %.0fpx (66%%)" % plot_grid_height)
 	print("  ActionPreviewRow: %.0fpx (15%%)" % action_row_height)
 	print("  ToolSelectionRow: %.0fpx (13%%)" % tool_row_height)
+
+
+func _update_debug_display() -> void:
+	"""Update or create debug display showing layout positions"""
+	if debug_layout_visible:
+		# Create debug label if needed
+		if debug_label == null:
+			debug_label = Label.new()
+			debug_label.z_index = 1000  # Above everything
+			add_child(debug_label)
+
+		# Build debug text
+		var debug_text = "=== LAYOUT DEBUG (Press F3 to toggle) ===\n"
+		debug_text += "\nActionPreviewRow (Q/E/R toolbar):\n"
+		if action_preview_row:
+			debug_text += "  Position: (%.0f, %.0f)\n" % [action_preview_row.position.x, action_preview_row.position.y]
+			debug_text += "  Size: %.0f × %.0f\n" % [action_preview_row.size.x, action_preview_row.size.y]
+			debug_text += "  Custom min size: %s\n" % action_preview_row.custom_minimum_size
+
+		debug_text += "\nToolSelectionRow (1-6 toolbar):\n"
+		if tool_selection_row:
+			debug_text += "  Position: (%.0f, %.0f)\n" % [tool_selection_row.position.x, tool_selection_row.position.y]
+			debug_text += "  Size: %.0f × %.0f\n" % [tool_selection_row.size.x, tool_selection_row.size.y]
+			debug_text += "  Custom min size: %s\n" % tool_selection_row.custom_minimum_size
+
+		debug_text += "\nFarmUI:\n"
+		debug_text += "  Size: %.0f × %.0f\n" % [size.x, size.y]
+
+		debug_label.text = debug_text
+		debug_label.position = Vector2(10, 10)
+		debug_label.add_theme_font_size_override("font_size", 12)
+		debug_label.show()
+	else:
+		if debug_label != null:
+			debug_label.hide()
