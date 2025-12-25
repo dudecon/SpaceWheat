@@ -107,32 +107,26 @@ func draw(canvas: CanvasItem, emoji_font: Font) -> void:
 		var glow_radius = BASE_RADIUS * (1.5 + energy * 0.5)
 		canvas.draw_circle(position, glow_radius, glow_color)
 
-	# === LAYER 2: CORE GRADIENT CIRCLE (superposition visualization) ===
+	# === LAYER 2: THETA-BASED RGB BACKGROUND ===
+	# Background color represents theta angle: Red (θ≈0) → Green (θ≈π/2) → Blue (θ≈π)
+	var theta_normalized = qubit.theta / PI  # 0.0 to 1.0
+	var bg_color: Color
+	if theta_normalized < 0.5:
+		# θ: 0→π/2, Color: Red → Green
+		var t = theta_normalized * 2.0  # 0→1 in first half
+		bg_color = Color(1.0 - t, t, 0.0, 0.4)  # Red to Green
+	else:
+		# θ: π/2→π, Color: Green → Blue
+		var t = (theta_normalized - 0.5) * 2.0  # 0→1 in second half
+		bg_color = Color(0.0, 1.0 - t, t, 0.4)  # Green to Blue
+	canvas.draw_circle(position, BASE_RADIUS * 0.85, bg_color)
+
+	# === LAYER 3: CORE GRADIENT CIRCLE (superposition visualization) ===
 	var north_color = _get_emoji_color(qubit.north_emoji)
 	var south_color = _get_emoji_color(qubit.south_emoji)
 	var blend = south_opacity / (north_opacity + south_opacity + 0.001)
 	var core_color = north_color.lerp(south_color, blend)
 	canvas.draw_circle(position, BASE_RADIUS * 0.7, core_color)
-
-	# === LAYER 3: PHASE RING (coherence-weighted thickness) ===
-	var ring_color = Color.from_hsv(phase_hue, 0.8, 0.9, 0.9)
-
-	# Animate hue for unmeasured qubits
-	if not is_measured:
-		ring_color = Color.from_hsv(
-			fmod(phase_hue + time_accumulated * 0.05, 1.0),
-			0.8, 0.9, 0.9
-		)
-
-	# Draw ring with coherence-based thickness
-	var ring_thickness_scaled = RING_THICKNESS + coherence * (RING_MAX_THICKNESS - RING_THICKNESS)
-	var ring_points = 32
-	for i in range(ring_points):
-		var angle1 = (i / float(ring_points)) * TAU
-		var angle2 = ((i + 1) / float(ring_points)) * TAU
-		var p1 = position + Vector2(cos(angle1), sin(angle1)) * BASE_RADIUS
-		var p2 = position + Vector2(cos(angle2), sin(angle2)) * BASE_RADIUS
-		canvas.draw_line(p1, p2, ring_color, ring_thickness_scaled)
 
 	# === LAYER 4: NORTH EMOJI ===
 	if north_opacity > 0.05:

@@ -638,7 +638,9 @@ func _apply_bloch_torque(qubit: DualEmojiQubit, target_v: Vector3, spring_consta
 func _apply_spring_attraction(dt: float) -> void:
 	"""Apply spring attraction in full Bloch sphere space
 
-	Crops are attracted toward icon stable points (θ_s, φ_s)
+	Crops have preferred rest locations that track celestial bodies:
+	- Wheat preferred rest = SUN's current position (θ_sun, φ_sun)
+	- Mushroom preferred rest = MOON's current position (opposite sun)
 	Uses cross product τ = v × v_target for proper 3D rotation
 	Affects both θ and φ naturally
 	"""
@@ -658,11 +660,15 @@ func _apply_spring_attraction(dt: float) -> void:
 
 		if is_hybrid:
 			# HYBRID: Apply torque from BOTH celestial targets simultaneously
-			# Wheat follows SUN, Mushroom follows MOON (opposite side of sun's oscillation)
+			# Wheat's preferred rest location = SUN's current position
+			# Mushroom's preferred rest location = MOON's current position (opposite sun)
 			if wheat_icon and sun_qubit:
 				var sun_target = _bloch_vector(sun_qubit.theta, sun_qubit.phi)
 				var wheat_spring = wheat_icon["spring_constant"] if wheat_icon is Dictionary else wheat_icon.spring_constant
 				_apply_bloch_torque(qubit, sun_target, wheat_spring * 0.5, dt)  # 0.5 weight for hybrid
+				# Update wheat_icon's preferred rest to track sun
+				wheat_icon["stable_theta"] = sun_qubit.theta
+				wheat_icon["stable_phi"] = sun_qubit.phi
 
 			if mushroom_icon and sun_qubit:
 				# Moon is opposite to sun (θ → π - θ, φ → φ + π)
@@ -671,19 +677,28 @@ func _apply_spring_attraction(dt: float) -> void:
 				var moon_target = _bloch_vector(moon_theta, moon_phi)
 				var mushroom_spring = mushroom_icon["spring_constant"] if mushroom_icon is Dictionary else mushroom_icon.spring_constant
 				_apply_bloch_torque(qubit, moon_target, mushroom_spring * 0.5, dt)  # 0.5 weight for hybrid
+				# Update mushroom_icon's preferred rest to track moon
+				mushroom_icon["stable_theta"] = moon_theta
+				mushroom_icon["stable_phi"] = moon_phi
 		else:
 			# SPECIALIST: Apply torque toward appropriate celestial body
 			if is_wheat and wheat_icon and sun_qubit:
 				var sun_target = _bloch_vector(sun_qubit.theta, sun_qubit.phi)
 				var spring = wheat_icon["spring_constant"] if wheat_icon is Dictionary else wheat_icon.spring_constant
 				_apply_bloch_torque(qubit, sun_target, spring, dt)
+				# Update wheat_icon's preferred rest to track sun
+				wheat_icon["stable_theta"] = sun_qubit.theta
+				wheat_icon["stable_phi"] = sun_qubit.phi
 			elif is_mushroom and mushroom_icon and sun_qubit:
-				# Mushroom follows moon (opposite of sun)
+				# Mushroom's preferred rest location = MOON's current position
 				var moon_theta = PI - sun_qubit.theta
 				var moon_phi = sun_qubit.phi + PI
 				var moon_target = _bloch_vector(moon_theta, moon_phi)
 				var spring = mushroom_icon["spring_constant"] if mushroom_icon is Dictionary else mushroom_icon.spring_constant
 				_apply_bloch_torque(qubit, moon_target, spring, dt)
+				# Update mushroom_icon's preferred rest to track moon
+				mushroom_icon["stable_theta"] = moon_theta
+				mushroom_icon["stable_phi"] = moon_phi
 
 
 func _get_icon_influence_for_crop(position: Vector2i) -> float:
