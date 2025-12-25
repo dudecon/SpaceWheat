@@ -110,9 +110,6 @@ func _ready():
 
 	print("🛠️  ToolSelectionRow initialized with 6 tools - beveled touch-friendly buttons")
 
-	# DEBUG: Print corner positions after layout engine runs
-	call_deferred("_print_corners")
-
 
 func select_tool(tool_num: int) -> void:
 	"""Select a tool and update button styling (internal - use for UI sync without emitting signal)"""

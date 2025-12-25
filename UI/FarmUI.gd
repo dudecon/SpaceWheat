@@ -36,11 +36,8 @@ func _ready() -> void:
 	"""FarmUI scene is ready - get references to child nodes"""
 	print("🎮 FarmUI initializing from scene...")
 
-	# Ensure FarmUI fills its parent for proper layout cascade
+	# Ensure FarmUI is properly sized to fill parent (using anchors)
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-
-	# CRITICAL: Deferred update to ensure size is calculated after layout engine runs
-	call_deferred("_ensure_size_matches_parent")
 
 	# Get references to scene-defined child nodes
 	resource_panel = get_node("MainContainer/ResourcePanel")
@@ -51,37 +48,13 @@ func _ready() -> void:
 
 	print("   ✅ All child nodes referenced")
 
-	# DEBUG: Print FarmUI and MainContainer sizes before parametric sizing
-	var parent = get_parent()
-	var grandparent = parent.get_parent() if parent else null
-	var viewport_size = get_viewport_rect().size
-	var main_container = get_node_or_null("MainContainer")
-	if parent:
-		print("\n📏 FarmUI parent (%s) size: %.0f × %.0f" % [parent.name, parent.size.x, parent.size.y])
-	if grandparent:
-		print("📏 FarmUI grandparent (%s) size: %.0f × %.0f" % [grandparent.name, grandparent.size.x, grandparent.size.y])
-	print("📏 Viewport size: %.0f × %.0f" % [viewport_size.x, viewport_size.y])
-	print("📏 FarmUI size: %.0f × %.0f" % [size.x, size.y])
-	print("   FarmUI anchors: L%.1f T%.1f R%.1f B%.1f" % [anchor_left, anchor_top, anchor_right, anchor_bottom])
-	if main_container:
-		print("📏 MainContainer size: %.0f × %.0f" % [main_container.size.x, main_container.size.y])
-		print("   MainContainer size_flags_h: %d" % main_container.size_flags_horizontal)
-		print("   MainContainer size_flags_v: %d" % main_container.size_flags_vertical)
-
-	# Apply parametric sizing based on viewport
+	# BEST PRACTICE: Wait for layout engine to calculate sizes, then apply parametric sizing
+	# Use await instead of call_deferred (modern Godot 4 pattern)
+	await get_tree().process_frame
 	_apply_parametric_sizing()
 
 	# DEBUG: Add info about toggling debug display
 	print("💡 Press F3 to toggle layout debug display")
-
-
-func _ensure_size_matches_parent() -> void:
-	"""CRITICAL FIX: Ensure FarmUI actually stretches to fill parent after layout engine runs"""
-	var parent = get_parent()
-	if parent:
-		# Force size to match parent (anchors should handle this, but we need to trigger it)
-		size = parent.size
-		print("✅ FarmUI size forced to match parent: %.0f × %.0f" % [size.x, size.y])
 
 
 func setup_farm(farm_ref: Node) -> void:

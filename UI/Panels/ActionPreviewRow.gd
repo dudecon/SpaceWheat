@@ -95,9 +95,6 @@ func _ready():
 
 	print("⚡ ActionPreviewRow initialized")
 
-	# DEBUG: Print corner positions after layout engine runs
-	call_deferred("_print_corners")
-
 
 func update_for_tool(tool_num: int) -> void:
 	"""Update action buttons to show actions for the selected tool"""

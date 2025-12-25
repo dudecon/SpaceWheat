@@ -45,41 +45,6 @@ func _ready() -> void:
 	print("   ✅ Overlay manager created")
 	print("✅ PlayerShell ready")
 
-	# CRITICAL FIX: Force PlayerShell to match parent size after layout engine runs
-	call_deferred("_ensure_full_size")
-
-
-func _ensure_full_size() -> void:
-	"""CRITICAL: Force PlayerShell and FarmUIContainer to fill their parents"""
-	var parent = get_parent()
-	if parent:
-		size = parent.size
-		print("✅ PlayerShell size forced to match parent: %.0f × %.0f" % [size.x, size.y])
-
-	# Also force FarmUIContainer to fill PlayerShell
-	if farm_ui_container:
-		farm_ui_container.size = size
-		print("✅ FarmUIContainer size forced: %.0f × %.0f" % [farm_ui_container.size.x, farm_ui_container.size.y])
-
-	# Debug: Print toolbar sizes AFTER sizing is applied
-	call_deferred("_print_toolbar_final_size")
-
-
-func _print_toolbar_final_size() -> void:
-	"""DEBUG: Print final toolbar sizes after all layout forcing is done"""
-	print("\n🎯 FINAL TOOLBAR SIZES (after all forcing):")
-	if farm_ui_container:
-		print("  FarmUIContainer: %.0f × %.0f" % [farm_ui_container.size.x, farm_ui_container.size.y])
-	# Get ActionPreviewRow and ToolSelectionRow
-	var farm_ui = farm_ui_container.get_child(0) if farm_ui_container and farm_ui_container.get_child_count() > 0 else null
-	if farm_ui:
-		var main_container = farm_ui.get_node_or_null("MainContainer")
-		if main_container:
-			for child in main_container.get_children():
-				if child.name in ["ActionPreviewRow", "ToolSelectionRow"]:
-					print("  %s: %.0f × %.0f (at %.0f, %.0f)" % [child.name, child.size.x, child.size.y, child.position.x, child.position.y])
-	print()
-
 
 func load_farm(farm_ref: Node) -> void:
 	"""Load a farm into FarmUIContainer (swappable)"""
