@@ -519,32 +519,40 @@ func _compose_total_hamiltonian() -> Dictionary:
 
 
 func _apply_celestial_oscillation(dt: float) -> void:
-	"""Drive sun/moon qubit around equator with tilted axis
+	"""Drive sun/moon qubit around tilted great circle (ecliptic path)
 
-	Path: Tilted oscillator that avoids pole singularities
-	- θ(t) = π/2 + A*sin(ωt) oscillates around equator
-	- φ(t) = B*sin(ωt) creates axial tilt (like Earth's 23.5°)
-	- ω = 2π / sun_moon_period
+	Path: Sun traces a great circle tilted ~23° from equator (like Earth's ecliptic)
+	- φ(t) rotates continuously: 0 → 2π over one sun_moon_period
+	- θ(φ) = π/2 + tilt·sin(φ) stays on the tilted great circle
+	- tilt ≈ 23.5° (Earth's axial tilt) = 0.41 radians
+
+	This gives a precessing path that's natural and dynamic:
+	- Full 360° rotation around the Bloch sphere
+	- Crosses the celestial equator at φ=0 and φ=π (ascending/descending nodes)
+	- Reaches maximum northern latitude at φ=π/2, southern at φ=3π/2
+	- No pole singularities since we never reach θ=0 or θ=π
 
 	This is deterministic - not quantum evolution, but classical driving force
 	"""
 	if not sun_qubit:
 		return
 
-	# Time-based oscillation
+	# Time-based continuous rotation around ecliptic great circle
 	var cycle_time = fmod(time_tracker.time_elapsed, sun_moon_period)
-	var phase = (cycle_time / sun_moon_period) * TAU  # 0 → 2π
+	var phi = (cycle_time / sun_moon_period) * TAU  # 0 → 2π full rotation
 
-	# Amplitude: controls how far sun swings from equator
-	var theta_amplitude = PI / 6.0  # ±30° swing around equator
-	var phi_amplitude = PI / 8.0    # ±22.5° tilt (similar to Earth's axial tilt)
+	# Ecliptic tilt (23.5° - Earth's axial tilt relative to orbital plane)
+	var ecliptic_tilt = 23.5 * PI / 180.0  # ~0.41 radians
 
-	# Oscillate sun/moon position
-	sun_qubit.theta = PI / 2.0 + theta_amplitude * sin(phase)
-	sun_qubit.phi = phi_amplitude * sin(phase + PI / 4.0)  # Offset phase for interesting pattern
+	# Position on tilted great circle
+	# θ(φ) = π/2 + tilt·sin(φ) keeps sun on the tilted ecliptic path
+	sun_qubit.phi = phi
+	sun_qubit.theta = PI / 2.0 + ecliptic_tilt * sin(phi)
 
-	# Modulate brightness with cycle (full brightness at equator, dimmer at extremes)
-	var phase_brightness = pow(cos(phase / 2.0), 2)  # 0→1→0 over cycle
+	# Brightness modulates based on position on ecliptic
+	# Maximum at equator crossings (φ=0, φ=π), minimum at extremes (φ=π/2, φ=3π/2)
+	# This models seasonal intensity: brightest at equinoxes, dimmer at solstices
+	var phase_brightness = pow(cos(phi / 2.0), 2)  # 0→1→0 over half cycle, repeats
 	sun_qubit.radius = 0.7 + 0.3 * phase_brightness  # Ranges 0.7 to 1.0
 
 
