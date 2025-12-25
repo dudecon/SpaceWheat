@@ -48,11 +48,8 @@ func _ready() -> void:
 
 	print("   ✅ All child nodes referenced")
 
-	# BEST PRACTICE: Wait for layout engine to calculate sizes, then apply parametric sizing
-	# Use await instead of call_deferred (modern Godot 4 pattern)
-	await get_tree().process_frame
-	_apply_parametric_sizing()
-
+	# Trust the layout engine to size this properly
+	# FarmUI anchors (0-1) are already set in scene, so it should fill parent
 	# DEBUG: Add info about toggling debug display
 	print("💡 Press F3 to toggle layout debug display")
 

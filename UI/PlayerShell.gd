@@ -64,9 +64,10 @@ func load_farm(farm_ref: Node) -> void:
 		current_farm_ui = farm_ui_scene.instantiate()
 		farm_ui_container.add_child(current_farm_ui)
 
-		# Setup farm immediately (no call_deferred - synchronous!)
-		current_farm_ui.setup_farm(farm_ref)
-		print("   ✅ FarmUI loaded and configured")
+		# Setup farm AFTER layout engine calculates sizes (proper Godot 4 pattern)
+		# call_deferred here is the CORRECT TOOL for "run after engine initialization"
+		current_farm_ui.call_deferred("setup_farm", farm_ref)
+		print("   ✅ FarmUI loaded (setup deferred until after layout calculation)")
 	else:
 		print("❌ FarmUI.tscn not found - cannot load farm UI")
 		return

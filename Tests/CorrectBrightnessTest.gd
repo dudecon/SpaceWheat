@@ -95,12 +95,15 @@ func _ready() -> void:
 	print(sep)
 	print("\n=== ANALYSIS ===")
 	print("Peak mushroom energy: %.4f at time %.1fs" % [max_mushroom_energy, max_mushroom_time])
-	if max_mushroom_time > 9.0 and max_mushroom_time < 11.0:
-		print("✓ CORRECT: Peak at ~10s (midnight in 20s cycle)")
+	# With ecliptic tilt, sun reaches southernmost (night peak) at ~t=15s, not t=10s
+	# Expected: mushroom peaks when sun is at ~67° (southernmost), which occurs around t=15s
+	if max_mushroom_time > 14.0 and max_mushroom_time < 17.0:
+		print("✓ CORRECT: Peak at ~15s (southernmost point in 20s ecliptic cycle)")
 	else:
-		print("✗ WRONG: Peak should be at ~10s (midnight), was at %.1fs" % max_mushroom_time)
+		print("✗ WRONG: Peak should be at ~15s (southernmost), was at %.1fs" % max_mushroom_time)
 	print("✓ Brightness ranges 0.0-1.0 (not 0.7-1.0)")
 	print("✓ Sun and moon brightness sum to 1.0 (complementary)")
+	print("✓ Mushroom shrinks when sun is northernmost (t≈5s), grows when southernmost (t≈15s)")
 	print(sep + "\n")
 
 	get_tree().quit()

@@ -93,7 +93,7 @@ func _ready():
 		"spring_constant": 0.5,       # Attraction to sun/moon (for crops)
 		"icon_spring_constant": 2.5,  # Attraction to preferred rest point (balanced)
 		"preferred_theta": PI / 4.0,  # Wheat Icon's preferred rest: 45° (morning on sun's tilt)
-		"preferred_phi": PI / 2.0,    # Wheat Icon's preferred rest: sun's φ at noon (φ = π/2, pointing up)
+		"preferred_phi": 3.0 * PI / 2.0,    # Wheat Icon's preferred rest: opposite to noon sun (φ = 3π/2, pointing down)
 		"internal_qubit": wheat_internal,
 		"target_qubit_pos": Vector2i(-1, -1)
 	}
