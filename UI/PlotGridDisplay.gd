@@ -187,10 +187,10 @@ func _create_tiles() -> void:
 		add_child(tile)
 		tiles[pos] = tile
 
-		# Set keyboard label from grid config
+		# Set keyboard label from grid config synchronously (tile is already created, no need to defer)
 		var label = plot_config.keyboard_label if plot_config.keyboard_label else ""
 		if label:
-			tile.call_deferred("set_label_text", label)
+			tile.set_label_text(label)
 
 	if positioned_count > 3:
 		print("  📍 ... and %d more tiles positioned parametrically" % (positioned_count - 3))

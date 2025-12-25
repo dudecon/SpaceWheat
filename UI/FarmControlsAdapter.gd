@@ -40,8 +40,8 @@ func _init(farm_instance: Node) -> void:
 	farm = farm_instance
 	name = "FarmControlsAdapter"
 
-	# Bridge signals after farm is set (use call_deferred if needed)
-	call_deferred("bridge_farm_signals")
+	# Bridge signals immediately - farm is already set, no need to defer
+	bridge_farm_signals()
 
 
 ## IMPLEMENT CONTROL METHODS
