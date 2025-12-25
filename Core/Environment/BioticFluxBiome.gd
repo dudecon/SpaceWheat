@@ -831,14 +831,14 @@ func _apply_energy_transfer(dt: float) -> void:
 		var qubit_vector = _bloch_vector(qubit.theta, qubit.phi)
 		var sun_vector = _bloch_vector(sun_qubit.theta, sun_qubit.phi)
 		var bloch_angle = _bloch_angle_between(qubit_vector, sun_vector)
-		var sun_alignment = pow(cos(bloch_angle / 2.0), 2)
+		var sun_alignment = pow(cos(bloch_angle), 2)
 
 		# Moon position (opposite of sun on Bloch sphere)
 		var moon_theta = PI - sun_qubit.theta
 		var moon_phi = sun_qubit.phi + PI
 		var moon_vector = _bloch_vector(moon_theta, moon_phi)
 		var moon_bloch_angle = _bloch_angle_between(qubit_vector, moon_vector)
-		var moon_alignment = pow(cos(moon_bloch_angle / 2.0), 2)
+		var moon_alignment = pow(cos(moon_bloch_angle), 2)
 
 		# Brightness sources: based on which pole sun's theta points toward (pure Bloch sphere calculation)
 		# cos²(θ/2) = probability of north pole (day) = sun brightness
