@@ -55,9 +55,6 @@ func _ready() -> void:
 	# Explicitly match parent size (in case anchors don't work due to layout_mode mismatch)
 	if get_parent():
 		size = get_parent().size
-		print("✅ FarmUI sized to fill FarmUIContainer: %.0f × %.0f" % [size.x, size.y])
-	else:
-		print("✅ FarmUI anchored to fill parent")
 
 	# Also size MainContainer to fill FarmUI (it has layout_mode=1 which has the same issue)
 	# Use set_deferred to avoid being overridden by layout engine
@@ -70,19 +67,6 @@ func _ready() -> void:
 
 	# Wait one frame for layout engine to calculate subsequent sizes
 	await get_tree().process_frame
-
-	# Verify the cascade is working
-	var parent = get_parent()
-	var grandparent = parent.get_parent() if parent else null
-	var great_grandparent = grandparent.get_parent() if grandparent else null
-
-	print("\n📏 SIZE CASCADE (should flow down from FarmView):")
-	print("  FarmView (root): %.0f × %.0f" % [great_grandparent.size.x if great_grandparent else 0, great_grandparent.size.y if great_grandparent else 0])
-	print("  PlayerShell: %.0f × %.0f" % [grandparent.size.x if grandparent else 0, grandparent.size.y if grandparent else 0])
-	print("  FarmUIContainer: %.0f × %.0f" % [parent.size.x if parent else 0, parent.size.y if parent else 0])
-	print("  FarmUI: %.0f × %.0f" % [size.x, size.y])
-	if main_container:
-		print("  MainContainer: %.0f × %.0f" % [main_container.size.x, main_container.size.y])
 
 	# DEBUG: Add info about toggling debug display
 	print("💡 Press F3 to toggle layout debug display")
@@ -227,12 +211,6 @@ func _apply_parametric_sizing() -> void:
 
 	if tool_selection_row:
 		tool_selection_row.custom_minimum_size = Vector2(0, tool_row_height)
-
-	print("📐 FarmUI parametric sizing applied:")
-	print("  ResourcePanel: %.0fpx (6%% of %.0f)" % [resource_panel_height, viewport_height])
-	print("  PlotGridDisplay: %.0fpx (66%%)" % plot_grid_height)
-	print("  ActionPreviewRow: %.0fpx (15%%)" % action_row_height)
-	print("  ToolSelectionRow: %.0fpx (13%%)" % tool_row_height)
 
 
 func _update_debug_display() -> void:

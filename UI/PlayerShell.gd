@@ -29,9 +29,6 @@ func _ready() -> void:
 	# Explicitly match parent size (in case anchors don't work due to layout_mode mismatch)
 	if get_parent():
 		size = get_parent().size
-		print("✅ PlayerShell sized to fill parent: %.0f × %.0f" % [size.x, size.y])
-	else:
-		print("✅ PlayerShell anchored to fill parent")
 
 	# Get reference to containers from scene
 	farm_ui_container = get_node("FarmUIContainer")
@@ -39,7 +36,6 @@ func _ready() -> void:
 	# Also size FarmUIContainer to fill this PlayerShell
 	if farm_ui_container:
 		farm_ui_container.size = size
-		print("✅ FarmUIContainer sized to fill PlayerShell: %.0f × %.0f" % [farm_ui_container.size.x, farm_ui_container.size.y])
 	var overlay_layer = get_node("OverlayLayer")
 
 	# Create and initialize UILayoutManager (needs to be in scene tree for _ready())
