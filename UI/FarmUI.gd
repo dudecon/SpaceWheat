@@ -209,28 +209,32 @@ func _update_debug_display() -> void:
 		if debug_label == null:
 			debug_label = Label.new()
 			debug_label.z_index = 1000  # Above everything
+			debug_label.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 			add_child(debug_label)
 
-		# Build debug text
+		# Build debug text with detailed layout info
 		var debug_text = "=== LAYOUT DEBUG (Press F3 to toggle) ===\n"
-		debug_text += "\nActionPreviewRow (Q/E/R toolbar):\n"
-		if action_preview_row:
-			debug_text += "  Position: (%.0f, %.0f)\n" % [action_preview_row.position.x, action_preview_row.position.y]
-			debug_text += "  Size: %.0f × %.0f\n" % [action_preview_row.size.x, action_preview_row.size.y]
-			debug_text += "  Custom min size: %s\n" % action_preview_row.custom_minimum_size
 
-		debug_text += "\nToolSelectionRow (1-6 toolbar):\n"
-		if tool_selection_row:
-			debug_text += "  Position: (%.0f, %.0f)\n" % [tool_selection_row.position.x, tool_selection_row.position.y]
-			debug_text += "  Size: %.0f × %.0f\n" % [tool_selection_row.size.x, tool_selection_row.size.y]
-			debug_text += "  Custom min size: %s\n" % tool_selection_row.custom_minimum_size
+		if action_preview_row and action_preview_row.has_method("debug_layout"):
+			debug_text += "\n" + action_preview_row.debug_layout()
 
-		debug_text += "\nFarmUI:\n"
+		if tool_selection_row and tool_selection_row.has_method("debug_layout"):
+			debug_text += "\n" + tool_selection_row.debug_layout()
+
+		debug_text += "\nMainContainer:\n"
+		var main_container = get_node_or_null("MainContainer")
+		if main_container:
+			debug_text += "  Position: (%.0f, %.0f)\n" % [main_container.position.x, main_container.position.y]
+			debug_text += "  Size: %.0f × %.0f\n" % [main_container.size.x, main_container.size.y]
+			debug_text += "  Size flags H: %d\n" % main_container.size_flags_horizontal
+
+		debug_text += "\nFarmUI (root):\n"
 		debug_text += "  Size: %.0f × %.0f\n" % [size.x, size.y]
+		debug_text += "  Viewport: %.0f × %.0f\n" % [get_viewport_rect().size.x, get_viewport_rect().size.y]
 
 		debug_label.text = debug_text
 		debug_label.position = Vector2(10, 10)
-		debug_label.add_theme_font_size_override("font_size", 12)
+		debug_label.add_theme_font_size_override("font_size", 10)
 		debug_label.show()
 	else:
 		if debug_label != null:

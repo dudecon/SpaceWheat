@@ -61,9 +61,6 @@ func _ready():
 	mouse_filter = MOUSE_FILTER_IGNORE
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	# DEBUG: Add corner markers to visualize toolbar layout
-	_add_corner_markers()
-
 	# Create Q, E, R action buttons with proper size_flags
 	for action_key in ["Q", "E", "R"]:
 		var button = Button.new()
@@ -74,6 +71,9 @@ func _ready():
 		# Set stretch_ratio to 1.0 to distribute width equally among all buttons
 		button.size_flags_stretch_ratio = 1.0
 		button.custom_minimum_size = Vector2(0, 50 * scale_factor)  # 0 width = full expansion
+		# CRITICAL FIX: Clip text overflow so button doesn't size based on text width
+		button.clip_text = true
+		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 
 		button.modulate = button_color
 
@@ -89,6 +89,9 @@ func _ready():
 
 	# Update display for current tool
 	update_for_tool(1)
+
+	# DEBUG: Output layout info (do this AFTER buttons are created)
+	_add_corner_markers()
 
 	print("⚡ ActionPreviewRow initialized")
 
@@ -169,56 +172,29 @@ func _on_action_button_pressed(action_key: String) -> void:
 	print("⚡ Action %s pressed: %s" % [action_key, label])
 
 
+func debug_layout() -> String:
+	"""Return detailed layout debug information for F3 display"""
+	var debug_text = ""
+	debug_text += "ActionPreviewRow (Q/E/R toolbar):\n"
+	debug_text += "  Position: (%.0f, %.0f)\n" % [position.x, position.y]
+	debug_text += "  Actual size: %.0f × %.0f\n" % [size.x, size.y]
+	debug_text += "  Custom min size: %s\n" % custom_minimum_size
+	debug_text += "  Size flags H: %d (3=EXPAND_FILL)\n" % size_flags_horizontal
+	debug_text += "  Size flags V: %d\n" % size_flags_vertical
+	debug_text += "  Buttons: %d total\n" % action_buttons.size()
+
+	var button_widths = []
+	for action_key in ["Q", "E", "R"]:
+		if action_buttons.has(action_key):
+			var btn = action_buttons[action_key]
+			button_widths.append("%.0f" % btn.size.x)
+	debug_text += "  Button widths: [%s] (should be equal for stretch)\n" % ", ".join(button_widths)
+
+	return debug_text
+
+
 func _add_corner_markers() -> void:
-	"""Add corner markers and output detailed layout debug info"""
-	var marker_size = 10
-	var colors = {
-		"TL": Color.RED,      # Top-left
-		"TR": Color.GREEN,    # Top-right
-		"BL": Color.BLUE,     # Bottom-left
-		"BR": Color.YELLOW    # Bottom-right
-	}
-
-	# Top-left marker
-	var tl = ColorRect.new()
-	tl.color = colors["TL"]
-	tl.custom_minimum_size = Vector2(marker_size, marker_size)
-	tl.anchor_left = 0
-	tl.anchor_top = 0
-	tl.offset_left = 0
-	tl.offset_top = 0
-	add_child(tl)
-
-	# Top-right marker
-	var tr = ColorRect.new()
-	tr.color = colors["TR"]
-	tr.custom_minimum_size = Vector2(marker_size, marker_size)
-	tr.anchor_left = 1.0
-	tr.anchor_top = 0
-	tr.offset_left = -marker_size
-	tr.offset_top = 0
-	add_child(tr)
-
-	# Bottom-left marker
-	var bl = ColorRect.new()
-	bl.color = colors["BL"]
-	bl.custom_minimum_size = Vector2(marker_size, marker_size)
-	bl.anchor_left = 0
-	bl.anchor_top = 1.0
-	bl.offset_left = 0
-	bl.offset_top = -marker_size
-	add_child(bl)
-
-	# Bottom-right marker
-	var br = ColorRect.new()
-	br.color = colors["BR"]
-	br.custom_minimum_size = Vector2(marker_size, marker_size)
-	br.anchor_left = 1.0
-	br.anchor_top = 1.0
-	br.offset_left = -marker_size
-	br.offset_top = -marker_size
-	add_child(br)
-
+	"""Debug output for layout information (no visual markers)"""
 	# DEBUG OUTPUT
 	print("═══════════════════════════════════════════════════════════════")
 	print("DEBUG: ActionPreviewRow (Q/E/R toolbar)")
@@ -227,4 +203,9 @@ func _add_corner_markers() -> void:
 	print("  Parent: %s" % get_parent().name)
 	print("  Size flags H: %d (3=SIZE_EXPAND_FILL)" % size_flags_horizontal)
 	print("  Custom minimum size: %s" % custom_minimum_size)
+	print("  Buttons per button size_flags:")
+	for action_key in ["Q", "E", "R"]:
+		if action_buttons.has(action_key):
+			var btn = action_buttons[action_key]
+			print("    [%s]: size_flags_h=%d, stretch_ratio=%.1f" % [action_key, btn.size_flags_horizontal, btn.size_flags_stretch_ratio])
 	print("═══════════════════════════════════════════════════════════════")

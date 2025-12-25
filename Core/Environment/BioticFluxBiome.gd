@@ -91,7 +91,7 @@ func _ready():
 		"stable_theta": PI / 2.0,     # Current target: SUN position (moves with sun)
 		"stable_phi": 0.0,            # Current target: SUN's φ
 		"spring_constant": 0.5,       # Attraction to sun/moon (for crops)
-		"icon_spring_constant": 0.1,  # WEAK attraction to preferred rest point
+		"icon_spring_constant": 2.5,  # Attraction to preferred rest point (balanced)
 		"preferred_theta": PI / 4.0,  # Wheat Icon's preferred rest: 45° (morning)
 		"preferred_phi": 3.0 * PI / 2.0,  # Wheat Icon's preferred rest: fall quadrant (φ ≈ 270°)
 		"internal_qubit": wheat_internal,
@@ -105,12 +105,12 @@ func _ready():
 		"stable_theta": PI / 2.0,     # Current target: MOON position
 		"stable_phi": PI,             # Current target: MOON's φ
 		"spring_constant": 0.5,       # Attraction to sun/moon (for crops)
-		"icon_spring_constant": 0.1,  # WEAK attraction to preferred rest point
+		"icon_spring_constant": 2.5,  # Attraction to preferred rest point (balanced)
 		"preferred_theta": PI,        # Mushroom Icon's preferred rest: π (midnight, south pole)
 		"preferred_phi": 0.0,         # Mushroom Icon's preferred rest: φ = 0
 		"target_qubit_pos": Vector2i(-1, -1)
 	}
-	mushroom_energy_influence = 0.04
+	mushroom_energy_influence = 0.5  # Increase to balance day damage with night growth
 
 	# TODO: Initialize biotic flux icon when script parsing issues are resolved
 	# For now, sun damage to fungi is applied directly in _apply_energy_transfer()
@@ -665,54 +665,71 @@ func _apply_spring_attraction(dt: float) -> void:
 		var is_hybrid = is_wheat and is_mushroom
 
 		if is_hybrid:
-			# HYBRID: Apply torque from BOTH celestial targets simultaneously
-			# Wheat's preferred rest location = SUN's current position
-			# Mushroom's preferred rest location = MOON's current position (opposite sun)
+			# HYBRID: Apply TWO separate torques from celestial targets AND preferred rests
+			# Wheat follows sun + weak pull toward icon rest location
 			if wheat_icon and sun_qubit:
+				# PRIMARY: Strong spring toward sun's current position
 				var sun_target = _bloch_vector(sun_qubit.theta, sun_qubit.phi)
 				var wheat_spring = wheat_icon["spring_constant"] if wheat_icon is Dictionary else wheat_icon.spring_constant
 				_apply_bloch_torque(qubit, sun_target, wheat_spring * 0.5, dt)  # 0.5 weight for hybrid
-				# Blend toward sun (90%) + preferred rest (10%)
-				var pref_theta = wheat_icon["preferred_theta"]
-				var pref_phi = wheat_icon["preferred_phi"]
-				wheat_icon["stable_theta"] = lerp(pref_theta, sun_qubit.theta, 0.5)
-				wheat_icon["stable_phi"] = lerp(pref_phi, sun_qubit.phi, 0.5)
+
+				# SECONDARY: Weak spring toward icon's preferred rest location
+				var pref_target = _bloch_vector(wheat_icon["preferred_theta"], wheat_icon["preferred_phi"])
+				_apply_bloch_torque(qubit, pref_target, wheat_icon["icon_spring_constant"] * 0.5, dt)
+
+				# Update stable position for visualization/debugging
+				wheat_icon["stable_theta"] = wheat_icon["preferred_theta"]
+				wheat_icon["stable_phi"] = wheat_icon["preferred_phi"]
 
 			if mushroom_icon and sun_qubit:
 				# Moon is opposite to sun (θ → π - θ, φ → φ + π)
 				var moon_theta = PI - sun_qubit.theta
 				var moon_phi = sun_qubit.phi + PI
+
+				# PRIMARY: Strong spring toward moon's current position
 				var moon_target = _bloch_vector(moon_theta, moon_phi)
 				var mushroom_spring = mushroom_icon["spring_constant"] if mushroom_icon is Dictionary else mushroom_icon.spring_constant
 				_apply_bloch_torque(qubit, moon_target, mushroom_spring * 0.5, dt)  # 0.5 weight for hybrid
-				# Blend toward moon (90%) + preferred rest (10%)
-				var pref_theta = mushroom_icon["preferred_theta"]
-				var pref_phi = mushroom_icon["preferred_phi"]
-				mushroom_icon["stable_theta"] = lerp(pref_theta, moon_theta, 0.5)
-				mushroom_icon["stable_phi"] = lerp(pref_phi, moon_phi, 0.5)
+
+				# SECONDARY: Weak spring toward icon's preferred rest location
+				var pref_target = _bloch_vector(mushroom_icon["preferred_theta"], mushroom_icon["preferred_phi"])
+				_apply_bloch_torque(qubit, pref_target, mushroom_icon["icon_spring_constant"] * 0.5, dt)
+
+				# Update stable position for visualization/debugging
+				mushroom_icon["stable_theta"] = mushroom_icon["preferred_theta"]
+				mushroom_icon["stable_phi"] = mushroom_icon["preferred_phi"]
 		else:
-			# SPECIALIST: Apply torque toward appropriate celestial body
+			# SPECIALIST: Apply TWO separate springs toward sun/moon AND preferred rests
 			if is_wheat and wheat_icon and sun_qubit:
+				# PRIMARY: Strong spring toward sun's current position
 				var sun_target = _bloch_vector(sun_qubit.theta, sun_qubit.phi)
 				var spring = wheat_icon["spring_constant"] if wheat_icon is Dictionary else wheat_icon.spring_constant
 				_apply_bloch_torque(qubit, sun_target, spring, dt)
-				# Blend toward sun (90%) + preferred rest (10%)
-				var pref_theta = wheat_icon["preferred_theta"]
-				var pref_phi = wheat_icon["preferred_phi"]
-				wheat_icon["stable_theta"] = lerp(pref_theta, sun_qubit.theta, 0.5)
-				wheat_icon["stable_phi"] = lerp(pref_phi, sun_qubit.phi, 0.5)
+
+				# SECONDARY: Weak spring toward icon's preferred rest location
+				var pref_target = _bloch_vector(wheat_icon["preferred_theta"], wheat_icon["preferred_phi"])
+				_apply_bloch_torque(qubit, pref_target, wheat_icon["icon_spring_constant"], dt)
+
+				# Update stable position for visualization/debugging
+				wheat_icon["stable_theta"] = wheat_icon["preferred_theta"]
+				wheat_icon["stable_phi"] = wheat_icon["preferred_phi"]
 			elif is_mushroom and mushroom_icon and sun_qubit:
-				# Mushroom's preferred rest location = MOON's current position
+				# Moon is opposite to sun (θ → π - θ, φ → φ + π)
 				var moon_theta = PI - sun_qubit.theta
 				var moon_phi = sun_qubit.phi + PI
+
+				# PRIMARY: Strong spring toward moon's current position
 				var moon_target = _bloch_vector(moon_theta, moon_phi)
 				var spring = mushroom_icon["spring_constant"] if mushroom_icon is Dictionary else mushroom_icon.spring_constant
 				_apply_bloch_torque(qubit, moon_target, spring, dt)
-				# Blend toward moon (90%) + preferred rest (10%)
-				var pref_theta = mushroom_icon["preferred_theta"]
-				var pref_phi = mushroom_icon["preferred_phi"]
-				mushroom_icon["stable_theta"] = lerp(pref_theta, moon_theta, 0.5)
-				mushroom_icon["stable_phi"] = lerp(pref_phi, moon_phi, 0.5)
+
+				# SECONDARY: Weak spring toward icon's preferred rest location
+				var pref_target = _bloch_vector(mushroom_icon["preferred_theta"], mushroom_icon["preferred_phi"])
+				_apply_bloch_torque(qubit, pref_target, mushroom_icon["icon_spring_constant"], dt)
+
+				# Update stable position for visualization/debugging
+				mushroom_icon["stable_theta"] = mushroom_icon["preferred_theta"]
+				mushroom_icon["stable_phi"] = mushroom_icon["preferred_phi"]
 
 
 func _apply_icon_rest_attraction(dt: float) -> void:
@@ -747,32 +764,40 @@ func _apply_icon_rest_attraction(dt: float) -> void:
 
 func _get_icon_influence_for_crop(position: Vector2i) -> float:
 	"""Get energy influence for crop at position based on crop type"""
-	if not grid:
-		return wheat_energy_influence  # Default to wheat
-
-	var plot = grid.get_plot(position)
-	if plot and plot.plot_type == 2:  # PlotType.MUSHROOM = 2
-		return mushroom_energy_influence
-	else:
+	# Try grid system first if available
+	if grid:
+		var plot = grid.get_plot(position)
+		if plot and plot.plot_type == 2:  # PlotType.MUSHROOM = 2
+			return mushroom_energy_influence
 		return wheat_energy_influence
+
+	# Fallback: check quantum_states for emoji (no grid)
+	if position in quantum_states:
+		var qubit = quantum_states[position]
+		if qubit and (qubit.north_emoji == "🍄" or qubit.south_emoji == "🍄" or qubit.north_emoji == "🍂" or qubit.south_emoji == "🍂"):
+			return mushroom_energy_influence
+
+	return wheat_energy_influence  # Default to wheat
 
 
 func _is_mushroom_plot(position: Vector2i) -> bool:
 	"""Check if a plot contains a mushroom crop (by emoji or plot_type)"""
-	if not grid:
-		return false
+	# First try grid system if available
+	if grid:
+		var plot = grid.get_plot(position)
+		if plot:
+			# Check by plot_type first
+			if plot.plot_type == 2:  # PlotType.MUSHROOM = 2
+				return true
+			# Fallback: check the emoji of the quantum state
+			if plot.quantum_state and plot.quantum_state.north_emoji == "🍄":
+				return true
 
-	var plot = grid.get_plot(position)
-	if not plot:
-		return false
-
-	# Check by plot_type first
-	if plot.plot_type == 2:  # PlotType.MUSHROOM = 2
-		return true
-
-	# Fallback: check the emoji of the quantum state
-	if plot.quantum_state and plot.quantum_state.north_emoji == "🍄":
-		return true
+	# Fallback for direct quantum_states (no grid)
+	if position in quantum_states:
+		var qubit = quantum_states[position]
+		if qubit and (qubit.north_emoji == "🍄" or qubit.south_emoji == "🍄" or qubit.north_emoji == "🍂" or qubit.south_emoji == "🍂"):
+			return true
 
 	return false
 
@@ -801,15 +826,23 @@ func _apply_energy_transfer(dt: float) -> void:
 		                (qubit.north_emoji == "🍄" and qubit.south_emoji == "🌾")
 		var is_mushroom = _is_mushroom_plot(position)
 
-		# Alignment: 3D Bloch sphere angle between crop and sun
-		# This emerges naturally from spring forces pulling toward sun
+		# Alignment: 3D Bloch sphere angle between crop and celestial bodies
+		# This emerges naturally from spring forces pulling toward sun/moon
 		var qubit_vector = _bloch_vector(qubit.theta, qubit.phi)
 		var sun_vector = _bloch_vector(sun_qubit.theta, sun_qubit.phi)
 		var bloch_angle = _bloch_angle_between(qubit_vector, sun_vector)
-		var alignment = pow(cos(bloch_angle / 2.0), 2)
+		var sun_alignment = pow(cos(bloch_angle / 2.0), 2)
 
-		# Sun brightness (radius) is primary energy source
-		var sun_brightness = sun_qubit.radius
+		# Moon position (opposite of sun on Bloch sphere)
+		var moon_theta = PI - sun_qubit.theta
+		var moon_phi = sun_qubit.phi + PI
+		var moon_vector = _bloch_vector(moon_theta, moon_phi)
+		var moon_bloch_angle = _bloch_angle_between(qubit_vector, moon_vector)
+		var moon_alignment = pow(cos(moon_bloch_angle / 2.0), 2)
+
+		# Brightness sources: sun and moon have equal but opposite brightness cycles
+		var sun_brightness = sun_qubit.radius  # Sun bright during day (θ near 0)
+		var moon_brightness = 1.0 - sun_brightness  # Moon bright at night (θ near π)
 
 		# Calculate total energy rate from applicable icons
 		var energy_rate = 0.0
@@ -822,18 +855,18 @@ func _apply_energy_transfer(dt: float) -> void:
 			var wheat_prob = pow(cos(qubit.theta / 2.0), 2)
 			var mushroom_prob = pow(sin(qubit.theta / 2.0), 2)
 
-			# Wheat component: energy scales with probability of wheat state
+			# Wheat component: absorbs energy from DAY (aligned with sun)
 			var wheat_amplitude = wheat_prob
-			var wheat_rate = base_energy_rate * wheat_amplitude * sun_brightness * alignment * wheat_energy_influence
+			var wheat_rate = base_energy_rate * wheat_amplitude * sun_brightness * sun_alignment * wheat_energy_influence
 
-			# Mushroom component: energy scales with probability of mushroom state
+			# Mushroom component: absorbs energy from NIGHT (aligned with moon)
 			var mushroom_amplitude = mushroom_prob
-			var mushroom_rate = base_energy_rate * mushroom_amplitude * sun_brightness * alignment * mushroom_energy_influence
+			var mushroom_rate = base_energy_rate * mushroom_amplitude * moon_brightness * moon_alignment * mushroom_energy_influence
 
 			# Total: smoothly transitions between wheat and mushroom effects
-			# At θ=0: 100% wheat, 0% mushroom (wheat shields mushroom from damage)
-			# At θ=π/2: 50% wheat, 50% mushroom (balanced)
-			# At θ=π: 0% wheat, 100% mushroom (mushroom exposed to sun)
+			# At θ=0: 100% wheat (day), 0% mushroom (wheat shields mushroom from sun damage)
+			# At θ=π/2: 50% wheat, 50% mushroom (balanced day/night)
+			# At θ=π: 0% wheat, 100% mushroom (night - mushroom absorbs moonlight)
 			energy_rate = wheat_rate + mushroom_rate
 
 			# Mushroom exposure for sun damage weighting
@@ -845,15 +878,17 @@ func _apply_energy_transfer(dt: float) -> void:
 			# Amplitude: relative to crop's native phase
 			var amplitude_self: float
 			if is_mushroom:
-				# Mushroom: native phase is θ=π
+				# Mushroom: absorbs energy from NIGHT (aligned with moon)
+				# Native phase is θ=π (midnight), amplitude peaks when aligned with moon
 				amplitude_self = pow(cos((qubit.theta - PI) / 2.0), 2)
-				mushroom_exposure = 1.0  # Specialist mushroom is fully exposed to sun damage
+				energy_rate = base_energy_rate * amplitude_self * moon_brightness * moon_alignment * icon_influence
+				mushroom_exposure = 1.0  # Specialist mushroom is fully exposed to sun damage (still takes damage during day)
 			else:
-				# Wheat: native phase is θ=0
+				# Wheat: absorbs energy from DAY (aligned with sun)
+				# Native phase is θ=0 (noon), amplitude peaks when aligned with sun
 				amplitude_self = pow(cos(qubit.theta / 2.0), 2)
+				energy_rate = base_energy_rate * amplitude_self * sun_brightness * sun_alignment * icon_influence
 				mushroom_exposure = 0.0  # Wheat doesn't take sun damage
-
-			energy_rate = base_energy_rate * amplitude_self * sun_brightness * alignment * icon_influence
 
 		# Apply exponential growth
 		qubit.grow_energy(energy_rate, dt)

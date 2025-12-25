@@ -48,9 +48,6 @@ func _ready():
 	# Toolbar stretches to fill full width
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	# DEBUG: Add corner markers to visualize toolbar layout
-	_add_corner_markers()
-
 	# Create buttons for tools 1-6
 	for tool_num in range(1, 7):
 		var button = Button.new()
@@ -66,6 +63,9 @@ func _ready():
 		button.size_flags_stretch_ratio = 1.0
 		# 0 width = full expansion, let layout system handle equal distribution
 		button.custom_minimum_size = Vector2(0, 55 * scale_factor)
+		# CRITICAL FIX: Clip text overflow so button doesn't size based on text width
+		button.clip_text = true
+		button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 
 		# Don't let buttons steal keyboard focus - keyboard is for input handler
 		button.focus_mode = Control.FOCUS_NONE
@@ -104,6 +104,9 @@ func _ready():
 
 	# Select first tool by default
 	select_tool(1)
+
+	# DEBUG: Output layout info (do this AFTER buttons are created)
+	_add_corner_markers()
 
 	print("🛠️  ToolSelectionRow initialized with 6 tools - beveled touch-friendly buttons")
 
@@ -163,56 +166,28 @@ func _on_tool_button_pressed(tool_num: int) -> void:
 	print("⌨️  Tool %d selected [%s button]" % [tool_num, TOOL_ACTIONS[tool_num]["name"]])
 
 
+func debug_layout() -> String:
+	"""Return detailed layout debug information for F3 display"""
+	var debug_text = ""
+	debug_text += "ToolSelectionRow (1-6 toolbar):\n"
+	debug_text += "  Position: (%.0f, %.0f)\n" % [position.x, position.y]
+	debug_text += "  Actual size: %.0f × %.0f\n" % [size.x, size.y]
+	debug_text += "  Custom min size: %s\n" % custom_minimum_size
+	debug_text += "  Size flags H: %d (3=EXPAND_FILL)\n" % size_flags_horizontal
+	debug_text += "  Size flags V: %d\n" % size_flags_vertical
+	debug_text += "  Buttons: %d total (1-6)\n" % tool_buttons.size()
+
+	var button_widths = []
+	for i in range(tool_buttons.size()):
+		var btn = tool_buttons[i]
+		button_widths.append("%.0f" % btn.size.x)
+	debug_text += "  Button widths: [%s] (should be equal for stretch)\n" % ", ".join(button_widths)
+
+	return debug_text
+
+
 func _add_corner_markers() -> void:
-	"""Add corner markers and output detailed layout debug info"""
-	var marker_size = 10
-	var colors = {
-		"TL": Color.RED,      # Top-left
-		"TR": Color.GREEN,    # Top-right
-		"BL": Color.BLUE,     # Bottom-left
-		"BR": Color.YELLOW    # Bottom-right
-	}
-
-	# Top-left marker
-	var tl = ColorRect.new()
-	tl.color = colors["TL"]
-	tl.custom_minimum_size = Vector2(marker_size, marker_size)
-	tl.anchor_left = 0
-	tl.anchor_top = 0
-	tl.offset_left = 0
-	tl.offset_top = 0
-	add_child(tl)
-
-	# Top-right marker
-	var tr = ColorRect.new()
-	tr.color = colors["TR"]
-	tr.custom_minimum_size = Vector2(marker_size, marker_size)
-	tr.anchor_left = 1.0
-	tr.anchor_top = 0
-	tr.offset_left = -marker_size
-	tr.offset_top = 0
-	add_child(tr)
-
-	# Bottom-left marker
-	var bl = ColorRect.new()
-	bl.color = colors["BL"]
-	bl.custom_minimum_size = Vector2(marker_size, marker_size)
-	bl.anchor_left = 0
-	bl.anchor_top = 1.0
-	bl.offset_left = 0
-	bl.offset_top = -marker_size
-	add_child(bl)
-
-	# Bottom-right marker
-	var br = ColorRect.new()
-	br.color = colors["BR"]
-	br.custom_minimum_size = Vector2(marker_size, marker_size)
-	br.anchor_left = 1.0
-	br.anchor_top = 1.0
-	br.offset_left = -marker_size
-	br.offset_top = -marker_size
-	add_child(br)
-
+	"""Debug output for layout information (no visual markers)"""
 	# DEBUG OUTPUT
 	print("═══════════════════════════════════════════════════════════════")
 	print("DEBUG: ToolSelectionRow (1-6 toolbar)")
@@ -221,4 +196,9 @@ func _add_corner_markers() -> void:
 	print("  Parent: %s" % get_parent().name)
 	print("  Size flags H: %d (3=SIZE_EXPAND_FILL)" % size_flags_horizontal)
 	print("  Custom minimum size: %s" % custom_minimum_size)
+	print("  Buttons per button size_flags:")
+	for i in range(tool_buttons.size()):
+		var btn = tool_buttons[i]
+		var tool_num = i + 1
+		print("    [%d]: size_flags_h=%d, stretch_ratio=%.1f" % [tool_num, btn.size_flags_horizontal, btn.size_flags_stretch_ratio])
 	print("═══════════════════════════════════════════════════════════════")
