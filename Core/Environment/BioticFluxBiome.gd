@@ -91,7 +91,7 @@ func _ready():
 		"stable_theta": PI / 2.0,     # Current target: SUN position (moves with sun)
 		"stable_phi": 0.0,            # Current target: SUN's φ
 		"spring_constant": 0.5,       # Attraction to sun/moon (for crops)
-		"icon_spring_constant": 2.5,  # Attraction to preferred rest point (balanced)
+		"icon_spring_constant": 1.0,  # Attraction to preferred rest point (weaker, let wheat chase sun)
 		"preferred_theta": PI / 4.0,  # Wheat Icon's preferred rest: 45° (morning on sun's tilt)
 		"preferred_phi": 3.0 * PI / 2.0,    # Wheat Icon's preferred rest: opposite to noon sun (φ = 3π/2, pointing down)
 		"internal_qubit": wheat_internal,
