@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://c06vchqhx2"]
+
+[ext_resource type="PackedScene" uid="uid://farm_view_main" path="res://scenes/FarmView.tscn" id="1_farm"]
+[ext_resource type="Script" path="res://Tests/test_all_tools_evaluation.gd" id="2_test"]
+
+[node name="TestAllTools" type="Node"]
+script = ExtResource("2_test")
+
+[node name="FarmView" parent="." instance=ExtResource("1_farm")]
