@@ -194,7 +194,55 @@ func debug_layout() -> String:
 
 
 func _add_corner_markers() -> void:
-	"""Debug output for layout information (no visual markers)"""
+	"""Add colored corner markers to visualize toolbar boundaries"""
+	var marker_size = 20
+	var colors = {
+		"TL": Color.RED,      # Top-left
+		"TR": Color.GREEN,    # Top-right
+		"BL": Color.BLUE,     # Bottom-left
+		"BR": Color.YELLOW    # Bottom-right
+	}
+
+	# Top-left marker
+	var tl = ColorRect.new()
+	tl.color = colors["TL"]
+	tl.custom_minimum_size = Vector2(marker_size, marker_size)
+	tl.anchor_left = 0
+	tl.anchor_top = 0
+	tl.offset_left = 0
+	tl.offset_top = 0
+	add_child(tl)
+
+	# Top-right marker
+	var tr = ColorRect.new()
+	tr.color = colors["TR"]
+	tr.custom_minimum_size = Vector2(marker_size, marker_size)
+	tr.anchor_left = 1.0
+	tr.anchor_top = 0
+	tr.offset_left = -marker_size
+	tr.offset_top = 0
+	add_child(tr)
+
+	# Bottom-left marker
+	var bl = ColorRect.new()
+	bl.color = colors["BL"]
+	bl.custom_minimum_size = Vector2(marker_size, marker_size)
+	bl.anchor_left = 0
+	bl.anchor_top = 1.0
+	bl.offset_left = 0
+	bl.offset_top = -marker_size
+	add_child(bl)
+
+	# Bottom-right marker
+	var br = ColorRect.new()
+	br.color = colors["BR"]
+	br.custom_minimum_size = Vector2(marker_size, marker_size)
+	br.anchor_left = 1.0
+	br.anchor_top = 1.0
+	br.offset_left = -marker_size
+	br.offset_top = -marker_size
+	add_child(br)
+
 	# DEBUG OUTPUT
 	print("═══════════════════════════════════════════════════════════════")
 	print("DEBUG: ActionPreviewRow (Q/E/R toolbar)")
@@ -203,9 +251,4 @@ func _add_corner_markers() -> void:
 	print("  Parent: %s" % get_parent().name)
 	print("  Size flags H: %d (3=SIZE_EXPAND_FILL)" % size_flags_horizontal)
 	print("  Custom minimum size: %s" % custom_minimum_size)
-	print("  Buttons per button size_flags:")
-	for action_key in ["Q", "E", "R"]:
-		if action_buttons.has(action_key):
-			var btn = action_buttons[action_key]
-			print("    [%s]: size_flags_h=%d, stretch_ratio=%.1f" % [action_key, btn.size_flags_horizontal, btn.size_flags_stretch_ratio])
 	print("═══════════════════════════════════════════════════════════════")

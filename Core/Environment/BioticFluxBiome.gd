@@ -895,12 +895,14 @@ func _apply_energy_transfer(dt: float) -> void:
 
 		# Apply sun damage (to mushrooms and hybrid crops)
 		if is_mushroom or is_hybrid:
-			# Damage based on sun brightness (radius modulates damage intensity too)
+			# Damage based on sun brightness AND alignment with sun
+			# Only strong damage when sun is bright AND aligned with crop
+			# At noon with sun-aligned mushroom: max damage (~0.05/sec)
+			# At noon with sun-opposite mushroom: negligible damage
 			var sun_brightness_damage = pow(sun_qubit.radius, 2)  # Damage scales with brightness squared
-			# Max damage when sun bright: 0.01/sec (weighted by mushroom exposure probability)
-			# For hybrids: damage only applies when mushroom component is exposed
-			# For specialists: always exposed
-			var damage_rate = 0.01 * sun_brightness_damage * mushroom_exposure
+			var sun_damage_modulation = sun_alignment  # Damage strongest when aligned with sun
+			# Increased damage coefficient to make mushrooms wilt more during day
+			var damage_rate = 0.05 * sun_brightness_damage * sun_damage_modulation * mushroom_exposure
 			qubit.grow_energy(-damage_rate, dt)  # Negative energy = damage
 
 		# Sync radius with energy
