@@ -4,6 +4,33 @@ extends "res://Core/Environment/BiomeBase.gd"
 const BiomePlot = preload("res://Core/GameMechanics/BiomePlot.gd")
 const QuantumOrganism = preload("res://Core/Environment/QuantumOrganism.gd")
 
+## Forest Markov Chain (from forest_emoji_simulation_v11.json)
+## Used to derive Icon interactions for bath-first mode
+const FOREST_MARKOV = {
+	"⛰": {"🌳": 0.6, "☔": 0.4},
+	"☀": {"🌳": 0.5, "🌱": 0.3, "🌿": 0.2},
+	"☔": {"💧": 0.5, "☀": 0.3, "💨": 0.2},
+	"🌳": {"⛰": 0.3, "🌲": 0.3, "🏡": 0.2, "🌿": 0.2, "🌳": 0.1},
+	"🌰": {"🍯": 0.2, "🌼": 0.2, "🍂": 0.2, "🌱": 0.4},
+	"🐝": {"🌼": 0.5, "🍯": 0.5},
+	"🌲": {"🏡": 0.3, "🍂": 0.3, "🐦": 0.4, "🌰": 0.2, "🌳": 0.2},
+	"🌱": {"⛰": 0.4, "☀": 0.3, "🌲": 0.3},
+	"🐇": {"🏡": 0.5, "🍂": 0.3, "🐺": 0.2, "🦅": 0.1},
+	"🦌": {"🏡": 0.5, "🍂": 0.3, "🐺": 0.3},
+	"🦅": {"💨": 0.3, "🌳": 0.5, "🐜": 0.2},
+	"💧": {"🌳": 0.4, "🌲": 0.3, "⛰": 0.3},
+	"💨": {"🌼": 0.3, "🌱": 0.3, "⛰": 0.4},
+	"🐺": {"🌳": 0.5, "💧": 0.3, "🌿": 0.2},
+	"🌿": {"🍂": 0.2, "🐇": 0.5, "🦌": 0.3},
+	"🍄": {"🍂": 0.5, "⛰": 0.5},
+	"🐜": {"🍯": 0.3, "🌰": 0.3, "🐦": 0.2, "🦅": 0.2},
+	"🐦": {"🐜": 0.3, "🌱": 0.3, "🦅": 0.2, "🌲": 0.2, "🏡": 0.2},
+	"🍂": {"🍄": 0.5, "🐜": 0.5},
+	"🌼": {"🐝": 0.4, "🍯": 0.2, "🌱": 0.4},
+	"🍯": {"🌰": 0.5, "🐜": 0.5},
+	"🏡": {"🐇": 0.3, "🦌": 0.3, "🐦": 0.4}
+}
+
 ## Quantum Forest Ecosystem Biome
 ##
 ## A complete predator-prey ecosystem modeled as quantum state transitions.
@@ -71,58 +98,176 @@ func _init(width: int = 6, height: int = 1):
 	grid_height = height
 
 
+func _initialize_bath_forest() -> void:
+	"""Initialize quantum bath for Forest biome (Phase 5 - Bath-First)
+
+	Forest emojis (22 total): ⛰ ☀ ☔ 🌳 🌰 🐝 🌲 🌱 🐇 🦌 🦅 💧 💨 🐺 🌿 🍄 🐜 🐦 🍂 🌼 🍯 🏡
+	Dynamics:
+	  - Predator-prey: 🐺 eats 🐇/🦌, 🦅 eats 🐦/🐜/🐇
+	  - Herbivores: 🐇/🦌 eat 🌿, 🐦 eats 🐜
+	  - Producers: 🌱/🌿/🌲 grow from ☀/💧/⛰
+	  - Decomposition: 🍂 → 🍄 → ⛰ (nutrient cycling)
+	  - Emergent Lotka-Volterra oscillations expected
+	"""
+	print("🛁 Initializing Forest quantum bath...")
+
+	# Get IconRegistry (now guaranteed to be first autoload)
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		push_error("🛁 IconRegistry not available!")
+		return
+
+	# Derive Icons from Markov chain
+	# This automatically creates Icons with H (symmetric) and L (asymmetric) terms
+	# Only derive if not already present (avoid overwriting CoreIcons)
+	var icons_to_derive = {}
+	for emoji in FOREST_MARKOV:
+		if not icon_registry.has_icon(emoji):
+			icons_to_derive[emoji] = FOREST_MARKOV[emoji]
+
+	if not icons_to_derive.is_empty():
+		# Lindblad rate scale: 10x slower for amplitude-based bath physics
+		icon_registry.derive_from_markov(icons_to_derive, 0.3, 0.015)  # Was 0.15
+		print("  ✅ Derived %d Icons from Markov chain" % icons_to_derive.size())
+	else:
+		print("  ✅ All %d emojis already have Icons" % FOREST_MARKOV.size())
+
+	# Tune predator-prey dynamics for realistic oscillations
+	# Increase Lindblad transfer rates for predation
+	_tune_predator_prey_icons(icon_registry)
+
+	# Create bath with forest emoji basis
+	bath = QuantumBath.new()
+	var emojis = FOREST_MARKOV.keys()
+	bath.initialize_with_emojis(emojis)
+
+	# Initialize weighted distribution based on trophic levels
+	# More base resources (soil, water, vegetation) than predators
+	bath.initialize_weighted({
+		"⛰": 0.10,   # Soil - foundation
+		"☀": 0.08,   # Sunlight - driver
+		"💧": 0.08,   # Water - essential
+		"☔": 0.04,   # Weather - driver
+		"💨": 0.04,   # Wind - dispersal
+		"🌳": 0.08,   # Forest - structure
+		"🌲": 0.08,   # Tree - structure
+		"🌱": 0.06,   # Seedling - growth
+		"🌿": 0.10,   # Vegetation - base producer
+		"🌰": 0.02,   # Brazilian nut - special
+		"🐝": 0.02,   # Orchid bee - pollinator
+		"🌼": 0.03,   # Pollination - process
+		"🍯": 0.02,   # Nectar - resource
+		"🍄": 0.04,   # Fungus - decomposer
+		"🍂": 0.06,   # Organic matter - recycling
+		"🐜": 0.04,   # Bugs - base prey
+		"🐇": 0.05,   # Rabbit - primary prey
+		"🦌": 0.03,   # Deer - large herbivore
+		"🐦": 0.03,   # Bird - small predator
+		"🐺": 0.02,   # Wolf - apex predator
+		"🦅": 0.01,   # Eagle - apex predator
+		"🏡": 0.03    # Shelter - protection
+	})
+
+	# Collect Icons from registry
+	var icons: Array[Icon] = []
+	for emoji in emojis:
+		var icon = icon_registry.get_icon(emoji)
+		if icon:
+			icons.append(icon)
+		else:
+			push_warning("🛁 Icon not found for emoji: " + emoji)
+
+	# Build Hamiltonian and Lindblad operators
+	bath.active_icons = icons
+	bath.build_hamiltonian_from_icons(icons)
+	bath.build_lindblad_from_icons(icons)
+
+	print("  ✅ Bath initialized with %d emojis, %d icons" % [emojis.size(), icons.size()])
+	print("  ✅ Hamiltonian: %d non-zero terms" % bath.hamiltonian_sparse.size())
+	print("  ✅ Lindblad: %d transfer terms" % bath.lindblad_terms.size())
+	print("  🌲 Forest ecosystem ready for emergent Lotka-Volterra dynamics!")
+
+
+func _tune_predator_prey_icons(icon_registry) -> void:
+	"""Tune predator-prey Icons for realistic dynamics
+
+	Increase Lindblad transfer rates for predation to ensure
+	strong enough coupling for Lotka-Volterra oscillations
+	"""
+	# Wolf predation (🐺 gains from 🐇 rabbit, 🦌 deer)
+	# 10x slower rates for amplitude-based bath physics
+	var wolf = icon_registry.get_icon("🐺")
+	if wolf:
+		wolf.lindblad_incoming["🐇"] = 0.012  # Strong predation on rabbits (was 0.12)
+		wolf.lindblad_incoming["🦌"] = 0.008  # Moderate predation on deer (was 0.08)
+		wolf.decay_rate = 0.03  # Wolves die without food
+		wolf.decay_target = "🍂"
+		print("  🐺 Wolf: Predation tuned (🐇: 0.012, 🦌: 0.008, decay: 0.03)")
+
+	# Eagle predation (🦅 gains from 🐦 bird, 🐜 bugs, 🐇 rabbit)
+	var eagle = icon_registry.get_icon("🦅")
+	if eagle:
+		eagle.lindblad_incoming["🐦"] = 0.010  # Was 0.10, 10x slower
+		eagle.lindblad_incoming["🐜"] = 0.008  # Was 0.08, 10x slower
+		eagle.lindblad_incoming["🐇"] = 0.006  # Was 0.06, 10x slower
+		eagle.decay_rate = 0.04  # Eagles die without prey
+		eagle.decay_target = "🍂"
+		print("  🦅 Eagle: Predation tuned (🐦: 0.010, 🐜: 0.008, 🐇: 0.006, decay: 0.04)")
+
+	# Rabbit herbivory (🐇 gains from 🌿 vegetation)
+	var rabbit = icon_registry.get_icon("🐇")
+	if rabbit:
+		rabbit.lindblad_incoming["🌿"] = 0.015  # Strong herbivory (was 0.15, 10x slower)
+		rabbit.decay_rate = 0.02  # Natural death rate
+		rabbit.decay_target = "🍂"
+		print("  🐇 Rabbit: Herbivory tuned (🌿: 0.015, decay: 0.02)")
+
+	# Deer herbivory (🦌 gains from 🌿 vegetation)
+	var deer = icon_registry.get_icon("🦌")
+	if deer:
+		deer.lindblad_incoming["🌿"] = 0.012  # Moderate herbivory (was 0.12, 10x slower)
+		deer.decay_rate = 0.02
+		deer.decay_target = "🍂"
+		print("  🦌 Deer: Herbivory tuned (🌿: 0.012, decay: 0.02)")
+
+	# Vegetation growth (🌿 gains from ☀ sunlight, 💧 water, 🍂 organic matter)
+	var vegetation = icon_registry.get_icon("🌿")
+	if vegetation:
+		# These should already be set by CoreIcons, but ensure they're strong enough
+		if not vegetation.lindblad_incoming.has("☀"):
+			vegetation.lindblad_incoming["☀"] = 0.10
+		if not vegetation.lindblad_incoming.has("💧"):
+			vegetation.lindblad_incoming["💧"] = 0.06
+		if not vegetation.lindblad_incoming.has("🍂"):
+			vegetation.lindblad_incoming["🍂"] = 0.04
+		print("  🌿 Vegetation: Growth rates ensured (☀: 0.10, 💧: 0.06, 🍂: 0.04)")
+
+
 func _ready():
 	"""Initialize forest ecosystem with grid of patches"""
 	super._ready()
 
-	# HAUNTED UI FIX: Guard against double-initialization
-	if weather_qubit != null:
-		if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_FOREST") == "1":
-			print("⚠️  ForestEcosystem_Biome._ready() called multiple times, skipping re-initialization")
-		return
-
-	# Create weather qubits
-	weather_qubit = BiomeUtilities.create_qubit("🌬️", "💧", PI / 2.0)
-	weather_qubit.radius = 1.0
-
-	season_qubit = BiomeUtilities.create_qubit("☀️", "🌧️", PI / 2.0)
-	season_qubit.radius = 1.0
-
-	# Use defaults if not set by _init()
-	if grid_width == 0:
-		grid_width = 6
-	if grid_height == 0:
-		grid_height = 1
-
-	# Initialize patches
-	for x in range(grid_width):
-		for y in range(grid_height):
-			var pos = Vector2i(x, y)
-			patches[pos] = _create_patch(pos)
-
-	if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_FOREST") == "1":
-		print("🌲 Forest Ecosystem initialized (%dx%d)" % [grid_width, grid_height])
-
-	# Configure visual properties for QuantumForceGraph
+	# Configure visual properties for QuantumForceGraph (BEFORE early return!)
+	# Layout: Forest (7890) in top-right corner - moved right by 1/10 screen width
 	visual_color = Color(0.3, 0.7, 0.3, 0.3)  # Green
 	visual_label = "🌲 Forest"
-	visual_center_offset = Vector2(0.85, -0.5)   # UPPER-RIGHT (7890 far right - pushed to edge)
-	visual_oval_width = 350.0   # Spread 7890 plots out
-	visual_oval_height = 216.0  # Golden ratio: 350/1.618
+	visual_center_offset = Vector2(0.65, -0.25)  # Moved right: 0.45 + 0.2 for extra 1/10
+	visual_oval_width = 560.0   # 2x larger
+	visual_oval_height = 350.0  # Golden ratio maintained
 
-	# Initialize forest icons (if grid available)
-	if grid:
-		_initialize_forest_icons()
+	print("  ✅ ForestEcosystem running in bath-first mode")
+
+
+func _initialize_bath() -> void:
+	"""Initialize quantum bath for Forest biome (Bath-First)"""
+	_initialize_bath_forest()
 
 
 func _update_quantum_substrate(dt: float) -> void:
 	"""Override parent: Update weather and all patches"""
-	# Update weather
-	_update_weather()
-
-	# Update all patches
-	for pos in patches.keys():
-		_update_patch(pos, dt)
+	# Bath mode: ecosystem dynamics handled by BiomeBase
+	# Predator-prey and vegetation dynamics come from bath Lindblad operators
+	pass
 
 
 func _create_patch(position: Vector2i) -> BiomePlot:
@@ -132,12 +277,9 @@ func _create_patch(position: Vector2i) -> BiomePlot:
 	plot.grid_position = position
 	plot.parent_biome = self
 
-	# Ecosystem state qubit (succession: 🏜️→🌱→🌿→🌲)
-	var state_qubit = DualEmojiQubit.new("🏜️", "🌱", PI / 2.0)
-	state_qubit.radius = 0.1  # Bare ground has low energy
-	state_qubit.phi = 0.0
-	state_qubit.add_graph_edge("🔄", "🌱")  # Bare → Seedling
-	plot.quantum_state = state_qubit
+	# Model B: Ecosystem state tracked via metadata only
+	# (State evolution would happen through quantum_computer if needed)
+	# State qubit left unregistered - forest succession is deterministic Markov, not quantum
 
 	# Store ecosystem metadata
 	plot.set_meta("ecological_state", EcologicalState.BARE_GROUND)
@@ -338,47 +480,20 @@ func _apply_ecological_transition(patch: BiomePlot):
 
 
 func _update_patch_transition_graph(patch: BiomePlot):
-	"""Update Markov transition graph based on current ecological state (pure emoji topology)"""
-	var state_qubit = patch.quantum_state
-	if not state_qubit:
-		return
-	# Clear old transitions
-	state_qubit.entanglement_graph.clear()
-
-	# Build transition graph based on current state (🔄 = can transition to)
-	var current_state = patch.get_meta("ecological_state") if patch.has_meta("ecological_state") else EcologicalState.BARE_GROUND
-	match current_state:
-		EcologicalState.BARE_GROUND:
-			state_qubit.add_graph_edge("🔄", "🌱")  # Can become seedling
-
-		EcologicalState.SEEDLING:
-			state_qubit.add_graph_edge("🔄", "🌿")  # Can become sapling
-			state_qubit.add_graph_edge("🔄", "🏜️")  # Can be eaten (back to bare)
-
-		EcologicalState.SAPLING:
-			state_qubit.add_graph_edge("🔄", "🌲")  # Can become forest
-			state_qubit.add_graph_edge("🔄", "🌱")  # Can regress under stress
-
-		EcologicalState.MATURE_FOREST:
-			state_qubit.add_graph_edge("🔄", "🏜️")  # Can die (fire/disease)
-			state_qubit.add_graph_edge("💧", "🍎")  # Produces apples
-			state_qubit.add_graph_edge("💧", "☀️")  # Produces energy
+	"""Model B: Markov state transitions tracked via metadata (not quantum evolution)"""
+	# Transitions are deterministic based on ecological state
+	# No quantum state qubit to update - transitions happen via _update_patch_qubit()
+	pass
 
 
 func _update_patch_qubit(patch: BiomePlot):
-	"""Update the patch's state qubit to reflect ecological state"""
-	var state = patch.get_meta("ecological_state") if patch.has_meta("ecological_state") else EcologicalState.BARE_GROUND
-	match state:
-		EcologicalState.BARE_GROUND:
-			patch.quantum_state.radius = 0.1
-		EcologicalState.SEEDLING:
-			patch.quantum_state.radius = 0.3
-		EcologicalState.SAPLING:
-			patch.quantum_state.radius = 0.6
-		EcologicalState.MATURE_FOREST:
-			patch.quantum_state.radius = 0.9
-		EcologicalState.DEAD_FOREST:
-			patch.quantum_state.radius = 0.0
+	"""Model B: Ecological state reflected through quantum_computer when needed
+
+	Patch succession (🏜️→🌱→🌿→🌲) is tracked via metadata (ecological_state).
+	Quantum evolution would happen through parent biome's quantum_computer if interactions needed.
+	"""
+	# Metadata-only tracking - no qubit manipulation needed
+	pass
 
 
 func add_organism(position: Vector2i, organism_icon: String) -> bool:
