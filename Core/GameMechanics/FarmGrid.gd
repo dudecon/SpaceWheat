@@ -1449,7 +1449,7 @@ func _auto_apply_persistent_gates(position: Vector2i) -> void:
 	Gates marked as 'active' on the plot are applied to the new quantum state.
 	"""
 	var plot = get_plot(position)
-	if not plot or not plot.is_planted or not plot.quantum_state:
+	if not plot or not plot.is_planted or plot.register_id < 0:
 		return
 
 	var active_gates = plot.get_active_gates()

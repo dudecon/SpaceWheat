@@ -188,14 +188,18 @@ func _on_restart_requested() -> void:
 
 
 func _on_overlay_state_changed(overlay_name: String, visible: bool) -> void:
-	"""Sync InputController.menu_visible when escape menu state changes
+	"""Sync InputController modal state when overlays change
 
-	CRITICAL: When the escape menu visibility changes, update InputController's internal state
-	to stay in sync. This prevents the game from blocking input when the menu fails to display.
+	CRITICAL: When modal overlays change visibility, update InputController's internal state
+	to block/unblock game input. This prevents the game from receiving input when modals are open.
 	"""
 	if overlay_name == "escape_menu":
 		input_controller.menu_visible = visible
 		print("🔗 Synced InputController.menu_visible = %s" % visible)
+
+	# Forward all overlay changes to InputController for modal blocking
+	if input_controller.has_method("_on_overlay_toggled"):
+		input_controller._on_overlay_toggled(overlay_name, visible)
 
 
 func _on_quantum_node_clicked(grid_pos: Vector2i, button_index: int) -> void:

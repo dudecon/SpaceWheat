@@ -48,7 +48,7 @@ func allocate_register(north_emoji: String = "🌾", south_emoji: String = "🌽
 
 	# Create 1-qubit component with |0⟩ state
 	var comp = QuantumComponent.new(_next_component_id)
-	comp.register_ids = [reg_id]
+	comp.register_ids.append(reg_id)  # Model B: append instead of assign
 	comp.state_vector = [Complex.one(), Complex.zero()]  # |0⟩
 	comp.is_pure = true
 

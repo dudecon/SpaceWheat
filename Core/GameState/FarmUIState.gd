@@ -98,15 +98,18 @@ func update_plot(position: Vector2i, plot) -> void:
 	ui_data.is_planted = plot.is_planted
 	ui_data.plot_type = _get_plot_type_string(plot.plot_type)
 
-	# Transform quantum state (if exists)
-	if plot.quantum_state:
+	# Transform quantum state (Model B: from parent biome's quantum_computer)
+	if plot.is_planted and plot.parent_biome and plot.register_id >= 0:
 		var emojis = plot.get_plot_emojis()
 		ui_data.north_emoji = emojis["north"]
 		ui_data.south_emoji = emojis["south"]
-		ui_data.north_probability = plot.quantum_state.get_north_probability()
-		ui_data.south_probability = plot.quantum_state.get_south_probability()
-		# Use radius (Bloch vector length) as energy proxy - coherence measure
-		ui_data.energy_level = plot.quantum_state.radius
+		# Get purity as proxy for energy level (Bloch coherence measure)
+		ui_data.energy_level = plot.get_purity()  # Tr(ρ²)
+	else:
+		# Unplanted: use default emojis
+		var emojis = plot.get_plot_emojis()
+		ui_data.north_emoji = emojis["north"]
+		ui_data.south_emoji = emojis["south"]
 
 	ui_data.has_been_measured = plot.has_been_measured
 

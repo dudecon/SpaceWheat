@@ -73,6 +73,16 @@ func _phase_1_setup():
 	farm = Farm.new()
 	farm._ready()
 
+	# Manually call _ready on biomes to ensure QuantumComputer initialization
+	if farm.biotic_flux_biome:
+		farm.biotic_flux_biome._ready()
+	if farm.market_biome:
+		farm.market_biome._ready()
+	if farm.forest_biome:
+		farm.forest_biome._ready()
+	if farm.kitchen_biome:
+		farm.kitchen_biome._ready()
+
 	if not farm:
 		print("  ❌ FAILED: Farm creation")
 		return
@@ -82,17 +92,17 @@ func _phase_1_setup():
 		print("  ❌ FAILED: Economy not created")
 		return
 
-	# Start with ample resources
-	economy.add_wheat(500)
-	economy.add_labor(100)
-	economy.add_flour(50)
+	# Start with ample resources (Model B: using emoji-based resource system)
+	economy.add_resource("🌾", 500 * 10)  # 500 wheat units
+	economy.add_resource("👥", 100 * 10)  # 100 labor units
+	economy.add_resource("💨", 50 * 10)   # 50 flour units
 
 	print("  ✓ Farm created with biome: %s" % farm.biome_enabled)
 	print("  ✓ Economy initialized")
 	print("  📊 Starting inventory:")
-	print("      🌾 Wheat: %d" % economy.wheat_inventory)
-	print("      👥 Labor: %d" % economy.labor_inventory)
-	print("      🌾 Flour: %d" % economy.flour_inventory)
+	print("      🌾 Wheat: %d" % economy.get_resource("🌾"))
+	print("      👥 Labor: %d" % economy.get_resource("👥"))
+	print("      💨 Flour: %d" % economy.get_resource("💨"))
 	print()
 
 	test_results["farm_setup"] = true
@@ -143,29 +153,39 @@ func _phase_3_growth():
 
 	print("  ⏳ Simulating %d biome days (%.0f seconds)..." % [BIOME_DAYS, TEST_DURATION])
 
-	# Log initial state
+	# Log initial state (Model B: check purity instead of quantum_state energy)
 	var wheat_pos = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
 	var initial_energies = []
 	for pos in wheat_pos:
 		var plot = farm.get_plot(pos)
-		if plot and plot.quantum_state:
-			initial_energies.append(plot.quantum_state.energy)
+		if plot and plot.is_planted and plot.parent_biome:
+			initial_energies.append(plot.get_purity())
 
 	print("  Initial energy: %.4f, %.4f, %.4f" % [initial_energies[0], initial_energies[1], initial_energies[2]])
 
-	# Simulate biome evolution
+	# Simulate biome evolution (Model B: process all biomes)
 	var steps = int(TEST_DURATION / STEP_SIZE)
 	for _step in range(steps):
-		farm.biome._process(STEP_SIZE)
+		if farm.biotic_flux_biome:
+			farm.biotic_flux_biome._process(STEP_SIZE)
+		if farm.market_biome:
+			farm.market_biome._process(STEP_SIZE)
+		if farm.forest_biome:
+			farm.forest_biome._process(STEP_SIZE)
+		if farm.kitchen_biome:
+			farm.kitchen_biome._process(STEP_SIZE)
 
-	# Log final state
+	# Log final state (Model B: check purity instead of quantum_state energy)
 	var final_energies = []
 	for pos in wheat_pos:
 		var plot = farm.get_plot(pos)
-		if plot and plot.quantum_state:
-			final_energies.append(plot.quantum_state.energy)
+		if plot and plot.is_planted and plot.parent_biome:
+			final_energies.append(plot.get_purity())
 
-	print("  Final energy:   %.4f, %.4f, %.4f" % [final_energies[0], final_energies[1], final_energies[2]])
+	if final_energies.size() == 3:
+		print("  Final energy:   %.4f, %.4f, %.4f" % [final_energies[0], final_energies[1], final_energies[2]])
+	else:
+		print("  Final energy:   (measurement failed)")
 
 	var avg_growth = ((final_energies[0] + final_energies[1] + final_energies[2]) / 3.0) - ((initial_energies[0] + initial_energies[1] + initial_energies[2]) / 3.0)
 	print("  ✓ Average growth: %.4f per crop" % avg_growth)
@@ -189,24 +209,9 @@ func _phase_4_harvest():
 	var wheat_pos = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
 	var harvest_qubits = []
 
-	print("  Collecting and harvesting wheat crops:")
+	print("  Harvesting wheat crops:")
 
-	# First, collect the qubits BEFORE harvesting (harvest clears them)
-	for pos in wheat_pos:
-		var plot = farm.get_plot(pos)
-		if not plot:
-			print("    ✗ Plot not found at %s" % pos)
-			return
-
-		var qubit = plot.quantum_state
-		if not qubit:
-			print("    ✗ Qubit not found at %s" % pos)
-			return
-
-		harvest_qubits.append(qubit)
-		print("    ✓ Collected qubit from %s (energy: %.4f)" % [pos, qubit.energy])
-
-	# Then harvest the plots (this will trigger measurement and clear plots)
+	# Model B: Harvest plots (measurement and clear are handled internally)
 	for pos in wheat_pos:
 		var measurement = farm.measure_plot(pos)
 		var harvest = farm.harvest_plot(pos)
