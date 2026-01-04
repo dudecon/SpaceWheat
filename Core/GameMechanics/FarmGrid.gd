@@ -341,85 +341,28 @@ func get_quantum_computer_for_plot(position: Vector2i) -> Resource:
 
 
 func _apply_icon_effects(delta: float):
-	"""Apply quantum evolution in correct order:
-	1. Icon Hamiltonians (UNITARY evolution only)
-	2. Biome dissipation (Lindblad terms: T1 amplitude damping + T2 phase damping)
+	"""Model B: Quantum evolution now handled by BiomeBase.quantum_computer
 
-	Icons are PURE - they provide Hamiltonian terms
-	Dissipation is handled by Biome based on temperature
+	This method is deprecated. Quantum evolution happens through:
+	1. QuantumBath Lindblad evolution in BiomeBase
+	2. Icon Hamiltonians registered in quantum_computer (via build_hamiltonian_from_icons)
+	3. Per-plot effects handled by quantum_computer projections
 
-	Icon scoping: If an icon has scopes defined, it only affects plots in those biomes
+	Legacy plot.quantum_state per-plot evolution no longer used.
 	"""
-	# Apply to all planted plots with quantum states
-	for position in plots.keys():
-		var plot = plots[position]
-		if not plot.is_planted or not plot.quantum_state:
-			continue
-
-		var plot_biome_name = plot_biome_assignments.get(position, "BioticFlux")
-
-		# STEP 1: Apply Icon Hamiltonians (unitary evolution)
-		for icon in active_icons:
-			# Check if icon has scope restrictions
-			if icon_scopes.has(icon):
-				var allowed_biomes = icon_scopes[icon]
-				if not allowed_biomes.has(plot_biome_name):
-					continue  # Skip this icon for this plot (not in allowed biome)
-
-			# Apply Hamiltonian
-			icon.apply_hamiltonian_evolution(plot.quantum_state, delta)
-
-		# STEP 2: Apply Biome dissipation (Lindblad: T1 + T2)
-		var plot_biome = get_biome_for_plot(position)  # Phase 2c: Route to correct biome
-		if plot_biome:
-			plot_biome.apply_dissipation(plot.quantum_state, position, delta)
-	# Entangled pairs automatically evolve via Lindblad operators on each qubit
-	# No separate apply_to_entangled_pair() method needed
-
-	# Apply Icon effects to entangled clusters (simplified - per-qubit decoherence)
-	# Update at reduced rate (10 FPS instead of 60 FPS) for performance
-	if Engine.get_frames_drawn() % 6 == 0:
-		for cluster in entangled_clusters:
-			for i in range(cluster.get_qubit_count()):
-				var plot_id = cluster.qubit_ids[i]
-				var plot = _get_plot_by_id(plot_id)
-				if plot and plot.quantum_state:
-					# Find plot position for biome lookup
-					var plot_pos = _find_plot_by_id(plot_id)
-					if plot_pos == Vector2i(-1, -1):
-						continue
-
-					var plot_biome_name = plot_biome_assignments.get(plot_pos, "BioticFlux")
-
-					# Apply Icon effects to each qubit individually (with scoping)
-					for icon in active_icons:
-						# Check if icon has scope restrictions
-						if icon_scopes.has(icon):
-							var allowed_biomes = icon_scopes[icon]
-							if not allowed_biomes.has(plot_biome_name):
-								continue  # Skip this icon for this qubit (not in allowed biome)
-
-						icon.apply_to_qubit(plot.quantum_state, delta * 6)
+	# Quantum evolution moved to BiomeBase and QuantumComputer
+	pass
 
 
 func _apply_entangled_pair_decoherence(delta: float):
-	"""Apply realistic decoherence to entangled pairs"""
-	const Lindblad = preload("res://Core/QuantumSubstrate/LindbladEvolution.gd")
+	"""Model B: Entangled pair decoherence handled by quantum_computer
 
-	for pair in entangled_pairs:
-		# Get effective temperature
-		var temp = base_temperature
-		for icon in active_icons:
-			if icon.active_strength > 0.0:
-				temp = max(temp, icon.get_effective_temperature())
-
-		# Apply decoherence via Lindblad equation
-		pair.density_matrix = Lindblad.apply_two_qubit_decoherence_4x4(
-			pair.density_matrix,
-			delta,
-			temp,
-			pair.coherence_time_T1
-		)
+	Lindblad evolution for entangled states now happens in:
+	- BiomeBase.quantum_computer via QuantumBath Lindblad evolution
+	- LindbladSuperoperator applies two-qubit operators automatically
+	"""
+	# Entanglement decoherence moved to QuantumComputer
+	pass
 
 
 func _build_icon_network() -> Dictionary:
