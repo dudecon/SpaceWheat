@@ -388,7 +388,7 @@ func tensor_product(other: ComplexMatrix) -> ComplexMatrix:
 	"""
 	var m = other.n
 	var result_dim = n * m
-	var result = ComplexMatrix.new(result_dim)
+	var result = load("res://Core/QuantumSubstrate/ComplexMatrix.gd").new(result_dim)
 
 	# Sparse computation: iterate only through non-zero elements of self
 	var self_sparsity = _get_sparsity_pattern()
@@ -450,7 +450,7 @@ static func from_statevector(statevector: Array) -> ComplexMatrix:
 	Typical case: superposition of 2-4 basis states → nnz ≈ 4, time ≈ O(16) vs O(2^(2n))
 	"""
 	var dim = statevector.size()
-	var rho = ComplexMatrix.new(dim)
+	var rho = load("res://Core/QuantumSubstrate/ComplexMatrix.gd").new(dim)
 
 	# Find non-zero indices in statevector
 	var nonzero_indices = []

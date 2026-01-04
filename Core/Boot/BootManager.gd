@@ -18,7 +18,7 @@ func _ready() -> void:
 	print("🔧 BootManager autoload ready")
 
 ## Main boot sequence entry point - call after farm and shell are created
-func boot(farm, shell, quantum_viz) -> void:
+func boot(farm: Farm, shell: Node, quantum_viz: Node) -> void:
 	if _booted:
 		push_warning("Boot already completed!")
 		return
