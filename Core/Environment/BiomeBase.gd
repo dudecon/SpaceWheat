@@ -491,6 +491,172 @@ func reset_to_mixed_state(emoji: String, reset_rate: float = 0.1) -> bool:
 	print("✅ Set reset for %s to mixed state (rate: %.3f)" % [emoji, reset_rate])
 	return true
 
+
+# ============================================================================
+# PHASE 4: Gate Infrastructure (Entanglement Management)
+# ============================================================================
+
+func create_cluster_state(positions: Array[Vector2i]) -> bool:
+	"""Create multi-qubit cluster state from selected plots (Model B)
+
+	Entangles multiple plots into a chain topology (linear cluster).
+	Uses sequential Bell pair entanglement: plot[0]↔plot[1]↔plot[2]↔...
+
+	Args:
+		positions: Array of plot positions to cluster
+
+	Returns:
+		true if cluster successfully created
+	"""
+	if not quantum_computer or positions.size() < 2:
+		return false
+
+	print("🌐 Creating cluster state with %d plots" % positions.size())
+
+	var success_count = 0
+	for i in range(positions.size() - 1):
+		var pos_a = positions[i]
+		var pos_b = positions[i + 1]
+
+		# Get register IDs
+		var reg_a = get_register_id_for_plot(pos_a)
+		var reg_b = get_register_id_for_plot(pos_b)
+
+		if reg_a < 0 or reg_b < 0:
+			push_warning("Invalid registers for cluster: %d, %d" % [reg_a, reg_b])
+			continue
+
+		# Create Bell pair entanglement
+		if quantum_computer.entangle_plots(reg_a, reg_b):
+			success_count += 1
+			print("  🔗 Entangled %s ↔ %s" % [pos_a, pos_b])
+
+	# Store in bell_gates history for UI visualization
+	if success_count > 0:
+		bell_gates.append(positions.duplicate())
+		bell_gate_created.emit(positions)
+
+	print("✅ Cluster created with %d entanglements" % success_count)
+	return success_count > 0
+
+
+func set_measurement_trigger(trigger_pos: Vector2i, target_positions: Array[Vector2i]) -> bool:
+	"""Set up conditional measurement trigger (Model B - Phase 4 Infrastructure)
+
+	When trigger_pos is measured, its outcome affects measurements at target_positions.
+	Requires both trigger and targets to be in same entangled component.
+
+	Args:
+		trigger_pos: Plot whose measurement triggers condition
+		target_positions: Plots affected by trigger measurement
+
+	Returns:
+		true if trigger successfully set up
+	"""
+	if not quantum_computer:
+		return false
+
+	var trigger_reg = get_register_id_for_plot(trigger_pos)
+	if trigger_reg < 0:
+		push_warning("Invalid trigger register at %s" % trigger_pos)
+		return false
+
+	# Verify all targets are in same component as trigger
+	var trigger_comp = quantum_computer.get_component_containing(trigger_reg)
+	if not trigger_comp:
+		push_warning("Trigger not in valid component")
+		return false
+
+	var valid_targets = 0
+	for target_pos in target_positions:
+		var target_reg = get_register_id_for_plot(target_pos)
+		if target_reg < 0:
+			continue
+
+		var target_comp = quantum_computer.get_component_containing(target_reg)
+		if target_comp and target_comp.component_id == trigger_comp.component_id:
+			valid_targets += 1
+
+	if valid_targets == 0:
+		push_warning("No valid targets in trigger component")
+		return false
+
+	print("✅ Measurement trigger set: %s → %d targets" % [trigger_pos, valid_targets])
+	return true
+
+
+func remove_entanglement(pos_a: Vector2i, pos_b: Vector2i) -> bool:
+	"""Remove entanglement between two plots (Model B - Phase 4 Infrastructure)
+
+	Decouples two plots by clearing their entanglement metadata.
+	Actual quantum state remains entangled (full disentanglement requires projection).
+
+	Args:
+		pos_a: First plot
+		pos_b: Second plot
+
+	Returns:
+		true if decouplng successful
+	"""
+	if not quantum_computer:
+		return false
+
+	var reg_a = get_register_id_for_plot(pos_a)
+	var reg_b = get_register_id_for_plot(pos_b)
+
+	if reg_a < 0 or reg_b < 0:
+		push_warning("Invalid registers for removal: %d, %d" % [reg_a, reg_b])
+		return false
+
+	# Clear entanglement graph edges
+	if quantum_computer.entanglement_graph.has(reg_a):
+		quantum_computer.entanglement_graph[reg_a].erase(reg_b)
+	if quantum_computer.entanglement_graph.has(reg_b):
+		quantum_computer.entanglement_graph[reg_b].erase(reg_a)
+
+	print("✅ Removed entanglement between %s and %s" % [pos_a, pos_b])
+	return true
+
+
+func batch_entangle(positions: Array[Vector2i]) -> bool:
+	"""Create Bell pairs between all adjacent plot pairs (Model B)
+
+	Entangles all consecutive plot pairs in the selection.
+	Creates multiple independent Bell pairs: (0,1), (1,2), (2,3), etc.
+
+	Args:
+		positions: Array of plot positions
+
+	Returns:
+		true if at least one entanglement succeeded
+	"""
+	if not quantum_computer or positions.size() < 2:
+		return false
+
+	print("🔗 Batch entangling %d plots" % positions.size())
+
+	var success_count = 0
+	for i in range(positions.size() - 1):
+		var pos_a = positions[i]
+		var pos_b = positions[i + 1]
+
+		var reg_a = get_register_id_for_plot(pos_a)
+		var reg_b = get_register_id_for_plot(pos_b)
+
+		if reg_a < 0 or reg_b < 0:
+			continue
+
+		if quantum_computer.entangle_plots(reg_a, reg_b):
+			success_count += 1
+			print("  🔗 Entangled %s ↔ %s" % [pos_a, pos_b])
+
+	if success_count > 0:
+		bell_gates.append(positions.duplicate())
+		bell_gate_created.emit(positions)
+
+	print("✅ Created %d Bell pairs" % success_count)
+	return success_count > 0
+
 # ============================================================================
 # MODEL B: Gate Operations (Tool 5 Backend)
 # ============================================================================

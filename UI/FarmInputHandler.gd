@@ -972,45 +972,140 @@ func _action_plant_batch(positions: Array[Vector2i]):
 
 
 func _action_entangle_batch(positions: Array[Vector2i]):
-	"""Batch entangle selected plots (PHASE 4 - Gate Infrastructure)
+	"""Batch entangle selected plots (Model B - Gate Infrastructure)
 
-	Creates entanglement between all plot pairs via quantum_computer API.
-	Deferred to Phase 4 when entanglement infrastructure is implemented.
+	Creates Bell pairs between all consecutive plots via quantum_computer.entangle_plots().
+	Uses BiomeBase.batch_entangle() for coordinated multi-qubit entanglement.
 	"""
-	action_performed.emit("entangle_batch", false,
-		"⚠️  Entanglement (Phase 4): Gate infrastructure - deferred")
+	if not farm or not farm.grid:
+		action_performed.emit("entangle_batch", false, "⚠️  Farm not loaded yet")
+		return
+
+	if positions.size() < 2:
+		action_performed.emit("entangle_batch", false, "⚠️  Need at least 2 plots to entangle")
+		return
+
+	print("🔗 Batch entangling %d plots..." % positions.size())
+
+	# Get biome from first plot
+	var biome = farm.grid.get_biome_for_plot(positions[0])
+	if not biome:
+		action_performed.emit("entangle_batch", false, "⚠️  Could not access biome")
+		return
+
+	# Create batch entanglement
+	var success = biome.batch_entangle(positions)
+	var pair_count = positions.size() - 1
+
+	action_performed.emit("entangle_batch", success,
+		"%s Created %d Bell pairs from %d plots" % ["✅" if success else "❌", pair_count, positions.size()])
 
 
 ## NEW Tool 2 (QUANTUM) Actions - PERSISTENT INFRASTRUCTURE
 
 func _action_cluster(positions: Array[Vector2i]):
-	"""Build entanglement gate infrastructure (PHASE 4 - Gate Infrastructure)
+	"""Build entanglement gate infrastructure (Model B - Gate Infrastructure)
 
-	Creates multi-qubit cluster state topology for advanced quantum operations.
-	Deferred to Phase 4 when gate infrastructure is implemented.
+	Creates multi-qubit cluster state topology via quantum_computer entanglement.
+	Linear chain: plot[0]↔plot[1]↔plot[2]↔...
+	Uses BiomeBase.create_cluster_state() for coordinated entanglement.
 	"""
-	action_performed.emit("cluster", false,
-		"⚠️  Gate clusters (Phase 4): Infrastructure framework - deferred")
+	if not farm or not farm.grid:
+		action_performed.emit("cluster", false, "⚠️  Farm not loaded yet")
+		return
+
+	if positions.size() < 2:
+		action_performed.emit("cluster", false, "⚠️  Need at least 2 plots for cluster")
+		return
+
+	print("🌐 Creating cluster state with %d plots..." % positions.size())
+
+	# Get biome from first plot
+	var biome = farm.grid.get_biome_for_plot(positions[0])
+	if not biome:
+		action_performed.emit("cluster", false, "⚠️  Could not access biome")
+		return
+
+	# Create cluster state
+	var success = biome.create_cluster_state(positions)
+	var entanglement_count = positions.size() - 1
+
+	action_performed.emit("cluster", success,
+		"%s Built cluster with %d entanglements (%d plots)" % ["✅" if success else "❌", entanglement_count, positions.size()])
 
 
 func _action_measure_trigger(positions: Array[Vector2i]):
-	"""Build measure trigger (PHASE 4 - Gate Infrastructure)
+	"""Build measure trigger (Model B - Gate Infrastructure)
 
 	Creates conditional measurement infrastructure for controlled collapse.
-	Deferred to Phase 4 when trigger framework is implemented.
+	First plot in selection is trigger, remaining are targets.
+	Uses BiomeBase.set_measurement_trigger() for setup.
 	"""
-	action_performed.emit("measure_trigger", false,
-		"⚠️  Measure triggers (Phase 4): Conditional framework - deferred")
+	if not farm or not farm.grid:
+		action_performed.emit("measure_trigger", false, "⚠️  Farm not loaded yet")
+		return
+
+	if positions.size() < 2:
+		action_performed.emit("measure_trigger", false, "⚠️  Need trigger + at least 1 target plot")
+		return
+
+	print("🎯 Setting up measure trigger with %d plots..." % positions.size())
+
+	# Get biome from first plot
+	var biome = farm.grid.get_biome_for_plot(positions[0])
+	if not biome:
+		action_performed.emit("measure_trigger", false, "⚠️  Could not access biome")
+		return
+
+	# First plot is trigger, rest are targets
+	var trigger_pos = positions[0]
+	var target_positions = positions.slice(1, positions.size())
+
+	# Set measurement trigger
+	var success = biome.set_measurement_trigger(trigger_pos, target_positions)
+
+	action_performed.emit("measure_trigger", success,
+		"%s Set trigger at %s with %d targets" % ["✅" if success else "❌", trigger_pos, target_positions.size()])
 
 
 func _action_remove_gates(positions: Array[Vector2i]):
-	"""Remove gate infrastructure (PHASE 4 - Gate Infrastructure)
+	"""Remove gate infrastructure (Model B - Gate Infrastructure)
 
-	Removes entanglement and gate configurations from specified locations.
-	Deferred to Phase 4 when gate decoupling is implemented.
+	Removes entanglement between pairs of plots via quantum_computer metadata.
+	Processes selection as pairs: (0,1), (2,3), (4,5), etc.
+	Uses BiomeBase.remove_entanglement() for decouplng.
 	"""
-	action_performed.emit("remove_gates", false,
-		"⚠️  Gate removal (Phase 4): Decoupling framework - deferred")
+	if not farm or not farm.grid:
+		action_performed.emit("remove_gates", false, "⚠️  Farm not loaded yet")
+		return
+
+	if positions.size() < 2:
+		action_performed.emit("remove_gates", false, "⚠️  Need at least 2 plots to decouple")
+		return
+
+	print("🔓 Removing entanglement for %d plots..." % positions.size())
+
+	# Get biome from first plot
+	var biome = farm.grid.get_biome_for_plot(positions[0])
+	if not biome:
+		action_performed.emit("remove_gates", false, "⚠️  Could not access biome")
+		return
+
+	var success_count = 0
+	var removed_pairs = []
+
+	# Process pairs
+	for i in range(0, positions.size() - 1, 2):
+		var pos_a = positions[i]
+		var pos_b = positions[i + 1]
+
+		if biome.remove_entanglement(pos_a, pos_b):
+			success_count += 1
+			removed_pairs.append("%s↔%s" % [pos_a, pos_b])
+			print("  🔓 Decoupled %s ↔ %s" % [pos_a, pos_b])
+
+	action_performed.emit("remove_gates", success_count > 0,
+		"%s Removed %d entanglements | %s" % ["✅" if success_count > 0 else "❌", success_count, ", ".join(removed_pairs) if removed_pairs else "no changes"])
 
 
 ## Tool 4 (BIOME EVOLUTION CONTROLLER) - Research-Grade Actions
