@@ -2325,11 +2325,11 @@ func _draw_quantum_nodes():
 		if planted_plots.size() > 0:
 			print("\n   🌱 PLANTED PLOTS:")
 			for p in planted_plots:
-				print("      Grid %s: emoji='%s' opacity=%.2f quantum_state=%s" % [
+				print("      Grid %s: emoji='%s' opacity=%.2f is_planted=%s" % [
 					p["grid_pos"],
 					p["emoji"],
 					p["opacity"],
-					p["quantum_state"]
+					p["is_planted"]
 				])
 
 
