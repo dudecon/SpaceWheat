@@ -1199,39 +1199,57 @@ func harvest_with_topology(position: Vector2i, local_radius: int = 2) -> Diction
 
 
 func measure_plot(position: Vector2i) -> String:
-	"""Measure quantum state (observer effect). Entanglement means measuring one collapses entire network!"""
+	"""Measure quantum state (observer effect). Entanglement means measuring one collapses entire network!
+
+	Model B: Delegates measurement to quantum_computer, which handles all cascading.
+	Entanglement network collapse is automatic via quantum_computer.measure_register().
+	"""
 	var plot = get_plot(position)
 	if plot == null or not plot.is_planted:
 		return ""
 
-	# Build icon_network for Imperium collapse bias (QUANTUM LAYER)
-	var icon_network = _build_icon_network()
+	# Get biome and register for primary plot
+	var biome = get_biome_for_plot(position)
+	var register_id = plot_register_mapping.get(position, -1)
 
-	# IMPORTANT: Save entanglement network BEFORE measuring
-	# (because measure() will detangle the plot)
-	var initial_entanglements = plot.entangled_plots.keys()
+	if not biome or not biome.quantum_computer or register_id < 0:
+		# Fallback: No quantum computer available - return default
+		print("⚠️  No quantum computer for plot at %s - measurement unavailable" % position)
+		return plot.north_emoji
 
-	# Measure the primary plot (with Icon effects)
-	var result = plot.measure(icon_network)
+	var comp = biome.quantum_computer.get_component_containing(register_id)
+	if not comp:
+		# Unentangled single qubit - shouldn't happen but handle gracefully
+		return plot.north_emoji
 
-	# Spooky action at a distance: measure ALL plots in the entangled network!
-	# Use flood-fill to find entire connected component
+	# Model B: Single unified measurement call handles ALL cascading
+	# quantum_computer automatically:
+	# 1. Measures primary register
+	# 2. Collapses entire component (all entangled qubits)
+	# 3. Updates all register states
+	# 4. Returns single outcome
+	var result = biome.quantum_computer.measure_register(comp, register_id)
+	print("📊 Measure operation: %s collapsed to %s" % [position, result])
+
+	# For compatibility, still track which plots were in the component
+	# (This is purely for logging/visualization - quantum collapse already happened in quantum_computer)
 	var measured_ids = {plot.plot_id: true}
-	var to_check = []
 
-	# Add all direct partners to queue (from saved entanglements)
-	for entangled_id in initial_entanglements:
+	# Flood-fill through FarmGrid entanglement metadata to find component
+	# (This mirrors the quantum measurement - all plots in component are now measured)
+	var to_check = []
+	for entangled_id in plot.entangled_plots.keys():
 		to_check.append(entangled_id)
 
 	# Flood-fill through the entanglement network
 	while not to_check.is_empty():
 		var current_id = to_check.pop_front()
 
-		# Skip if already measured
+		# Skip if already processed
 		if measured_ids.has(current_id):
 			continue
 
-		# Find and measure this plot
+		# Find this plot
 		var current_pos = _find_plot_by_id(current_id)
 		if current_pos == Vector2i(-1, -1):
 			continue
@@ -1240,11 +1258,8 @@ func measure_plot(position: Vector2i) -> String:
 		if not current_plot or not current_plot.is_planted:
 			continue
 
-		# Measure it (with Icon effects)
-		if not current_plot.has_been_measured:
-			current_plot.measure(icon_network)
-			print("  ↪ Entanglement network collapsed %s!" % current_id)
-
+		# Mark as measured (quantum_computer already handled the measurement)
+		print("  ↪ Entanglement network collapsed %s (via quantum_computer)" % current_id)
 		measured_ids[current_id] = true
 
 		# Add its entangled partners to the queue
@@ -1252,9 +1267,10 @@ func measure_plot(position: Vector2i) -> String:
 			if not measured_ids.has(next_id):
 				to_check.append(next_id)
 
-	# MEASUREMENT COLLAPSES TO CLASSICAL STATE:
+	# MEASUREMENT COLLAPSES TO CLASSICAL STATE: (Model B)
 	# Break ALL entanglements for measured plots (quantum → classical transition)
 	# Measured plots become classical and no longer participate in quantum network
+	# Note: quantum_computer already handled the collapse - we only clear metadata
 	for measured_id in measured_ids.keys():
 		var measured_pos = _find_plot_by_id(measured_id)
 		if measured_pos == Vector2i(-1, -1):
@@ -1264,27 +1280,15 @@ func measure_plot(position: Vector2i) -> String:
 		if not measured_plot:
 			continue
 
-		# Clear all entanglements for this plot
+		# Clear all entanglements for this plot (FarmGrid metadata only)
 		if not measured_plot.entangled_plots.is_empty():
 			var num_broken = measured_plot.entangled_plots.size()
 			measured_plot.entangled_plots.clear()
 			print("  🔓 Measurement broke %d entanglements for %s (classical state)" % [num_broken, measured_id])
 
-	# Also clean up density matrices for broken entangled pairs
-	var pairs_to_remove = []
-	for i in range(entangled_pairs.size()):
-		var pair = entangled_pairs[i]
-		var plot1 = _get_plot_by_id(pair.qubit_a_id)
-		var plot2 = _get_plot_by_id(pair.qubit_b_id)
-
-		# Remove pair if either plot has been measured
-		if (plot1 and plot1.has_been_measured) or (plot2 and plot2.has_been_measured):
-			pairs_to_remove.append(i)
-
-	# Remove in reverse order to avoid index shifting
-	pairs_to_remove.reverse()
-	for i in pairs_to_remove:
-		entangled_pairs.remove_at(i)
+	# Note: EntangledPair objects were Model A artifacts managed via plot.quantum_state
+	# Model B: Entanglement is managed by quantum_computer via registers and components
+	# No manual pair cleanup needed
 
 	# Emit signals for visualization update (CRITICAL for visual feedback!)
 	# Measure operation changes plot state from unmeasured → measured
