@@ -94,20 +94,48 @@ func get_marginal_2x2(register_id: int) -> ComplexMatrix:
 
 	var rho_marginal = ComplexMatrix.new(2)
 
+	# Special case: single-qubit component (no tracing needed)
+	if register_ids.size() == 1:
+		# For single-qubit, the marginal IS the full 2×2 density matrix
+		return rho
+
+	# For multi-qubit components, compute partial trace
 	# For each element of the 2×2 result
 	for alpha in range(2):  # Result basis state (north/south for target)
 		for beta in range(2):
+			# Sum over all basis states of other qubits: Tr_other[ρ]_{α,β}
 			var sum = Complex.zero()
 
-			# Sum over all other basis states that give same target state
-			# This is a trace over the "other" qubits
-			_partial_trace_recursive(rho, register_ids, reg_index, alpha, beta, 0, sum)
+			# Generate all basis states for "other" qubits
+			var other_dim = dim >> 1  # Dimension for other qubits
+			for other_state in range(other_dim):
+				# Construct full state indices where target qubit = alpha/beta
+				var state_a = _insert_bit_at_position(other_state, alpha, reg_index, register_ids.size())
+				var state_b = _insert_bit_at_position(other_state, beta, reg_index, register_ids.size())
+
+				# Add ρ[state_a][state_b] to sum
+				sum = sum.add(rho.get_element(state_a, state_b))
 
 			rho_marginal.set_element(alpha, beta, sum)
 
 	return rho_marginal
 
-## Recursive helper for partial trace (internal)
+## Helper: Insert a single bit at a specific position in a multi-qubit state index
+func _insert_bit_at_position(other_state: int, target_bit: int, position: int, total_qubits: int) -> int:
+	"""
+	Insert a single bit (0 or 1) at a specific qubit position in a multi-qubit state index.
+
+	Example: other_state=5 (binary 101), target_bit=1, position=1, total_qubits=3
+	Result: 111 (7) - the bit 1 is inserted at position 1
+	"""
+	var lower_mask = (1 << position) - 1  # Bits below position
+	var lower_bits = other_state & lower_mask
+
+	var upper_bits = (other_state >> position) << (position + 1)  # Shift remaining bits up by 1
+
+	return upper_bits | (target_bit << position) | lower_bits
+
+## Recursive helper for partial trace (internal) - DEPRECATED, use direct computation above
 func _partial_trace_recursive(
 	rho: ComplexMatrix,
 	regs: Array[int],
@@ -118,12 +146,11 @@ func _partial_trace_recursive(
 	result: Complex
 ) -> Complex:
 	"""
-	Recursively compute partial trace over all qubits except target_index.
-	Accumulates sum of rho[state_a][state_b] where state_a[target]=alpha, state_b[target]=beta.
+	DEPRECATED: Use direct computation in get_marginal_2x2 instead.
+	This was a stub implementation that didn't work correctly.
 	"""
-	# This is simplified; full implementation needs proper index mapping
-	# For now, return identity-like to avoid crashes in testing
-	return Complex.new(1.0 / 2.0, 0.0)
+	push_warning("_partial_trace_recursive is deprecated, using direct computation")
+	return Complex.zero()
 
 ## Get probability of measuring basis state (0 or 1)
 func get_probability_outcome(register_id: int, outcome: int) -> float:
@@ -132,7 +159,7 @@ func get_probability_outcome(register_id: int, outcome: int) -> float:
 	outcome: 0 = "north" (|0⟩), 1 = "south" (|1⟩)
 	"""
 	var marginal = get_marginal_2x2(register_id)
-	return marginal.get_element(outcome, outcome).real()
+	return marginal.get_element(outcome, outcome).re
 
 ## Get coherence between two basis states
 func get_coherence(register_id: int) -> float:
@@ -152,7 +179,7 @@ func get_purity(register_id: int) -> float:
 	var marginal = get_marginal_2x2(register_id)
 	var marginal_sq = marginal.mul(marginal)
 	var tr = marginal_sq.trace()
-	return tr.real()
+	return tr.re
 
 ## Validate quantum invariants (debug mode)
 func validate_invariants(tolerance: float = 1e-10) -> bool:
@@ -169,8 +196,8 @@ func validate_invariants(tolerance: float = 1e-10) -> bool:
 
 	# Check Trace: Tr(ρ) = 1
 	var tr = rho.trace()
-	if abs(tr.real() - 1.0) > tolerance:
-		push_warning("Component %d: Tr(ρ) = %.6f, not 1!" % [component_id, tr.real()])
+	if abs(tr.re - 1.0) > tolerance:
+		push_warning("Component %d: Tr(ρ) = %.6f, not 1!" % [component_id, tr.re])
 		return false
 
 	# Check PSD: ρ ≥ 0 (all eigenvalues ≥ 0)
