@@ -316,7 +316,6 @@ func harvest() -> Dictionary:
 func collapse_to_measurement(outcome: String) -> void:
 	"""Collapse quantum state based on measurement outcome (Model B version)"""
 	# Model B: Measurement collapse is handled by parent biome's quantum computer
-	theta_frozen = true
 	has_been_measured = true
 	measured_outcome = outcome
 	state_collapsed.emit(outcome)
@@ -328,7 +327,6 @@ func reset() -> void:
 	NOTE: persistent_gates is NOT cleared - infrastructure survives harvest."""
 	is_planted = false
 	has_been_measured = false
-	theta_frozen = false
 	measured_outcome = ""
 	# Model B: quantum_state is owned by parent_biome.quantum_computer, not by plot
 	register_id = -1  # Clear quantum computer register

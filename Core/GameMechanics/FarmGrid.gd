@@ -663,7 +663,7 @@ func plant(position: Vector2i, plant_type: String, quantum_state: Resource = nul
 	# After plot.plant() succeeds, sync FarmGrid's register tracking
 	if plot.register_id >= 0:
 		plot_register_mapping[position] = plot.register_id
-		var plot_biome = get_biome_for_plot(position)
+		plot_biome = get_biome_for_plot(position)
 		if plot_biome and plot_biome.has_method("quantum_computer"):
 			plot_to_biome_quantum_computer[position] = plot_biome.quantum_computer
 
