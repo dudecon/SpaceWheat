@@ -1131,7 +1131,9 @@ func harvest_with_topology(position: Vector2i, local_radius: int = 2) -> Diction
 			measurement_result = plot.north_emoji  # Default to north state
 
 	# 5. Calculate base yield from growth
-	var growth_factor = plot.growth_progress  # 0.0 to 1.0
+	# Note: growth_progress was deprecated in Model B
+	# Using constant base yield for now (plots are harvested immediately upon measurement)
+	var growth_factor = 1.0  # Model B: plots grow instantly, no time-based progression
 	var base_yield = 10.0 * growth_factor
 
 	# 6. Quantum state modifier
