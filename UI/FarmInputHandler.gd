@@ -837,439 +837,89 @@ func _action_remove_gates(positions: Array[Vector2i]):
 ## Tool 4 (BIOME EVOLUTION CONTROLLER) - Research-Grade Actions
 
 func _action_boost_coupling(positions: Array[Vector2i]):
-	"""Boost Hamiltonian coupling between emojis → faster coherent oscillations
-
-	Physics: Increases H[i,j] coupling strength
-	Effect: Natural dynamics happen faster (e.g., wheat → bread)
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("boost_coupling", false, "⚠️  Farm not loaded yet")
-		return
-
-	print("⚡ Boosting Hamiltonian coupling for %d positions..." % positions.size())
-
-	# For simplicity, boost coupling between plot's north and south emojis
-	var success_count = 0
-	var boost_factor = 1.5  # 50% faster evolution
-
-	for pos in positions:
-		var plot = farm.grid.get_plot(pos)
-		if not plot or not plot.quantum_state:
-			continue
-
-		# Get biome for this position
-		var biome = _get_biome_for_position(pos)
-		if not biome:
-			print("  ⚠️  No biome at %s" % pos)
-			continue
-
-		var emoji_a = plot.quantum_state.north_emoji
-		var emoji_b = plot.quantum_state.south_emoji
-
-		# Boost coupling in biome
-		if biome.boost_hamiltonian_coupling(emoji_a, emoji_b, boost_factor):
-			success_count += 1
-
-	action_performed.emit("boost_coupling", success_count > 0,
-		"✅ Boosted coupling at %d plots (×%.1f)" % [success_count, boost_factor])
+	"""Boost Hamiltonian coupling (Model B: disabled)"""
+	action_performed.emit("boost_coupling", false,
+		"⚠️  Hamiltonian coupling not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_tune_decoherence(positions: Array[Vector2i]):
-	"""Tune Lindblad decoherence rates → control purity
-
-	Physics: Modifies γ in Lindblad operators
-	Effect: Lower γ → higher purity → better harvest yield
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("tune_decoherence", false, "⚠️  Farm not loaded yet")
-		return
-
-	print("🌊 Tuning decoherence rates for %d positions..." % positions.size())
-
-	# Resource cost: 10 wheat credits per plot
-	# Maintaining quantum purity requires energy investment!
-	var cost_per_plot = 10
-	var total_cost = positions.size() * cost_per_plot
-
-	# Check if player can afford
-	if not farm.economy or not farm.economy.can_afford_resource("🌾", total_cost):
-		var available = 0
-		if farm.economy:
-			available = farm.economy.emoji_credits.get("🌾", 0)
-		print("  ❌ Insufficient wheat! Need %d, have %d" % [total_cost, available])
-		action_performed.emit("tune_decoherence", false,
-			"❌ Need %d 🌾 wheat (have %d)" % [total_cost, available])
-		return
-
-	# Spend resources
-	if not farm.economy.remove_resource("🌾", total_cost, "Tune decoherence"):
-		print("  ❌ Failed to spend resources")
-		action_performed.emit("tune_decoherence", false, "❌ Payment failed")
-		return
-
-	print("  💰 Spent %d wheat credits" % total_cost)
-
-	# Reduce decoherence → maintain purity
-	var success_count = 0
-	var rate_factor = 0.7  # Reduce decoherence by 30%
-
-	for pos in positions:
-		var plot = farm.grid.get_plot(pos)
-		if not plot or not plot.quantum_state:
-			continue
-
-		# Get biome for this position
-		var biome = _get_biome_for_position(pos)
-		if not biome:
-			print("  ⚠️  No biome at %s" % pos)
-			continue
-
-		var source = plot.quantum_state.north_emoji
-		var target = plot.quantum_state.south_emoji
-
-		# Tune Lindblad rate for this transition
-		# Try both directions (source→target and target→source)
-		var tuned = false
-		if biome.tune_lindblad_rate(source, target, rate_factor):
-			tuned = true
-		if biome.tune_lindblad_rate(target, source, rate_factor):
-			tuned = true
-
-		if tuned:
-			success_count += 1
-
-	action_performed.emit("tune_decoherence", success_count > 0,
-		"✅ Reduced decoherence at %d plots (×%.1f) | Cost: %d🌾" % [success_count, rate_factor, total_cost])
+	"""Tune Lindblad decoherence rates (Model B: disabled)"""
+	action_performed.emit("tune_decoherence", false,
+		"⚠️  Decoherence tuning not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_add_driver(positions: Array[Vector2i]):
-	"""Add time-dependent driving field → resonant control
-
-	Physics: H_drive(t) = A·cos(ωt + φ)
-	Effect: Selective amplification at resonant frequency
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("add_driver", false, "⚠️  Farm not loaded yet")
-		return
-
-	print("📡 Adding resonant driver for %d positions..." % positions.size())
-
-	# Add moderate resonant drive
-	var success_count = 0
-	var frequency = 0.5  # Angular frequency (rad/s)
-	var amplitude = 0.1  # Drive strength
-
-	for pos in positions:
-		var plot = farm.grid.get_plot(pos)
-		if not plot or not plot.quantum_state:
-			continue
-
-		# Get biome for this position
-		var biome = _get_biome_for_position(pos)
-		if not biome:
-			print("  ⚠️  No biome at %s" % pos)
-			continue
-
-		# Drive the south emoji (excited state)
-		var target_emoji = plot.quantum_state.south_emoji
-
-		if biome.add_time_driver(target_emoji, frequency, amplitude):
-			success_count += 1
-
-	action_performed.emit("add_driver", success_count > 0,
-		"✅ Added driver at %d plots (ω=%.2f)" % [success_count, frequency])
+	"""Add time-dependent driving field (Model B: disabled)"""
+	action_performed.emit("add_driver", false,
+		"⚠️  Resonant driving not functional in Model B (requires quantum_computer refactor)")
 
 
 ## DEPRECATED: Old fake physics methods (kept for backwards compatibility)
 
 func _action_inject_energy(positions: Array[Vector2i]):
-	"""DEPRECATED: Use boost_coupling instead"""
-	push_warning("inject_energy deprecated - use boost_coupling for real physics")
-	_action_boost_coupling(positions)
+	"""Inject energy into plots (Model B: disabled)"""
+	action_performed.emit("inject_energy", false,
+		"⚠️  Energy injection not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_drain_energy(positions: Array[Vector2i]):
-	"""DEPRECATED: Use tune_decoherence instead"""
-	push_warning("drain_energy deprecated - use tune_decoherence for real physics")
-	_action_tune_decoherence(positions)
+	"""Drain energy from plots (Model B: disabled)"""
+	action_performed.emit("drain_energy", false,
+		"⚠️  Energy draining not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_place_energy_tap(positions: Array[Vector2i]):
-	"""Place constant energy drain taps on selected plots"""
-	if not farm or not farm.grid:
-		action_performed.emit("place_energy_tap", false, "⚠️  Farm not loaded yet")
-		return
-
-	print("🚰 Placing energy taps on %d plots..." % positions.size())
-
-	# Get available emojis from vocabulary discovery system
-	var available_emojis = farm.grid.get_available_tap_emojis()
-	if available_emojis.is_empty():
-		action_performed.emit("place_energy_tap", false, "⚠️  No emojis discovered yet. Grow crops to discover vocabulary.")
-		return
-
-	# Use first available emoji (future: could add UI selector)
-	var target_emoji = available_emojis[0]
-	print("  🎯 Target emoji: %s (from %d discovered)" % [target_emoji, available_emojis.size()])
-
-	var success_count = 0
-	for pos in positions:
-		if farm.grid.plant_energy_tap(pos, target_emoji):
-			success_count += 1
-			print("  ⚡ Placed energy tap at %s targeting %s" % [pos, target_emoji])
-		else:
-			print("  ❌ Failed to place tap at %s (plot occupied or invalid)" % pos)
-
-	action_performed.emit("place_energy_tap", success_count > 0,
-		"✅ Placed %d energy taps targeting %s" % [success_count, target_emoji] if success_count > 0 else "❌ No taps placed")
+	"""Place energy drain taps (Model B: disabled)"""
+	action_performed.emit("place_energy_tap", false,
+		"⚠️  Energy taps not functional in Model B (requires quantum_computer refactor)")
 
 
 ## NEW Tool 5 (GATES) Actions - INSTANTANEOUS SINGLE-QUBIT
 
 func _action_apply_pauli_x(positions: Array[Vector2i]):
-	"""Apply Pauli-X gate (bit flip) to selected plots - INSTANTANEOUS.
-
-	Flips the qubit state: |0⟩ → |1⟩, |1⟩ → |0⟩
-	Proper unitary: ρ' = XρX† where X = [[0,1],[1,0]]
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("apply_pauli_x", false, "⚠️  Farm not loaded yet")
-		return
-
-	print("↔️ Applying Pauli-X (bit flip) to %d plots..." % positions.size())
-
-	var success_count = 0
-	for pos in positions:
-		var plot = farm.grid.get_plot(pos)
-		if plot and plot.quantum_state and plot.quantum_state.bath:
-			var bath = plot.quantum_state.bath
-			var north = plot.quantum_state.north_emoji
-			var south = plot.quantum_state.south_emoji
-			var X = bath.get_standard_gate("X")
-			bath.apply_unitary_1q(north, south, X)
-			success_count += 1
-			print("  ↔️ Applied Pauli-X at %s (%s ↔ %s)" % [pos, north, south])
-
-	action_performed.emit("apply_pauli_x", success_count > 0,
-		"✅ Applied Pauli-X to %d qubits" % success_count)
+	"""Apply Pauli-X gate (Model B: disabled)"""
+	action_performed.emit("apply_pauli_x", false,
+		"⚠️  Quantum gates not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_apply_hadamard(positions: Array[Vector2i]):
-	"""Apply Hadamard gate (superposition) to selected plots - INSTANTANEOUS.
-
-	Creates equal superposition from basis states:
-	|0⟩ → (|0⟩ + |1⟩)/√2, |1⟩ → (|0⟩ - |1⟩)/√2
-	Proper unitary: ρ' = HρH† where H = (1/√2)[[1,1],[1,-1]]
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("apply_hadamard", false, "⚠️  Farm not loaded yet")
-		return
-
-	print("🌀 Applying Hadamard (superposition) to %d plots..." % positions.size())
-
-	var success_count = 0
-	for pos in positions:
-		var plot = farm.grid.get_plot(pos)
-		if plot and plot.quantum_state and plot.quantum_state.bath:
-			var bath = plot.quantum_state.bath
-			var north = plot.quantum_state.north_emoji
-			var south = plot.quantum_state.south_emoji
-			var H = bath.get_standard_gate("H")
-			bath.apply_unitary_1q(north, south, H)
-			success_count += 1
-			print("  🌀 Applied Hadamard at %s (%s ↔ %s)" % [pos, north, south])
-
-	action_performed.emit("apply_hadamard", success_count > 0,
-		"✅ Applied Hadamard to %d qubits" % success_count)
+	"""Apply Hadamard gate (Model B: disabled)"""
+	action_performed.emit("apply_hadamard", false,
+		"⚠️  Quantum gates not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_apply_pauli_z(positions: Array[Vector2i]):
-	"""Apply Pauli-Z gate (phase flip) to selected plots - INSTANTANEOUS.
-
-	Applies a phase flip: |0⟩ → |0⟩, |1⟩ → -|1⟩
-	Proper unitary: ρ' = ZρZ† where Z = [[1,0],[0,-1]]
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("apply_pauli_z", false, "⚠️  Farm not loaded yet")
-		return
-
-	print("⚡ Applying Pauli-Z (phase flip) to %d plots..." % positions.size())
-
-	var success_count = 0
-	for pos in positions:
-		var plot = farm.grid.get_plot(pos)
-		if plot and plot.quantum_state and plot.quantum_state.bath:
-			var bath = plot.quantum_state.bath
-			var north = plot.quantum_state.north_emoji
-			var south = plot.quantum_state.south_emoji
-			var Z = bath.get_standard_gate("Z")
-			bath.apply_unitary_1q(north, south, Z)
-			success_count += 1
-			print("  ⚡ Applied Pauli-Z at %s (%s ↔ %s)" % [pos, north, south])
-
-	action_performed.emit("apply_pauli_z", success_count > 0,
-		"✅ Applied Pauli-Z to %d qubits" % success_count)
+	"""Apply Pauli-Z gate (Model B: disabled)"""
+	action_performed.emit("apply_pauli_z", false,
+		"⚠️  Quantum gates not functional in Model B (requires quantum_computer refactor)")
 
 
 ## NEW Tool 4 (ENERGY) - Energy Tap with specific emoji target
 
 func _action_place_energy_tap_for(positions: Array[Vector2i], target_emoji: String):
-	"""Place energy tap targeting a specific emoji"""
-	if not farm or not farm.grid:
-		action_performed.emit("place_energy_tap", false, "⚠️  Farm not loaded yet")
-		return
-
-	print("🚰 Placing energy taps targeting %s on %d plots..." % [target_emoji, positions.size()])
-
-	var success_count = 0
-	for pos in positions:
-		if farm.grid.plant_energy_tap(pos, target_emoji):
-			success_count += 1
-			print("  ⚡ Placed energy tap at %s targeting %s" % [pos, target_emoji])
-		else:
-			print("  ❌ Failed to place tap at %s (plot occupied or invalid)" % pos)
-
-	action_performed.emit("place_energy_tap", success_count > 0,
-		"✅ Placed %d energy taps targeting %s" % [success_count, target_emoji] if success_count > 0 else "❌ No taps placed")
+	"""Place energy tap targeting specific emoji (Model B: disabled)"""
+	action_performed.emit("place_energy_tap", false,
+		"⚠️  Energy taps not functional in Model B (requires quantum_computer refactor)")
 
 
 ## NEW Tool 5 (GATES) - Two-Qubit Gates
 
 func _action_apply_cnot(positions: Array[Vector2i]):
-	"""Apply CNOT (Controlled-NOT) gate to pairs of selected plots.
-
-	First plot is control, second is target.
-	Proper unitary on 4D subspace: CNOT|10⟩ = |11⟩, CNOT|11⟩ = |10⟩
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("apply_cnot", false, "⚠️  Farm not loaded yet")
-		return
-
-	if positions.size() < 2:
-		action_performed.emit("apply_cnot", false, "⚠️  CNOT requires at least 2 plots (control, target)")
-		return
-
-	print("⊕ Applying CNOT gate (control: %s → target: %s)..." % [positions[0], positions[1]])
-
-	var control_plot = farm.grid.get_plot(positions[0])
-	var target_plot = farm.grid.get_plot(positions[1])
-
-	if not control_plot or not control_plot.quantum_state or not control_plot.quantum_state.bath:
-		action_performed.emit("apply_cnot", false, "⚠️  Control plot has no quantum state")
-		return
-	if not target_plot or not target_plot.quantum_state or not target_plot.quantum_state.bath:
-		action_performed.emit("apply_cnot", false, "⚠️  Target plot has no quantum state")
-		return
-
-	# Verify both plots share the same bath (same biome)
-	if control_plot.quantum_state.bath != target_plot.quantum_state.bath:
-		action_performed.emit("apply_cnot", false, "⚠️  Plots must be in same biome for 2Q gates")
-		return
-
-	# Get bath and emojis for 4D subspace
-	var bath = control_plot.quantum_state.bath
-	var n1 = control_plot.quantum_state.north_emoji
-	var s1 = control_plot.quantum_state.south_emoji
-	var n2 = target_plot.quantum_state.north_emoji
-	var s2 = target_plot.quantum_state.south_emoji
-
-	# Apply proper 4×4 CNOT unitary
-	var CNOT = bath.get_standard_gate("CNOT")
-	bath.apply_unitary_2q(n1, s1, n2, s2, CNOT)
-
-	print("  ⊕ Applied CNOT: (%s,%s) ⊗ (%s,%s)" % [n1, s1, n2, s2])
-	action_performed.emit("apply_cnot", true, "✅ Applied CNOT: %s → %s" % [positions[0], positions[1]])
+	"""Apply CNOT gate (Model B: disabled)"""
+	action_performed.emit("apply_cnot", false,
+		"⚠️  Quantum gates not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_apply_cz(positions: Array[Vector2i]):
-	"""Apply CZ (Controlled-Z) gate to pairs of selected plots.
-
-	Proper unitary on 4D subspace: CZ = diag(1, 1, 1, -1)
-	Adds phase -1 when both qubits are |1⟩
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("apply_cz", false, "⚠️  Farm not loaded yet")
-		return
-
-	if positions.size() < 2:
-		action_performed.emit("apply_cz", false, "⚠️  CZ requires at least 2 plots")
-		return
-
-	print("⚡ Applying CZ gate to %s and %s..." % [positions[0], positions[1]])
-
-	var plot_a = farm.grid.get_plot(positions[0])
-	var plot_b = farm.grid.get_plot(positions[1])
-
-	if not plot_a or not plot_a.quantum_state or not plot_a.quantum_state.bath:
-		action_performed.emit("apply_cz", false, "⚠️  First plot has no quantum state")
-		return
-	if not plot_b or not plot_b.quantum_state or not plot_b.quantum_state.bath:
-		action_performed.emit("apply_cz", false, "⚠️  Second plot has no quantum state")
-		return
-
-	# Verify both plots share the same bath
-	if plot_a.quantum_state.bath != plot_b.quantum_state.bath:
-		action_performed.emit("apply_cz", false, "⚠️  Plots must be in same biome for 2Q gates")
-		return
-
-	# Get bath and emojis for 4D subspace
-	var bath = plot_a.quantum_state.bath
-	var n1 = plot_a.quantum_state.north_emoji
-	var s1 = plot_a.quantum_state.south_emoji
-	var n2 = plot_b.quantum_state.north_emoji
-	var s2 = plot_b.quantum_state.south_emoji
-
-	# Apply proper 4×4 CZ unitary
-	var CZ = bath.get_standard_gate("CZ")
-	bath.apply_unitary_2q(n1, s1, n2, s2, CZ)
-
-	print("  ⚡ Applied CZ: (%s,%s) ⊗ (%s,%s)" % [n1, s1, n2, s2])
-	action_performed.emit("apply_cz", true, "✅ Applied CZ to %s ↔ %s" % [positions[0], positions[1]])
+	"""Apply CZ gate (Model B: disabled)"""
+	action_performed.emit("apply_cz", false,
+		"⚠️  Quantum gates not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_apply_swap(positions: Array[Vector2i]):
-	"""Apply SWAP gate - exchange quantum states between two plots.
-
-	Proper unitary on 4D subspace: SWAP|01⟩ = |10⟩, SWAP|10⟩ = |01⟩
-	"""
-	if not farm or not farm.grid:
-		action_performed.emit("apply_swap", false, "⚠️  Farm not loaded yet")
-		return
-
-	if positions.size() < 2:
-		action_performed.emit("apply_swap", false, "⚠️  SWAP requires at least 2 plots")
-		return
-
-	print("⇄ Applying SWAP gate to %s and %s..." % [positions[0], positions[1]])
-
-	var plot_a = farm.grid.get_plot(positions[0])
-	var plot_b = farm.grid.get_plot(positions[1])
-
-	if not plot_a or not plot_a.quantum_state or not plot_a.quantum_state.bath:
-		action_performed.emit("apply_swap", false, "⚠️  First plot has no quantum state")
-		return
-	if not plot_b or not plot_b.quantum_state or not plot_b.quantum_state.bath:
-		action_performed.emit("apply_swap", false, "⚠️  Second plot has no quantum state")
-		return
-
-	# Verify both plots share the same bath
-	if plot_a.quantum_state.bath != plot_b.quantum_state.bath:
-		action_performed.emit("apply_swap", false, "⚠️  Plots must be in same biome for 2Q gates")
-		return
-
-	# Get bath and emojis for 4D subspace
-	var bath = plot_a.quantum_state.bath
-	var n1 = plot_a.quantum_state.north_emoji
-	var s1 = plot_a.quantum_state.south_emoji
-	var n2 = plot_b.quantum_state.north_emoji
-	var s2 = plot_b.quantum_state.south_emoji
-
-	# Apply proper 4×4 SWAP unitary
-	var SWAP = bath.get_standard_gate("SWAP")
-	bath.apply_unitary_2q(n1, s1, n2, s2, SWAP)
-
-	print("  ⇄ Applied SWAP: (%s,%s) ⊗ (%s,%s)" % [n1, s1, n2, s2])
-	action_performed.emit("apply_swap", true, "✅ Swapped %s ↔ %s" % [positions[0], positions[1]])
+	"""Apply SWAP gate (Model B: disabled)"""
+	action_performed.emit("apply_swap", false,
+		"⚠️  Quantum gates not functional in Model B (requires quantum_computer refactor)")
 
 
 func _extract_emoji_from_action(action: String) -> String:
@@ -1541,131 +1191,19 @@ func _get_overlay_manager():
 ## ═══════════════════════════════════════════════════════════════════════════
 
 func _action_pump_to_wheat(plots: Array[Vector2i]):
-	"""Phase 4: Pump population from sink to wheat emoji
-	
-	Invokes BiomeBase.pump_emoji() to transfer population via Lindblad pump operator.
-	Uses default parameters: source="sink", target="🌾", rate=0.1, duration=5.0
-	"""
-	if plots.is_empty():
-		print("⚠️  No plots selected for pump operation")
-		action_performed.emit("pump_to_wheat", false, "No plots")
-		return
-
-	if not farm or not farm.grid or not farm.grid.biomes:
-		print("⚠️  Farm grid not initialized")
-		action_performed.emit("pump_to_wheat", false, "Farm unavailable")
-		return
-
-	print("⚡ PUMP OPERATION: Transferring population to Wheat")
-	print("──────────────────────────────────────────────────────────────────────")
-
-	# Get first biome (simplest approach - pump to first available biome)
-	var biome_name = farm.grid.biomes.keys()[0] if farm.grid.biomes.size() > 0 else ""
-	if biome_name == "":
-		print("❌ No biomes available for pump operation")
-		action_performed.emit("pump_to_wheat", false, "No biomes")
-		return
-
-	var biome = farm.grid.biomes[biome_name]
-	if not biome:
-		print("❌ Could not access biome '%s'" % biome_name)
-		action_performed.emit("pump_to_wheat", false, "Biome access failed")
-		return
-
-	# Pump parameters (Phase 4)
-	var target_emoji = "🌾"  # Wheat
-	var pump_rate = 0.1
-	var duration = 5.0
-
-	print("   🌾 Target: Wheat (🌾)")
-	print("   ⏱️  Duration: %.1f seconds" % duration)
-	print("   📊 Rate: %.2f" % pump_rate)
-
-	# Execute pump operation
-	biome.pump_emoji("sink", target_emoji, pump_rate, duration)
-
-	print("✅ Pump operation initiated for biome '%s'" % biome_name)
-	action_performed.emit("pump_to_wheat", true, "Pumped to wheat")
+	"""Pump population to wheat (Model B: disabled)"""
+	action_performed.emit("pump_to_wheat", false,
+		"⚠️  Pumping operations not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_reset_to_pure(plots: Array[Vector2i]):
-	"""Phase 4: Reset quantum state to pure |0⟩ state
-	
-	Invokes BiomeBase.apply_reset() with alpha=1.0 to collapse to pure ground state.
-	This is a strong decoherence channel - maximally damps coherence and resets.
-	"""
-	if plots.is_empty():
-		print("⚠️  No plots selected for reset operation")
-		action_performed.emit("reset_to_pure", false, "No plots")
-		return
-
-	if not farm or not farm.grid or not farm.grid.biomes:
-		print("⚠️  Farm grid not initialized")
-		action_performed.emit("reset_to_pure", false, "Farm unavailable")
-		return
-
-	print("✨ RESET OPERATION: Collapsing to Pure State")
-	print("──────────────────────────────────────────────────────────────────────")
-
-	var biome_name = farm.grid.biomes.keys()[0] if farm.grid.biomes.size() > 0 else ""
-	if biome_name == "":
-		print("❌ No biomes available for reset operation")
-		action_performed.emit("reset_to_pure", false, "No biomes")
-		return
-
-	var biome = farm.grid.biomes[biome_name]
-	if not biome:
-		print("❌ Could not access biome '%s'" % biome_name)
-		action_performed.emit("reset_to_pure", false, "Biome access failed")
-		return
-
-	print("   🔄 Action: Reset via ρ ← |0⟩⟨0| (pure collapse)")
-	print("   🌱 All emojis collapse to ground state")
-
-	# Execute reset to pure state (alpha=1.0 means full reset, ref_state="pure")
-	biome.apply_reset(1.0, "pure")
-
-	print("✅ Reset to pure state completed for biome '%s'" % biome_name)
-	action_performed.emit("reset_to_pure", true, "Reset to pure")
+	"""Reset to pure state (Model B: disabled)"""
+	action_performed.emit("reset_to_pure", false,
+		"⚠️  Reset operations not functional in Model B (requires quantum_computer refactor)")
 
 
 func _action_reset_to_mixed(plots: Array[Vector2i]):
-	"""Phase 4: Reset quantum state to maximally mixed state
-	
-	Invokes BiomeBase.apply_reset() with alpha=1.0 and ref_state="maximally_mixed"
-	This creates complete uncertainty - all eigenstates equally probable.
-	"""
-	if plots.is_empty():
-		print("⚠️  No plots selected for reset operation")
-		action_performed.emit("reset_to_mixed", false, "No plots")
-		return
-
-	if not farm or not farm.grid or not farm.grid.biomes:
-		print("⚠️  Farm grid not initialized")
-		action_performed.emit("reset_to_mixed", false, "Farm unavailable")
-		return
-
-	print("🌈 RESET OPERATION: Collapsing to Maximally Mixed State")
-	print("──────────────────────────────────────────────────────────────────────")
-
-	var biome_name = farm.grid.biomes.keys()[0] if farm.grid.biomes.size() > 0 else ""
-	if biome_name == "":
-		print("❌ No biomes available for reset operation")
-		action_performed.emit("reset_to_mixed", false, "No biomes")
-		return
-
-	var biome = farm.grid.biomes[biome_name]
-	if not biome:
-		print("❌ Could not access biome '%s'" % biome_name)
-		action_performed.emit("reset_to_mixed", false, "Biome access failed")
-		return
-
-	print("   🔄 Action: Reset via ρ ← I/N (maximum entropy)")
-	print("   🎲 All emojis equally probable - complete uncertainty")
-
-	# Execute reset to maximally mixed state
-	biome.apply_reset(1.0, "maximally_mixed")
-
-	print("✅ Reset to maximally mixed state completed for biome '%s'" % biome_name)
-	action_performed.emit("reset_to_mixed", true, "Reset to mixed")
+	"""Reset to mixed state (Model B: disabled)"""
+	action_performed.emit("reset_to_mixed", false,
+		"⚠️  Reset operations not functional in Model B (requires quantum_computer refactor)")
 
