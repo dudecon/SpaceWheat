@@ -23,7 +23,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-z_index = 2
+z_index = -10
 mouse_filter = 2
 script = ExtResource("3_plotgrid")
 
@@ -40,7 +40,7 @@ offset_bottom = 0.0
 separation = 0
 size_flags_horizontal = 3
 size_flags_vertical = 3
-z_index = 1
+z_index = 100
 mouse_filter = 2
 self_modulate = Color(1, 1, 1, 0)
 
@@ -60,6 +60,7 @@ mouse_filter = 2
 layout_mode = 2
 size_flags_horizontal = 3
 custom_minimum_size = Vector2(0, 80)
+z_index = 500
 script = ExtResource("5_actionrow")
 
 [node name="ToolSelectionRow" type="HBoxContainer" parent="MainContainer"]

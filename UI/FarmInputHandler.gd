@@ -782,12 +782,11 @@ func _action_batch_measure(positions: Array[Vector2i]):
 	var success_count = 0
 	var outcomes = {}
 	for pos in positions:
-		var result = farm.grid.measure_plot(pos)
-		if result.has("outcome") and result["outcome"]:
+		var outcome_emoji = farm.grid.measure_plot(pos)
+		if outcome_emoji and outcome_emoji != "":
 			success_count += 1
-			var outcome = result["outcome"]
-			outcomes[outcome] = outcomes.get(outcome, 0) + 1
-			print("  📍 %s → %s" % [pos, outcome])
+			outcomes[outcome_emoji] = outcomes.get(outcome_emoji, 0) + 1
+			print("  📍 %s → %s" % [pos, outcome_emoji])
 
 	var summary = ""
 	for emoji in outcomes.keys():
@@ -1367,9 +1366,36 @@ func _action_apply_pauli_z(positions: Array[Vector2i]):
 ## NEW Tool 4 (ENERGY) - Energy Tap with specific emoji target
 
 func _action_place_energy_tap_for(positions: Array[Vector2i], target_emoji: String):
-	"""Place energy tap targeting specific emoji (Model B: disabled)"""
-	action_performed.emit("place_energy_tap", false,
-		"⚠️  Energy taps not functional in Model B (requires quantum_computer refactor)")
+	"""Place energy tap targeting specific emoji (Model B)
+
+	Creates Lindblad drain operators for the specified emoji on selected plots.
+	Drains population to sink state ⬇️ via L_drain = √κ |sink⟩⟨target⟩.
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("place_energy_tap", false, "⚠️  Farm not loaded yet")
+		return
+
+	if positions.is_empty():
+		action_performed.emit("place_energy_tap", false, "⚠️  No plots selected")
+		return
+
+	print("💧 Placing energy taps targeting %s on %d plots..." % [target_emoji, positions.size()])
+
+	var success_count = 0
+
+	for pos in positions:
+		var plot = farm.grid.get_plot(pos)
+		if not plot or not plot.is_planted:
+			continue
+
+		# Get the biome and place energy tap for target emoji
+		var biome = farm.grid.get_biome_for_plot(pos)
+		if biome and biome.place_energy_tap(target_emoji, 0.05):
+			success_count += 1
+			print("  💧 Tap on %s placed at %s" % [target_emoji, pos])
+
+	action_performed.emit("place_energy_tap", success_count > 0,
+		"%s Placed %d energy taps targeting %s" % ["✅" if success_count > 0 else "❌", success_count, target_emoji])
 
 
 ## NEW Tool 5 (GATES) - Two-Qubit Gates

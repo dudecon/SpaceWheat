@@ -57,9 +57,9 @@ func _ready() -> void:
 	print("🛁 Creating bath-first quantum visualization...")
 	quantum_viz = BathQuantumViz.new()
 
-	# Add to a CanvasLayer so Node2D renders on top of UI
+	# Add to a CanvasLayer so Node2D renders BEHIND UI
 	var viz_layer = CanvasLayer.new()
-	viz_layer.layer = 1  # Above UI layer (layer 0) - critical for touch input!
+	viz_layer.layer = -1  # BEHIND UI layer (layer 0) - biomes in back!
 	add_child(viz_layer)
 	viz_layer.add_child(quantum_viz)
 
