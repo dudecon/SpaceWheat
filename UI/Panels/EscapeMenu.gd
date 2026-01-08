@@ -35,19 +35,21 @@ func _init():
 	background.layout_mode = 1
 	add_child(background)
 
-	# Center container - use size_flags for proper centering
-	var center = CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center.layout_mode = 1
-	add_child(center)
-
-	# Menu box - will be sized parametrically when shown
+	# Menu box - Fixed size, manually centered using anchors
 	var menu_panel = PanelContainer.new()
-	# Default size (will be overridden when menu is shown)
-	menu_panel.custom_minimum_size = Vector2(400, 600)
-	center.add_child(menu_panel)
+	menu_panel.custom_minimum_size = Vector2(450, 500)
+	# Anchor to center point
+	menu_panel.anchor_left = 0.5
+	menu_panel.anchor_right = 0.5
+	menu_panel.anchor_top = 0.5
+	menu_panel.anchor_bottom = 0.5
+	# Offset by half the size to center (450x500)
+	menu_panel.offset_left = -225
+	menu_panel.offset_right = 225
+	menu_panel.offset_top = -250
+	menu_panel.offset_bottom = 250
+	menu_panel.layout_mode = 1
+	add_child(menu_panel)
 
 	menu_vbox = VBoxContainer.new()
 	menu_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -56,8 +58,8 @@ func _init():
 
 	# Title
 	var title = Label.new()
-	title.text = "PAUSED"
-	title.add_theme_font_size_override("font_size", 48)
+	title.text = "⚙️ PAUSED ⚙️"
+	title.add_theme_font_size_override("font_size", 36)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	menu_vbox.add_child(title)
 
@@ -108,24 +110,43 @@ func _init():
 func _create_menu_button(text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	# Default sizing (will be adjusted when shown)
-	btn.custom_minimum_size = Vector2(300, 60)
-	btn.add_theme_font_size_override("font_size", 24)
+	# Fixed size for 960×540 base resolution
+	btn.custom_minimum_size = Vector2(380, 55)
+	btn.add_theme_font_size_override("font_size", 20)
 
+	# FLASH GAME STYLE - Chunky borders matching quest board
 	var style = StyleBoxFlat.new()
 	style.bg_color = color
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
+	style.border_color = Color(0.7, 0.7, 0.7, 0.8)  # Brighter border
+	style.border_width_left = 4  # THICKER borders!
+	style.border_width_right = 4
+	style.border_width_top = 4
+	style.border_width_bottom = 4
+	style.corner_radius_top_left = 12  # Rounder corners
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	style.content_margin_left = 20  # MORE PADDING!
+	style.content_margin_right = 20
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
 	btn.add_theme_stylebox_override("normal", style)
 
 	var style_hover = StyleBoxFlat.new()
 	style_hover.bg_color = color.lightened(0.2)
-	style_hover.corner_radius_top_left = 8
-	style_hover.corner_radius_top_right = 8
-	style_hover.corner_radius_bottom_left = 8
-	style_hover.corner_radius_bottom_right = 8
+	style_hover.border_color = Color(0.9, 0.9, 0.9, 1.0)  # Even brighter on hover
+	style_hover.border_width_left = 4
+	style_hover.border_width_right = 4
+	style_hover.border_width_top = 4
+	style_hover.border_width_bottom = 4
+	style_hover.corner_radius_top_left = 12
+	style_hover.corner_radius_top_right = 12
+	style_hover.corner_radius_bottom_left = 12
+	style_hover.corner_radius_bottom_right = 12
+	style_hover.content_margin_left = 20
+	style_hover.content_margin_right = 20
+	style_hover.content_margin_top = 12
+	style_hover.content_margin_bottom = 12
 	btn.add_theme_stylebox_override("hover", style_hover)
 
 	return btn
@@ -225,6 +246,7 @@ func show_menu():
 	visible = true
 	selected_button_index = 0  # Reset to first button
 	_update_button_highlights()
+
 	if is_inside_tree():
 		get_tree().paused = true
 		print("📋 Menu opened - Game PAUSED")

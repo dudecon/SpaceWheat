@@ -1,0 +1,593 @@
+class_name QuantumKitchen_Biome
+extends BiomeBase
+
+## Kitchen: Icon-Based Quantum Baking
+##
+## The Kitchen is a 3-qubit quantum system represented as 8 basis states in Icon format:
+##   Basis states: |ijk⟩ where i,j,k ∈ {0,1}
+##     |000⟩ = 🔥💧💨 (hot, wet, flour) = Bread Ready
+##     |111⟩ = ❄️🏜️🌾 (cold, dry, grain) = Ground State
+##     ... 6 intermediate states
+##
+## Each basis state is an "emoji" in the Icon system (multi-character labels).
+##
+## Dynamics (Icon-Based):
+##   1. Player spends credits → updates Icon.lindblad_outgoing rates for single-qubit drives
+##   2. Drives push population: ❄️→🔥, 🏜️→💧, 🌾→💨 (4 Icon transitions each)
+##   3. Sweet spot Hamiltonian: Icon coupling |000⟩ ↔ |111⟩ (strength varies with detuning)
+##   4. Natural decay: All states decay toward |111⟩ via Icon.decay_target
+##   5. Harvest = measurement → collapses to one basis state → 🍞 if close to |000⟩
+##
+## Key Insight: 🍞 is NOT a basis state. It's the outcome when measurement finds |000⟩.
+
+# ------------------------------------------------------------------------------
+# STATE
+# ------------------------------------------------------------------------------
+
+# Drive strength tracking (for UI display)
+var fire_drive_strength: float = 0.0
+var water_drive_strength: float = 0.0
+var flour_drive_strength: float = 0.0
+
+# Ideal conditions (the "sweet spot")
+const IDEAL_FIRE = 0.7
+const IDEAL_WATER = 0.5
+const IDEAL_FLOUR = 0.6
+
+# Physics constants
+const COUPLING_OMEGA = 0.15  # |111⟩ ↔ |000⟩ coupling strength
+const DRIVE_RATE = 0.5       # Lindblad drive rate
+const DECAY_RATE = 0.05      # Natural decay toward |111⟩
+
+# ------------------------------------------------------------------------------
+# INITIALIZATION
+# ------------------------------------------------------------------------------
+
+func _ready():
+	super._ready()
+
+	# Visual properties for BiomeBase
+	visual_color = Color(0.9, 0.7, 0.4, 0.3)  # Warm bread color
+	visual_label = "🍳 Kitchen"
+	visual_center_offset = Vector2(0.0, -0.8)  # Top-center
+	visual_oval_width = 220.0
+	visual_oval_height = 140.0
+
+	# Register emoji pairings for visualization
+	register_emoji_pair("🔥", "❄️")  # Temperature axis
+	register_emoji_pair("💧", "🏜️")  # Moisture axis
+	register_emoji_pair("💨", "🌾")  # Substance axis
+
+	print("  ✅ QuantumKitchen (Model C): 3-qubit analog system ready")
+
+
+func _initialize_bath() -> void:
+	"""Override BiomeBase: Initialize quantum kitchen using Icon-based QuantumBath.
+
+	Kitchen uses 8 basis states (3 qubits = 2^3):
+	  |000⟩ = 🔥💧💨 (hot, wet, flour) = Bread Ready
+	  |111⟩ = ❄️🏜️🌾 (cold, dry, grain) = Ground State
+	  ... 6 intermediate states
+	"""
+	print("🍳 Initializing Kitchen quantum bath...")
+
+	# Get IconRegistry
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		push_error("🍳 IconRegistry not available!")
+		return
+
+	# Create Icons for all 8 basis states
+	var icons = _create_kitchen_icons()
+
+	# Register Icons
+	for icon in icons:
+		icon_registry.register_icon(icon)
+		print("  📝 Registered Icon: %s" % icon.emoji)
+
+	# Create QuantumBath with 8 basis states
+	bath = QuantumBath.new()
+	var basis_labels = [
+		"🔥💧💨",  # |000⟩ - bread ready
+		"🔥💧🌾",  # |001⟩
+		"🔥🏜️💨",  # |010⟩
+		"🔥🏜️🌾",  # |011⟩
+		"❄️💧💨",  # |100⟩
+		"❄️💧🌾",  # |101⟩
+		"❄️🏜️💨",  # |110⟩
+		"❄️🏜️🌾",  # |111⟩ - ground state
+	]
+	bath.initialize_with_emojis(basis_labels)
+
+	# Start in ground state |111⟩
+	bath.initialize_weighted({"❄️🏜️🌾": 1.0})
+
+	# Build operators from Icons
+	bath.active_icons = icons
+	bath.build_hamiltonian_from_icons(icons)
+	bath.build_lindblad_from_icons(icons)
+
+	print("  ✅ Kitchen initialized: 8 basis states, starting in |111⟩ (❄️🏜️🌾)")
+	print("  ✅ Hamiltonian: %d non-zero terms" % bath.hamiltonian_sparse.size())
+	print("  ✅ Lindblad: %d transfer terms" % bath.lindblad_terms.size())
+
+
+func _create_kitchen_icons() -> Array[Icon]:
+	"""Create all 8 Icons for Kitchen basis states."""
+	var icons: Array[Icon] = []
+
+	# Bread state (|000⟩) - special Hamiltonian coupling to ground
+	var bread = Icon.new()
+	bread.emoji = "🔥💧💨"
+	bread.display_name = "Bread Ready"
+	bread.hamiltonian_couplings = {"❄️🏜️🌾": COUPLING_OMEGA}
+	bread.decay_rate = DECAY_RATE
+	bread.decay_target = "❄️🏜️🌾"
+	icons.append(bread)
+
+	# Ground state (|111⟩) - symmetric coupling to bread
+	var ground = Icon.new()
+	ground.emoji = "❄️🏜️🌾"
+	ground.display_name = "Ground State"
+	ground.hamiltonian_couplings = {"🔥💧💨": COUPLING_OMEGA}
+	icons.append(ground)
+
+	# Intermediate states (6 total) - just decay to ground
+	var intermediate_states = ["🔥💧🌾", "🔥🏜️💨", "🔥🏜️🌾", "❄️💧💨", "❄️💧🌾", "❄️🏜️💨"]
+	for state in intermediate_states:
+		var icon = Icon.new()
+		icon.emoji = state
+		icon.display_name = "Kitchen State"
+		icon.decay_rate = DECAY_RATE
+		icon.decay_target = "❄️🏜️🌾"
+		icons.append(icon)
+
+	return icons
+
+
+func reset_to_ground_state() -> void:
+	"""Reset to |111⟩ after measurement."""
+	if bath:
+		bath.initialize_weighted({"❄️🏜️🌾": 1.0})
+		_clear_all_drives()
+		print("🍳 Kitchen reset to |111⟩ (❄️🏜️🌾)")
+
+# ------------------------------------------------------------------------------
+# PLAYER ACTIONS: Spend resources to activate drives
+# ------------------------------------------------------------------------------
+
+func add_fire(amount: float) -> void:
+	"""Player adds fire → activates temperature drive toward hot.
+
+	Modifies Icon lindblad_outgoing rates for ❄️ → 🔥 transitions.
+
+	Args:
+	    amount: Resource credits (controls drive strength)
+	"""
+	if amount <= 0:
+		return
+
+	var icon_registry = get_node("/root/IconRegistry")
+	if not icon_registry:
+		return
+
+	# Fire drive: ❄️ → 🔥 on qubit 0
+	# Affects 4 basis states with ❄️ in first position
+	var drive_rate = DRIVE_RATE * amount
+
+	var cold_states = ["❄️💧💨", "❄️💧🌾", "❄️🏜️💨", "❄️🏜️🌾"]
+	var hot_targets = ["🔥💧💨", "🔥💧🌾", "🔥🏜️💨", "🔥🏜️🌾"]
+
+	for i in range(4):
+		var icon = icon_registry.get_icon(cold_states[i])
+		if icon:
+			icon.lindblad_outgoing[hot_targets[i]] = drive_rate
+
+	# Rebuild Lindblad operators with updated rates
+	if bath and bath.active_icons:
+		bath.build_lindblad_from_icons(bath.active_icons)
+
+	fire_drive_strength += amount
+	print("🔥 Fire drive activated: strength=%.2f" % drive_rate)
+
+
+func add_water(amount: float) -> void:
+	"""Player adds water → activates moisture drive toward wet.
+
+	Modifies Icon lindblad_outgoing rates for 🏜️ → 💧 transitions.
+	"""
+	if amount <= 0:
+		return
+
+	var icon_registry = get_node("/root/IconRegistry")
+	if not icon_registry:
+		return
+
+	# Water drive: 🏜️ → 💧 on qubit 1
+	# Affects 4 basis states with 🏜️ in second position
+	var drive_rate = DRIVE_RATE * amount
+
+	var dry_states = ["🔥🏜️💨", "🔥🏜️🌾", "❄️🏜️💨", "❄️🏜️🌾"]
+	var wet_targets = ["🔥💧💨", "🔥💧🌾", "❄️💧💨", "❄️💧🌾"]
+
+	for i in range(4):
+		var icon = icon_registry.get_icon(dry_states[i])
+		if icon:
+			icon.lindblad_outgoing[wet_targets[i]] = drive_rate
+
+	# Rebuild Lindblad operators
+	if bath and bath.active_icons:
+		bath.build_lindblad_from_icons(bath.active_icons)
+
+	water_drive_strength += amount
+	print("💧 Water drive activated: strength=%.2f" % drive_rate)
+
+
+func add_flour(amount: float) -> void:
+	"""Player adds flour → activates substance drive toward flour.
+
+	Modifies Icon lindblad_outgoing rates for 🌾 → 💨 transitions.
+	"""
+	if amount <= 0:
+		return
+
+	var icon_registry = get_node("/root/IconRegistry")
+	if not icon_registry:
+		return
+
+	# Flour drive: 🌾 → 💨 on qubit 2
+	# Affects 4 basis states with 🌾 in third position
+	var drive_rate = DRIVE_RATE * amount
+
+	var grain_states = ["🔥💧🌾", "🔥🏜️🌾", "❄️💧🌾", "❄️🏜️🌾"]
+	var flour_targets = ["🔥💧💨", "🔥🏜️💨", "❄️💧💨", "❄️🏜️💨"]
+
+	for i in range(4):
+		var icon = icon_registry.get_icon(grain_states[i])
+		if icon:
+			icon.lindblad_outgoing[flour_targets[i]] = drive_rate
+
+	# Rebuild Lindblad operators
+	if bath and bath.active_icons:
+		bath.build_lindblad_from_icons(bath.active_icons)
+
+	flour_drive_strength += amount
+	print("💨 Flour drive activated: strength=%.2f" % drive_rate)
+
+# ------------------------------------------------------------------------------
+# POPULATION QUERIES (Marginal probabilities from bath)
+# ------------------------------------------------------------------------------
+
+func get_temperature_hot() -> float:
+	"""P(qubit 0 = |0⟩) = probability oven is hot (🔥).
+
+	Sum probabilities of all basis states with 🔥 in first position.
+	"""
+	if not bath:
+		return 0.0
+
+	var hot_states = ["🔥💧💨", "🔥💧🌾", "🔥🏜️💨", "🔥🏜️🌾"]
+	var prob = 0.0
+	for state in hot_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+func get_temperature_cold() -> float:
+	"""P(qubit 0 = |1⟩) = probability oven is cold (❄️).
+
+	Sum probabilities of all basis states with ❄️ in first position.
+	"""
+	if not bath:
+		return 1.0
+
+	var cold_states = ["❄️💧💨", "❄️💧🌾", "❄️🏜️💨", "❄️🏜️🌾"]
+	var prob = 0.0
+	for state in cold_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+func get_moisture_wet() -> float:
+	"""P(qubit 1 = |0⟩) = probability dough is wet (💧).
+
+	Sum probabilities of all basis states with 💧 in second position.
+	"""
+	if not bath:
+		return 0.0
+
+	var wet_states = ["🔥💧💨", "🔥💧🌾", "❄️💧💨", "❄️💧🌾"]
+	var prob = 0.0
+	for state in wet_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+func get_moisture_dry() -> float:
+	"""P(qubit 1 = |1⟩) = probability dough is dry (🏜️).
+
+	Sum probabilities of all basis states with 🏜️ in second position.
+	"""
+	if not bath:
+		return 1.0
+
+	var dry_states = ["🔥🏜️💨", "🔥🏜️🌾", "❄️🏜️💨", "❄️🏜️🌾"]
+	var prob = 0.0
+	for state in dry_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+func get_substance_flour() -> float:
+	"""P(qubit 2 = |0⟩) = probability substance is flour (💨).
+
+	Sum probabilities of all basis states with 💨 in third position.
+	"""
+	if not bath:
+		return 0.0
+
+	var flour_states = ["🔥💧💨", "🔥🏜️💨", "❄️💧💨", "❄️🏜️💨"]
+	var prob = 0.0
+	for state in flour_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+func get_substance_grain() -> float:
+	"""P(qubit 2 = |1⟩) = probability substance is grain (🌾).
+
+	Sum probabilities of all basis states with 🌾 in third position.
+	"""
+	if not bath:
+		return 1.0
+
+	var grain_states = ["🔥💧🌾", "🔥🏜️🌾", "❄️💧🌾", "❄️🏜️🌾"]
+	var prob = 0.0
+	for state in grain_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+func get_bread_probability() -> float:
+	"""P(|000⟩) = probability of getting bread on measurement.
+
+	THIS IS THE KEY NUMBER. When this is high, player should harvest.
+	🍞 is NOT a qubit. It's the outcome when we measure and find |000⟩ = 🔥💧💨.
+	"""
+	if not bath:
+		return 0.0
+	return bath.get_probability("🔥💧💨")
+
+
+func get_ground_probability() -> float:
+	"""P(|111⟩) = probability still in ground state."""
+	if not bath:
+		return 1.0
+	return bath.get_probability("❄️🏜️🌾")
+
+# ------------------------------------------------------------------------------
+# DETUNING (Sweet Spot Physics)
+# ------------------------------------------------------------------------------
+
+func _compute_detuning() -> float:
+	"""Compute detuning Δ based on how far from ideal conditions.
+
+	Ideal: P(🔥)≈0.7, P(💧)≈0.5, P(💨)≈0.6
+
+	Δ = 0 at sweet spot (resonance, fast rotation)
+	Δ >> 0 off resonance (rotation suppressed)
+	"""
+	var p_fire = get_temperature_hot()
+	var p_water = get_moisture_wet()
+	var p_flour = get_substance_flour()
+
+	# Sum of squared deviations
+	var d2 = 0.0
+	d2 += pow(p_fire - IDEAL_FIRE, 2)
+	d2 += pow(p_water - IDEAL_WATER, 2)
+	d2 += pow(p_flour - IDEAL_FLOUR, 2)
+
+	return sqrt(d2) * 5.0  # Scale to Hamiltonian units
+
+
+func get_effective_baking_rate() -> float:
+	"""Compute effective rotation rate Ω_eff for UI display.
+
+	Shows player how "in tune" the kitchen is.
+
+	Ω_eff = Ω / √(1 + (Δ/Ω)²)
+
+	At resonance: Ω_eff ≈ Ω (maximum)
+	Off resonance: Ω_eff → 0
+	"""
+	var delta = _compute_detuning()
+	return COUPLING_OMEGA / sqrt(1.0 + pow(delta / COUPLING_OMEGA, 2))
+
+# ------------------------------------------------------------------------------
+# PHYSICS EVOLUTION (Called every frame)
+# ------------------------------------------------------------------------------
+
+func _update_quantum_substrate(dt: float) -> void:
+	"""Override BiomeBase: Update sweet spot coupling dynamically.
+
+	With Icon-based QuantumBath, physics evolution happens automatically
+	via bath.evolve() in BiomeBase. We just need to update the Hamiltonian
+	coupling strength based on current conditions (detuning).
+	"""
+	if not bath:
+		return
+
+	# Update sweet spot coupling strength based on detuning
+	_update_sweet_spot_coupling()
+
+
+func _update_sweet_spot_coupling() -> void:
+	"""Update Hamiltonian coupling strength based on current detuning.
+
+	Sweet spot physics: When conditions are close to ideal (P(🔥)≈0.7,
+	P(💧)≈0.5, P(💨)≈0.6), the |000⟩ ↔ |111⟩ coupling is strongest.
+	"""
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		return
+
+	# Get effective coupling strength (reduced by detuning)
+	var omega_eff = get_effective_baking_rate()
+
+	# Update Icon couplings
+	var bread_icon = icon_registry.get_icon("🔥💧💨")
+	var ground_icon = icon_registry.get_icon("❄️🏜️🌾")
+
+	if bread_icon and ground_icon:
+		bread_icon.hamiltonian_couplings["❄️🏜️🌾"] = omega_eff
+		ground_icon.hamiltonian_couplings["🔥💧💨"] = omega_eff
+
+		# Rebuild Hamiltonian with updated couplings
+		if bath and bath.active_icons:
+			bath.build_hamiltonian_from_icons(bath.active_icons)
+
+
+func _clear_all_drives() -> void:
+	"""Clear all active drives (used after measurement reset)."""
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		return
+
+	# Clear fire drives (❄️ → 🔥)
+	var cold_states = ["❄️💧💨", "❄️💧🌾", "❄️🏜️💨", "❄️🏜️🌾"]
+	for state in cold_states:
+		var icon = icon_registry.get_icon(state)
+		if icon:
+			icon.lindblad_outgoing.clear()
+
+	# Clear water drives (🏜️ → 💧)
+	var dry_states = ["🔥🏜️💨", "🔥🏜️🌾", "❄️🏜️💨", "❄️🏜️🌾"]
+	for state in dry_states:
+		var icon = icon_registry.get_icon(state)
+		if icon:
+			icon.lindblad_outgoing.clear()
+
+	# Clear flour drives (🌾 → 💨)
+	var grain_states = ["🔥💧🌾", "🔥🏜️🌾", "❄️💧🌾", "❄️🏜️🌾"]
+	for state in grain_states:
+		var icon = icon_registry.get_icon(state)
+		if icon:
+			icon.lindblad_outgoing.clear()
+
+	# Rebuild Lindblad operators with cleared drives
+	if bath and bath.active_icons:
+		bath.build_lindblad_from_icons(bath.active_icons)
+
+	# Clear tracking variables
+	fire_drive_strength = 0.0
+	water_drive_strength = 0.0
+	flour_drive_strength = 0.0
+
+# ------------------------------------------------------------------------------
+# MEASUREMENT / HARVEST
+# ------------------------------------------------------------------------------
+
+func harvest() -> Dictionary:
+	"""Perform projective measurement on Kitchen state.
+
+	Measurement in computational basis:
+	  - Collapses to one of 8 basis states
+	  - P(emoji) = ρ[emoji_idx, emoji_idx]
+
+	Returns:
+	  {
+	    success: bool,
+	    got_bread: bool,
+	    outcome: String ("🍞" or "💀"),
+	    collapsed_to: String (emoji label),
+	    yield: int (bread amount)
+	  }
+	"""
+	if not bath:
+		return {"success": false, "got_bread": false, "outcome": "💀",
+		        "collapsed_to": "❄️🏜️🌾", "yield": 0}
+
+	# Perform measurement - returns emoji label
+	var outcome_emoji = bath.measure()
+
+	# Determine result based on outcome
+	var got_bread = false
+	var bread_yield = 0
+	var outcome_symbol = "💀"
+
+	if outcome_emoji == "🔥💧💨":
+		# |000⟩ = 🔥💧💨 = Perfect bread!
+		got_bread = true
+		bread_yield = 100
+		outcome_symbol = "🍞"
+		print("🍞 BREAD! Measured |000⟩ (🔥💧💨 - Hot, Wet, Flour)")
+	elif outcome_emoji in ["🔥💧🌾", "🔥🏜️💨", "❄️💧💨"]:
+		# One bit wrong - partial success
+		got_bread = true
+		bread_yield = 30
+		outcome_symbol = "🍞"
+		print("🍞 Partial bread: measured %s" % outcome_emoji)
+	else:
+		# Two or more bits wrong - failure
+		got_bread = false
+		bread_yield = 0
+		outcome_symbol = "💀"
+		print("💀 Failed bake: measured %s" % outcome_emoji)
+
+	var result = {
+		"success": true,
+		"got_bread": got_bread,
+		"outcome": outcome_symbol,
+		"collapsed_to": outcome_emoji,
+		"yield": bread_yield
+	}
+
+	# Reset for next bake
+	reset_to_ground_state()
+
+	return result
+
+
+
+# ------------------------------------------------------------------------------
+# DEBUG & STATUS (BiomeBase integration)
+# ------------------------------------------------------------------------------
+
+func get_kitchen_status() -> Dictionary:
+	"""Get current kitchen state for display."""
+	return {
+		"bread_probability": get_bread_probability(),
+		"temperature_hot": get_temperature_hot(),
+		"moisture_wet": get_moisture_wet(),
+		"substance_flour": get_substance_flour(),
+		"detuning": _compute_detuning(),
+		"baking_rate": get_effective_baking_rate(),
+		"ground_probability": get_ground_probability(),
+		"fire_drive": fire_drive_strength,
+		"water_drive": water_drive_strength,
+		"flour_drive": flour_drive_strength,
+	}
+
+
+func get_biome_type() -> String:
+	"""Return biome type identifier."""
+	return "QuantumKitchen"
+
+
+func get_paired_emoji(emoji: String) -> String:
+	"""Get the paired emoji for this biome's axis."""
+	return emoji_pairings.get(emoji, "?")
+
+
+func _process(delta: float) -> void:
+	"""Process framework."""
+	super._process(delta)
+
+	# Optional debug output
+	if OS.get_environment("DEBUG_KITCHEN") == "1":
+		print("Kitchen: P(🍞)=%.3f, Δ=%.3f, Ω_eff=%.3f, Trace=%.3f" % [
+			get_bread_probability(),
+			_compute_detuning(),
+			get_effective_baking_rate(),
+			bath.get_trace() if bath else 0.0
+		])

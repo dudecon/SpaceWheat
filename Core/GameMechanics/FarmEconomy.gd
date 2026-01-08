@@ -17,18 +17,46 @@ signal flour_sold(flour_amount: int, credits_received: int)
 # Conversion ratio: 1 quantum energy = 10 credits
 const QUANTUM_TO_CREDITS: int = 10
 
-# Initial resources in emoji-credits
+# Initial resources in emoji-credits (10 credits = 1 quantum energy unit)
 const INITIAL_RESOURCES = {
-	"🌾": 500,   # 50 wheat * 10 (agriculture)
-	"👥": 10,    # 1 labor * 10 (work)
-	"💨": 0,     # flour
-	"🌻": 0,     # flower
-	"🍄": 10,    # 1 mushroom * 10 (fungal)
-	"🍂": 10,    # 1 detritus * 10 (decay)
-	"🍅": 0,     # tomato (life/conspiracy)
-	"🌌": 0,     # cosmic chaos (entropy/void)
-	"👑": 0,     # imperium
-	"💰": 10,    # 1 legacy credit * 10 (now just another emoji)
+	# BioticFlux crops
+	"🌾": 10,    # wheat (agriculture)
+	"👥": 10,    # labor (work)
+	"🍄": 10,    # mushroom (fungal)
+	"🍂": 10,    # detritus (decay)
+	"🍅": 10,    # tomato (life/conspiracy)
+	"🌌": 10,    # cosmic chaos (entropy/void)
+	# Market commodities
+	"💨": 10,    # flour (processed grain)
+	"🍞": 10,    # bread (finished product)
+	# Kitchen ingredients
+	"🔥": 10,    # fire (heat)
+	"💧": 10,    # water (moisture)
+	"❄️": 10,    # cold (opposite of fire)
+	"🏜️": 10,    # dry (opposite of water)
+	# Forest organisms
+	"🌿": 10,    # vegetation (producer)
+	"🐇": 10,    # rabbit (herbivore)
+	"🐺": 10,    # wolf (predator)
+	# Other
+	"👑": 10,    # imperium
+	"💰": 10,    # credits (legacy)
+}
+
+## ========================================
+## Kitchen v2: Resource ID Mapping (Guardrail)
+## ========================================
+## Maps emoji strings to logical resource types for kitchen mechanics
+## Ensures same emoji in different biomes routes to same economy resource
+## Example: BioticFlux 🌾 and Kitchen 🌾 both route to RESOURCE_IDS["🌾"] = "wheat"
+const RESOURCE_IDS = {
+	"🌾": "wheat",      # Grain (produced in BioticFlux, consumed in Kitchen)
+	"💨": "flour",      # Processed grain (produced via Mill, consumed in Kitchen)
+	"🔥": "fire",       # Heat energy (tapped from Kitchen biome, consumed in Kitchen)
+	"💧": "water",      # Moisture (tapped from Forest biome, consumed in Kitchen)
+	"🍞": "bread",      # Finished product (measurement outcome of Kitchen)
+	"❄️": "cold",       # Opposite of fire
+	"🏜️": "dry",        # Opposite of water
 }
 
 # Unified emoji-credits dictionary - THE source of truth
@@ -205,40 +233,6 @@ func process_wheat_to_flour(wheat_amount: int) -> Dictionary:
 		"wheat_used": wheat_amount
 	}
 
-
-func sell_flour_at_market(flour_amount: int) -> Dictionary:
-	"""Sell flour at the market
-
-	Market pricing: 100 💰 gross per flour, market takes 20%
-	Farmer gets 80 💰 per flour
-	"""
-	var flour_credits = flour_amount * QUANTUM_TO_CREDITS
-
-	if not can_afford_resource("💨", flour_credits):
-		purchase_failed.emit("Not enough flour to sell! Need %d, have %d" % [flour_amount, get_resource_units("💨")])
-		return {"success": false, "flour_sold": 0, "credits_received": 0, "market_margin": 0}
-
-	# Remove flour
-	remove_resource("💨", flour_credits, "market_sale")
-
-	# Market economics: 100 💰 per flour gross, 20% margin to market
-	var flour_price_gross = flour_amount * 100
-	var market_cut = int(flour_price_gross * 0.20)
-	var farmer_cut = flour_price_gross - market_cut
-
-	# Add 💰 from market sale
-	add_resource("💰", farmer_cut * QUANTUM_TO_CREDITS, "market_sale")
-
-	flour_sold.emit(flour_amount, farmer_cut)
-
-	print("💰 Sold %d flour → %d 💰 (market took %d)" % [flour_amount, farmer_cut, market_cut])
-
-	return {
-		"success": true,
-		"flour_sold": flour_amount,
-		"credits_received": farmer_cut,
-		"market_margin": market_cut
-	}
 
 
 func process_flour_to_bread(flour_amount: int) -> Dictionary:

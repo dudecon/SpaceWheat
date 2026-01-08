@@ -4,7 +4,7 @@ extends SceneTree
 ## Test vocabulary reward system
 ## Verifies that completing quests teaches new vocabulary from faction signatures
 
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const QuestRewards = preload("res://Core/Quests/QuestRewards.gd")
 const QuestTheming = preload("res://Core/Quests/QuestTheming.gd")
 const QuantumBath = preload("res://Core/QuantumSubstrate/QuantumBath.gd")

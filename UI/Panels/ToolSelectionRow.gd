@@ -27,6 +27,9 @@ signal tool_selected(tool_num: int)
 
 
 func _ready():
+	# Z-index: ActionBarLayer(50) + 5 = 55 total, below quest(100)
+	z_index = 5
+
 	# Container setup
 	# Note: Don't use anchors in container children - let parent handle layout
 	# Increased separation and padding for touch-friendly appearance
@@ -37,8 +40,8 @@ func _ready():
 	add_theme_constant_override("margin_bottom", 8)  # Bottom padding
 	# CRITICAL: Don't set alignment here - let buttons' size_flags_horizontal handle distribution
 
-	# Ensure buttons don't block keyboard input
-	mouse_filter = MOUSE_FILTER_IGNORE
+	# Allow keyboard input to pass through, but buttons can still receive clicks
+	mouse_filter = MOUSE_FILTER_PASS
 	# Toolbar stretches to fill full width
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
@@ -114,17 +117,45 @@ func _update_tool_visual(tool_num: int) -> void:
 
 	current_tool = tool_num
 
-	# Update all button colors
+	# Update all button styleboxes (not modulate - styleboxes override it)
 	for i in range(tool_buttons.size()):
 		var button = tool_buttons[i]
 		var tool_idx = i + 1
 
-		if tool_idx == tool_num:
-			# Selected tool: bright cyan
-			button.modulate = selected_color
+		# CRITICAL: Must update ALL states (normal, hover, pressed) or selection disappears on interaction
+		var is_selected = (tool_idx == tool_num)
+
+		# Normal state
+		var old_normal = button.get_theme_stylebox("normal")
+		var stylebox_normal = old_normal.duplicate() if old_normal else StyleBoxFlat.new()
+		if is_selected:
+			stylebox_normal.bg_color = Color(0.0, 0.8, 0.8)
+			stylebox_normal.border_color = Color(0.0, 1.0, 1.0)
 		else:
-			# Unselected: normal gray
-			button.modulate = normal_color
+			stylebox_normal.bg_color = Color(0.4, 0.4, 0.4)
+			stylebox_normal.border_color = Color(0.8, 0.8, 0.8)
+		button.add_theme_stylebox_override("normal", stylebox_normal)
+
+		# Hover state (lighter than normal)
+		var stylebox_hover = stylebox_normal.duplicate()
+		if is_selected:
+			stylebox_hover.bg_color = Color(0.2, 1.0, 1.0)  # Brighter cyan
+		else:
+			stylebox_hover.bg_color = Color(0.6, 0.6, 0.6)  # Light gray
+		button.add_theme_stylebox_override("hover", stylebox_hover)
+
+		# Pressed state (darker than normal)
+		var stylebox_pressed = stylebox_normal.duplicate()
+		if is_selected:
+			stylebox_pressed.bg_color = Color(0.0, 0.6, 0.6)  # Darker cyan
+			stylebox_pressed.border_color = Color(0.0, 0.8, 0.8)
+		else:
+			stylebox_pressed.bg_color = Color(0.2, 0.2, 0.2)  # Dark gray
+			stylebox_pressed.border_color = Color(0.4, 0.4, 0.4)
+		button.add_theme_stylebox_override("pressed", stylebox_pressed)
+
+		# CRITICAL: Force visual update
+		button.queue_redraw()
 
 
 func set_tool_enabled(tool_num: int, enabled: bool) -> void:
@@ -136,7 +167,16 @@ func set_tool_enabled(tool_num: int, enabled: bool) -> void:
 	button.disabled = not enabled
 
 	if not enabled:
-		button.modulate = disabled_color
+		# Update stylebox for disabled state - MUST duplicate!
+		var old_stylebox = button.get_theme_stylebox("normal")
+		if old_stylebox:
+			var stylebox = old_stylebox.duplicate()
+			stylebox.bg_color = Color(0.2, 0.2, 0.2)  # Dark gray
+			stylebox.border_color = Color(0.4, 0.4, 0.4)  # Darker border
+			button.add_theme_stylebox_override("normal", stylebox)
+	else:
+		# Re-apply current tool selection styling
+		_update_tool_visual(current_tool)
 
 
 func set_layout_manager(mgr) -> void:

@@ -1,0 +1,100 @@
+class_name LindbladBuilder
+extends RefCounted
+
+## Build Lindblad operators from Icons, filtered by RegisterMap
+##
+## Lindblad operators: L_k = amplitude * |target⟩⟨source|
+## where amplitude = √rate (Complex number)
+##
+## Icons define couplings: {target_emoji: Complex}
+## RegisterMap filters: only include if both emojis have coordinates
+
+const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
+const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
+
+
+static func build(icons: Dictionary, register_map: RegisterMap) -> Array[ComplexMatrix]:
+	"""Build array of Lindblad jump operators from Icons dictionary.
+
+	Args:
+	    icons: Dictionary[emoji] → Icon (containing lindblad_couplings)
+	    register_map: This biome's RegisterMap
+
+	Returns:
+	    Array of L_k matrices (each is dim×dim ComplexMatrix)
+	"""
+	var operators: Array[ComplexMatrix] = []
+	var dim = register_map.dim()
+	var num_qubits = register_map.num_qubits
+
+	print("🔨 Building Lindblad operators: %d qubits (%dD)..." % [num_qubits, dim])
+
+	for source_emoji in icons:
+		var icon = icons[source_emoji]
+
+		# Skip if source not in this biome
+		if not register_map.has(source_emoji):
+			continue
+
+		var source_q = register_map.qubit(source_emoji)
+		var source_p = register_map.pole(source_emoji)
+
+		# --- Lindblad couplings: emoji → Complex ---
+		if icon.lindblad_couplings:
+			for target_emoji in icon.lindblad_couplings:
+				# Filter: skip if target not in this biome
+				if not register_map.has(target_emoji):
+					print("  ⚠️ L %s→%s skipped (no coordinate)" % [source_emoji, target_emoji])
+					continue
+
+				var target_q = register_map.qubit(target_emoji)
+				var target_p = register_map.pole(target_emoji)
+				var amplitude: Complex = icon.lindblad_couplings[target_emoji]
+
+				var L = _build_jump(source_q, source_p, target_q, target_p,
+									amplitude, num_qubits)
+				operators.append(L)
+
+				print("  ✓ L %s→%s (√γ=%s)" % [source_emoji, target_emoji, amplitude])
+
+	print("🔨 Built %d Lindblad operators" % operators.size())
+	return operators
+
+
+static func _build_jump(from_q: int, from_p: int, to_q: int, to_p: int,
+						amplitude: Complex, num_qubits: int) -> ComplexMatrix:
+	"""Build jump operator L = amplitude * |to⟩⟨from|.
+
+	Cases:
+	    - Same qubit: flip pole (|0⟩→|1⟩ or |1⟩→|0⟩)
+	    - Different qubits: correlated transfer (flip both)
+	"""
+	var dim = 1 << num_qubits
+	var L = ComplexMatrix.zeros(dim)
+
+	if from_q == to_q:
+		# Same qubit: flip pole
+		var shift = num_qubits - 1 - from_q
+
+		for i in range(dim):
+			# Check if qubit is in 'from' pole
+			if ((i >> shift) & 1) == from_p:
+				var j = i ^ (1 << shift)  # Flip bit
+				L.set_element(j, i, amplitude)
+	else:
+		# Different qubits: correlated transfer
+		# If from_q is in from_p AND to_q is NOT in to_p, flip both
+		var shift_from = num_qubits - 1 - from_q
+		var shift_to = num_qubits - 1 - to_q
+
+		for i in range(dim):
+			var bit_from = (i >> shift_from) & 1
+			var bit_to = (i >> shift_to) & 1
+
+			# Source qubit must be in from_p
+			# Target qubit must NOT already be in to_p (room to transfer)
+			if bit_from == from_p and bit_to != to_p:
+				var j = i ^ (1 << shift_from) ^ (1 << shift_to)
+				L.set_element(j, i, amplitude)
+
+	return L

@@ -18,7 +18,7 @@ const BioticFluxBiome = preload("res://Core/Environment/BioticFluxBiome.gd")
 const MarketBiome = preload("res://Core/Environment/MarketBiome.gd")
 const ForestBiome = preload("res://Core/Environment/ForestEcosystem_Biome.gd")
 const QuantumKitchen_Biome = preload("res://Core/Environment/QuantumKitchen_Biome.gd")
-const TestBiome = preload("res://Core/Environment/TestBiome.gd")
+# const TestBiome = preload("res://Core/Environment/TestBiome.gd")  # Removed - file doesn't exist
 const FarmUIState = preload("res://Core/GameState/FarmUIState.gd")
 const VocabularyEvolution = preload("res://Core/QuantumSubstrate/VocabularyEvolution.gd")
 
@@ -94,6 +94,68 @@ const BUILD_CONFIGS = {
 		"type": "gather",
 		"yields": {"🍂": 5},  # Collect 5 detritus (leaf litter, deadwood)
 		"biome_required": "Forest"  # Only works in Forest biome
+	},
+
+	# Kitchen ingredients (planted on Kitchen plots for quantum baking)
+	"fire": {
+		"cost": {"🔥": 10},  # 1 fire unit (10 credits)
+		"type": "plant",
+		"plant_type": "fire",
+		"north_emoji": "🔥",  # Hot (fire present)
+		"south_emoji": "❄️",  # Cold (no fire)
+		"biome_required": "Kitchen"
+	},
+	"water": {
+		"cost": {"💧": 10},  # 1 water unit (10 credits)
+		"type": "plant",
+		"plant_type": "water",
+		"north_emoji": "💧",  # Wet (water present)
+		"south_emoji": "🏜️",  # Dry (no water)
+		"biome_required": "Kitchen"
+	},
+	"flour": {
+		"cost": {"💨": 10},  # 1 flour unit (10 credits)
+		"type": "plant",
+		"plant_type": "flour",
+		"north_emoji": "💨",  # Flour (processed)
+		"south_emoji": "🌾"  # Grain (unprocessed)
+		# Note: No biome_required - can plant in Kitchen or Market
+	},
+
+	# Forest organisms (planted on Forest plots for ecosystem dynamics)
+	"vegetation": {
+		"cost": {"🌿": 10},  # 1 vegetation unit (10 credits)
+		"type": "plant",
+		"plant_type": "vegetation",
+		"north_emoji": "🌿",  # Vegetation (green/healthy)
+		"south_emoji": "🍂",  # Detritus (brown/decayed)
+		"biome_required": "Forest"
+	},
+	"rabbit": {
+		"cost": {"🐇": 10},  # 1 rabbit unit (10 credits)
+		"type": "plant",
+		"plant_type": "rabbit",
+		"north_emoji": "🐇",  # Rabbit (alive/thriving)
+		"south_emoji": "🍂",  # Detritus (death/decay)
+		"biome_required": "Forest"
+	},
+	"wolf": {
+		"cost": {"🐺": 10},  # 1 wolf unit (10 credits)
+		"type": "plant",
+		"plant_type": "wolf",
+		"north_emoji": "🐺",  # Wolf (apex predator)
+		"south_emoji": "🍂",  # Detritus (death/decay)
+		"biome_required": "Forest"
+	},
+
+	# Market commodities (planted on Market plots for trading)
+	"bread": {
+		"cost": {"🍞": 10},  # 1 bread unit (10 credits)
+		"type": "plant",
+		"plant_type": "bread",
+		"north_emoji": "🍞",  # Bread (finished product)
+		"south_emoji": "💨"  # Flour (ingredient)
+		# Note: No biome_required - can plant in Market or elsewhere
 	}
 }
 
@@ -152,6 +214,9 @@ func _ready():
 	# All four biomes successfully instantiated
 	biome_enabled = true
 
+	# NOTE: Operator rebuild now handled by BootManager in Stage 3A
+	# This ensures deterministic ordering: IconRegistry ready → rebuild operators → verify biomes
+
 	# Create Icons (simulation objects that affect quantum evolution)
 	# These are owned by Farm (simulation) not UI
 	biotic_icon = BioticFluxIcon.new()
@@ -170,6 +235,9 @@ func _ready():
 
 	# Connect economy to grid for mill/market/kitchen flour & bread processing
 	grid.farm_economy = economy
+
+	# Connect economy to Market biome for buy/sell trading
+	market_biome.farm_economy = economy
 
 	# Wire all four biomes to the grid
 	if biome_enabled:
@@ -211,9 +279,11 @@ func _ready():
 		grid.assign_plot_to_biome(Vector2i(0, 1), "Forest")
 		grid.assign_plot_to_biome(Vector2i(1, 1), "Forest")
 		grid.assign_plot_to_biome(Vector2i(2, 1), "Forest")
-		grid.assign_plot_to_biome(Vector2i(3, 1), "Forest")
+		# Moved to Kitchen - need 3 plots for GHZ entanglement
+		# grid.assign_plot_to_biome(Vector2i(3, 1), "Forest")
 
-		# Kitchen biome: , .
+		# Kitchen biome: , . / (3 plots for GHZ state)
+		grid.assign_plot_to_biome(Vector2i(3, 1), "Kitchen")
 		grid.assign_plot_to_biome(Vector2i(4, 1), "Kitchen")
 		grid.assign_plot_to_biome(Vector2i(5, 1), "Kitchen")
 
@@ -286,6 +356,25 @@ func _ready():
 	ui_state.refresh_all(self)
 
 
+## Rebuild quantum operators after biomes have initialized
+func rebuild_all_biome_operators() -> void:
+	"""Rebuild quantum operators for all biomes
+
+	Called by BootManager in Stage 3A after IconRegistry is confirmed ready.
+	This ensures all biomes have complete Hamiltonian and Lindblad operators
+	even if they initialized before IconRegistry loaded all icons.
+	"""
+	if not biome_enabled:
+		return
+
+	print("  🔧 Rebuilding operators for all biomes...")
+	biotic_flux_biome.rebuild_quantum_operators()
+	market_biome.rebuild_quantum_operators()
+	forest_biome.rebuild_quantum_operators()
+	kitchen_biome.rebuild_quantum_operators()
+	print("  ✓ All biome operators rebuilt")
+
+
 ## Called by BootManager in Stage 3A to finalize setup before simulation starts
 func finalize_setup() -> void:
 	"""Finalize farm setup after all basic initialization.
@@ -293,12 +382,12 @@ func finalize_setup() -> void:
 	Called by BootManager.boot() after biomes are verified to be initialized.
 	This allows for any post-setup operations needed before gameplay starts.
 	"""
-	# Verify all biomes have their baths initialized
+	# Verify all biomes have their quantum systems initialized (Model C: quantum_computer OR legacy bath)
 	if biome_enabled:
-		assert(biotic_flux_biome.bath != null, "BioticFlux biome has null bath!")
-		assert(market_biome.bath != null, "Market biome has null bath!")
-		assert(forest_biome.bath != null, "Forest biome has null bath!")
-		assert(kitchen_biome.bath != null, "Kitchen biome has null bath!")
+		assert(biotic_flux_biome.bath != null or biotic_flux_biome.quantum_computer != null, "BioticFlux biome has neither bath nor quantum_computer!")
+		assert(market_biome.bath != null or market_biome.quantum_computer != null, "Market biome has neither bath nor quantum_computer!")
+		assert(forest_biome.bath != null or forest_biome.quantum_computer != null, "Forest biome has neither bath nor quantum_computer!")
+		assert(kitchen_biome.bath != null or kitchen_biome.quantum_computer != null, "Kitchen biome has neither bath nor quantum_computer!")
 
 	print("  ✓ Farm setup finalized")
 
@@ -426,17 +515,17 @@ func _create_grid_config() -> GridConfig:
 		keyboard.action_to_position["select_plot_" + row1_keys[i]] = pos
 		keyboard.position_to_label[pos] = row1_keys[i]
 
-	# Kitchen keys: , and .
-	var kitchen_keys = [",", "."]
-	for i in range(2):
-		var pos = Vector2i(4 + i, 1)
+	# Kitchen keys: , . and /
+	var kitchen_keys = [",", ".", "/"]
+	for i in range(3):
+		var pos = Vector2i(3 + i, 1)
 		keyboard.action_to_position["select_plot_" + kitchen_keys[i]] = pos
 		keyboard.position_to_label[pos] = kitchen_keys[i]
 
 	# NOTE: Removed confusing parametric position overrides
 	# Keyboard now matches grid in simple left-to-right order:
 	#   Row 0: T=0, Y=1, U=2, I=3, O=4, P=5
-	#   Row 1: 7=0, 8=1, 9=2, 0=3, -=4, ==5
+	#   Row 1: 7=0, 8=1, 9=2, 0=3, ,=4, .=5
 
 	config.keyboard_layout = keyboard
 
@@ -465,22 +554,22 @@ func _create_grid_config() -> GridConfig:
 		plot.biome_name = "BioticFlux"
 		config.plots.append(plot)
 
-	# Forest (7890) - positions (0,1), (1,1), (2,1), (3,1)
-	for i in range(4):
+	# Forest (789) - positions (0,1), (1,1), (2,1) [reduced to 3 for Kitchen]
+	for i in range(3):
 		var plot = PlotConfig.new()
 		plot.position = Vector2i(i, 1)
 		plot.is_active = true
-		plot.keyboard_label = row1_keys[i]  # 7, 8, 9, 0
+		plot.keyboard_label = row1_keys[i]  # 7, 8, 9
 		plot.input_action = "select_plot_" + row1_keys[i]
 		plot.biome_name = "Forest"
 		config.plots.append(plot)
 
-	# Kitchen (positions 4,1 and 5,1) - using keys ',' and '.'
+	# Kitchen (positions 3,1, 4,1, and 5,1) - using keys ',' '.' and '/' [3 plots for GHZ]
 	# Reusing kitchen_keys declared above
-	for i in range(2):
+	for i in range(3):
 		var plot = PlotConfig.new()
-		plot.position = Vector2i(4 + i, 1)
-		plot.is_active = true  # Changed from false
+		plot.position = Vector2i(3 + i, 1)
+		plot.is_active = true
 		plot.keyboard_label = kitchen_keys[i]
 		plot.input_action = "select_plot_" + kitchen_keys[i]
 		plot.biome_name = "Kitchen"
@@ -496,7 +585,7 @@ func _create_grid_config() -> GridConfig:
 	config.biome_assignments[Vector2i(0, 1)] = "Forest"
 	config.biome_assignments[Vector2i(1, 1)] = "Forest"
 	config.biome_assignments[Vector2i(2, 1)] = "Forest"
-	config.biome_assignments[Vector2i(3, 1)] = "Forest"
+	config.biome_assignments[Vector2i(3, 1)] = "Kitchen"
 	config.biome_assignments[Vector2i(4, 1)] = "Kitchen"
 	config.biome_assignments[Vector2i(5, 1)] = "Kitchen"
 
@@ -1077,11 +1166,16 @@ func _ensure_iconregistry() -> void:
 
 	icon_registry = IconRegistryScript.new()
 	icon_registry.name = "IconRegistry"
-	# Use get_tree() if available (normal mode), otherwise use SceneTree's root
-	var tree_root = get_tree().root if has_method("get_tree") else get_node("/root")
-	tree_root.add_child(icon_registry)
-	icon_registry._ready()  # Trigger initialization
-	print("✓ Test mode: IconRegistry initialized with %d icons" % icon_registry.icons.size())
+	# Use get_tree() if available (normal mode), otherwise skip autoload simulation
+	var tree = get_tree()
+	if tree and tree.root:
+		tree.root.add_child(icon_registry)
+		icon_registry._ready()  # Trigger initialization
+		print("✓ Test mode: IconRegistry initialized with %d icons" % icon_registry.icons.size())
+	else:
+		# Headless mode without scene tree - just initialize locally
+		icon_registry._ready()
+		print("✓ Headless mode: IconRegistry initialized with %d icons" % icon_registry.icons.size())
 
 
 ## Private Helpers - Resource & Economy Management

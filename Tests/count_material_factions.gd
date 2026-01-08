@@ -1,7 +1,7 @@
 #!/usr/bin/env -S godot --headless -s
 extends SceneTree
 
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
 func _init():
 	var material_count = 0

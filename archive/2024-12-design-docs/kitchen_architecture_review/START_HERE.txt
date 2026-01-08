@@ -1,0 +1,75 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                  🍳 KITCHEN ARCHITECTURE REVIEW PACKAGE                         ║
+║                                                                                ║
+║  Complete investigation into kitchen gameplay loop, quantum mechanics,          ║
+║  and architectural design decisions needed for implementation.                  ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+📍 YOU ARE HERE: /home/tehcr33d/llm_outbox/kitchen_architecture_review/
+
+📚 READ FIRST:
+   1. README.md (orientation)
+   2. 00_INVESTIGATION_OVERVIEW.md (context + findings)
+   3. 01_GAMEPLAY_LOOP_SPECIFICATION.md (what the kitchen teaches)
+   4. 02_SYSTEMS_ANALYSIS.md (how everything works)
+   5. 05_DESIGN_DECISION_FRAMEWORK.md (*** CRITICAL: 3 decisions to make ***)
+   6. 06_SIMULATION_EVIDENCE.md (proof of current state)
+
+⏱️  ESTIMATED READING TIME: 2-3 hours
+
+🎯 YOUR JOB:
+   1. Review the documents
+   2. Choose answers to 3 critical decisions (A, B, C)
+   3. Return with your choices
+   4. We implement according to your architecture
+
+📊 KEY FINDINGS:
+   ✅ Wheat/Mill/Kitchen systems work individually
+   ❌ Wheat not consumed after mill measurement (can measure infinitely)
+   ❌ Energy taps fail (emoji not in biome)
+   ⚠️  3 architectural questions need answers
+
+🔑 THE THREE DECISIONS:
+
+   Decision A: Mill Physics
+   ├─ A1: Destructive (wheat consumed)
+   ├─ A2: Non-destructive + outcome tracking
+   └─ A3: Renewable (wheat infinite)
+
+   Decision B: Energy Tap Model
+   ├─ B1: Plot-level buildings
+   ├─ B2: Biome-level quantum operations
+   └─ B3: Auto-injected global emoji set
+
+   Decision C: Cross-Biome Kitchen Access
+   ├─ C1: Kitchen biome only
+   ├─ C2: Cross-biome aware
+   └─ C3: Unified global quantum computer
+
+⚡ START IMMEDIATELY:
+   1. Open: README.md
+   2. Open: 05_DESIGN_DECISION_FRAMEWORK.md
+   3. Pick your A, B, C options
+   4. Come back to Claude with decisions
+
+🧪 TEST COMMAND (if you want to verify findings):
+   cd /home/tehcr33d/ws/SpaceWheat
+   timeout 20 godot --headless -s /tmp/test_physics_issues.gd 2>&1 | tail -100
+
+📁 FOLDER STRUCTURE:
+   kitchen_architecture_review/
+   ├── START_HERE.txt (this file)
+   ├── README.md
+   ├── 00_INVESTIGATION_OVERVIEW.md
+   ├── 01_GAMEPLAY_LOOP_SPECIFICATION.md
+   ├── 02_SYSTEMS_ANALYSIS.md
+   ├── 05_DESIGN_DECISION_FRAMEWORK.md
+   └── 06_SIMULATION_EVIDENCE.md
+
+✨ PRINCIPLE:
+   We're not restricting your design, we're clarifying the options.
+   You choose the approach that makes sense for Space Wheat.
+
+═════════════════════════════════════════════════════════════════════════════════
+
+NEXT: Open README.md

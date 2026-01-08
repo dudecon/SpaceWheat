@@ -727,6 +727,14 @@ static func get_faction_by_name(name: String) -> Dictionary:
 			return faction
 	return {}
 
+
+static func get_random_faction() -> Dictionary:
+	"""Get a random faction from the database"""
+	if ALL_FACTIONS.size() == 0:
+		return {}
+	var idx = randi() % ALL_FACTIONS.size()
+	return ALL_FACTIONS[idx]
+
 static func get_factions_by_ring(ring: String) -> Array:
 	"""Get all factions in a specific ring"""
 	var result = []

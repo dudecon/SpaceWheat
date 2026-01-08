@@ -4,7 +4,7 @@ extends SceneTree
 ## Test vocabulary-based quest generation
 ## Verifies that quests only use emojis from faction vocabulary ∩ player vocabulary
 
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const QuestTheming = preload("res://Core/Quests/QuestTheming.gd")
 const QuantumBath = preload("res://Core/QuantumSubstrate/QuantumBath.gd")
 

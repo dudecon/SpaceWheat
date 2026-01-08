@@ -44,9 +44,7 @@ func _setup_theme() -> void:
 	# Use semi-transparent background
 	add_theme_stylebox_override("panel", _create_panel_style())
 
-	# Style the label
-	var label_settings = LabelSettings.new()
-	label_settings.font_sizes[TextServer.HINTING_NONE] = 11
+	# Style the label (Godot 4.5: use theme overrides directly, no LabelSettings.font_sizes)
 	status_label.add_theme_font_size_override("font_size", 11)
 	status_label.add_theme_color_override("font_color", Color(0.2, 0.8, 1.0, 0.9))  # Cyan
 
@@ -58,9 +56,17 @@ func _create_panel_style() -> StyleBox:
 	"""Create semi-transparent panel background"""
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.05, 0.05, 0.1, 0.7)  # Dark blue-black
-	style.set_border_enabled_all(true)
-	style.set_border_color_all(Color(0.2, 0.8, 1.0, 0.3))  # Cyan border
-	style.set_content_margin_all(8)
+	# Godot 4.5: set borders individually (no set_border_enabled_all)
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.2, 0.8, 1.0, 0.3)  # Cyan border
+	# Godot 4.5: set margins individually (no set_content_margin_all)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
 	return style
 
 

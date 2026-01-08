@@ -24,6 +24,7 @@ offset_left = 0.0
 offset_top = 0.0
 offset_right = 0.0
 offset_bottom = 0.0
+mouse_filter = 2
 
 [node name="CityUIContainer" type="Control" parent="."]
 layout_mode = 1
@@ -35,17 +36,26 @@ visible = false
 
 [node name="OverlayLayer" type="Control" parent="."]
 layout_mode = 1
-anchors_left = 0.0
-anchors_top = 0.0
-anchors_right = 1.0
-anchors_bottom = 1.0
-z_index = 1000
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+z_index = 100
+mouse_filter = 2
 
 [node name="ActionBarLayer" type="Control" parent="."]
 layout_mode = 1
-anchors_left = 0.0
-anchors_top = 0.0
-anchors_right = 1.0
-anchors_bottom = 1.0
-z_index = 3000
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+z_index = 50
 mouse_filter = 2

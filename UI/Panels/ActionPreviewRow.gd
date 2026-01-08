@@ -14,11 +14,16 @@ var action_buttons: Dictionary = {}  # "Q", "E", "R" -> Button
 var current_tool: int = 1
 var current_submenu: String = ""  # Active submenu name (empty = show tool actions)
 
+# References for checking action availability
+var plot_grid_display = null  # Injected reference to PlotGridDisplay
+var farm = null  # Injected reference to Farm
+var input_handler = null  # Injected reference to FarmInputHandler (for validation)
+
 # Styling
-var button_color: Color = Color(0.3, 0.3, 0.3)
-var hover_color: Color = Color(0.5, 0.5, 0.5)
-var disabled_color: Color = Color(0.2, 0.2, 0.2)
-var enabled_color: Color = Color(0.2, 0.6, 0.2)  # Green highlight for available actions
+var button_color: Color = Color(0.45, 0.45, 0.45)  # Lighter base color for visibility
+var hover_color: Color = Color(0.6, 0.6, 0.6)
+var disabled_color: Color = Color(0.15, 0.15, 0.15)  # Much darker for clear disabled state
+var enabled_color: Color = Color(0.3, 0.9, 0.3)  # Bright green for available actions
 
 # Layout manager for scaling
 var layout_manager
@@ -29,13 +34,16 @@ signal action_pressed(action_key: String)
 
 
 func _ready():
+	# Z-index: Above quest board (3500), above tool selection (3000)
+	z_index = 4000
+
 	# Container setup
 	# Note: Don't use anchors in container children - let parent handle layout
 	add_theme_constant_override("separation", 10)
 	# CRITICAL: Don't set alignment here - let buttons' size_flags_horizontal handle distribution
 
-	# Ensure container doesn't block keyboard input
-	mouse_filter = MOUSE_FILTER_IGNORE
+	# Allow keyboard input to pass through, but buttons can still receive clicks
+	mouse_filter = MOUSE_FILTER_PASS
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	# Create Q, E, R action buttons with proper size_flags
@@ -67,8 +75,6 @@ func _ready():
 	# Update display for current tool
 	update_for_tool(1)
 
-	print("⚡ ActionPreviewRow initialized")
-
 
 func update_for_tool(tool_num: int) -> void:
 	"""Update action buttons to show actions for the selected tool"""
@@ -93,7 +99,8 @@ func update_for_tool(tool_num: int) -> void:
 		# Update button text
 		button.text = "[%s] %s %s" % [action_key, emoji, label]
 
-	print("⚡ ActionPreviewRow updated for Tool %d: %s" % [tool_num, tool_info.get("name", "Unknown")])
+	# Update action availability based on selected plots
+	update_action_availability()
 
 
 func update_for_submenu(submenu_name: String, submenu_info: Dictionary) -> void:
@@ -119,6 +126,11 @@ func update_for_submenu(submenu_name: String, submenu_info: Dictionary) -> void:
 			continue
 
 		var button = action_buttons[action_key]
+
+		# CRITICAL FIX: Force button out of pressed state before text update
+		# This ensures touch and keyboard render the same way
+		button.button_pressed = false
+
 		var action_info = submenu_info.get(action_key, {})
 		var label = action_info.get("label", "?")
 		var emoji = action_info.get("emoji", "")
@@ -127,17 +139,17 @@ func update_for_submenu(submenu_name: String, submenu_info: Dictionary) -> void:
 		# Update button text with submenu prefix
 		button.text = "[%s] %s %s" % [action_key, emoji, label]
 
-		# Handle disabled/locked states
+		# Handle disabled/locked states (truly unavailable slots only)
 		if is_disabled or action == "":
 			button.disabled = true
 			button.modulate = disabled_color
 		else:
+			# Don't set color here - let validation system handle it below
 			button.disabled = false
-			button.modulate = button_color
 
-	var submenu_label = submenu_info.get("name", submenu_name)
-	var dynamic_note = " (dynamic)" if submenu_info.get("dynamic", false) else ""
-	print("📂 ActionPreviewRow showing submenu: %s%s" % [submenu_label, dynamic_note])
+	# CRITICAL: Update button colors based on validation (resources, plot states, etc.)
+	# This must happen AFTER text is updated so validation knows what submenu we're in
+	update_action_availability()
 
 
 func update_for_quest_board(slot_state: int, is_locked: bool = false) -> void:
@@ -211,15 +223,12 @@ func update_for_quest_board(slot_state: int, is_locked: bool = false) -> void:
 			action_buttons["R"].disabled = true
 			action_buttons["R"].modulate = disabled_color
 
-	print("🎯 ActionPreviewRow showing QUEST actions (state=%d)" % slot_state)
-
 
 func restore_normal_mode() -> void:
 	"""Restore normal tool display (called when quest board closes)"""
 	if current_submenu == "quest_board":
 		current_submenu = ""
 		update_for_tool(current_tool)
-		print("🎯 ActionPreviewRow restored to TOOL mode")
 
 
 func set_action_enabled(action_key: String, enabled: bool) -> void:
@@ -236,22 +245,59 @@ func set_action_enabled(action_key: String, enabled: bool) -> void:
 		button.modulate = button_color
 
 
-func update_button_highlights(has_selection: bool) -> void:
-	"""Highlight buttons based on whether plots are selected (required for actions)"""
+func update_action_availability() -> void:
+	"""Check selected plots and highlight available actions"""
+	# Check if we have references
+	if not plot_grid_display or not plot_grid_display.has_method("get_selected_plots"):
+		update_button_highlights({"Q": false, "E": false, "R": false})
+		return
+
+	var selected_plots = plot_grid_display.get_selected_plots()
+	if selected_plots.is_empty():
+		update_button_highlights({"Q": false, "E": false, "R": false})
+		return
+
+	# Get input handler reference
+	if not input_handler:
+		# Fallback: naive behavior (all enabled if plots selected)
+		var has_selection = selected_plots.size() > 0
+		update_button_highlights({"Q": has_selection, "E": has_selection, "R": has_selection})
+		return
+
+	# Check each action individually using validation API
+	var availability = {
+		"Q": input_handler.can_execute_action("Q"),
+		"E": input_handler.can_execute_action("E"),
+		"R": input_handler.can_execute_action("R"),
+	}
+
+	update_button_highlights(availability)
+
+
+func update_button_highlights(availability: Dictionary) -> void:
+	"""Highlight buttons based on per-action availability
+
+	Args:
+		availability: Dictionary with "Q"/"E"/"R" keys mapping to bool
+	"""
 	for action_key in ["Q", "E", "R"]:
 		if not action_buttons.has(action_key):
 			continue
 
 		var button = action_buttons[action_key]
 
-		if has_selection:
-			# Actions available - highlight in green
+		# Skip if button is already disabled (locked slot from submenu)
+		if button.disabled:
+			continue
+
+		var is_available = availability.get(action_key, false)
+
+		if is_available:
+			# Actions available - highlight in bright green
 			button.modulate = enabled_color
-			button.disabled = false
 		else:
-			# No selection - disable buttons
-			button.modulate = disabled_color
-			button.disabled = true
+			# Action not available (no resources, wrong state, etc) - show as base color
+			button.modulate = button_color
 
 
 func set_layout_manager(mgr) -> void:
@@ -268,27 +314,6 @@ func set_layout_manager(mgr) -> void:
 func _on_action_button_pressed(action_key: String) -> void:
 	"""Handle action button press"""
 	action_pressed.emit(action_key)
-	var tool_info = TOOL_ACTIONS.get(current_tool, {})
-	var action_info = tool_info.get(action_key, {})
-	var label = action_info.get("label", "action")
-	print("⚡ Action %s pressed: %s" % [action_key, label])
-
-
-func _print_corners() -> void:
-	"""DEBUG: Print actual corner positions of toolbar"""
-	var tl = position
-	var tr = position + Vector2(size.x, 0)
-	var bl = position + Vector2(0, size.y)
-	var br = position + size
-
-	print("\n🎯 ActionPreviewRow CORNERS:")
-	print("  Top-Left:     (%.1f, %.1f)" % [tl.x, tl.y])
-	print("  Top-Right:    (%.1f, %.1f)" % [tr.x, tr.y])
-	print("  Bottom-Left:  (%.1f, %.1f)" % [bl.x, bl.y])
-	print("  Bottom-Right: (%.1f, %.1f)" % [br.x, br.y])
-	print("  Size: %.1f × %.1f" % [size.x, size.y])
-	print("  Parent size: %.1f × %.1f" % [get_parent().size.x, get_parent().size.y])
-	print()
 
 
 func debug_layout() -> String:
@@ -310,15 +335,3 @@ func debug_layout() -> String:
 	debug_text += "  Button widths: [%s] (should be equal for stretch)\n" % ", ".join(button_widths)
 
 	return debug_text
-
-
-
-	# DEBUG OUTPUT
-	print("═══════════════════════════════════════════════════════════════")
-	print("DEBUG: ActionPreviewRow (Q/E/R toolbar)")
-	print("═══════════════════════════════════════════════════════════════")
-	print("  Name: ActionPreviewRow")
-	print("  Parent: %s" % get_parent().name)
-	print("  Size flags H: %d (3=SIZE_EXPAND_FILL)" % size_flags_horizontal)
-	print("  Custom minimum size: %s" % custom_minimum_size)
-	print("═══════════════════════════════════════════════════════════════")

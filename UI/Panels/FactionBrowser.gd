@@ -141,14 +141,16 @@ func handle_input(event: InputEvent) -> bool:
 
 
 func _create_ui() -> void:
-	"""Create the faction browser UI - proper modal design"""
+	"""Create the faction browser UI - RESPONSIVE DESIGN matching QuestBoard"""
 	var scale = layout_manager.scale_factor if layout_manager else 1.0
-	var title_size = layout_manager.get_scaled_font_size(18) if layout_manager else 18
-	var normal_size = layout_manager.get_scaled_font_size(12) if layout_manager else 12
 
-	# Background - fill screen (darker than quest board)
+	# Fixed font sizes for 960×540 base resolution
+	var title_size = 24
+	var normal_size = 14
+
+	# Background - fill screen (darker than quest board for drill-down effect)
 	background = ColorRect.new()
-	background.color = Color(0.0, 0.0, 0.0, 0.8)
+	background.color = Color(0.0, 0.0, 0.0, 0.85)  # Slightly darker
 	background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	background.layout_mode = 1
 	add_child(background)
@@ -161,9 +163,9 @@ func _create_ui() -> void:
 	center.layout_mode = 1
 	add_child(center)
 
-	# Browser panel
+	# Browser panel - Fixed size for 960×540 base resolution (~70% width, 75% height)
 	browser_panel = PanelContainer.new()
-	browser_panel.custom_minimum_size = Vector2(700 * scale, 650 * scale)
+	browser_panel.custom_minimum_size = Vector2(670, 400)
 	center.add_child(browser_panel)
 
 	var main_vbox = VBoxContainer.new()
@@ -192,9 +194,9 @@ func _create_ui() -> void:
 	controls.modulate = Color(0.8, 0.8, 0.8)
 	main_vbox.add_child(controls)
 
-	# Scroll container
+	# Scroll container - Fixed height for 960×540 base resolution
 	scroll_container = ScrollContainer.new()
-	scroll_container.custom_minimum_size = Vector2(0, 550 * scale)
+	scroll_container.custom_minimum_size = Vector2(0, 320)  # ~60% of 540
 	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	main_vbox.add_child(scroll_container)
@@ -330,11 +332,14 @@ class FactionItem extends PanelContainer:
 
 	func _create_ui() -> void:
 		var scale = layout_manager.scale_factor if layout_manager else 1.0
-		var faction_size = layout_manager.get_scaled_font_size(14) if layout_manager else 14
-		var normal_size = layout_manager.get_scaled_font_size(12) if layout_manager else 12
-		var small_size = layout_manager.get_scaled_font_size(10) if layout_manager else 10
 
-		custom_minimum_size = Vector2(0, 90 * scale)
+		# Fixed font sizes for 960×540 base resolution
+		var faction_size = 15
+		var normal_size = 13
+		var small_size = 11
+
+		# Fixed item height
+		custom_minimum_size = Vector2(0, 65)
 
 		# Background color based on alignment
 		var alignment = quest_data.get("_alignment", 0.5)
@@ -405,38 +410,41 @@ class FactionItem extends PanelContainer:
 		vbox.add_child(vocab_label)
 
 	func _refresh_selection() -> void:
-		"""Update selection visual"""
+		"""Update selection visual - THICKER gold border when selected"""
 		var current_style = get_theme_stylebox("panel")
 		if current_style and current_style is StyleBoxFlat:
 			if is_selected:
+				# SELECTED: Extra thick gold border (matching QuestBoard)
+				current_style.border_width_left = 6
+				current_style.border_width_right = 6
+				current_style.border_width_top = 6
+				current_style.border_width_bottom = 6
+				current_style.border_color = Color(1.0, 0.9, 0.0)  # Bright gold
+			else:
+				# NORMAL: Standard thick border
 				current_style.border_width_left = 4
 				current_style.border_width_right = 4
 				current_style.border_width_top = 4
 				current_style.border_width_bottom = 4
-				current_style.border_color = Color(1.0, 0.9, 0.3)  # Gold
-			else:
-				current_style.border_width_left = 2
-				current_style.border_width_right = 2
-				current_style.border_width_top = 2
-				current_style.border_width_bottom = 2
-				current_style.border_color = Color(0.5, 0.5, 0.5, 0.5)
+				current_style.border_color = Color(0.7, 0.7, 0.7, 0.8)
 
 	func _set_bg_color(color: Color) -> void:
+		# FLASH GAME STYLE - Chunky borders matching QuestBoard and ESC menu
 		var style = StyleBoxFlat.new()
 		style.bg_color = color
-		style.border_color = Color(0.5, 0.5, 0.5, 0.5)
-		style.border_width_left = 2
-		style.border_width_right = 2
-		style.border_width_top = 2
-		style.border_width_bottom = 2
-		style.corner_radius_top_left = 6
-		style.corner_radius_top_right = 6
-		style.corner_radius_bottom_left = 6
-		style.corner_radius_bottom_right = 6
-		style.content_margin_left = 8
-		style.content_margin_right = 8
-		style.content_margin_top = 6
-		style.content_margin_bottom = 6
+		style.border_color = Color(0.7, 0.7, 0.7, 0.8)  # Brighter border
+		style.border_width_left = 4  # THICKER borders!
+		style.border_width_right = 4
+		style.border_width_top = 4
+		style.border_width_bottom = 4
+		style.corner_radius_top_left = 12  # Rounder corners
+		style.corner_radius_top_right = 12
+		style.corner_radius_bottom_left = 12
+		style.corner_radius_bottom_right = 12
+		style.content_margin_left = 16  # MORE PADDING!
+		style.content_margin_right = 16
+		style.content_margin_top = 12
+		style.content_margin_bottom = 12
 		add_theme_stylebox_override("panel", style)
 
 	func _get_alignment_color(alignment: float) -> Color:

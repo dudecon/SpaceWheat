@@ -1,0 +1,423 @@
+## PlayerShell - Player-level UI layer
+## Handles:
+## - Overlay/menu system (ESC menu, V vocabulary, C contracts, etc)
+## - Player inventory/resource panel
+## - Keyboard help, settings
+## - Farm loading/switching (when implemented)
+##
+## This layer STAYS when farm changes
+
+class_name PlayerShell
+extends Control
+
+const OverlayManager = preload("res://UI/Managers/OverlayManager.gd")
+const QuestManager = preload("res://Core/Quests/QuestManager.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+
+var current_farm_ui = null  # FarmUI instance (from scene)
+var overlay_manager: OverlayManager = null
+var quest_manager: QuestManager = null
+var farm: Node = null
+var farm_ui_container: Control = null
+var action_preview_row: Control = null  # Cached reference after moving to ActionBarLayer
+
+## Modal Management
+var modal_stack: Array[Control] = []
+
+
+func _input(event: InputEvent) -> void:
+	"""Layer 1: High-priority input routing (modals + shell actions)"""
+	if not event is InputEventKey or not event.pressed or event.echo:
+		return
+
+	print("⌨️  PlayerShell._input() KEY: %s, modal_stack: %d" % [event.keycode, modal_stack.size()])
+
+	# LAYER 1: Modal input (highest priority)
+	if not modal_stack.is_empty():
+		var active_modal = modal_stack[-1]
+		print("  → Routing to modal: %s" % active_modal.name)
+		if active_modal.has_method("handle_input"):
+			var consumed = active_modal.handle_input(event)
+			print("  → Modal consumed: %s" % consumed)
+			if consumed:
+				get_viewport().set_input_as_handled()
+				return
+
+	# LAYER 2: Shell actions
+	if _handle_shell_action(event):
+		get_viewport().set_input_as_handled()
+		return
+
+	# LAYER 3: Fall through to Farm._unhandled_input()
+
+
+func _handle_shell_action(event: InputEvent) -> bool:
+	"""Handle shell-level actions (overlay toggles, menu)"""
+	match event.keycode:
+		KEY_C:
+			_toggle_quest_board()
+			return true
+		KEY_K:
+			_toggle_keyboard_help()
+			return true
+		KEY_ESCAPE:
+			_toggle_escape_menu()
+			return true
+	return false
+
+
+func _toggle_quest_board() -> void:
+	"""Toggle quest board - pass biome via parameter"""
+	print("🎯 _toggle_quest_board() called")
+	if not overlay_manager:
+		print("   ❌ overlay_manager is null!")
+		return
+	if not overlay_manager.quest_board:
+		print("   ❌ quest_board is null!")
+		return
+	var quest_board = overlay_manager.quest_board
+	if quest_board.visible:
+		print("   → Closing quest board")
+		quest_board.close_board()
+		_pop_modal(quest_board)
+	else:
+		print("   → Opening quest board")
+		var biome = null
+		if farm and "biotic_flux_biome" in farm:
+			biome = farm.biotic_flux_biome
+		print("   → farm: ", farm)
+		print("   → biome: ", biome)
+		if biome:
+			quest_board.set_biome(biome)
+			quest_board.open_board()
+			_push_modal(quest_board)
+			print("   ✅ Quest board opened")
+		else:
+			print("   ❌ No biome available!")
+
+
+func _toggle_keyboard_help() -> void:
+	"""Toggle keyboard help overlay"""
+	if not overlay_manager:
+		return
+	overlay_manager.toggle_keyboard_help()
+
+
+func _toggle_escape_menu() -> void:
+	"""Toggle escape menu"""
+	if not overlay_manager or not overlay_manager.escape_menu:
+		return
+	var menu = overlay_manager.escape_menu
+	if menu.visible:
+		menu.hide()
+		_pop_modal(menu)
+	else:
+		menu.show()
+		_push_modal(menu)
+
+
+func _push_modal(modal: Control) -> void:
+	"""Add modal to stack"""
+	if modal not in modal_stack:
+		modal_stack.append(modal)
+		print("📚 Modal stack: ", modal_stack.map(func(m): return m.name))
+
+
+func _pop_modal(modal: Control) -> void:
+	"""Remove modal from stack"""
+	var idx = modal_stack.find(modal)
+	if idx >= 0:
+		modal_stack.remove_at(idx)
+		print("📚 Modal stack: ", modal_stack.map(func(m): return m.name))
+
+
+func _ready() -> void:
+	"""Initialize player shell UI - children defined in scene"""
+	print("🎪 PlayerShell initializing...")
+
+	# Add to group so overlay buttons can find us
+	add_to_group("player_shell")
+
+	# CRITICAL: Ensure PlayerShell fills its parent (FarmView)
+	# This is the top of the delegation cascade - everything below depends on this sizing
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	# Process input even when game is paused (for ESC menu, etc.)
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+	# PRESET_FULL_RECT anchors already handle sizing - no need to set size explicitly
+	# (Setting size with anchors causes warning: "size overridden after _ready()")
+
+	# Get reference to containers from scene
+	farm_ui_container = get_node("FarmUIContainer")
+
+	# FarmUIContainer already has PRESET_FULL_RECT anchors from scene file
+	# No need to set size explicitly - anchors handle it
+
+	var overlay_layer = get_node("OverlayLayer")
+
+	# Create and initialize UILayoutManager (needs to be in scene tree for _ready())
+	const UILayoutManager = preload("res://UI/Managers/UILayoutManager.gd")
+	var layout_manager = UILayoutManager.new()
+	add_child(layout_manager)
+	# _ready() will be called automatically by the engine
+
+	# Create quest manager (before overlays, since overlays need it)
+	quest_manager = QuestManager.new()
+	add_child(quest_manager)
+	print("   ✅ Quest manager created")
+
+	# Create overlay manager and add to overlay layer
+	overlay_manager = OverlayManager.new()
+	overlay_layer.add_child(overlay_manager)
+
+	# Setup overlay manager with proper dependencies (pass quest_manager)
+	overlay_manager.setup(layout_manager, null, null, null, quest_manager)
+
+	# Initialize overlays (C/V/N/K/ESC menus)
+	overlay_manager.create_overlays(overlay_layer)
+
+	# Connect to overlay signals to manage modal stack
+	if overlay_manager.quest_board:
+		overlay_manager.quest_board.board_closed.connect(func():
+			_pop_modal(overlay_manager.quest_board)
+			_restore_action_toolbar()
+		)
+		print("   ✅ Quest board close signal connected")
+
+		overlay_manager.quest_board.board_opened.connect(func():
+			_update_action_toolbar_for_quest()
+		)
+
+		overlay_manager.quest_board.selection_changed.connect(func(slot_state: int, is_locked: bool):
+			_update_action_toolbar_for_quest(slot_state, is_locked)
+		)
+		print("   ✅ Quest board action toolbar signals connected")
+
+	if overlay_manager.escape_menu:
+		overlay_manager.escape_menu.resume_pressed.connect(func():
+			_pop_modal(overlay_manager.escape_menu)
+		)
+		overlay_manager.escape_menu.save_pressed.connect(func():
+			_push_modal(overlay_manager.save_load_menu)
+		)
+		overlay_manager.escape_menu.load_pressed.connect(func():
+			_push_modal(overlay_manager.save_load_menu)
+		)
+		print("   ✅ Escape menu signals connected")
+
+	if overlay_manager.save_load_menu:
+		overlay_manager.save_load_menu.menu_closed.connect(func():
+			_pop_modal(overlay_manager.save_load_menu)
+		)
+		print("   ✅ Save/Load menu signals connected")
+
+	print("   ✅ Overlay manager created")
+	print("✅ PlayerShell ready")
+
+
+func load_farm(farm_ref: Node) -> void:
+	"""Load a farm into FarmUIContainer (swappable)"""
+	print("📂 Loading farm into PlayerShell...")
+
+	# Clean up old farm UI if it exists
+	if current_farm_ui:
+		current_farm_ui.queue_free()
+		current_farm_ui = null
+
+	# Store farm reference
+	farm = farm_ref
+
+	# Connect quest manager to farm economy
+	if quest_manager and farm.economy:
+		quest_manager.connect_to_economy(farm.economy)
+		print("   ✅ Quest manager connected to economy")
+
+		# Offer initial quest
+		_offer_initial_quest()
+
+	# Load FarmUI as scene and add to container
+	var farm_ui_scene = load("res://UI/FarmUI.tscn")
+	if farm_ui_scene:
+		current_farm_ui = farm_ui_scene.instantiate()
+		farm_ui_container.add_child(current_farm_ui)
+
+		# Setup farm AFTER layout engine calculates sizes (proper Godot 4 pattern)
+		# call_deferred here is the CORRECT TOOL for "run after engine initialization"
+		current_farm_ui.call_deferred("setup_farm", farm_ref)
+		print("   ✅ FarmUI loaded (setup deferred until after layout calculation)")
+	else:
+		print("❌ FarmUI.tscn not found - cannot load farm UI")
+		return
+
+	print("✅ Farm loaded into PlayerShell")
+
+
+func get_farm_ui():
+	"""Get the currently loaded FarmUI instance"""
+	return current_farm_ui
+
+
+func load_farm_ui(farm_ui: Control) -> void:
+	"""Load an already-instantiated FarmUI into the farm container.
+
+	Called by BootManager.boot() in Stage 3C to add the FarmUI that has
+	already been instantiated and setup with all dependencies.
+
+	This is separate from load_farm() which handles the entire loading sequence.
+	"""
+	# Store reference
+	current_farm_ui = farm_ui
+
+	# Add to container
+	if farm_ui_container:
+		farm_ui_container.add_child(farm_ui)
+		print("   ✓ FarmUI mounted in container")
+
+	# Move ActionPreviewRow to ActionBarLayer for correct z-ordering
+	# (Action bar needs to be above overlays)
+	call_deferred("_move_action_bar_to_top_layer")
+
+
+## OVERLAY SYSTEM INITIALIZATION
+
+func _initialize_overlay_system() -> void:
+	"""Initialize OverlayManager with minimal dependencies"""
+	if not overlay_manager:
+		return
+
+	# Create a minimal UILayoutManager for compatibility
+	# (OverlayManager requires it even if we don't use all features)
+	const UILayoutManager = preload("res://UI/Managers/UILayoutManager.gd")
+	var layout_mgr = UILayoutManager.new()
+
+	# Get system dependencies from Farm if available
+	# (These will be null but OverlayManager handles it gracefully)
+	var vocab_sys = null
+	var faction_mgr = null
+	var conspiracy_net = null
+
+	# Initialize OverlayManager with dependencies
+	overlay_manager.setup(layout_mgr, vocab_sys, faction_mgr, conspiracy_net)
+
+	# Create the overlay UI panels
+	overlay_manager.create_overlays(self)
+
+	print("🎭 Overlay system initialized")
+
+
+## QUEST SYSTEM HELPERS
+
+## ACTION TOOLBAR UPDATES (for quest board context)
+
+func _update_action_toolbar_for_quest(slot_state: int = 1, is_locked: bool = false) -> void:
+	"""Update action toolbar to show quest-specific actions"""
+	if not action_preview_row:
+		return
+
+	if action_preview_row.has_method("update_for_quest_board"):
+		action_preview_row.update_for_quest_board(slot_state, is_locked)
+
+
+func _restore_action_toolbar() -> void:
+	"""Restore action toolbar to normal tool mode"""
+	if not action_preview_row:
+		return
+
+	if action_preview_row.has_method("restore_normal_mode"):
+		action_preview_row.restore_normal_mode()
+
+
+## QUEST SYSTEM HELPERS
+
+func _move_action_bar_to_top_layer() -> void:
+	"""Move ActionPreviewRow and ToolSelectionRow from FarmUI to ActionBarLayer for correct z-ordering"""
+	if not current_farm_ui:
+		return
+
+	var action_bar_layer = get_node_or_null("ActionBarLayer")
+	if not action_bar_layer:
+		print("⚠️  ActionBarLayer not found in PlayerShell")
+		return
+
+	var main_container = current_farm_ui.get_node_or_null("MainContainer")
+	if not main_container:
+		print("⚠️  MainContainer not found in FarmUI")
+		return
+
+	# Move ActionPreviewRow (QER buttons)
+	var action_bar = current_farm_ui.get_node_or_null("MainContainer/ActionPreviewRow")
+	if action_bar:
+		main_container.remove_child(action_bar)
+		action_bar_layer.add_child(action_bar)
+
+		# CRITICAL: Clear container properties from old parent (VBoxContainer)
+		action_bar.layout_mode = 1  # 1 = anchors (not 2 = container child)
+		action_bar.size_flags_horizontal = Control.SIZE_FILL
+		action_bar.size_flags_vertical = Control.SIZE_FILL
+
+		action_preview_row = action_bar
+
+	# Move ToolSelectionRow (1-6 tool buttons)
+	var tool_bar = current_farm_ui.get_node_or_null("MainContainer/ToolSelectionRow")
+	if tool_bar:
+		main_container.remove_child(tool_bar)
+		action_bar_layer.add_child(tool_bar)
+
+		# CRITICAL: Clear container properties from old parent
+		tool_bar.layout_mode = 1  # 1 = anchors (not 2 = container child)
+		tool_bar.size_flags_horizontal = Control.SIZE_FILL
+		tool_bar.size_flags_vertical = Control.SIZE_FILL
+
+	# WAIT for next frame so ActionBarLayer has its final size, THEN position
+	_position_action_bars_deferred.call_deferred()
+
+	print("   ✅ Both toolbars moved to ActionBarLayer (positioning next frame)")
+
+
+func _position_action_bars_deferred() -> void:
+	"""Position action bars after ActionBarLayer is sized (called deferred)"""
+	# Wait one more frame to ensure layout is finalized
+	await get_tree().process_frame
+
+	if action_preview_row:
+		action_preview_row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		action_preview_row.offset_top = -80
+		action_preview_row.offset_bottom = 0
+		action_preview_row.custom_minimum_size = Vector2(0, 80)
+		print("   ✅ ActionPreviewRow positioned at bottom center")
+
+	var tool_bar = get_node_or_null("ActionBarLayer/ToolSelectionRow")
+	if tool_bar:
+		tool_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		tool_bar.offset_top = -140
+		tool_bar.offset_bottom = -80
+		tool_bar.custom_minimum_size = Vector2(0, 60)
+		print("   ✅ ToolSelectionRow positioned above action bar")
+
+
+func _offer_initial_quest() -> void:
+	"""Offer first quest to player when farm loads"""
+	if not quest_manager or not farm:
+		return
+
+	# Get random faction from database
+	var faction = FactionDatabase.get_random_faction()
+	if faction.is_empty():
+		print("⚠️  No factions available for quests")
+		return
+
+	# Get resources from current biome
+	var resources = []
+	if farm.biotic_flux_biome:
+		resources = farm.biotic_flux_biome.get_harvestable_emojis()
+
+	if resources.is_empty():
+		resources = ["🌾", "👥"]  # Fallback
+
+	# Generate and offer quest
+	var quest = quest_manager.offer_quest(faction, "BioticFlux", resources)
+	if not quest.is_empty():
+		# Auto-accept first quest for tutorial
+		quest_manager.accept_quest(quest)
+		print("   📜 Initial quest offered: %s - %s" % [quest.get("faction", ""), quest.get("body", "")])

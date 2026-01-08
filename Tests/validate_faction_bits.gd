@@ -4,7 +4,7 @@ extends SceneTree
 ## Validate faction bit encodings
 ## Decode all 32 factions and verify bits match personalities
 
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
 # Bit encoding reference
 const BIT_MEANINGS = [

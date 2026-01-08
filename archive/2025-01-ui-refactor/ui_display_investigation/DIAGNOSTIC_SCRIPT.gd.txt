@@ -1,0 +1,161 @@
+# UI Diagnostic Script
+# Add this to PlayerShell.gd to debug UI positioning issues
+
+func _debug_print_ui_hierarchy() -> void:
+	"""Print complete UI hierarchy with positions and sizes"""
+	print("\n=== UI HIERARCHY DEBUG ===")
+	_debug_print_node(self, 0)
+	print("=== END UI HIERARCHY ===\n")
+
+
+func _debug_print_node(node: Node, depth: int) -> void:
+	"""Recursively print node info"""
+	var indent = "  ".repeat(depth)
+
+	if node is Control:
+		var ctrl = node as Control
+		print("%s%s [%s]" % [indent, node.name, node.get_class()])
+		print("%s  global_pos: %s" % [indent, ctrl.global_position])
+		print("%s  size: %s" % [indent, ctrl.size])
+		print("%s  anchors: L%.1f T%.1f R%.1f B%.1f" % [
+			indent,
+			ctrl.anchor_left,
+			ctrl.anchor_top,
+			ctrl.anchor_right,
+			ctrl.anchor_bottom
+		])
+		print("%s  offsets: L%.0f T%.0f R%.0f B%.0f" % [
+			indent,
+			ctrl.offset_left,
+			ctrl.offset_top,
+			ctrl.offset_right,
+			ctrl.offset_bottom
+		])
+		print("%s  z_index: %d" % [indent, ctrl.z_index])
+		print("%s  visible: %s" % [indent, ctrl.visible])
+		if ctrl is Container:
+			print("%s  [CONTAINER]" % indent)
+		if ctrl.has_meta("layout_mode"):
+			print("%s  layout_mode: %d" % [indent, ctrl.get_meta("layout_mode")])
+	else:
+		print("%s%s [%s]" % [indent, node.name, node.get_class()])
+
+	# Print children
+	for child in node.get_children():
+		_debug_print_node(child, depth + 1)
+
+
+func _debug_action_bars() -> void:
+	"""Debug action bar positioning specifically"""
+	print("\n=== ACTION BAR DEBUG ===")
+
+	var action_bar_layer = get_node_or_null("ActionBarLayer")
+	if action_bar_layer:
+		print("ActionBarLayer found:")
+		print("  size: %s" % action_bar_layer.size)
+		print("  global_pos: %s" % action_bar_layer.global_position)
+		print("  anchors: L%.1f T%.1f R%.1f B%.1f" % [
+			action_bar_layer.anchor_left,
+			action_bar_layer.anchor_top,
+			action_bar_layer.anchor_right,
+			action_bar_layer.anchor_bottom
+		])
+	else:
+		print("ActionBarLayer NOT FOUND")
+
+	if action_preview_row:
+		print("\nActionPreviewRow:")
+		print("  size: %s" % action_preview_row.size)
+		print("  global_pos: %s" % action_preview_row.global_position)
+		print("  position: %s" % action_preview_row.position)
+		print("  anchors: L%.1f T%.1f R%.1f B%.1f" % [
+			action_preview_row.anchor_left,
+			action_preview_row.anchor_top,
+			action_preview_row.anchor_right,
+			action_preview_row.anchor_bottom
+		])
+		print("  offsets: L%.0f T%.0f R%.0f B%.0f" % [
+			action_preview_row.offset_left,
+			action_preview_row.offset_top,
+			action_preview_row.offset_right,
+			action_preview_row.offset_bottom
+		])
+		print("  layout_mode: %d" % action_preview_row.layout_mode)
+		print("  size_flags_h: %d" % action_preview_row.size_flags_horizontal)
+		print("  size_flags_v: %d" % action_preview_row.size_flags_vertical)
+		print("  custom_min_size: %s" % action_preview_row.custom_minimum_size)
+		print("  parent: %s" % action_preview_row.get_parent().name)
+	else:
+		print("\nActionPreviewRow is NULL")
+
+	var tool_bar = get_node_or_null("ActionBarLayer/ToolSelectionRow")
+	if tool_bar:
+		print("\nToolSelectionRow:")
+		print("  size: %s" % tool_bar.size)
+		print("  global_pos: %s" % tool_bar.global_position)
+		print("  position: %s" % tool_bar.position)
+		print("  anchors: L%.1f T%.1f R%.1f B%.1f" % [
+			tool_bar.anchor_left,
+			tool_bar.anchor_top,
+			tool_bar.anchor_right,
+			tool_bar.anchor_bottom
+		])
+		print("  offsets: L%.0f T%.0f R%.0f B%.0f" % [
+			tool_bar.offset_left,
+			tool_bar.offset_top,
+			tool_bar.offset_right,
+			tool_bar.offset_bottom
+		])
+		print("  layout_mode: %d" % tool_bar.layout_mode)
+		print("  custom_min_size: %s" % tool_bar.custom_minimum_size)
+	else:
+		print("\nToolSelectionRow NOT FOUND")
+
+	print("\nViewport info:")
+	print("  size: %s" % get_viewport().get_visible_rect().size)
+	print("  PlayerShell size: %s" % size)
+
+	print("=== END ACTION BAR DEBUG ===\n")
+
+
+func _debug_keyboard_hints() -> void:
+	"""Debug keyboard hints button visibility"""
+	print("\n=== KEYBOARD HINTS DEBUG ===")
+
+	var overlay_layer = get_node_or_null("OverlayLayer")
+	if overlay_layer:
+		print("OverlayLayer:")
+		print("  size: %s" % overlay_layer.size)
+		print("  children: %d" % overlay_layer.get_child_count())
+
+		# Look for KeyboardHintButton
+		for child in overlay_layer.get_children():
+			if "Keyboard" in child.name or child.name == "KeyboardHintButton":
+				print("\nFound: %s" % child.name)
+				if child is Control:
+					print("  visible: %s" % child.visible)
+					print("  size: %s" % child.size)
+					print("  global_pos: %s" % child.global_position)
+					print("  position: %s" % child.position)
+					print("  z_index: %d" % child.z_index)
+					print("  modulate: %s" % child.modulate)
+					print("  mouse_filter: %d" % child.mouse_filter)
+	else:
+		print("OverlayLayer NOT FOUND")
+
+	print("=== END KEYBOARD HINTS DEBUG ===\n")
+
+
+# USAGE:
+# Call these from _ready() or from a test button:
+#
+# func _ready():
+#     # ... existing code ...
+#     call_deferred("_debug_action_bars")
+#     call_deferred("_debug_keyboard_hints")
+#
+# Or press a key to trigger:
+# func _input(event):
+#     if event is InputEventKey and event.keycode == KEY_F12 and event.pressed:
+#         _debug_action_bars()
+#         _debug_keyboard_hints()

@@ -9,7 +9,7 @@ extends Node
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
 
 # Base resolution for design (all proportions calculated from this)
-const BASE_RESOLUTION = Vector2(1920, 1080)
+const BASE_RESOLUTION = Vector2(960, 540)  # Static viewport base resolution
 
 # Layout proportions (percentages of viewport)
 const TOP_BAR_HEIGHT_PERCENT = 0.06       # 6% of viewport height
@@ -107,7 +107,7 @@ func _recalculate_layout_percentages() -> void:
 
 func _on_viewport_resize():
 	"""Called when viewport size changes"""
-	viewport_size = get_viewport().size
+	viewport_size = get_viewport().get_visible_rect().size  # Logical viewport (960×540 with canvas_items)
 	_calculate_scale_factor()
 	_calculate_layout_dimensions()
 	_emit_layout_change()

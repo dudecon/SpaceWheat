@@ -58,22 +58,58 @@ func _stage_core_systems(farm: Farm) -> void:
 	assert(farm.grid != null, "Farm.grid is null!")
 	assert(farm.grid.biomes != null, "Farm.grid.biomes is null!")
 
-	# Verify IconRegistry is available
+	# Verify IconRegistry is available and fully loaded
 	var icon_registry = get_node_or_null("/root/IconRegistry")
 	assert(icon_registry != null, "IconRegistry not found! Autoloads not initialized.")
+
+	# Wait for IconRegistry to finish loading if needed
+	if icon_registry.icons.size() == 0:
+		push_warning("IconRegistry not fully loaded yet, waiting...")
+		await get_tree().process_frame
+
+	print("  ✓ IconRegistry ready (%d icons)" % icon_registry.icons.size())
+
+	# CRITICAL: Rebuild biome quantum operators now that IconRegistry is guaranteed ready
+	# Biomes may have initialized before IconRegistry loaded all icons
+	print("  🔧 Rebuilding biome quantum operators...")
+	if farm.has_method("rebuild_all_biome_operators"):
+		farm.rebuild_all_biome_operators()
+	else:
+		# Fallback: rebuild each biome directly
+		for biome_name in farm.grid.biomes.keys():
+			var biome = farm.grid.biomes[biome_name]
+			if biome.has_method("rebuild_quantum_operators"):
+				biome.rebuild_quantum_operators()
+	print("  ✓ All biome operators rebuilt\n")
 
 	# Verify all biomes initialized correctly
 	for biome_name in farm.grid.biomes.keys():
 		var biome = farm.grid.biomes[biome_name]
 		assert(biome != null, "Biome '%s' is null!" % biome_name)
-		assert(biome.bath != null, "Biome '%s' has null bath!" % biome_name)
-		assert(biome.bath._hamiltonian != null, "Biome '%s' bath has null hamiltonian!" % biome_name)
-		assert(biome.bath._lindblad != null, "Biome '%s' bath has null lindblad!" % biome_name)
+
+		# Check for either old (bath) or new (quantum_computer) architecture
+		var has_bath = biome.bath != null
+		var has_qc = biome.quantum_computer != null
+		assert(has_bath or has_qc, "Biome '%s' has neither bath nor quantum_computer!" % biome_name)
+
+		# Verify bath components if using old architecture
+		if has_bath:
+			assert(biome.bath._hamiltonian != null, "Biome '%s' bath has null hamiltonian!" % biome_name)
+			assert(biome.bath._lindblad != null, "Biome '%s' bath has null lindblad!" % biome_name)
+
 		print("  ✓ Biome '%s' verified" % biome_name)
 
 	# Any additional farm finalization
 	if farm.has_method("finalize_setup"):
 		farm.finalize_setup()
+
+	# CRITICAL: Set active_farm in GameStateManager for save/load to work
+	var game_state_mgr = get_node_or_null("/root/GameStateManager")
+	if game_state_mgr:
+		game_state_mgr.active_farm = farm
+		print("  ✓ GameStateManager.active_farm set")
+	else:
+		push_warning("GameStateManager not found - save/load will not work!")
 
 	print("  ✓ Core systems ready\n")
 	core_systems_ready.emit()

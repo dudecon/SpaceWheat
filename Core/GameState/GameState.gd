@@ -172,9 +172,10 @@ func _init():
 	active_contracts.clear()
 
 	# Initialize player vocabulary with starter emojis
-	# 🌾 (Wheat) and 🍄 (Mushroom) are the magical starter emojis!
-	# They appear on the axial spine, giving access to ~50% of factions
-	known_emojis = ["🌾", "🍄"]
+	# 🍞 (Bread) and 👥 (People) are the starter emojis
+	# These match faction signatures, not axial vocabulary
+	# Provides access to community/production-themed factions
+	known_emojis = ["🍞", "👥"]
 
 
 ## Convenience method to create state for a specific grid size

@@ -73,6 +73,34 @@ signal resource_registered(emoji: String, is_producible: bool, is_consumable: bo
 # HAUNTED UI FIX: Prevent double-initialization when _ready() called multiple times
 var _is_initialized: bool = false
 
+# Performance: Control quantum evolution frequency
+var quantum_evolution_accumulator: float = 0.0
+var quantum_evolution_timestep: float = 0.033  # 30 Hz (60 FPS / 2)
+var quantum_evolution_enabled: bool = true  # Can be toggled for debugging
+
+# Performance: Lazy evolution for idle biomes
+# Lazy = no active farm plots (user not involved)
+var is_idle: bool = false
+var active_plot_count: int = 0  # Tracked by plot system
+
+
+## Safe VerboseConfig access wrapper (works even during compilation)
+func _verbose_log(level: String, category: String, emoji: String, message: String) -> void:
+	"""Safely log to VerboseConfig if available (avoids compile-time errors)"""
+	if not has_node("/root/VerboseConfig"):
+		return
+
+	var logger = get_node("/root/VerboseConfig")
+	match level:
+		"debug":
+			logger.debug(category, emoji, message)
+		"info":
+			logger.info(category, emoji, message)
+		"warn":
+			logger.warn(category, emoji, message)
+		"error":
+			logger.error(category, emoji, message)
+
 
 func _ready() -> void:
 	"""Initialize biome - called by Godot when node enters scene tree"""
@@ -101,18 +129,98 @@ func advance_simulation(dt: float) -> void:
 	"""Advance simulation by dt seconds (for manual time control in tests)"""
 	time_tracker.update(dt)
 
-	# Bath-first evolution
-	if bath:
-		bath.evolve(dt)
-		update_projections(dt)  # Pass dt for radius growth
+	# OPTIMIZATION: Skip evolution for idle biomes (no active plots)
+	# DISABLED FOR NOW - we want to see baseline evolution even without plots
+	#update_idle_status()
+	#if is_idle:
+	#	if Engine.get_frames_drawn() % 300 == 0:  # Print every 5 seconds
+	#		print("⏸️ %s: IDLE (skipping evolution)" % get_biome_type())
+	#	return  # Skip quantum evolution entirely
 
-		# Track quantum state evolution for dynamics calculation (lazy init)
-		if not dynamics_tracker:
-			dynamics_tracker = BiomeDynamicsTracker.new()
-		if dynamics_tracker:
-			_track_dynamics()
+	# OPTIMIZATION: Accumulate time and evolve at lower frequency (30 Hz instead of 60 Hz)
+	if quantum_evolution_enabled:
+		quantum_evolution_accumulator += dt
+
+		# Only evolve when accumulated time exceeds timestep
+		if quantum_evolution_accumulator >= quantum_evolution_timestep:
+			var actual_dt = quantum_evolution_accumulator
+			quantum_evolution_accumulator = 0.0
+
+			# Model C: QuantumComputer-based evolution (new architecture)
+			if quantum_computer and not bath:
+				_update_quantum_substrate(actual_dt)
+
+				# Track quantum state evolution for dynamics calculation (lazy init)
+				if not dynamics_tracker:
+					dynamics_tracker = BiomeDynamicsTracker.new()
+				if dynamics_tracker:
+					_track_dynamics()
+
+			# Legacy: Bath-based evolution (deprecated, but still supported)
+			elif bath:
+				# Emergency rebuild if operators are missing (should not happen with BootManager fix)
+				var icon_count = bath.active_icons.size()
+				var h_count = bath.hamiltonian_sparse.size()
+				var l_count = bath.lindblad_terms.size()
+
+				if icon_count > 0 and (h_count == 0 or l_count == 0):
+					push_warning("⚠️ %s: Icons present but operators missing - emergency rebuild" % get_biome_type())
+					bath.build_hamiltonian_from_icons(bath.active_icons)
+					bath.build_lindblad_from_icons(bath.active_icons)
+					_verbose_log("debug", "biome", "🔧", "Emergency rebuild: %s now has H=%d L=%d" % [
+						get_biome_type(),
+						bath.hamiltonian_sparse.size(),
+						bath.lindblad_terms.size()
+					])
+
+				bath.evolve(actual_dt)
+				update_projections(actual_dt)  # Pass dt for radius growth
+
+				# Track quantum state evolution for dynamics calculation (lazy init)
+				if not dynamics_tracker:
+					dynamics_tracker = BiomeDynamicsTracker.new()
+				if dynamics_tracker:
+					_track_dynamics()
+
+			# Warning only if NEITHER quantum_computer nor bath exists
+			elif not quantum_computer and not bath:
+				push_warning("Biome %s has no quantum backend - evolution disabled" % get_biome_type())
 	else:
-		push_warning("Biome %s has no bath - quantum evolution disabled" % get_biome_type())
+		# Evolution disabled (for debugging/testing)
+		pass
+
+
+func _update_quantum_substrate(dt: float) -> void:
+	"""Virtual method: Override in child classes for Model C evolution.
+
+	Called by advance_simulation() when quantum_computer exists.
+	Default implementation does nothing - child classes implement their own physics.
+	"""
+	pass
+
+
+func update_idle_status() -> void:
+	"""Check if biome should go idle (no active plots = user not involved)"""
+	# Biome is idle if no active plots (nothing planted or growing)
+	if active_plot_count == 0:
+		if not is_idle:
+			is_idle = true
+			# Optional debug: print("💤 Biome %s going idle (no active plots)" % get_biome_type())
+	else:
+		if is_idle:
+			is_idle = false
+			# Optional debug: print("⚡ Biome %s waking up (%d active plots)" % [get_biome_type(), active_plot_count])
+
+
+func on_plot_planted(position: Vector2i) -> void:
+	"""Called when a plot is planted in this biome"""
+	active_plot_count += 1
+	is_idle = false
+
+
+func on_plot_harvested(position: Vector2i) -> void:
+	"""Called when a plot is harvested in this biome"""
+	active_plot_count = max(0, active_plot_count - 1)
 
 
 # ============================================================================
@@ -144,6 +252,64 @@ func allocate_register_for_plot(position: Vector2i, north_emoji: String = "🌾"
 
 	qubit_created.emit(position, qubit_reg)
 	return reg_id
+
+
+# ============================================================================
+# MODEL C: Bath & Subplot API (Analog Model Support)
+# ============================================================================
+
+func allocate_subplot_for_plot(position: Vector2i, north_emoji: String = "🔥", south_emoji: String = "❄️") -> int:
+	"""
+	Allocate a subplot in bath for a planted plot (Model C - Analog).
+
+	Model C: Bath manages full composite state - plots define measurement axes.
+	This method tracks subplot metadata without creating independent quantum states.
+
+	Args:
+		position: Grid position of the plot
+		north_emoji: North pole measurement basis
+		south_emoji: South pole measurement basis
+
+	Returns:
+		subplot_id (0 for success, -1 for failure)
+	"""
+	# Model C uses quantum_computer, Model B uses bath - check for either
+	if not bath and not quantum_computer:
+		push_warning("BiomeBase.allocate_subplot_for_plot: neither bath nor quantum_computer available! Biome may not have initialized.")
+		return -1
+
+	# Model C: Bath manages the full state - plots just track their measurement axis
+	# No need to allocate separate quantum states
+	# Just track metadata (subplot_id could be sequential, or just 0 for success)
+
+	# Store metadata in plot_registers for compatibility
+	var qubit_reg = QuantumRegister.new(0, get_biome_type(), 0)
+	qubit_reg.north_emoji = north_emoji
+	qubit_reg.south_emoji = south_emoji
+	qubit_reg.is_planted = true
+	plot_registers[position] = qubit_reg
+
+	qubit_created.emit(position, qubit_reg)
+
+	# Subplot allocation succeeds - bath manages full state
+	return 0
+
+
+func clear_subplot_for_plot(position: Vector2i) -> void:
+	"""
+	Clear subplot metadata when plot is unplanted (Model C - Analog).
+
+	Model C: Bath state persists - this only clears the measurement axis metadata.
+	The underlying bath continues evolving with all emojis intact.
+
+	Args:
+		position: Grid position of the plot to clear
+	"""
+	if position in plot_registers:
+		plot_registers.erase(position)
+
+	# Note: Bath state is NOT cleared - it's shared across all plots in the biome
+	# Only the measurement axis reference is removed
 
 func get_register_for_plot(position: Vector2i) -> QuantumRegister:
 	"""Get the QuantumRegister metadata for a plot."""
@@ -274,7 +440,7 @@ func boost_coupling(emoji: String, target_emoji: String, factor: float = 1.5) ->
 
 	# Rebuild Hamiltonian with new coupling
 	bath.build_hamiltonian_from_icons(bath.active_icons)
-	print("✅ Boosted coupling %s → %s by %.1f× (%.3f → %.3f)" %
+	_verbose_log("info","biome", "✅", "Boosted coupling %s → %s by %.1f× (%.3f → %.3f)" %
 		[emoji, target_emoji, factor, current_coupling, new_coupling])
 
 	return true
@@ -318,7 +484,7 @@ func tune_decoherence(emoji: String, factor: float = 1.5) -> bool:
 
 	# Rebuild Lindblad with new rates
 	bath.build_lindblad_from_icons(bath.active_icons)
-	print("✅ Tuned decoherence for %s by %.1f× (decay: %.4f)" %
+	_verbose_log("info","biome", "✅", "Tuned decoherence for %s by %.1f× (decay: %.4f)" %
 		[emoji, factor, target_icon.decay_rate])
 
 	return true
@@ -360,7 +526,7 @@ func add_time_dependent_driver(emoji: String, driver_type: String = "cosine", fr
 
 	# Rebuild Hamiltonian with time-dependent terms
 	bath.build_hamiltonian_from_icons(bath.active_icons)
-	print("✅ Added %s driver to %s (freq: %.1f Hz, amp: %.1f)" %
+	_verbose_log("info","biome", "✅", "Added %s driver to %s (freq: %.1f Hz, amp: %.1f)" %
 		[driver_type, emoji, frequency, amplitude])
 
 	return true
@@ -407,7 +573,7 @@ func pump_to_emoji(source_emoji: String, target_emoji: String, pump_rate: float 
 
 	# Rebuild Lindblad with new pump channel
 	bath.build_lindblad_from_icons(bath.active_icons)
-	print("✅ Added pump %s → %s (rate: %.4f, total: %.4f)" %
+	_verbose_log("info","biome", "✅", "Added pump %s → %s (rate: %.4f, total: %.4f)" %
 		[source_emoji, target_emoji, pump_rate, source_icon.lindblad_outgoing[target_emoji]])
 
 	return true
@@ -449,7 +615,7 @@ func reset_to_pure_state(emoji: String, reset_rate: float = 0.1) -> bool:
 		var old_rate = target_icon.get_meta("reset_rate")
 		target_icon.set_meta("reset_rate", old_rate + reset_rate)
 
-	print("✅ Set reset for %s to pure state (rate: %.3f)" % [emoji, reset_rate])
+	_verbose_log("info","biome", "✅", "Set reset for %s to pure state (rate: %.3f)" % [emoji, reset_rate])
 	return true
 
 
@@ -489,7 +655,7 @@ func reset_to_mixed_state(emoji: String, reset_rate: float = 0.1) -> bool:
 		var old_rate = target_icon.get_meta("reset_rate")
 		target_icon.set_meta("reset_rate", old_rate + reset_rate)
 
-	print("✅ Set reset for %s to mixed state (rate: %.3f)" % [emoji, reset_rate])
+	_verbose_log("info","biome", "✅", "Set reset for %s to mixed state (rate: %.3f)" % [emoji, reset_rate])
 	return true
 
 
@@ -512,7 +678,7 @@ func create_cluster_state(positions: Array[Vector2i]) -> bool:
 	if not quantum_computer or positions.size() < 2:
 		return false
 
-	print("🌐 Creating cluster state with %d plots" % positions.size())
+	_verbose_log("debug","quantum", "🌐", "Creating cluster state with %d plots" % positions.size())
 
 	var success_count = 0
 	for i in range(positions.size() - 1):
@@ -530,14 +696,14 @@ func create_cluster_state(positions: Array[Vector2i]) -> bool:
 		# Create Bell pair entanglement
 		if quantum_computer.entangle_plots(reg_a, reg_b):
 			success_count += 1
-			print("  🔗 Entangled %s ↔ %s" % [pos_a, pos_b])
+			_verbose_log("debug","quantum", "🔗", "Entangled %s ↔ %s" % [pos_a, pos_b])
 
 	# Store in bell_gates history for UI visualization
 	if success_count > 0:
 		bell_gates.append(positions.duplicate())
 		bell_gate_created.emit(positions)
 
-	print("✅ Cluster created with %d entanglements" % success_count)
+	_verbose_log("info","quantum", "✅", "Cluster created with %d entanglements" % success_count)
 	return success_count > 0
 
 
@@ -582,7 +748,7 @@ func set_measurement_trigger(trigger_pos: Vector2i, target_positions: Array[Vect
 		push_warning("No valid targets in trigger component")
 		return false
 
-	print("✅ Measurement trigger set: %s → %d targets" % [trigger_pos, valid_targets])
+	_verbose_log("info","quantum", "✅", "Measurement trigger set: %s → %d targets" % [trigger_pos, valid_targets])
 	return true
 
 
@@ -615,7 +781,7 @@ func remove_entanglement(pos_a: Vector2i, pos_b: Vector2i) -> bool:
 	if quantum_computer.entanglement_graph.has(reg_b):
 		quantum_computer.entanglement_graph[reg_b].erase(reg_a)
 
-	print("✅ Removed entanglement between %s and %s" % [pos_a, pos_b])
+	_verbose_log("info","quantum", "✅", "Removed entanglement between %s and %s" % [pos_a, pos_b])
 	return true
 
 
@@ -634,7 +800,7 @@ func batch_entangle(positions: Array[Vector2i]) -> bool:
 	if not quantum_computer or positions.size() < 2:
 		return false
 
-	print("🔗 Batch entangling %d plots" % positions.size())
+	_verbose_log("debug","quantum", "🔗", "Batch entangling %d plots" % positions.size())
 
 	var success_count = 0
 	for i in range(positions.size() - 1):
@@ -649,13 +815,13 @@ func batch_entangle(positions: Array[Vector2i]) -> bool:
 
 		if quantum_computer.entangle_plots(reg_a, reg_b):
 			success_count += 1
-			print("  🔗 Entangled %s ↔ %s" % [pos_a, pos_b])
+			_verbose_log("debug","quantum", "🔗", "Entangled %s ↔ %s" % [pos_a, pos_b])
 
 	if success_count > 0:
 		bell_gates.append(positions.duplicate())
 		bell_gate_created.emit(positions)
 
-	print("✅ Created %d Bell pairs" % success_count)
+	_verbose_log("info","quantum", "✅", "Created %d Bell pairs" % success_count)
 	return success_count > 0
 
 
@@ -683,7 +849,7 @@ func initialize_energy_tap_system() -> void:
 	sink_icon.lindblad_outgoing = {}
 
 	bath.active_icons.append(sink_icon)
-	print("✅ Energy tap system initialized with sink state")
+	_verbose_log("info","biome", "✅", "Energy tap system initialized with sink state")
 
 
 func place_energy_tap(target_emoji: String, drain_rate: float = 0.05) -> bool:
@@ -728,7 +894,7 @@ func place_energy_tap(target_emoji: String, drain_rate: float = 0.05) -> bool:
 	# Rebuild Lindblad with new drain operator
 	bath.build_lindblad_from_icons(bath.active_icons)
 
-	print("✅ Energy tap placed on %s (rate: %.4f → sink)" %
+	_verbose_log("info","biome", "✅", "Energy tap placed on %s (rate: %.4f → sink)" %
 		[target_emoji, target_icon.lindblad_outgoing[sink_emoji]])
 
 	return true
@@ -904,7 +1070,7 @@ func entangle_plots(position_a: Vector2i, position_b: Vector2i) -> bool:
 		# Emit signal for visualization/tracking
 		bell_gate_created.emit([position_a, position_b])
 
-		print("🔗 Entangled plots %s ↔ %s" % [position_a, position_b])
+		_verbose_log("info","quantum", "🔗", "Entangled plots %s ↔ %s" % [position_a, position_b])
 
 	return success
 
@@ -946,7 +1112,7 @@ func batch_measure_plots(position: Vector2i) -> Dictionary:
 				qubit_measured.emit(plot_pos, outcomes[reg_id])
 				break
 
-	print("🌀 Batch measurement on component %d: %s" % [comp.component_id, outcomes])
+	_verbose_log("debug","quantum", "🌀", "Batch measurement on component %d: %s" % [comp.component_id, outcomes])
 	return outcomes
 
 # ============================================================================
@@ -969,6 +1135,22 @@ func _initialize_bath() -> void:
 		bath.build_hamiltonian_from_icons(icons)
 		bath.build_lindblad_from_icons(icons)
 	"""
+	pass
+
+
+func rebuild_quantum_operators() -> void:
+	"""Rebuild Hamiltonian and Lindblad operators (call after IconRegistry is ready)
+
+	This is needed when biomes initialize before IconRegistry is available.
+	Child classes can override to implement custom rebuild logic.
+	"""
+	if bath:
+		# Always rebuild if bath exists - icons may be incomplete from partial IconRegistry init
+		_rebuild_bath_operators()
+
+
+func _rebuild_bath_operators() -> void:
+	"""Attempt to rebuild bath operators from IconRegistry (override in child classes)"""
 	pass
 
 
@@ -1044,7 +1226,7 @@ func initialize_bath_from_emojis(emojis: Array[String], initial_weights: Diction
 		bath.build_hamiltonian_from_icons(icons)
 		bath.build_lindblad_from_icons(icons)
 
-	print("🛁 Bath initialized: %d emojis, %d icons" % [emojis.size(), icons.size()])
+	_verbose_log("info","biome", "🛁", "Bath initialized: %d emojis, %d icons" % [emojis.size(), icons.size()])
 
 
 func hot_drop_emoji(emoji: String, initial_amplitude: Complex = null) -> bool:
@@ -1105,7 +1287,7 @@ func hot_drop_emoji(emoji: String, initial_amplitude: Complex = null) -> bool:
 	# Renormalize after injection
 	bath.normalize()
 
-	print("🚁 Hot dropped %s into %s biome (now %d emojis)" % [emoji, get_biome_type(), bath.emoji_list.size()])
+	_verbose_log("info","biome", "🚁", "Hot dropped %s into %s biome (now %d emojis)" % [emoji, get_biome_type(), bath.emoji_list.size()])
 	return true
 
 
@@ -1166,7 +1348,7 @@ func boost_hamiltonian_coupling(emoji_a: String, emoji_b: String, boost_factor: 
 	# Rebuild Hamiltonian with new coupling
 	bath.build_hamiltonian_from_icons(bath.active_icons)
 
-	print("⚡ Boosted coupling %s ↔ %s: %.3f → %.3f (×%.2f)" %
+	_verbose_log("info","biome", "⚡", "Boosted coupling %s ↔ %s: %.3f → %.3f (×%.2f)" %
 		[emoji_a, emoji_b, old_coupling, icon_a.hamiltonian_couplings[emoji_b], boost_factor])
 
 	return true
@@ -1221,7 +1403,7 @@ func tune_lindblad_rate(source: String, target: String, rate_factor: float) -> b
 	# Rebuild Lindblad operators with new rate
 	bath.build_lindblad_from_icons(bath.active_icons)
 
-	print("🌊 Tuned Lindblad %s → %s: γ=%.4f → %.4f (×%.2f)" %
+	_verbose_log("info","biome", "🌊", "Tuned Lindblad %s → %s: γ=%.4f → %.4f (×%.2f)" %
 		[source, target, old_rate, icon_source.lindblad_outgoing[target], rate_factor])
 
 	return true
@@ -1275,10 +1457,10 @@ func add_time_driver(emoji: String, frequency: float, amplitude: float, phase: f
 	bath.build_hamiltonian_from_icons(bath.active_icons)
 
 	if amplitude > 0.0:
-		print("📡 Added driver to %s: ω=%.3f, A=%.3f, φ=%.2f" %
+		_verbose_log("info","biome", "📡", "Added driver to %s: ω=%.3f, A=%.3f, φ=%.2f" %
 			[emoji, frequency, amplitude, phase])
 	else:
-		print("📡 Removed driver from %s" % emoji)
+		_verbose_log("info","biome", "📡", "Removed driver from %s" % emoji)
 
 	return true
 
@@ -1318,7 +1500,7 @@ func create_projection(position: Vector2i, north: String, south: String) -> Reso
 				# Start with zero amplitude (will adjust after south check)
 				bath.inject_emoji(north, north_icon, Complex.zero())
 				injected = true
-				print("  💉 Injected %s into %s bath" % [north, get_biome_type()])
+				_verbose_log("debug","biome", "💉", "Injected %s into %s bath" % [north, get_biome_type()])
 			else:
 				push_warning("  ⚠️  No Icon for %s in IconRegistry" % north)
 
@@ -1331,14 +1513,14 @@ func create_projection(position: Vector2i, north: String, south: String) -> Reso
 				var north_amp = bath.get_amplitude(north)
 				bath.inject_emoji(south, south_icon, north_amp)
 				injected = true
-				print("  💉 Injected %s into %s bath (amplitude matched to %s)" % [south, get_biome_type(), north])
+				_verbose_log("debug","biome", "💉", "Injected %s into %s bath (amplitude matched to %s)" % [south, get_biome_type(), north])
 			else:
 				push_warning("  ⚠️  No Icon for %s in IconRegistry" % south)
 
 		if injected:
 			# Normalize bath to maintain total probability = 1.0
 			bath.normalize()
-			print("  ✅ Bath now has %d emojis: %s" % [bath.emoji_list.size(), str(bath.emoji_list)])
+			_verbose_log("info","biome", "✅", "Bath now has %d emojis: %s" % [bath.emoji_list.size(), str(bath.emoji_list)])
 
 	# ========================================================================
 	# PROJECTION PHASE: Both emojis guaranteed to exist (or warnings issued)
@@ -1352,7 +1534,7 @@ func create_projection(position: Vector2i, north: String, south: String) -> Reso
 	# No need to set theta/phi/radius - they're computed from bath!
 	# The qubit is now a live viewport into the bath state
 
-	print("🔭 Created live projection %s↔%s at %s (θ=%.2f from bath)" % [north, south, position, qubit.theta])
+	_verbose_log("debug","biome", "🔭", "Created live projection %s↔%s at %s (θ=%.2f from bath)" % [north, south, position, qubit.theta])
 
 	# Store projection metadata
 	active_projections[position] = {
@@ -1735,7 +1917,7 @@ func mark_bell_gate(positions: Array) -> void:
 	bell_gates.append(positions.duplicate())
 	bell_gate_created.emit(positions)
 
-	print("🔔 Bell gate created at biome %s: %s" % [get_biome_type(), _format_positions(positions)])
+	_verbose_log("info","quantum", "🔔", "Bell gate created at biome %s: %s" % [get_biome_type(), _format_positions(positions)])
 
 
 func get_bell_gate(index: int) -> Array:
@@ -1785,10 +1967,16 @@ func bell_gate_count() -> int:
 
 func get_status() -> Dictionary:
 	"""Get current biome status (override to add custom fields)"""
-	var qubit_count = quantum_computer.get_total_qubits() if quantum_computer else 0
+	# Get quantum system size (works for both bath and quantum_computer)
+	var quantum_size = 0
+	if bath and bath.emoji_list:
+		quantum_size = bath.emoji_list.size()
+	elif quantum_computer and quantum_computer.register_map:
+		quantum_size = quantum_computer.register_map.num_qubits
+
 	return BiomeUtilities.create_status_dict({
 		"type": get_biome_type(),
-		"qubits": qubit_count,
+		"qubits": quantum_size,
 		"time": time_tracker.time_elapsed,
 		"cycles": time_tracker.cycle_count
 	})
@@ -2008,14 +2196,14 @@ func pump_emoji(rest_emoji: String, target_emoji: String, pump_rate: float, dura
 
 	# Ensure both emojis are in the bath
 	if not bath.has_emoji(rest_emoji):
-		print("   ℹ️  Injecting %s into bath for pumping" % rest_emoji)
+		_verbose_log("debug","biome", "ℹ️", "Injecting %s into bath for pumping" % rest_emoji)
 		var rest_icon = Icon.new()
 		rest_icon.emoji = rest_emoji
 		rest_icon.display_name = rest_emoji
 		bath.inject_emoji(rest_emoji, rest_icon)
 
 	if not bath.has_emoji(target_emoji):
-		print("   ℹ️  Injecting %s into bath for pumping" % target_emoji)
+		_verbose_log("debug","biome", "ℹ️", "Injecting %s into bath for pumping" % target_emoji)
 		var target_icon = Icon.new()
 		target_icon.emoji = target_emoji
 		target_icon.display_name = target_emoji
@@ -2042,7 +2230,7 @@ func pump_emoji(rest_emoji: String, target_emoji: String, pump_rate: float, dura
 	var steps = int(duration / dt)
 	var total_amplitude_pumped = 0.0
 
-	print("💧 Pumping %s → %s at rate %.3f/sec for %.2f sec (%d steps)" % [
+	_verbose_log("debug","biome", "💧", "Pumping %s → %s at rate %.3f/sec for %.2f sec (%d steps)" % [
 		rest_emoji, target_emoji, pump_rate, duration, steps
 	])
 
@@ -2057,7 +2245,7 @@ func pump_emoji(rest_emoji: String, target_emoji: String, pump_rate: float, dura
 	bath.build_lindblad_from_icons(bath.active_icons)
 
 	var p_target = bath.get_probability(target_emoji)
-	print("✅ Pump complete: %s now at P=%.3f" % [target_emoji, p_target])
+	_verbose_log("info","biome", "✅", "Pump complete: %s now at P=%.3f" % [target_emoji, p_target])
 
 	return total_amplitude_pumped
 
@@ -2125,7 +2313,7 @@ func apply_reset(alpha: float, ref_state: String = "pure") -> void:
 	bath._density_matrix._enforce_trace_one()
 
 	var trace = bath._density_matrix.get_trace()
-	print("🔄 Reset applied: α=%.3f, ref='%s', Tr(ρ)=%.6f" % [alpha, ref_state, trace])
+	_verbose_log("debug","biome", "🔄", "Reset applied: α=%.3f, ref='%s', Tr(ρ)=%.6f" % [alpha, ref_state, trace])
 
 
 # ============================================================================
@@ -2154,7 +2342,7 @@ func harvest_all_plots() -> Array:
 			# Harvest this plot
 			var result = plot.harvest()
 			results.append(result)
-			print("   📍 Harvested plot at %s: yield=%d" % [position, result.get("yield", 0)])
+			_verbose_log("debug","farm", "📍", "Harvested plot at %s: yield=%d" % [position, result.get("yield", 0)])
 
 	# Aggregate results
 	var total_yield = 0
@@ -2165,7 +2353,7 @@ func harvest_all_plots() -> Array:
 			successful_harvests += 1
 			total_yield += result.get("yield", 0)
 
-	print("✂️  BiomeBase.harvest_all_plots(): %d harvested, %d credits total" % [
+	_verbose_log("info","farm", "✂️", "BiomeBase.harvest_all_plots(): %d harvested, %d credits total" % [
 		successful_harvests, total_yield
 	])
 
@@ -2262,7 +2450,7 @@ func setup_energy_tap(target_emoji: String, drain_rate: float = 0.1) -> bool:
 	bath.build_hamiltonian_from_icons(bath.active_icons)
 	bath.build_lindblad_from_icons(bath.active_icons)
 
-	print("⚡ Setup energy tap drain for %s (κ=%.3f/sec) in %s" % [
+	_verbose_log("info","biome", "⚡", "Setup energy tap drain for %s (κ=%.3f/sec) in %s" % [
 		target_emoji, drain_rate, get_biome_type()
 	])
 

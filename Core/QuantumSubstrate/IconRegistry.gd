@@ -2,9 +2,13 @@ extends Node
 
 ## IconRegistry: Singleton registry of all Icons in the game
 ## Automatically loaded at game start
+##
+## Model C upgrade: Icons are now built from Factions using IconBuilder
+## Each Icon is the additive union of all faction contributions
 
-# Preload CoreIcons
-const CoreIcons = preload("res://Core/Icons/CoreIcons.gd")
+# Preload Faction system (replaces CoreIcons)
+const CoreFactions = preload("res://Core/Factions/CoreFactions.gd")
+const IconBuilder = preload("res://Core/Factions/IconBuilder.gd")
 
 ## Dictionary mapping emoji → Icon resource
 var icons: Dictionary = {}
@@ -35,22 +39,22 @@ func has_icon(emoji: String) -> bool:
 	return icons.has(emoji)
 
 ## Get all registered emojis
-func get_all_emojis() -> Array[String]:
-	var result: Array[String] = []
+func get_all_emojis() -> Array:
+	var result: Array = []
 	for emoji in icons.keys():
 		result.append(emoji)
 	return result
 
 ## Get all Icons (for building bath operators)
-func get_all_icons() -> Array[Icon]:
-	var result: Array[Icon] = []
+func get_all_icons() -> Array:
+	var result: Array = []
 	for icon in icons.values():
 		result.append(icon)
 	return result
 
 ## Get Icons by tag
-func get_icons_by_tag(tag: String) -> Array[Icon]:
-	var result: Array[Icon] = []
+func get_icons_by_tag(tag: String) -> Array:
+	var result: Array = []
 	for icon_variant in icons.values():
 		var icon: Icon = icon_variant as Icon
 		if icon and tag in icon.tags:
@@ -58,19 +62,25 @@ func get_icons_by_tag(tag: String) -> Array[Icon]:
 	return result
 
 ## Get Icons by trophic level
-func get_icons_by_trophic_level(level: int) -> Array[Icon]:
-	var result: Array[Icon] = []
+func get_icons_by_trophic_level(level: int) -> Array:
+	var result: Array = []
 	for icon_variant in icons.values():
 		var icon: Icon = icon_variant as Icon
 		if icon and icon.trophic_level == level:
 			result.append(icon)
 	return result
 
-## Load built-in Icons from CoreIcons
+## Build Icons from Factions (Model C upgrade)
 func _load_builtin_icons() -> void:
-	# Core Icons will be loaded from CoreIcons.gd
-	# Pass self to avoid circular dependency
-	CoreIcons.register_all(self)
+	# Build all Icons from faction contributions
+	var all_factions = CoreFactions.get_all()
+	var built_icons = IconBuilder.build_icons_for_factions(all_factions)
+
+	# Register each built Icon
+	for icon in built_icons:
+		register_icon(icon)
+
+	print("📜 Built %d icons from %d factions" % [built_icons.size(), all_factions.size()])
 
 ## Derive Icons from a Markov chain
 ## Useful for bootstrapping biome Icons from transition probabilities

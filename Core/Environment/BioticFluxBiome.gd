@@ -114,101 +114,178 @@ func _update_sun_visualization() -> void:
 
 
 func _initialize_bath() -> void:
-	"""Initialize quantum bath for BioticFlux biome (Phase 4 - Bath-First)
+	"""Initialize Model C quantum computer for BioticFlux biome.
 
-	BioticFlux emojis: ☀ 🌙 🌾 🍄 💀 🍂
-	Dynamics:
-	  - Sun/Moon oscillate with time-dependent self-energy (cosine/sine drivers)
-	  - Wheat grows from sun alignment (Lindblad transfer)
-	  - Mushroom grows from moon alignment (Lindblad transfer)
-	  - Death/Labor and Organic Matter provide recycling
+	MODEL C: 3-qubit analog system with RegisterMap
+	  Qubit 0 (Celestial): ☀ (north) ↔ 🌙 (south)
+	  Qubit 1 (Flora):     🌾 (north) ↔ 🍄 (south)
+	  Qubit 2 (Matter):    🍂 (north) ↔ 💀 (south)
+
+	Basis states (8 total):
+	  |000⟩ = ☀🌾🍂 = Sunny wheat with organic matter
+	  |111⟩ = 🌙🍄💀 = Moonlit mushrooms with death/decay
+	  ... and 6 intermediate states
+
+	Dynamics (via Icon-defined operators):
+	  - Sun/Moon: Hamiltonian oscillation (Rabi-like)
+	  - Wheat←Sun: Lindblad transfer (growth from sunlight)
+	  - Mushroom←Moon: Lindblad transfer (growth from moonlight)
+	  - Decay: Lindblad relaxation toward equilibrium
 	"""
-	print("🛁 Initializing BioticFlux quantum bath...")
+	print("🌿 Initializing BioticFlux Model C quantum computer...")
 
-	# Create bath with BioticFlux emoji basis
-	bath = QuantumBath.new()
-	var emojis = ["☀", "🌙", "🌾", "🍄", "💀", "🍂"]
-	bath.initialize_with_emojis(emojis)
+	# Create QuantumComputer with RegisterMap
+	quantum_computer = QuantumComputer.new("BioticFlux")
 
-	# Initialize weighted distribution
-	bath.initialize_weighted({
-		"☀": 0.25,   # Sun - primary driver
-		"🌙": 0.15,  # Moon - secondary driver
-		"🌾": 0.20,  # Wheat - cultivated crop
-		"🍄": 0.20,  # Mushroom - decomposer
-		"💀": 0.10,  # Death/Labor - terminus
-		"🍂": 0.10   # Organic Matter - recycling
-	})
+	# Allocate 3 qubits with emoji axes
+	quantum_computer.allocate_axis(0, "☀", "🌙")   # Celestial: Sun/Moon
+	quantum_computer.allocate_axis(1, "🌾", "🍄")  # Flora: Wheat/Mushroom
+	quantum_computer.allocate_axis(2, "🍂", "💀")  # Matter: Organic/Death
 
-	# Get Icons from IconRegistry (Farm._ensure_iconregistry() guarantees it exists)
-	var icon_registry = get_node("/root/IconRegistry")
+	# Initialize to balanced state (½☀ + ½🌙)(½🌾 + ½🍄)(½🍂 + ½💀)
+	# For simplicity, start with |000⟩ = ☀🌾🍂 (sunny, wheat, organic)
+	quantum_computer.initialize_basis(0)
+
+	print("  📊 RegisterMap configured (3 qubits, 8 basis states)")
+
+	# Get Icons from IconRegistry
+	var icon_registry = get_node_or_null("/root/IconRegistry")
 	if not icon_registry:
-		push_error("🛁 IconRegistry not available - bath init failed!")
+		push_error("🌿 IconRegistry not available!")
 		return
 
-	var icons: Array[Icon] = []
-	for emoji in emojis:
+	var icon_emojis = ["☀", "🌙", "🌾", "🍄", "🍂", "💀"]
+	var icons = {}
+
+	for emoji in icon_emojis:
 		var icon = icon_registry.get_icon(emoji)
 		if icon:
-			icons.append(icon)
+			icons[emoji] = icon
 		else:
-			push_warning("🛁 Icon not found for emoji: " + emoji)
+			push_warning("🌿 Icon not found: %s" % emoji)
 
 	# Tune BioticFlux-specific Icon parameters
-	var wheat_icon = icon_registry.get_icon("🌾")
-	if wheat_icon:
-		wheat_icon.lindblad_incoming["☀"] = 0.017
+	var wheat_icon_ref = icon_registry.get_icon("🌾")
+	if wheat_icon_ref:
+		wheat_icon_ref.lindblad_incoming["☀"] = 0.017
 		print("  🌾 Wheat: Lindblad incoming from ☀ = 0.017")
 
-	var mushroom_icon = icon_registry.get_icon("🍄")
-	if mushroom_icon:
-		mushroom_icon.lindblad_incoming["🌙"] = 0.40
+	var mushroom_icon_ref = icon_registry.get_icon("🍄")
+	if mushroom_icon_ref:
+		mushroom_icon_ref.lindblad_incoming["🌙"] = 0.40
 		print("  🍄 Mushroom: Lindblad incoming from 🌙 = 0.40")
 
-		# NOTE: Mushroom composting was here but Icons are Resources and can't hold Node references
-		# The composting effect should be handled via Lindblad operators in the Icon itself
-		# TODO: Move composting logic to Icon.lindblad_incoming if needed
-		# mushroom_icon.economy = farm.economy  # ← REMOVED: Invalid assignment
-		print("  🍄 Mushroom icon configured (composting via Lindblad operators)")
+	# Build operators using HamiltonianBuilder and LindbladBuilder
+	var HamBuilder = load("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
+	var LindBuilder = load("res://Core/QuantumSubstrate/LindbladBuilder.gd")
 
-	# Build Hamiltonian and Lindblad operators
-	bath.active_icons = icons
-	bath.build_hamiltonian_from_icons(icons)
-	bath.build_lindblad_from_icons(icons)
+	quantum_computer.hamiltonian = HamBuilder.build(icons, quantum_computer.register_map)
 
-	print("  ✅ Bath initialized with %d emojis, %d icons" % [emojis.size(), icons.size()])
-	print("  ✅ Hamiltonian: %d non-zero terms" % bath.hamiltonian_sparse.size())
-	print("  ✅ Lindblad: %d transfer terms" % bath.lindblad_terms.size())
+	# LindbladBuilder now returns {operators, gated_configs}
+	var lindblad_result = LindBuilder.build(icons, quantum_computer.register_map)
+	quantum_computer.lindblad_operators = lindblad_result.get("operators", [])
+	quantum_computer.gated_lindblad_configs = lindblad_result.get("gated_configs", [])
+
+	print("  ✅ Hamiltonian: %dx%d matrix" % [
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0,
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0
+	])
+	print("  ✅ Lindblad: %d operators + %d gated configs" % [
+		quantum_computer.lindblad_operators.size(),
+		quantum_computer.gated_lindblad_configs.size()])
+	print("  ✅ BioticFlux Model C ready (analog evolution enabled)")
+
+
+func rebuild_quantum_operators() -> void:
+	"""Rebuild Hamiltonian and Lindblad operators after IconRegistry is ready.
+
+	Called by BootManager in Stage 3A to ensure operators are built with
+	complete Icon definitions from the faction system.
+	"""
+	if not quantum_computer:
+		return
+
+	print("  🔧 BioticFlux: Rebuilding quantum operators...")
+
+	# Get Icons from IconRegistry (now guaranteed to be ready)
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		push_warning("🌿 IconRegistry not available for BioticFlux rebuild!")
+		return
+
+	var icon_emojis = ["☀", "🌙", "🌾", "🍄", "🍂", "💀"]
+	var icons = {}
+
+	for emoji in icon_emojis:
+		var icon = icon_registry.get_icon(emoji)
+		if icon:
+			icons[emoji] = icon
+		else:
+			push_warning("🌿 Icon not found during rebuild: %s" % emoji)
+
+	# Tune BioticFlux-specific Icon parameters
+	var wheat = icon_registry.get_icon("🌾")
+	if wheat:
+		wheat.lindblad_incoming["☀"] = 0.017  # Wheat gains from sun
+
+	var mushroom = icon_registry.get_icon("🍄")
+	if mushroom:
+		mushroom.lindblad_incoming["🌙"] = 0.40  # Mushroom gains from moon
+
+	# Rebuild operators using HamiltonianBuilder and LindbladBuilder
+	var HamBuilder = load("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
+	var LindBuilder = load("res://Core/QuantumSubstrate/LindbladBuilder.gd")
+
+	quantum_computer.hamiltonian = HamBuilder.build(icons, quantum_computer.register_map)
+
+	# LindbladBuilder returns {operators, gated_configs}
+	var lindblad_result = LindBuilder.build(icons, quantum_computer.register_map)
+	quantum_computer.lindblad_operators = lindblad_result.get("operators", [])
+	quantum_computer.gated_lindblad_configs = lindblad_result.get("gated_configs", [])
+
+	print("  ✅ BioticFlux: Hamiltonian %dx%d, Lindblad %d operators + %d gated" % [
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0,
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0,
+		quantum_computer.lindblad_operators.size(),
+		quantum_computer.gated_lindblad_configs.size()])
 
 
 func _update_quantum_substrate(dt: float) -> void:
-	"""Override parent: Update biome with quantum evolution"""
+	"""Override parent: Update biome with quantum evolution (Model C)"""
 	# Skip all evolution if in static mode (for testing)
 	if is_static:
 		return
 
-	# Bath-first mode: sync visualization from bath state
-	# (Bath evolves automatically in BiomeBase.advance_simulation())
-	_update_sun_visualization_from_bath()
-	_update_temperature_from_bath()
+	# MODEL C: Evolve quantum computer under Lindblad master equation
+	if quantum_computer:
+		quantum_computer.evolve(dt)
+
+	# Update visualizations from quantum state
+	_update_sun_visualization_from_quantum()
+	_update_temperature_from_quantum()
 
 
-func _update_sun_visualization_from_bath() -> void:
-	"""Update sun color based on bath state (bath-first mode)
+func _update_sun_visualization_from_quantum() -> void:
+	"""Update sun color based on quantum state (Model C)
 
-	Projects bath onto ☀/🌙 axis to determine day/night state
+	Queries quantum_computer for ☀/🌙 populations
 	Color transition: yellow (day) → deep purple (night)
 	"""
-	if not bath:
+	if not quantum_computer:
 		return
 
-	# Project bath onto sun/moon axis
-	var proj = bath.project_onto_axis("☀", "🌙")
-	if not proj.valid:
-		return
+	# Get sun/moon populations from quantum computer
+	var p_sun = quantum_computer.get_population("☀")
+	var p_moon = quantum_computer.get_population("🌙")
 
-	# Extract theta from projection (0 = sun dominant, π = moon dominant)
-	sun_display_theta = proj.theta
+	# Convert populations to theta (0 = sun, π = moon)
+	# p_sun = cos²(θ/2) → θ = 2 * acos(√p_sun)
+	var theta = 0.0
+	if p_sun + p_moon > 0.001:
+		# Normalize and compute angle
+		var p_sun_norm = p_sun / (p_sun + p_moon)
+		theta = 2.0 * acos(clamp(sqrt(p_sun_norm), 0.0, 1.0))
+	sun_display_theta = theta
 
 	# Color transition: θ=0 (yellow ☀️) → θ=π (deep purple/blue 🌙)
 	var day_night_progress = sun_display_theta / PI  # 0.0 (day) to 1.0 (night)
@@ -224,22 +301,18 @@ func _update_sun_visualization_from_bath() -> void:
 	sun_color = Color.from_hsv(hue, saturation, brightness, 1.0)
 
 
-func _update_temperature_from_bath() -> void:
-	"""Update temperature based on bath state (bath-first mode)
+func _update_temperature_from_quantum() -> void:
+	"""Update temperature based on quantum state (Model C)
 
-	Temperature varies with sun/moon dominance in bath
+	Temperature varies with sun/moon dominance
 	Peaks at both noon (sun dominant) and midnight (moon dominant)
 	"""
-	if not bath:
-		return
-
-	# Project bath onto sun/moon axis
-	var proj = bath.project_onto_axis("☀", "🌙")
-	if not proj.valid:
+	if not quantum_computer:
 		return
 
 	# Rabi-like oscillation: peaks at both θ=0 (noon) and θ=π (midnight)
-	var intensity = (1.0 + cos(2.0 * proj.theta)) / 2.0
+	# Using the cached sun_display_theta from visualization update
+	var intensity = (1.0 + cos(2.0 * sun_display_theta)) / 2.0
 
 	# Temperature ranges from 300K (twilight) to 400K (noon/midnight)
 	var heat_factor = intensity * 100.0
@@ -391,16 +464,19 @@ func _notification(what: int):
 	"""Debug: Print biome info periodically"""
 	if what == NOTIFICATION_PROCESS:
 		if Engine.get_process_frames() % 300 == 0:  # Every 5 seconds at 60fps
-			# Simplified for bath mode - sun/moon state comes from bath
-			var sun_theta = 0.0
-			if bath:
-				var proj = bath.project_onto_axis("☀", "🌙")
-				if proj.valid:
-					sun_theta = proj.theta
+			# Model C: Get populations from quantum computer
+			var p_sun = 0.0
+			var p_wheat = 0.0
+			var p_organic = 0.0
+			if quantum_computer:
+				p_sun = quantum_computer.get_population("☀")
+				p_wheat = quantum_computer.get_population("🌾")
+				p_organic = quantum_computer.get_population("🍂")
 
-			print("🌍 BioticFlux | Temp: %.0fK | ☀️%.1f° | Energy: %.1f | Qubits: %d" % [
+			print("🌍 BioticFlux | Temp: %.0fK | ☀%.2f 🌾%.2f 🍂%.2f | Purity: %.3f" % [
 				base_temperature,
-				sun_theta * 180.0 / PI,
-				0.0,  # Legacy energy_strength removed
-				quantum_computer.get_total_qubits()
+				p_sun,
+				p_wheat,
+				p_organic,
+				quantum_computer.get_purity() if quantum_computer else 0.0
 			])

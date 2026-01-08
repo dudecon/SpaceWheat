@@ -4,7 +4,7 @@ extends SceneTree
 ## Demo: Vocabulary Discovery Progression
 ## Shows how discovering emojis unlocks factions and expands quest variety
 
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const QuestTheming = preload("res://Core/Quests/QuestTheming.gd")
 const QuantumBath = preload("res://Core/QuantumSubstrate/QuantumBath.gd")
 

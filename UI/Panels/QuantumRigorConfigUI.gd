@@ -36,9 +36,17 @@ func _setup_theme() -> void:
 	# Panel background
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.95)
-	panel_style.set_border_enabled_all(true)
-	panel_style.set_border_color_all(Color(0.2, 0.8, 1.0, 0.5))
-	panel_style.set_content_margin_all(16)
+	# Godot 4.5: set borders individually
+	panel_style.border_width_left = 1
+	panel_style.border_width_right = 1
+	panel_style.border_width_top = 1
+	panel_style.border_width_bottom = 1
+	panel_style.border_color = Color(0.2, 0.8, 1.0, 0.5)
+	# Godot 4.5: set margins individually
+	panel_style.content_margin_left = 16
+	panel_style.content_margin_right = 16
+	panel_style.content_margin_top = 16
+	panel_style.content_margin_bottom = 16
 	add_theme_stylebox_override("panel", panel_style)
 
 	# Custom minimum size
@@ -100,21 +108,21 @@ func _add_readout_mode_section() -> void:
 	"""Add readout mode selection section"""
 	var section = _create_section("📡 Readout Mode", "How measurement results are presented:")
 
-	var hardware_btn = _create_mode_button(
+	var hardware_btn_container = _create_mode_button(
 		"HARDWARE",
 		"🎲 Shot-based sampling (realistic quantum hardware behavior)",
 		config.readout_mode == QuantumRigorConfig.ReadoutMode.HARDWARE
 	)
-	hardware_btn.pressed.connect(func(): _set_readout_mode(QuantumRigorConfig.ReadoutMode.HARDWARE))
-	section.add_child(hardware_btn)
+	hardware_btn_container.get_child(0).pressed.connect(func(): _set_readout_mode(QuantumRigorConfig.ReadoutMode.HARDWARE))
+	section.add_child(hardware_btn_container)
 
-	var inspector_btn = _create_mode_button(
+	var inspector_btn_container = _create_mode_button(
 		"INSPECTOR",
 		"🔍 Exact probability distribution (simulator privilege mode)",
 		config.readout_mode == QuantumRigorConfig.ReadoutMode.INSPECTOR
 	)
-	inspector_btn.pressed.connect(func(): _set_readout_mode(QuantumRigorConfig.ReadoutMode.INSPECTOR))
-	section.add_child(inspector_btn)
+	inspector_btn_container.get_child(0).pressed.connect(func(): _set_readout_mode(QuantumRigorConfig.ReadoutMode.INSPECTOR))
+	section.add_child(inspector_btn_container)
 
 	content_vbox.add_child(section)
 
@@ -123,21 +131,21 @@ func _add_backaction_mode_section() -> void:
 	"""Add backaction mode selection section"""
 	var section = _create_section("⚛️ Backaction Mode", "How measurement affects quantum state:")
 
-	var kid_light_btn = _create_mode_button(
+	var kid_light_btn_container = _create_mode_button(
 		"KID_LIGHT",
 		"😌 Gentle partial collapse (preserves some quantum coherence)",
 		config.backaction_mode == QuantumRigorConfig.BackactionMode.KID_LIGHT
 	)
-	kid_light_btn.pressed.connect(func(): _set_backaction_mode(QuantumRigorConfig.BackactionMode.KID_LIGHT))
-	section.add_child(kid_light_btn)
+	kid_light_btn_container.get_child(0).pressed.connect(func(): _set_backaction_mode(QuantumRigorConfig.BackactionMode.KID_LIGHT))
+	section.add_child(kid_light_btn_container)
 
-	var lab_true_btn = _create_mode_button(
+	var lab_true_btn_container = _create_mode_button(
 		"LAB_TRUE",
 		"🔬 Rigorous projective collapse (full Born rule, no coherence)",
 		config.backaction_mode == QuantumRigorConfig.BackactionMode.LAB_TRUE
 	)
-	lab_true_btn.pressed.connect(func(): _set_backaction_mode(QuantumRigorConfig.BackactionMode.LAB_TRUE))
-	section.add_child(lab_true_btn)
+	lab_true_btn_container.get_child(0).pressed.connect(func(): _set_backaction_mode(QuantumRigorConfig.BackactionMode.LAB_TRUE))
+	section.add_child(lab_true_btn_container)
 
 	content_vbox.add_child(section)
 
@@ -146,21 +154,21 @@ func _add_selective_measure_section() -> void:
 	"""Add selective measurement model selection section"""
 	var section = _create_section("💰 Selective Measurement Model", "Cost of measuring specific subspaces:")
 
-	var costed_btn = _create_mode_button(
+	var costed_btn_container = _create_mode_button(
 		"POSTSELECT_COSTED",
 		"💸 Postselection cost: harvest yield divided by measurement cost",
 		config.selective_measure_model == QuantumRigorConfig.SelectiveMeasureModel.POSTSELECT_COSTED
 	)
-	costed_btn.pressed.connect(func(): _set_measure_model(QuantumRigorConfig.SelectiveMeasureModel.POSTSELECT_COSTED))
-	section.add_child(costed_btn)
+	costed_btn_container.get_child(0).pressed.connect(func(): _set_measure_model(QuantumRigorConfig.SelectiveMeasureModel.POSTSELECT_COSTED))
+	section.add_child(costed_btn_container)
 
-	var click_btn = _create_mode_button(
+	var click_btn_container = _create_mode_button(
 		"CLICK_NOCLICK",
 		"🎯 Click/no-click instrument (future: repeated measurement)",
 		config.selective_measure_model == QuantumRigorConfig.SelectiveMeasureModel.CLICK_NOCLICK
 	)
-	click_btn.pressed.connect(func(): _set_measure_model(QuantumRigorConfig.SelectiveMeasureModel.CLICK_NOCLICK))
-	section.add_child(click_btn)
+	click_btn_container.get_child(0).pressed.connect(func(): _set_measure_model(QuantumRigorConfig.SelectiveMeasureModel.CLICK_NOCLICK))
+	section.add_child(click_btn_container)
 
 	content_vbox.add_child(section)
 
@@ -206,8 +214,8 @@ func _create_section(title: String, description: String) -> VBoxContainer:
 	return section
 
 
-func _create_mode_button(name: String, description: String, selected: bool) -> Button:
-	"""Create a selectable mode button"""
+func _create_mode_button(name: String, description: String, selected: bool) -> HBoxContainer:
+	"""Create a selectable mode button (returns container with button as first child)"""
 	var container = HBoxContainer.new()
 	container.custom_minimum_size = Vector2(500, 60)
 
@@ -223,7 +231,7 @@ func _create_mode_button(name: String, description: String, selected: bool) -> B
 	desc.add_theme_font_size_override("font_size", 10)
 	container.add_child(desc)
 
-	return button
+	return container
 
 
 func _set_readout_mode(mode: QuantumRigorConfig.ReadoutMode) -> void:

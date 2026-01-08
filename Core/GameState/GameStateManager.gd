@@ -5,7 +5,7 @@ extends Node
 
 const GameState = preload("res://Core/GameState/GameState.gd")
 const VocabularyEvolution = preload("res://Core/QuantumSubstrate/VocabularyEvolution.gd")
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const QuantumRigorConfig = preload("res://Core/GameState/QuantumRigorConfig.gd")
 
 # Signals
@@ -37,19 +37,19 @@ func _ready():
 	var dir = DirAccess.open("user://")
 	if not dir.dir_exists("saves"):
 		dir.make_dir("saves")
-	print("💾 GameStateManager ready - Save dir: " + SAVE_DIR)
+	VerboseConfig.info("save", "💾", "GameStateManager ready - Save dir: " + SAVE_DIR)
 
 	# Initialize quantum rigor configuration (singleton)
 	if not QuantumRigorConfig.instance:
 		var config = QuantumRigorConfig.new()
-		print("   ⚛️  QuantumRigorConfig initialized: %s" % config.mode_description())
+		VerboseConfig.info("quantum", "⚛️", "QuantumRigorConfig initialized: %s" % config.mode_description())
 
 	# Initialize persistent vocabulary evolution system
 	if not vocabulary_evolution:
 		vocabulary_evolution = VocabularyEvolution.new()
 		vocabulary_evolution._ready()
 		add_child(vocabulary_evolution)
-		print("   📚 Persistent VocabularyEvolution initialized")
+		VerboseConfig.info("quest", "📚", "Persistent VocabularyEvolution initialized")
 
 
 ## Player Vocabulary Discovery
@@ -73,15 +73,15 @@ func discover_emoji(emoji: String) -> void:
 	current_state.known_emojis.append(emoji)
 	emit_signal("emoji_discovered", emoji)
 
-	print("📖 Discovered emoji: %s (vocabulary: %d emojis)" % [emoji, current_state.known_emojis.size()])
+	VerboseConfig.info("quest", "📖", "Discovered emoji: %s (vocabulary: %d emojis)" % [emoji, current_state.known_emojis.size()])
 
 	# Check if this unlocks new factions
 	var newly_accessible = _check_newly_accessible_factions(emoji)
 	if newly_accessible.size() > 0:
 		emit_signal("factions_unlocked", newly_accessible)
-		print("🔓 Unlocked %d new faction(s)!" % newly_accessible.size())
+		VerboseConfig.info("quest", "🔓", "Unlocked %d new faction(s)!" % newly_accessible.size())
 		for faction in newly_accessible:
-			print("   - %s %s" % ["".join(faction.signature.slice(0, 3)), faction.name])
+			VerboseConfig.info("quest", "-", "%s %s" % ["".join(faction.signature.slice(0, 3)), faction.name])
 
 
 func _check_newly_accessible_factions(new_emoji: String) -> Array:
@@ -131,19 +131,19 @@ func get_accessible_factions() -> Array:
 
 func new_game(scenario_id: String = "default") -> GameState:
 	"""Start new game by loading a scenario template"""
-	print("🎮 Starting new game with scenario: " + scenario_id)
+	VerboseConfig.info("quest", "🎮", "Starting new game with scenario: " + scenario_id)
 	current_scenario_id = scenario_id
-	
+
 	# Try to load scenario file, fall back to default state
 	var scenario_path = SCENARIO_DIR + scenario_id + ".tres"
 	if ResourceLoader.exists(scenario_path):
 		current_state = ResourceLoader.load(scenario_path).duplicate()
-		print("✓ Loaded scenario from: " + scenario_path)
+		VerboseConfig.info("quest", "✓", "Loaded scenario from: " + scenario_path)
 	else:
-		print("⚠ Scenario not found, using default state")
+		VerboseConfig.info("quest", "⚠", "Scenario not found, using default state")
 		current_state = GameState.new()
 		current_state.scenario_id = scenario_id
-	
+
 	current_state.save_timestamp = Time.get_unix_time_from_system()
 	current_state.game_time = 0.0
 	return current_state
@@ -167,10 +167,10 @@ func save_game(slot: int) -> bool:
 	# Save to disk
 	var path = get_save_path(slot)
 	var result = ResourceSaver.save(state, path)
-	
+
 	if result == OK:
 		last_saved_slot = slot
-		print("💾 Game saved to slot " + str(slot + 1) + ": " + path)
+		VerboseConfig.info("save", "💾", "Game saved to slot " + str(slot + 1) + ": " + path)
 		return true
 	else:
 		push_error("Failed to save game to slot " + str(slot))
@@ -214,15 +214,15 @@ func load_game_state(slot: int) -> GameState:
 	if slot < 0 or slot >= NUM_SAVE_SLOTS:
 		push_error("Invalid save slot: " + str(slot))
 		return null
-	
+
 	var path = get_save_path(slot)
 	if not FileAccess.file_exists(path):
-		print("⚠ No save file in slot " + str(slot + 1))
+		VerboseConfig.info("save", "⚠", "No save file in slot " + str(slot + 1))
 		return null
-	
+
 	var state = ResourceLoader.load(path)
 	if state:
-		print("📂 Loaded save from slot " + str(slot + 1))
+		VerboseConfig.info("save", "📂", "Loaded save from slot " + str(slot + 1))
 		return state
 	else:
 		push_error("Failed to load save from slot " + str(slot))
@@ -264,10 +264,10 @@ func reload_last_save() -> bool:
 
 	# No saves found
 	if latest_slot < 0:
-		print("⚠ No saves found to reload")
+		VerboseConfig.info("save", "⚠", "No saves found to reload")
 		return false
 
-	print("🔄 Reloading most recent save from slot " + str(latest_slot + 1) + " (saved at " + str(latest_timestamp) + ")")
+	VerboseConfig.info("save", "🔄", "Reloading most recent save from slot " + str(latest_slot + 1) + " (saved at " + str(latest_timestamp) + ")")
 	return load_and_apply(latest_slot)
 
 
@@ -390,14 +390,14 @@ func capture_state_from_game() -> GameState:
 	# Vocabulary Evolution State (PERSISTED - player's discovered vocabulary travels with them)
 	if vocabulary_evolution:
 		state.vocabulary_state = vocabulary_evolution.serialize()
-		print("   📚 Captured vocabulary: %d discovered, %d evolving" % [
+		VerboseConfig.debug("save", "📚", "Captured vocabulary: %d discovered, %d evolving" % [
 			state.vocabulary_state.get("discovered_vocabulary", []).size(),
 			state.vocabulary_state.get("evolving_qubits", []).size()
 		])
 
 	# Conspiracy Network NOT saved (dynamic, regenerated each session)
 
-	print("📸 Captured game state: grid=" + str(state.grid_width) + "x" + str(state.grid_height) +
+	VerboseConfig.info("save", "📸", "Captured game state: grid=" + str(state.grid_width) + "x" + str(state.grid_height) +
 		  ", plots=" + str(state.plots.size()) + ", credits=" + str(state.credits))
 	return state
 
@@ -427,7 +427,7 @@ func _capture_all_biome_states(farm: Node) -> Dictionary:
 			state["biome_class"] = biome.get_script().resource_path
 
 			all_states[biome_name] = state
-			print("   💾 Captured %s biome (%s)" % [biome_name, state["biome_class"]])
+			VerboseConfig.debug("save", "💾", "Captured %s biome (%s)" % [biome_name, state["biome_class"]])
 
 	return all_states
 
@@ -559,7 +559,7 @@ func _restore_all_biome_states(farm: Node, biome_states: Dictionary) -> void:
 
 		# Restore state
 		_restore_single_biome_state(biome, biome_state, biome_name)
-		print("   📂 Restored %s biome" % biome_name)
+		VerboseConfig.debug("save", "📂", "Restored %s biome" % biome_name)
 
 
 func _restore_single_biome_state(biome: Node, state: Dictionary, biome_name: String) -> void:
@@ -699,14 +699,18 @@ func _reconnect_plots_to_projections(farm: Node, state: GameState) -> void:
 		if not projection.has("qubit"):
 			continue
 
-		# Model B: Reconnect plot to projection via register_id
-		# (projection references are maintained in quantum_computer)
-		if projection.has("register_id"):
-			plot.register_id = projection.register_id
+		# Model C: Reconnect plot to projection via bath_subplot_id
+		# (backwards compatible with old register_id saves)
+		if projection.has("bath_subplot_id"):
+			plot.bath_subplot_id = projection.bath_subplot_id
+			reconnected_count += 1
+		elif projection.has("register_id"):
+			# Backwards compatibility with Model B saves
+			plot.bath_subplot_id = projection.register_id
 			reconnected_count += 1
 
 	if reconnected_count > 0:
-		print("🔗 Reconnected %d plots to biome projections" % reconnected_count)
+		VerboseConfig.debug("farm", "🔗", "Reconnected %d plots to biome projections" % reconnected_count)
 
 
 ## Phase 3: Bath-First Serialization Helpers
@@ -776,7 +780,7 @@ func apply_state_to_game(state: GameState):
 			])
 			push_warning("Out-of-bounds plots will be skipped")
 
-	print("🔄 Applying game state to farm (" + str(state.grid_width) + "x" + str(state.grid_height) + ")...")
+	VerboseConfig.info("save", "🔄", "Applying game state to farm (" + str(state.grid_width) + "x" + str(state.grid_height) + ")...")
 
 	# Apply Economy (from Farm.economy) - using emoji-based API
 	var economy = farm.economy
@@ -869,7 +873,7 @@ func apply_state_to_game(state: GameState):
 	# Restore Vocabulary Evolution State (PERSISTED - player's discovered vocabulary)
 	if vocabulary_evolution and state.vocabulary_state:
 		vocabulary_evolution.deserialize(state.vocabulary_state)
-		print("   📚 Restored vocabulary evolution from save")
+		VerboseConfig.debug("save", "📚", "Restored vocabulary evolution from save")
 
 	# Conspiracy Network NOT loaded (dynamic, regenerate each session)
 
@@ -889,7 +893,7 @@ func apply_state_to_game(state: GameState):
 	# NOTE: Economy signals are automatically emitted when we set wheat_inventory etc above,
 	# so ResourcePanel updates happen automatically. Other visualizers need explicit rebuild.
 
-	print("✓ State applied to farm successfully - quantum states will regenerate from biome")
+	VerboseConfig.info("save", "✓", "State applied to farm successfully - quantum states will regenerate from biome")
 
 
 ## Scenario Completion Tracking
@@ -900,7 +904,7 @@ func mark_scenario_completed(scenario_id: String):
 	if scenario_id not in completed:
 		completed.append(scenario_id)
 		_save_completed_scenarios(completed)
-		print("🏆 Scenario completed: " + scenario_id)
+		VerboseConfig.info("quest", "🏆", "Scenario completed: " + scenario_id)
 
 func is_scenario_completed(scenario_id: String) -> bool:
 	"""Check if player has completed this scenario"""
@@ -914,7 +918,7 @@ func get_completed_scenarios() -> Array[String]:
 func clear_completed_scenarios():
 	"""Clear all completed scenarios (for testing/reset)"""
 	_save_completed_scenarios([])
-	print("🔄 Cleared all completed scenarios")
+	VerboseConfig.info("quest", "🔄", "Cleared all completed scenarios")
 
 func _load_completed_scenarios() -> Array:
 	"""Load completed scenarios from save file"""
@@ -942,7 +946,7 @@ func _save_completed_scenarios(completed: Array):
 
 func restart_current_scenario():
 	"""Restart by reloading current scenario (not scene reload!)"""
-	print("🔄 Restarting scenario: " + current_scenario_id)
+	VerboseConfig.info("quest", "🔄", "Restarting scenario: " + current_scenario_id)
 	var state = new_game(current_scenario_id)
 	apply_state_to_game(state)
 

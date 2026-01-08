@@ -57,6 +57,7 @@ const SUBMENUS = {
 		"name": "Plant Type",
 		"emoji": "🌱",
 		"parent_tool": 1,
+		"dynamic": true,  # Generate based on selected plot's biome
 		"Q": {"action": "plant_wheat", "label": "Wheat", "emoji": "🌾"},
 		"E": {"action": "plant_mushroom", "label": "Mushroom", "emoji": "🍄"},
 		"R": {"action": "plant_tomato", "label": "Tomato", "emoji": "🍅"},
@@ -124,15 +125,16 @@ static func get_submenu(submenu_name: String) -> Dictionary:
 	return SUBMENUS.get(submenu_name, {})
 
 
-static func get_dynamic_submenu(submenu_name: String, farm) -> Dictionary:
-	"""Generate dynamic submenu from game state (discovered vocabulary)
+static func get_dynamic_submenu(submenu_name: String, farm, current_selection: Vector2i = Vector2i.ZERO) -> Dictionary:
+	"""Generate dynamic submenu from game state (discovered vocabulary, current selection)
 
 	For submenus marked with "dynamic": true, generates Q/E/R actions
-	at runtime based on available game options (e.g., discovered emojis).
+	at runtime based on available game options (e.g., discovered emojis, selected plot's biome).
 
 	Args:
 		submenu_name: Name of submenu to generate
 		farm: Farm instance (provides access to FarmGrid for vocabulary)
+		current_selection: Currently selected plot position (for context-aware menus)
 
 	Returns:
 		Dictionary with Q/E/R actions, or base submenu if not dynamic
@@ -145,6 +147,8 @@ static func get_dynamic_submenu(submenu_name: String, farm) -> Dictionary:
 
 	# Generate based on submenu type
 	match submenu_name:
+		"plant":
+			return _generate_plant_submenu(base_submenu, farm, current_selection)
 		"energy_tap":
 			return _generate_energy_tap_submenu(base_submenu, farm)
 		"biome_assign":
@@ -152,6 +156,77 @@ static func get_dynamic_submenu(submenu_name: String, farm) -> Dictionary:
 		_:
 			push_warning("Unknown dynamic submenu: %s" % submenu_name)
 			return base_submenu
+
+
+static func _generate_plant_submenu(base: Dictionary, farm, current_selection: Vector2i) -> Dictionary:
+	"""Generate plant submenu based on selected plot's biome
+
+	Context-aware planting:
+	- Kitchen plots → Q=Fire, E=Water, R=Flour (all Kitchen plots show same menu)
+	- Other plots → Q=Wheat, E=Mushroom, R=Tomato (default)
+
+	Args:
+		base: Base submenu structure
+		farm: Farm instance for biome lookup
+		current_selection: Currently selected plot position
+
+	Returns:
+		Dictionary with Q/E/R actions appropriate for the plot's biome
+	"""
+	var generated = base.duplicate(true)
+
+	# Get biome name for selected plot
+	var biome_name = ""
+	if farm and farm.grid and farm.grid.plot_biome_assignments.has(current_selection):
+		biome_name = farm.grid.plot_biome_assignments[current_selection]
+
+	# Generate menu based on biome
+	match biome_name:
+		"Kitchen":
+			# Kitchen-specific plant menu: Q=Fire, E=Water, R=Flour
+			# All Kitchen plots show the same menu (player chooses which ingredient)
+			generated["Q"] = {"action": "plant_fire", "label": "Fire", "emoji": "🔥"}
+			generated["E"] = {"action": "plant_water", "label": "Water", "emoji": "💧"}
+			generated["R"] = {"action": "plant_flour", "label": "Flour", "emoji": "💨"}
+			generated["name"] = "Kitchen Ingredients"
+			print("  🍳 Kitchen plot → Fire/Water/Flour menu")
+
+		"Forest":
+			# Forest-specific plant menu: Q=Vegetation, E=Rabbit, R=Wolf
+			# Plant forest organisms to build ecosystem dynamics
+			generated["Q"] = {"action": "plant_vegetation", "label": "Vegetation", "emoji": "🌿"}
+			generated["E"] = {"action": "plant_rabbit", "label": "Rabbit", "emoji": "🐇"}
+			generated["R"] = {"action": "plant_wolf", "label": "Wolf", "emoji": "🐺"}
+			generated["name"] = "Forest Organisms"
+			print("  🌲 Forest plot → Vegetation/Rabbit/Wolf menu")
+
+		"Market":
+			# Market-specific plant menu: Q=Wheat, E=Flour, R=Bread
+			# Commodity production chain for trading
+			generated["Q"] = {"action": "plant_wheat", "label": "Wheat", "emoji": "🌾"}
+			generated["E"] = {"action": "plant_flour", "label": "Flour", "emoji": "💨"}
+			generated["R"] = {"action": "plant_bread", "label": "Bread", "emoji": "🍞"}
+			generated["name"] = "Market Commodities"
+			print("  📈 Market plot → Wheat/Flour/Bread menu")
+
+		"BioticFlux":
+			# BioticFlux-specific plant menu: Q=Wheat, E=Mushroom, R=Tomato
+			# Standard agricultural crops with biotic cycling
+			generated["Q"] = {"action": "plant_wheat", "label": "Wheat", "emoji": "🌾"}
+			generated["E"] = {"action": "plant_mushroom", "label": "Mushroom", "emoji": "🍄"}
+			generated["R"] = {"action": "plant_tomato", "label": "Tomato", "emoji": "🍅"}
+			generated["name"] = "BioticFlux Crops"
+			print("  🌾 BioticFlux plot → Wheat/Mushroom/Tomato menu")
+
+		_:
+			# Default plant menu for unassigned/other biomes
+			generated["Q"] = {"action": "plant_wheat", "label": "Wheat", "emoji": "🌾"}
+			generated["E"] = {"action": "plant_mushroom", "label": "Mushroom", "emoji": "🍄"}
+			generated["R"] = {"action": "plant_tomato", "label": "Tomato", "emoji": "🍅"}
+			generated["name"] = "Plant Type"
+			print("  📦 Default plot → Wheat/Mushroom/Tomato menu")
+
+	return generated
 
 
 static func _generate_energy_tap_submenu(base: Dictionary, farm) -> Dictionary:

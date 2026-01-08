@@ -9,7 +9,7 @@ const FactionVoices = preload("res://Core/Quests/FactionVoices.gd")
 const BiomeLocations = preload("res://Core/Quests/BiomeLocations.gd")
 const QuestGenerator = preload("res://Core/Quests/QuestGenerator.gd")
 const QuestManager = preload("res://Core/Quests/QuestManager.gd")
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
 # =============================================================================
 # TEST RUNNER

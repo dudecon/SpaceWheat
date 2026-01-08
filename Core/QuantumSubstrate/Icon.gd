@@ -97,7 +97,7 @@ extends Resource
 @export var trophic_level: int = 0
 
 ## Tags for organization and querying
-@export var tags: Array[String] = []
+@export var tags: Array = []
 
 ## Special behavioral flags
 @export var is_driver: bool = false      # External forcing (like sun)
@@ -124,8 +124,8 @@ func get_self_energy(time: float) -> float:
 			return base
 
 ## Get all emojis this icon couples to (for building bath emoji set)
-func get_coupled_emojis() -> Array[String]:
-	var result: Array[String] = []
+func get_coupled_emojis() -> Array:
+	var result: Array = []
 
 	for e in hamiltonian_couplings.keys():
 		if not result.has(e):

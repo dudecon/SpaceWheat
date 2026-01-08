@@ -30,35 +30,35 @@ static func deutsch_jozsa(bath, qubit_a: Dictionary, qubit_b: Dictionary) -> Dic
 	    classical_advantage: "1 query vs 2"
 	  }
 	"""
-	print("\n🎯 DEUTSCH-JOZSA ALGORITHM")
-	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	VerboseConfig.info("quantum", "🎯", "\nDEUTSCH-JOZSA ALGORITHM")
+	VerboseConfig.info("quantum", "", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	# Step 1: Prepare |+⟩⊗|+⟩ by applying H⊗H
-	print("Step 1: Apply H⊗H (create superposition)")
+	VerboseConfig.debug("quantum", "🔧", "Step 1: Apply H⊗H (create superposition)")
 	var H = bath.get_standard_gate("H")
 	bath.apply_unitary_1q(qubit_a.north, qubit_a.south, H)
 	bath.apply_unitary_1q(qubit_b.north, qubit_b.south, H)
 
 	# Step 2: Oracle phase - natural biome evolution acts as oracle
 	# Phase accumulation from Hamiltonian encodes the function
-	print("Step 2: Oracle (biome evolution for %.2f seconds)" % 0.5)
+	VerboseConfig.debug("quantum", "🔧", "Step 2: Oracle (biome evolution for %.2f seconds)" % 0.5)
 	# Note: In real gameplay, biome.advance_simulation(dt) would be called here
 	# For now, we rely on the natural dynamics already present
 
 	# Step 3: Apply H⊗H again (interference step)
-	print("Step 3: Apply H⊗H (interference)")
+	VerboseConfig.debug("quantum", "🔧", "Step 3: Apply H⊗H (interference)")
 	bath.apply_unitary_1q(qubit_a.north, qubit_a.south, H)
 	bath.apply_unitary_1q(qubit_b.north, qubit_b.south, H)
 
 	# Step 4: Measure first qubit
-	print("Step 4: Measure first qubit")
+	VerboseConfig.debug("quantum", "🔧", "Step 4: Measure first qubit")
 	var outcome = bath.measure_axis(qubit_a.north, qubit_a.south)
 
 	# Interpretation: |north⟩ = constant, |south⟩ = balanced
 	var result = "constant" if outcome == qubit_a.north else "balanced"
 
-	print("✓ Result: %s (measured %s)" % [result, outcome])
-	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	VerboseConfig.info("quantum", "✓", "Result: %s (measured %s)" % [result, outcome])
+	VerboseConfig.info("quantum", "", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 
 	return {
 		"result": result,
@@ -92,22 +92,22 @@ static func grover_search(bath, qubit_a: Dictionary, qubit_b: Dictionary, marked
 	    classical_advantage: "√N queries vs N"
 	  }
 	"""
-	print("\n🔍 GROVER SEARCH ALGORITHM")
-	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	print("Searching for: %s" % marked_state)
+	VerboseConfig.info("quantum", "🔍", "\nGROVER SEARCH ALGORITHM")
+	VerboseConfig.info("quantum", "", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	VerboseConfig.info("quantum", "🎯", "Searching for: %s" % marked_state)
 
 	# Step 1: Initialize to uniform superposition |+⟩⊗|+⟩
-	print("Step 1: Create uniform superposition (H⊗H)")
+	VerboseConfig.debug("quantum", "🔧", "Step 1: Create uniform superposition (H⊗H)")
 	var H = bath.get_standard_gate("H")
 	bath.apply_unitary_1q(qubit_a.north, qubit_a.south, H)
 	bath.apply_unitary_1q(qubit_b.north, qubit_b.south, H)
 
 	# Step 2: Grover iterations (√N = √4 = 2 for optimal)
 	var num_iterations = 2
-	print("Step 2: Grover iterations (k=%d)" % num_iterations)
+	VerboseConfig.debug("quantum", "🔧", "Step 2: Grover iterations (k=%d)" % num_iterations)
 
 	for k in range(num_iterations):
-		print("  Iteration %d/%d" % [k+1, num_iterations])
+		VerboseConfig.debug("quantum", "🔄", "  Iteration %d/%d" % [k+1, num_iterations])
 
 		# Oracle: Mark the target state with phase flip
 		_grover_oracle(bath, qubit_a, qubit_b, marked_state)
@@ -116,7 +116,7 @@ static func grover_search(bath, qubit_a: Dictionary, qubit_b: Dictionary, marked
 		_grover_diffusion(bath, qubit_a, qubit_b)
 
 	# Step 3: Measure
-	print("Step 3: Measure qubits")
+	VerboseConfig.debug("quantum", "🔧", "Step 3: Measure qubits")
 	var result_a = bath.measure_axis(qubit_a.north, qubit_a.south)
 	var result_b = bath.measure_axis(qubit_b.north, qubit_b.south)
 
@@ -126,9 +126,9 @@ static func grover_search(bath, qubit_a: Dictionary, qubit_b: Dictionary, marked
 	# Calculate success probability (should be ~100% after optimal iterations)
 	var success_prob = 1.0 if found == marked_state else 0.25
 
-	print("✓ Found: %s (target: %s)" % [found, marked_state])
-	print("✓ Success probability: %.1f%%" % (success_prob * 100))
-	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	VerboseConfig.info("quantum", "✓", "Found: %s (target: %s)" % [found, marked_state])
+	VerboseConfig.info("quantum", "✓", "Success probability: %.1f%%" % (success_prob * 100))
+	VerboseConfig.info("quantum", "", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 
 	return {
 		"found": found,
@@ -197,19 +197,19 @@ static func phase_estimation(bath, control: Dictionary, target: Dictionary, evol
 	    interpretation: String
 	  }
 	"""
-	print("\n📐 PHASE ESTIMATION ALGORITHM")
-	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	print("Evolution time: %.2f seconds" % evolution_time)
+	VerboseConfig.info("quantum", "📐", "\nPHASE ESTIMATION ALGORITHM")
+	VerboseConfig.info("quantum", "", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	VerboseConfig.info("quantum", "⏱️", "Evolution time: %.2f seconds" % evolution_time)
 
 	# Step 1: Prepare control in superposition
-	print("Step 1: Prepare control qubit in |+⟩")
+	VerboseConfig.debug("quantum", "🔧", "Step 1: Prepare control qubit in |+⟩")
 	var H = bath.get_standard_gate("H")
 	bath.apply_unitary_1q(control.north, control.south, H)
 
 	# Step 2: Controlled evolution
 	# In real implementation: if control=|1⟩, evolve target for time t
 	# Phase accumulation: φ = ωt where ω is eigenfrequency
-	print("Step 2: Controlled time evolution")
+	VerboseConfig.debug("quantum", "🔧", "Step 2: Controlled time evolution")
 
 	# Get initial target probability
 	var initial_prob = bath.get_probability(target.north)
@@ -218,11 +218,11 @@ static func phase_estimation(bath, control: Dictionary, target: Dictionary, evol
 	# The phase accumulates naturally from Hamiltonian dynamics
 
 	# Step 3: Inverse QFT on control (simplified for 1 qubit)
-	print("Step 3: Apply inverse QFT (H gate for 1-qubit case)")
+	VerboseConfig.debug("quantum", "🔧", "Step 3: Apply inverse QFT (H gate for 1-qubit case)")
 	bath.apply_unitary_1q(control.north, control.south, H)
 
 	# Step 4: Measure control qubit
-	print("Step 4: Measure control register")
+	VerboseConfig.debug("quantum", "🔧", "Step 4: Measure control register")
 	var outcome = bath.measure_axis(control.north, control.south)
 
 	# Decode phase from measurement outcome
@@ -230,9 +230,9 @@ static func phase_estimation(bath, control: Dictionary, target: Dictionary, evol
 	var estimated_phase = PI if outcome == control.south else 0.0
 	var frequency = estimated_phase / evolution_time if evolution_time > 0 else 0.0
 
-	print("✓ Estimated phase: %.3f rad" % estimated_phase)
-	print("✓ Frequency: ω = %.3f rad/s" % frequency)
-	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	VerboseConfig.info("quantum", "✓", "Estimated phase: %.3f rad" % estimated_phase)
+	VerboseConfig.info("quantum", "✓", "Frequency: ω = %.3f rad/s" % frequency)
+	VerboseConfig.info("quantum", "", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 
 	return {
 		"phase": estimated_phase,

@@ -9,7 +9,7 @@ extends "res://Core/GameMechanics/BasePlot.gd"
 const PhaseConstraint = preload("res://Core/GameMechanics/PhaseConstraint.gd")
 
 # Plot type
-enum PlotType { WHEAT, TOMATO, MUSHROOM, MILL, MARKET, KITCHEN, ENERGY_TAP }
+enum PlotType { WHEAT, TOMATO, MUSHROOM, MILL, MARKET, KITCHEN, ENERGY_TAP, FIRE, WATER, FLOUR, VEGETATION, RABBIT, WOLF, BREAD }
 @export var plot_type: PlotType = PlotType.WHEAT
 
 # Phase constraint (for plots that restrict Bloch sphere movement)
@@ -64,6 +64,23 @@ func get_plot_emojis() -> Dictionary:
 			return {"north": "🍳", "south": "🍞"}  # Kitchen ↔ Bread
 		PlotType.ENERGY_TAP:
 			return {"north": "🚰", "south": "⚡"}  # Energy Tap ↔ Power
+		# Kitchen ingredients (quantum baking qubits)
+		PlotType.FIRE:
+			return {"north": "🔥", "south": "❄️"}  # Temperature: Hot ↔ Cold (qubit 1)
+		PlotType.WATER:
+			return {"north": "💧", "south": "🏜️"}  # Moisture: Wet ↔ Dry (qubit 2)
+		PlotType.FLOUR:
+			return {"north": "💨", "south": "🌾"}  # Substance: Flour ↔ Grain (qubit 3)
+		# Forest organisms (ecosystem dynamics)
+		PlotType.VEGETATION:
+			return {"north": "🌿", "south": "🍂"}  # Vegetation ↔ Detritus (growth/decay)
+		PlotType.RABBIT:
+			return {"north": "🐇", "south": "🍂"}  # Rabbit ↔ Detritus (life/death)
+		PlotType.WOLF:
+			return {"north": "🐺", "south": "🍂"}  # Wolf ↔ Detritus (predator/decay)
+		# Market commodities (trading goods)
+		PlotType.BREAD:
+			return {"north": "🍞", "south": "💨"}  # Bread ↔ Flour (product/ingredient)
 		_:
 			return {"north": "?", "south": "?"}
 

@@ -68,13 +68,16 @@ func add_biome(biome_name: String, biome_ref) -> void:
 		push_warning("BathQuantumViz: null biome reference for %s" % biome_name)
 		return
 
-	# All biomes now use bath mode, just check for bath existence
-	if not biome_ref.bath:
-		push_warning("BathQuantumViz: biome %s has no bath" % biome_name)
+	# Model C biomes use quantum_computer, legacy biomes use bath
+	if not biome_ref.bath and not biome_ref.quantum_computer:
+		push_warning("BathQuantumViz: biome %s has neither bath nor quantum_computer" % biome_name)
 		return
 
 	biomes[biome_name] = biome_ref
-	print("🛁 BathQuantumViz: Added biome '%s' with %d basis states" % [biome_name, biome_ref.bath.emoji_list.size()])
+	if biome_ref.bath:
+		print("🛁 BathQuantumViz: Added biome '%s' with %d basis states (bath mode)" % [biome_name, biome_ref.bath.emoji_list.size()])
+	elif biome_ref.quantum_computer:
+		print("🛁 BathQuantumViz: Added biome '%s' with %d qubits (Model C)" % [biome_name, biome_ref.quantum_computer.register_map.num_qubits])
 
 
 func initialize() -> void:
@@ -244,8 +247,8 @@ func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
 	if not biome or not biome.bath:
 		return
 
-	# Get emojis from plot (Model B: emojis are plot metadata, not quantum state)
-	if not plot.is_planted or not plot.parent_biome or plot.register_id < 0:
+	# Get emojis from plot (Model C: emojis are plot metadata, not quantum state)
+	if not plot.is_planted or not plot.parent_biome or plot.bath_subplot_id < 0:
 		print("   ⚠️  Plot at %s not properly initialized!" % grid_pos)
 		return
 

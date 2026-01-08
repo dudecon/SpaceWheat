@@ -5,7 +5,7 @@ extends SceneTree
 
 const Farm = preload("res://Core/Farm.gd")
 const QuestManager = preload("res://Core/Quests/QuestManager.gd")
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
 var farm: Farm
 var quest_manager: QuestManager

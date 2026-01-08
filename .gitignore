@@ -33,6 +33,17 @@ __pycache__/
 *.bak
 *.log
 
+# WSL artifacts
+*Zone.Identifier
+
+# Test outputs
+test_results/
+player_logs/
+llm_inbox/player_logs/
+
+# Godot shader cache (auto-generated)
+.godot/shader_cache/
+
 # Keep tracked: Source code, scenes, and documentation
 # Do not ignore:
 # - project.godot

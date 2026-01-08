@@ -6,7 +6,7 @@ extends SceneTree
 
 const FactionStateMatcher = preload("res://Core/QuantumSubstrate/FactionStateMatcher.gd")
 const QuantumBath = preload("res://Core/QuantumSubstrate/QuantumBath.gd")
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
 func _init():
 	print("\n" + "=".repeat(80))

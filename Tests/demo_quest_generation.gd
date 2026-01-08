@@ -4,7 +4,7 @@ extends SceneTree
 ## Shows quests from different faction categories
 
 const QuestGenerator = preload("res://Core/Quests/QuestGenerator.gd")
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
 func _init():
 	print("================================================================================")

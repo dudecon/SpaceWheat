@@ -119,7 +119,7 @@ func _initialize_bath_forest() -> void:
 
 	# Derive Icons from Markov chain
 	# This automatically creates Icons with H (symmetric) and L (asymmetric) terms
-	# Only derive if not already present (avoid overwriting CoreIcons)
+	# Only derive if not already present (avoid overwriting faction-built Icons)
 	var icons_to_derive = {}
 	for emoji in FOREST_MARKOV:
 		if not icon_registry.has_icon(emoji):
@@ -233,7 +233,7 @@ func _tune_predator_prey_icons(icon_registry) -> void:
 	# Vegetation growth (🌿 gains from ☀ sunlight, 💧 water, 🍂 organic matter)
 	var vegetation = icon_registry.get_icon("🌿")
 	if vegetation:
-		# These should already be set by CoreIcons, but ensure they're strong enough
+		# These should already be set by faction-built Icons, but ensure they're strong enough
 		if not vegetation.lindblad_incoming.has("☀"):
 			vegetation.lindblad_incoming["☀"] = 0.10
 		if not vegetation.lindblad_incoming.has("💧"):
@@ -255,7 +255,7 @@ func _ready():
 	visual_oval_width = 560.0   # 2x larger
 	visual_oval_height = 350.0  # Golden ratio maintained
 
-	print("  ✅ ForestEcosystem running in bath-first mode")
+	print("  ✅ ForestEcosystem initialized (bath-Lindblad, 22 emojis)")
 
 
 func _initialize_bath() -> void:
@@ -264,10 +264,14 @@ func _initialize_bath() -> void:
 
 
 func _update_quantum_substrate(dt: float) -> void:
-	"""Override parent: Update weather and all patches"""
-	# Bath mode: ecosystem dynamics handled by BiomeBase
-	# Predator-prey and vegetation dynamics come from bath Lindblad operators
-	pass
+	"""Override parent: Evolve forest quantum bath (Lindblad evolution)
+
+	Forest uses bath-based architecture due to 22-dimensional emoji space
+	(2^22 = 4M states would be too large for dense matrix Model C).
+	The bath.evolve() performs sparse Lindblad evolution efficiently.
+	"""
+	if bath:
+		bath.evolve(dt)
 
 
 func _create_patch(position: Vector2i) -> BiomePlot:

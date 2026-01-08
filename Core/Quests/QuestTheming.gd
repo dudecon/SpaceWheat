@@ -10,7 +10,18 @@ extends RefCounted
 
 const FactionStateMatcher = preload("res://Core/QuantumSubstrate/FactionStateMatcher.gd")
 const QuestTypes = preload("res://Core/Quests/QuestTypes.gd")
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
+
+## Safe VerboseConfig accessor for RefCounted classes (no scene tree access)
+static func _log(level: String, category: String, emoji: String, message: String) -> void:
+	var tree = Engine.get_main_loop()
+	if tree and tree.root and tree.root.has_node("VerboseConfig"):
+		var logger = tree.root.get_node("VerboseConfig")
+		match level:
+			"debug": logger.debug(category, emoji, message)
+			"info": logger.info(category, emoji, message)
+			"warn": logger.warn(category, emoji, message)
+			"error": logger.error(category, emoji, message)
 
 
 static func apply_theming(params: FactionStateMatcher.QuestParameters, bath) -> Dictionary:
@@ -236,15 +247,20 @@ static func _sample_from_allowed_emojis(bath, allowed_emojis: Array, params) -> 
 	"""
 
 	if allowed_emojis.is_empty():
+		_log("warn", "quest", "⚠️", "Empty allowed_emojis - fallback to 🌾")
 		return "🌾"  # Ultimate fallback
 
 	# No bath? Pick random from allowed
 	if bath == null:
-		return allowed_emojis[randi() % allowed_emojis.size()]
+		var chosen = allowed_emojis[randi() % allowed_emojis.size()]
+		_log("debug", "quest", "🎲", "No bath - random from allowed: %s" % chosen)
+		return chosen
 
 	var density_matrix = bath.get("_density_matrix")
 	if density_matrix == null:
-		return allowed_emojis[randi() % allowed_emojis.size()]
+		var chosen = allowed_emojis[randi() % allowed_emojis.size()]
+		_log("debug", "quest", "🎲", "No density matrix - random from allowed: %s" % chosen)
+		return chosen
 
 	# Get bath emoji list
 	var bath_emojis = density_matrix.emoji_list
@@ -260,7 +276,9 @@ static func _sample_from_allowed_emojis(bath, allowed_emojis: Array, params) -> 
 
 	# If no allowed emojis in bath, pick from allowed randomly
 	if allowed_indices.is_empty():
-		return allowed_emojis[randi() % allowed_emojis.size()]
+		var chosen = allowed_emojis[randi() % allowed_emojis.size()]
+		_log("debug", "quest", "🎲", "No overlap with bath - random from allowed: %s" % chosen)
+		return chosen
 
 	# Renormalize probabilities
 	var total = 0.0
@@ -280,10 +298,14 @@ static func _sample_from_allowed_emojis(bath, allowed_emojis: Array, params) -> 
 	for i in range(allowed_probs.size()):
 		cumulative += allowed_probs[i]
 		if roll <= cumulative:
-			return bath_emojis[allowed_indices[i]]
+			var chosen = bath_emojis[allowed_indices[i]]
+			_log("debug", "quest", "🎯", "Sampled %s (p=%.3f, roll=%.3f) from bath" % [chosen, allowed_probs[i], roll])
+			return chosen
 
 	# Fallback
-	return bath_emojis[allowed_indices[0]]
+	var fallback = bath_emojis[allowed_indices[0]]
+	_log("debug", "quest", "🎲", "Fallback to first allowed: %s" % fallback)
+	return fallback
 
 
 static func _urgency_to_time(urgency: float) -> float:
@@ -312,23 +334,40 @@ static func generate_quest(faction: Dictionary, bath, player_vocab: Array = []) 
 
 	# 1. Get faction's complete vocabulary
 	var faction_vocab = FactionDatabase.get_faction_vocabulary(faction)
+	var faction_name = faction.get("name", "Unknown")
+
+	_log("debug", "quest", "📚", "Quest gen: %s signature=%s axial=%s" % [
+		faction_name,
+		"".join(faction_vocab.signature),
+		"".join(faction_vocab.axial.slice(0, 3)) + "..."
+	])
 
 	# 2. Find overlap with player's known vocabulary
+	# NEW DESIGN: Quest resources come from SIGNATURE ONLY (not axial vocabulary)
+	# This makes factions feel distinct and prevents "everyone wants wheat" problem
 	var available_emojis = []
 	if player_vocab.is_empty():
-		# No filtering - use all faction vocabulary (backward compatibility for tests)
-		available_emojis = faction_vocab.all
+		# No filtering - use signature only (backward compatibility for tests)
+		available_emojis = faction_vocab.signature
+		_log("debug", "quest", "🎲", "No player vocab filter - using full signature")
 	else:
-		available_emojis = FactionDatabase.get_vocabulary_overlap(faction_vocab.all, player_vocab)
+		# Filter signature to player's known vocabulary
+		available_emojis = FactionDatabase.get_vocabulary_overlap(faction_vocab.signature, player_vocab)
+		_log("debug", "quest", "🔍", "Player knows %s, faction signature %s → available %s" % [
+			"".join(player_vocab),
+			"".join(faction_vocab.signature),
+			"".join(available_emojis)
+		])
 
 	# 3. If no overlap, faction is inaccessible!
 	if available_emojis.is_empty():
+		_log("info", "quest", "🚫", "%s inaccessible - no signature overlap with player vocab" % faction_name)
 		return {
 			"error": "no_vocabulary_overlap",
 			"message": "Learn more about %s's interests first..." % faction.get("name", "Unknown"),
 			"faction": faction.get("name", "Unknown"),
-			"required_emojis": faction_vocab.all.slice(0, 3),  # Hint: first 3
-			"faction_vocabulary": faction_vocab.all
+			"required_emojis": faction_vocab.signature.slice(0, 3),  # Hint: signature emojis
+			"faction_vocabulary": faction_vocab.signature  # Show signature, not axial
 		}
 
 	# 4. Extract abstract observables

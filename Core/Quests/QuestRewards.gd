@@ -4,7 +4,7 @@ extends RefCounted
 ## Quest Reward System
 ## Handles reward generation and vocabulary teaching for completed quests
 
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
 
 class QuestReward:

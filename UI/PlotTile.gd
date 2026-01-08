@@ -238,7 +238,7 @@ func _update_visuals():
 		_show_empty_state()
 		return
 
-	if not plot_ui_data.is_planted:
+	if not plot_ui_data.get("is_planted", false):
 		_show_empty_state()
 	else:
 		# Quantum-only mechanics: plants are instant full size
@@ -299,7 +299,7 @@ func _show_mature_state():
 	growth_bar.visible = false
 
 	# Phase 4: Use PlotUIData - no plot_type enum, use string instead
-	match plot_ui_data.plot_type:
+	match plot_ui_data.get("plot_type", ""):
 		"tomato":
 			emoji_label_north.text = "🍅"
 			emoji_label_south.text = ""
@@ -320,22 +320,40 @@ func _show_mature_state():
 			emoji_label_south.text = ""
 			emoji_label_north.modulate.a = 1.0
 			emoji_label_south.modulate.a = 0.0
+		"fire", "water", "flour":
+			# Kitchen ingredients: QUANTUM SUPERPOSITION - dual label with probability-weighted opacity
+			if not plot_ui_data.get("has_been_measured", false):
+				# Show both emojis with probability-weighted opacity
+				emoji_label_north.text = plot_ui_data.get("north_emoji", "")
+				emoji_label_south.text = plot_ui_data.get("south_emoji", "")
+				emoji_label_north.modulate.a = plot_ui_data.get("north_probability", 0.5)
+				emoji_label_south.modulate.a = plot_ui_data.get("south_probability", 0.5)
+			else:
+				# Measured - show single dominant emoji
+				if plot_ui_data.get("north_probability", 0.5) > plot_ui_data.get("south_probability", 0.5):
+					emoji_label_north.text = plot_ui_data.get("north_emoji", "")
+					emoji_label_south.text = ""
+				else:
+					emoji_label_north.text = plot_ui_data.get("south_emoji", "")
+					emoji_label_south.text = ""
+				emoji_label_north.modulate.a = 1.0
+				emoji_label_south.modulate.a = 0.0
 		_:
 			# Wheat: QUANTUM SUPERPOSITION - dual label with probability-weighted opacity
-			if not plot_ui_data.has_been_measured:
+			if not plot_ui_data.get("has_been_measured", false):
 				# Show both emojis with probability-weighted opacity
-				emoji_label_north.text = plot_ui_data.north_emoji
-				emoji_label_south.text = plot_ui_data.south_emoji
-				emoji_label_north.modulate.a = plot_ui_data.north_probability
-				emoji_label_south.modulate.a = plot_ui_data.south_probability
+				emoji_label_north.text = plot_ui_data.get("north_emoji", "")
+				emoji_label_south.text = plot_ui_data.get("south_emoji", "")
+				emoji_label_north.modulate.a = plot_ui_data.get("north_probability", 0.5)
+				emoji_label_south.modulate.a = plot_ui_data.get("south_probability", 0.5)
 			else:
 				# Measured - show single dominant emoji
 				# (choose dominant based on which has higher probability)
-				if plot_ui_data.north_probability > plot_ui_data.south_probability:
-					emoji_label_north.text = plot_ui_data.north_emoji
+				if plot_ui_data.get("north_probability", 0.5) > plot_ui_data.get("south_probability", 0.5):
+					emoji_label_north.text = plot_ui_data.get("north_emoji", "")
 					emoji_label_south.text = ""
 				else:
-					emoji_label_north.text = plot_ui_data.south_emoji
+					emoji_label_north.text = plot_ui_data.get("south_emoji", "")
 					emoji_label_south.text = ""
 				emoji_label_north.modulate.a = 1.0
 				emoji_label_south.modulate.a = 0.0
@@ -473,10 +491,10 @@ func _draw():
 	_draw_circuit_traces(rect)
 
 	# Draw entanglement ring if plot is entangled
-	if plot_ui_data and plot_ui_data.is_planted:
+	if plot_ui_data and plot_ui_data.get("is_planted", false):
 		var entangled_count = 0
 		if plot_ui_data.has("entangled_plots"):
-			entangled_count = plot_ui_data.entangled_plots.size()
+			entangled_count = plot_ui_data.get("entangled_plots", []).size()
 		if entangled_count > 0:
 			_draw_entanglement_ring_inline(rect, entangled_count)
 
@@ -546,7 +564,7 @@ func _update_center_indicator():
 	- Size: coherence level (radius/coherence) - larger when more coherent
 	- Opacity: biome energy - brighter during high-energy times
 	"""
-	if not plot_ui_data or not plot_ui_data.is_planted:
+	if not plot_ui_data or not plot_ui_data.get("is_planted", false):
 		var c = center_state_indicator.color
 		c.a = 0.0
 		center_state_indicator.color = c
@@ -560,7 +578,7 @@ func _update_center_indicator():
 
 	# Calculate size and opacity based on coherence (PlotUIData equivalent of radius)
 	# Size ranges from 2 to 12 pixels based on coherence (0 to 1)
-	var glow_size = 2.0 + (plot_ui_data.coherence * 10.0)
+	var glow_size = 2.0 + (plot_ui_data.get("coherence", 0.0) * 10.0)
 
 	# Center the indicator in the middle of the plot
 	var plot_center = size / 2.0
@@ -576,7 +594,7 @@ func _update_center_indicator():
 
 func _update_entanglement_display():
 	"""Update entanglement visual indicators (ring + counter)"""
-	if plot_ui_data == null or not plot_ui_data.is_planted:
+	if plot_ui_data == null or not plot_ui_data.get("is_planted", false):
 		# No entanglement indicators for empty plots
 		entanglement_indicator.queue_redraw()
 		entanglement_counter.text = ""
@@ -585,7 +603,7 @@ func _update_entanglement_display():
 	# Count entangled connections (from plot_ui_data if available)
 	var entangled_count = 0
 	if plot_ui_data.has("entangled_plots"):
-		entangled_count = plot_ui_data.entangled_plots.size()
+		entangled_count = plot_ui_data.get("entangled_plots", []).size()
 
 	# Update counter label
 	if entangled_count > 0:
@@ -599,7 +617,7 @@ func _update_entanglement_display():
 
 func _update_purity_display():
 	"""Update purity indicator showing Tr(ρ²) quality metric"""
-	if plot_ui_data == null or not plot_ui_data.is_planted:
+	if plot_ui_data == null or not plot_ui_data.get("is_planted", false):
 		# Hide purity for empty plots
 		purity_label.text = ""
 		return
@@ -607,11 +625,12 @@ func _update_purity_display():
 	# Get purity from plot_ui_data if available
 	var purity = 1.0  # Default to pure state
 	if plot_ui_data.has("purity"):
-		purity = plot_ui_data.purity
-	elif plot_ui_data.has("quantum_state") and plot_ui_data.quantum_state:
+		purity = plot_ui_data.get("purity", 1.0)
+	elif plot_ui_data.has("quantum_state") and plot_ui_data.get("quantum_state"):
 		# Try to get purity from quantum state's bath
-		if plot_ui_data.quantum_state.has("bath") and plot_ui_data.quantum_state.bath:
-			purity = plot_ui_data.quantum_state.bath.get_purity()
+		var quantum_state = plot_ui_data.get("quantum_state")
+		if quantum_state and quantum_state.has("bath") and quantum_state.get("bath"):
+			purity = quantum_state.get("bath").get_purity()
 
 	# Format purity as percentage
 	var purity_percent = int(purity * 100)
@@ -666,6 +685,6 @@ func set_plot_data(plot_data, pos: Vector2i, index: int = -1):
 
 
 func get_debug_info() -> String:
-	if plot_ui_data == null or not plot_ui_data.is_planted:
+	if plot_ui_data == null or not plot_ui_data.get("is_planted", false):
 		return "Empty"
-	return "Planted: %s" % plot_ui_data.plot_type
+	return "Planted: %s" % plot_ui_data.get("plot_type", "unknown")

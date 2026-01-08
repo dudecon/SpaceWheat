@@ -1,372 +1,773 @@
 class_name MarketBiome
 extends "res://Core/Environment/BiomeBase.gd"
 
-## Quantum Market Biome: Full quantum system for trading/economics
+## Quantum Market Biome v2: Emergent Exchange Economics (Icon-Based)
 ##
-## Two quantum axes drive market dynamics:
-## 1. Sentiment qubit: 🐂/🐻 (Bull/Bear) - price direction
-## 2. Liquidity qubit: 💰/📦 (Money/Goods) - available resources
+## Architecture: Icon-based QuantumBath with 3-qubit tensor product core
 ##
-## Architecture mirrors BioticFlux biome but for economics:
-## - Celestial equivalent: market_sentiment_qubit (drives overall mood)
-## - Icon equivalents: bull_icon, bear_icon (Hamiltonian attractors)
-## - Crop equivalents: trader qubits (💰/📦 money/goods axis)
+## Core Market State (8D):
+##   Qubit 0 (Sentiment): 🐂 Bull / 🐻 Bear
+##   Qubit 1 (Liquidity): 💰 Money / 💳 Debt
+##   Qubit 2 (Stability): 🏛️ Order / 🏚️ Chaos
 ##
-## Biome emoji pairings (what gets attached when injected):
-## - 💰 pairs with 📦 (money ↔ goods)
-## - 🐂 pairs with 🐻 (bull ↔ bear)
-
-const TIME_SCALE = 1.0  # Market evolution speed
+## Basis States (tensor product, 3-char emoji labels):
+##   |000⟩ = "🐂💰🏛️" (Bull + Money + Stable) - best market
+##   |001⟩ = "🐂💰🏚️" (Bull + Money + Chaos)
+##   |010⟩ = "🐂💳🏛️" (Bull + Debt + Stable)
+##   |011⟩ = "🐂💳🏚️" (Bull + Debt + Chaos)
+##   |100⟩ = "🐻💰🏛️" (Bear + Money + Stable)
+##   |101⟩ = "🐻💰🏚️" (Bear + Money + Chaos)
+##   |110⟩ = "🐻💳🏛️" (Bear + Debt + Stable)
+##   |111⟩ = "🐻💳🏚️" (Bear + Debt + Chaos) - crash state
+##
+## Commodity Trading (Generic):
+##   - Commodities injected dynamically to bath (any emoji)
+##   - Price = Hamiltonian tunneling rate (commodity → money states)
+##   - Trading = Lindblad drives (injection → evolution → extraction)
+##   - Market impact = backaction on sentiment qubit
+##
+## Physics:
+##   - Emergent pricing from spectral overlap
+##   - Lindblad-driven exchange (trace conserving)
+##   - Detuning modulation (sentiment affects price)
+##   - Liquidity crises (trace limits money extraction)
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CELESTIAL: Market Sentiment (drives overall market mood)
-# ═══════════════════════════════════════════════════════════════════════════
-var sentiment_qubit: DualEmojiQubit = null  # 🐂/🐻 Bull/Bear sentiment
-var sentiment_period: float = 30.0  # seconds for full bull/bear cycle
-
-# ═══════════════════════════════════════════════════════════════════════════
-# ICONS: Market forces (Hamiltonian attractors)
-# ═══════════════════════════════════════════════════════════════════════════
-var bull_icon: Dictionary = {}  # Attracts toward 🐂 (rising prices)
-var bear_icon: Dictionary = {}  # Attracts toward 🐻 (falling prices)
-
-# ═══════════════════════════════════════════════════════════════════════════
-# EMOJI PAIRINGS: Registered in _ready() via BiomeBase.register_emoji_pair()
+# CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Market-specific constants
-var base_price: int = 100  # Starting price per unit
-var volatility: float = 0.3  # How much sentiment affects prices
+const BASE_PRICE = 1.0  # Base Hamiltonian coupling strength
+const SENTIMENT_CYCLE_PERIOD = 60.0  # seconds for bull/bear oscillation
+const TRADE_DRIVE_RATE = 5.0  # Lindblad rate for trading
+const LARGE_TRADE_THRESHOLD = 100  # Credits threshold for market impact
+const MARKET_IMPACT_STRENGTH = 0.05  # Backaction on sentiment
+const MARKET_LIQUIDITY_POOL = 10000  # Total market money capacity
+const GAMMA_SQUARED = 1.0  # Detuning broadening factor
 
-# Granary Guilds influence (merchant collective)
-var granary_guilds_qubit: DualEmojiQubit = null  # 🏛️/🏚️ (stable/chaotic markets)
+# Hamiltonian coupling strengths (modulate base price)
+const BULL_BOOST = 1.5  # Price multiplier in bull markets
+const BEAR_DISCOUNT = 0.5  # Price multiplier in bear markets
+const CHAOS_PENALTY = 0.7  # Price reduction in chaotic markets
+const STABLE_BONUS = 1.0  # No penalty in stable markets
 
+# Icon decay rates
+const CORE_DECAY_RATE = 0.02  # Natural market evolution
+const COMMODITY_DECAY_RATE = 0.01  # Commodity spoilage
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STATE
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Farm economy reference (set by Farm or FarmGrid)
+var farm_economy = null
+
+# Injected commodities (emojis currently tradeable)
+var active_commodities: Array[String] = []
+
+# Temporary trade drives (cleared after extraction)
+var active_trade_drives: Dictionary = {}  # emoji -> {direction, rate}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INITIALIZATION
+# ═══════════════════════════════════════════════════════════════════════════
 
 func _ready():
 	super._ready()
 
-	# Register emoji pairings for this biome (uses BiomeBase system)
-	register_emoji_pair("💰", "📦")  # Money ↔ Goods
-	register_emoji_pair("🐂", "🐻")  # Bull ↔ Bear
-
 	# Configure visual properties for QuantumForceGraph
-	# Layout: Market (TY) in top-left corner - moved left by ~3/8 screen width total
 	visual_color = Color(1.0, 0.55, 0.0, 0.3)  # Sunset orange
 	visual_label = "📈 Market"
-	visual_center_offset = Vector2(-1.15, -0.25)  # Far left, -0.9 - 0.25 for extra 1/8
-	visual_oval_width = 400.0   # 2x larger to match other biomes
-	visual_oval_height = 250.0  # Golden ratio maintained
+	visual_center_offset = Vector2(-1.15, -0.25)  # Top-left
+	visual_oval_width = 400.0
+	visual_oval_height = 250.0
 
-	print("  ✅ MarketBiome running in bath-first mode")
+	print("  ✅ MarketBiome v2 initialized (bath-Lindblad, 8+ emojis)")
+
+
+func _update_quantum_substrate(dt: float) -> void:
+	"""Evolve market quantum bath (Lindblad evolution)
+
+	Market uses bath-based architecture for dynamic commodity injection.
+	The bath.evolve() performs sparse Lindblad evolution efficiently.
+	"""
+	if bath:
+		bath.evolve(dt)
 
 
 func _initialize_bath() -> void:
-	"""Initialize quantum bath for Market biome (Bath-First)"""
-	print("🛁 Initializing Market quantum bath...")
+	"""Initialize quantum bath with 8 core market states (3-qubit tensor product)"""
+	print("🛁 Initializing Market v2 quantum bath...")
 
-	# Create bath with Market emoji basis
+	# Create bath with 8 core market states (3-char emoji labels)
 	bath = QuantumBath.new()
-	var emojis = ["🐂", "🐻", "💰", "📦", "🏛️", "🏚️"]
-	bath.initialize_with_emojis(emojis)
+	var core_emojis = [
+		"🐂💰🏛️",  # |000⟩ Bull + Money + Stable (best)
+		"🐂💰🏚️",  # |001⟩ Bull + Money + Chaos
+		"🐂💳🏛️",  # |010⟩ Bull + Debt + Stable
+		"🐂💳🏚️",  # |011⟩ Bull + Debt + Chaos
+		"🐻💰🏛️",  # |100⟩ Bear + Money + Stable
+		"🐻💰🏚️",  # |101⟩ Bear + Money + Chaos
+		"🐻💳🏛️",  # |110⟩ Bear + Debt + Stable
+		"🐻💳🏚️",  # |111⟩ Bear + Debt + Chaos (crash)
+	]
 
-	# Initialize weighted distribution
-	# Bull/Bear start balanced (neutral market)
-	# Money and Goods are equal liquidity
-	# Granary Guilds lean toward stability
+	bath.initialize_with_emojis(core_emojis)
+
+	# Initialize weighted distribution (neutral market, bias toward stability)
 	bath.initialize_weighted({
-		"🐂": 0.20,  # Bull - rising prices
-		"🐻": 0.20,  # Bear - falling prices
-		"💰": 0.20,  # Money - liquid capital
-		"📦": 0.20,  # Goods - commodities
-		"🏛️": 0.15,  # Stable - Granary Guilds stability
-		"🏚️": 0.05   # Chaotic - market chaos
+		"🐂💰🏛️": 0.20,  # Bull + Money + Stable (optimal)
+		"🐂💰🏚️": 0.05,  # Bull + Money + Chaos
+		"🐂💳🏛️": 0.10,  # Bull + Debt + Stable
+		"🐂💳🏚️": 0.02,  # Bull + Debt + Chaos
+		"🐻💰🏛️": 0.20,  # Bear + Money + Stable
+		"🐻💰🏚️": 0.05,  # Bear + Money + Chaos
+		"🐻💳🏛️": 0.10,  # Bear + Debt + Stable
+		"🐻💳🏚️": 0.28,  # Bear + Debt + Chaos (crash attractor)
 	})
 
-	# Collect Icons from registry
-	# Get IconRegistry (Farm._ensure_iconregistry() guarantees it exists)
+	# Create Icons for 8 core market states
+	var market_icons = _create_core_market_icons()
+
+	# Register Icons in IconRegistry
 	var icon_registry = get_node("/root/IconRegistry")
 	if not icon_registry:
 		push_error("🛁 IconRegistry not available!")
 		return
 
+	for icon in market_icons:
+		icon_registry.register_icon(icon)
+
+	# Build Hamiltonian and Lindblad operators
+	bath.active_icons = market_icons
+	bath.build_hamiltonian_from_icons(market_icons)
+	bath.build_lindblad_from_icons(market_icons)
+
+	print("  ✅ Market core bath initialized: 8 states")
+	print("  ✅ Hamiltonian: %d non-zero terms" % bath.hamiltonian_sparse.size())
+	print("  ✅ Lindblad: %d transfer terms" % bath.lindblad_terms.size())
+	print("  📈 Market ready for commodity trading!")
+
+
+func _create_core_market_icons() -> Array[Icon]:
+	"""Create Icons for 8 core market states with Hamiltonian couplings and decay"""
 	var icons: Array[Icon] = []
-	for emoji in emojis:
-		var icon = icon_registry.get_icon(emoji)
-		if icon:
-			icons.append(icon)
-		else:
-			push_warning("🛁 Icon not found for emoji: " + emoji)
 
-	# Build Hamiltonian and Lindblad operators from Icons
-	if not icons.is_empty():
-		bath.active_icons = icons
-		bath.build_hamiltonian_from_icons(icons)
-		bath.build_lindblad_from_icons(icons)
+	# Sentiment flip rate (bull ↔ bear natural oscillation)
+	const SENTIMENT_FLIP_RATE = 0.1
 
-		print("  ✅ Bath initialized with %d emojis, %d icons" % [emojis.size(), icons.size()])
-		print("  ✅ Hamiltonian: %d non-zero terms" % bath.hamiltonian_sparse.size())
-		print("  ✅ Lindblad: %d transfer terms" % bath.lindblad_terms.size())
-	else:
-		push_warning("🛁 No icons found for Market bath")
+	# Liquidity oscillation (money ↔ debt natural flow)
+	const LIQUIDITY_FLOW_RATE = 0.2
 
-	print("  📈 Market ready for quantum trading dynamics!")
+	# Stability decay (order → chaos entropy)
+	const STABILITY_DECAY_RATE = 0.05
 
-
-func _initialize_market_qubits():
-	"""Set up quantum states for market"""
-
-	# Sentiment qubit: 🐂 Bull (north) / 🐻 Bear (south)
-	# θ=0 → pure bull, θ=π → pure bear, θ=π/2 → neutral
-	sentiment_qubit = BiomeUtilities.create_qubit("🐂", "🐻", PI / 2.0)
-	sentiment_qubit.phi = 0.0
-	sentiment_qubit.radius = 1.0
-	# energy removed - derived from theta
-
-	# Granary Guilds qubit: 🏛️ Stable (north) / 🏚️ Chaotic (south)
-	# Merchants prefer stability (low volatility, predictable prices)
-	granary_guilds_qubit = BiomeUtilities.create_qubit("🏛️", "🏚️", PI / 4.0)
-	granary_guilds_qubit.radius = 1.0
-	# energy removed - derived from theta
-	# Model B: Sentiment state is managed by QuantumComputer, not stored in plots
-
-
-func _initialize_market_icons():
-	"""Set up icon Hamiltonians for market forces"""
-
-	# BULL ICON - Attracts prices upward
-	var bull_internal = DualEmojiQubit.new()
-	bull_internal.north_emoji = "🐂"
-	bull_internal.south_emoji = "🐻"
-	bull_internal.theta = PI / 6.0  # Leans bullish
-	bull_internal.phi = 0.0
-	bull_internal.radius = 1.0
-
-	bull_icon = {
-		"hamiltonian_terms": {"sigma_x": 0.0, "sigma_y": 0.0, "sigma_z": 0.0},
-		"stable_theta": 0.0,  # Pure bull
-		"stable_phi": 0.0,
-		"spring_constant": 0.3,  # Bull force strength
-		"internal_qubit": bull_internal,
+	# |000⟩ = 🐂💰🏛️ (Bull + Money + Stable) - Optimal market state
+	var bull_money_stable = Icon.new()
+	bull_money_stable.emoji = "🐂💰🏛️"
+	bull_money_stable.display_name = "Bull Money Stable"
+	bull_money_stable.hamiltonian_couplings = {
+		"🐻💰🏛️": SENTIMENT_FLIP_RATE,  # Bull ↔ Bear (qubit 0)
+		"🐂💳🏛️": LIQUIDITY_FLOW_RATE,  # Money ↔ Debt (qubit 1)
 	}
+	bull_money_stable.decay_rate = STABILITY_DECAY_RATE
+	bull_money_stable.decay_target = "🐂💰🏚️"  # Stable → Chaos
+	icons.append(bull_money_stable)
 
-	# BEAR ICON - Attracts prices downward
-	var bear_internal = DualEmojiQubit.new()
-	bear_internal.north_emoji = "🐂"
-	bear_internal.south_emoji = "🐻"
-	bear_internal.theta = 5.0 * PI / 6.0  # Leans bearish
-	bear_internal.phi = PI
-	bear_internal.radius = 1.0
-
-	bear_icon = {
-		"hamiltonian_terms": {"sigma_x": 0.0, "sigma_y": 0.0, "sigma_z": 0.0},
-		"stable_theta": PI,  # Pure bear
-		"stable_phi": PI,
-		"spring_constant": 0.3,  # Bear force strength
-		"internal_qubit": bear_internal,
+	# |001⟩ = 🐂💰🏚️ (Bull + Money + Chaos)
+	var bull_money_chaos = Icon.new()
+	bull_money_chaos.emoji = "🐂💰🏚️"
+	bull_money_chaos.display_name = "Bull Money Chaos"
+	bull_money_chaos.hamiltonian_couplings = {
+		"🐻💰🏚️": SENTIMENT_FLIP_RATE,
+		"🐂💳🏚️": LIQUIDITY_FLOW_RATE,
 	}
+	bull_money_chaos.decay_rate = CORE_DECAY_RATE
+	bull_money_chaos.decay_target = "🐻💳🏚️"  # Chaos attracts toward crash
+	icons.append(bull_money_chaos)
+
+	# |010⟩ = 🐂💳🏛️ (Bull + Debt + Stable)
+	var bull_debt_stable = Icon.new()
+	bull_debt_stable.emoji = "🐂💳🏛️"
+	bull_debt_stable.display_name = "Bull Debt Stable"
+	bull_debt_stable.hamiltonian_couplings = {
+		"🐻💳🏛️": SENTIMENT_FLIP_RATE,
+		"🐂💰🏛️": LIQUIDITY_FLOW_RATE,  # Debt ↔ Money
+	}
+	bull_debt_stable.decay_rate = STABILITY_DECAY_RATE
+	bull_debt_stable.decay_target = "🐂💳🏚️"
+	icons.append(bull_debt_stable)
+
+	# |011⟩ = 🐂💳🏚️ (Bull + Debt + Chaos)
+	var bull_debt_chaos = Icon.new()
+	bull_debt_chaos.emoji = "🐂💳🏚️"
+	bull_debt_chaos.display_name = "Bull Debt Chaos"
+	bull_debt_chaos.hamiltonian_couplings = {
+		"🐻💳🏚️": SENTIMENT_FLIP_RATE,
+		"🐂💰🏚️": LIQUIDITY_FLOW_RATE,
+	}
+	bull_debt_chaos.decay_rate = CORE_DECAY_RATE * 1.5
+	bull_debt_chaos.decay_target = "🐻💳🏚️"  # Strong crash attractor
+	icons.append(bull_debt_chaos)
+
+	# |100⟩ = 🐻💰🏛️ (Bear + Money + Stable)
+	var bear_money_stable = Icon.new()
+	bear_money_stable.emoji = "🐻💰🏛️"
+	bear_money_stable.display_name = "Bear Money Stable"
+	bear_money_stable.hamiltonian_couplings = {
+		"🐂💰🏛️": SENTIMENT_FLIP_RATE,
+		"🐻💳🏛️": LIQUIDITY_FLOW_RATE,
+	}
+	bear_money_stable.decay_rate = STABILITY_DECAY_RATE
+	bear_money_stable.decay_target = "🐻💰🏚️"
+	icons.append(bear_money_stable)
+
+	# |101⟩ = 🐻💰🏚️ (Bear + Money + Chaos)
+	var bear_money_chaos = Icon.new()
+	bear_money_chaos.emoji = "🐻💰🏚️"
+	bear_money_chaos.display_name = "Bear Money Chaos"
+	bear_money_chaos.hamiltonian_couplings = {
+		"🐂💰🏚️": SENTIMENT_FLIP_RATE,
+		"🐻💳🏚️": LIQUIDITY_FLOW_RATE,
+	}
+	bear_money_chaos.decay_rate = CORE_DECAY_RATE
+	bear_money_chaos.decay_target = "🐻💳🏚️"
+	icons.append(bear_money_chaos)
+
+	# |110⟩ = 🐻💳🏛️ (Bear + Debt + Stable)
+	var bear_debt_stable = Icon.new()
+	bear_debt_stable.emoji = "🐻💳🏛️"
+	bear_debt_stable.display_name = "Bear Debt Stable"
+	bear_debt_stable.hamiltonian_couplings = {
+		"🐂💳🏛️": SENTIMENT_FLIP_RATE,
+		"🐻💰🏛️": LIQUIDITY_FLOW_RATE,
+	}
+	bear_debt_stable.decay_rate = STABILITY_DECAY_RATE
+	bear_debt_stable.decay_target = "🐻💳🏚️"
+	icons.append(bear_debt_stable)
+
+	# |111⟩ = 🐻💳🏚️ (Bear + Debt + Chaos) - CRASH STATE (absorbing)
+	var crash_state = Icon.new()
+	crash_state.emoji = "🐻💳🏚️"
+	crash_state.display_name = "Market Crash"
+	crash_state.hamiltonian_couplings = {
+		"🐂💳🏚️": SENTIMENT_FLIP_RATE * 0.5,  # Weak recovery
+		"🐻💰🏚️": LIQUIDITY_FLOW_RATE * 0.3,  # Weak liquidity injection
+	}
+	crash_state.decay_rate = 0.0  # Absorbing state (no decay)
+	icons.append(crash_state)
+
+	return icons
 
 
-func _initialize_bath_market() -> void:
-	"""Initialize quantum bath for Market biome (Bath-First)
+# ═══════════════════════════════════════════════════════════════════════════
+# COMMODITY INJECTION (Generic Trading System)
+# ═══════════════════════════════════════════════════════════════════════════
 
-	Market emojis: 🐂 🐻 💰 📦 🏛️ 🏚️
-	Dynamics:
-	  - Bull/Bear oscillate with time-dependent self-energy (sentiment cycle)
-	  - Money flows toward bull markets (Lindblad transfer)
-	  - Goods flow toward bear markets (accumulation in downturns)
-	  - Stability/Chaos affects volatility
+func inject_commodity(emoji: String) -> bool:
+	"""Add commodity to market bath for trading.
+
+	Creates Icon with Hamiltonian couplings to money states.
+	Price emerges from coupling strength modulated by market state.
+
+	Args:
+	    emoji: Commodity emoji (e.g., "🔥", "💧", "💨", "🍞")
+
+	Returns:
+	    true if commodity was added successfully
 	"""
-	print("🛁 Initializing Market quantum bath...")
+	# Check if already injected
+	if emoji in active_commodities:
+		return true
 
-	# Create bath with Market emoji basis
-	bath = QuantumBath.new()
-	var emojis = ["🐂", "🐻", "💰", "📦", "🏛️", "🏚️"]
-	bath.initialize_with_emojis(emojis)
-
-	# Initialize weighted distribution
-	# Bull/Bear start balanced (neutral market)
-	# Money and Goods are equal liquidity
-	# Granary Guilds lean toward stability
-	bath.initialize_weighted({
-		"🐂": 0.20,  # Bull - rising prices
-		"🐻": 0.20,  # Bear - falling prices
-		"💰": 0.20,  # Money - liquid capital
-		"📦": 0.20,  # Goods - commodities
-		"🏛️": 0.15,  # Stable - Granary Guilds stability
-		"🏚️": 0.05   # Chaotic - market chaos
-	})
-
-	# Collect Icons from registry
-	# Get IconRegistry (now guaranteed to be first autoload)
-	var icon_registry = get_node_or_null("/root/IconRegistry")
+	# Get IconRegistry
+	var icon_registry = get_node("/root/IconRegistry")
 	if not icon_registry:
-		push_error("🛁 IconRegistry not available!")
+		push_error("📈 IconRegistry not available!")
+		return false
+
+	# Check if Icon already exists in registry
+	var existing_icon = icon_registry.get_icon(emoji)
+	if existing_icon:
+		# Icon exists globally, add to bath
+		bath.add_emoji_to_basis(emoji)
+		bath.active_icons.append(existing_icon)
+		active_commodities.append(emoji)
+
+		# Rebuild operators to include new commodity
+		bath.build_hamiltonian_from_icons(bath.active_icons)
+		bath.build_lindblad_from_icons(bath.active_icons)
+
+		print("📈 Market: Injected existing commodity %s" % emoji)
+		return true
+
+	# Create new commodity Icon
+	var commodity_icon = _create_commodity_icon(emoji)
+
+	# Register in IconRegistry
+	icon_registry.register_icon(commodity_icon)
+
+	# Add to bath
+	bath.add_emoji_to_basis(emoji)
+	bath.active_icons.append(commodity_icon)
+	active_commodities.append(emoji)
+
+	# Rebuild operators
+	bath.build_hamiltonian_from_icons(bath.active_icons)
+	bath.build_lindblad_from_icons(bath.active_icons)
+
+	print("📈 Market: Injected new commodity %s (price emerges from dynamics)" % emoji)
+	return true
+
+
+func _create_commodity_icon(emoji: String) -> Icon:
+	"""Create Icon for generic commodity with price couplings.
+
+	Commodity couples to ALL money states (not debt states).
+	Coupling strength = base price * market condition modifiers.
+
+	Price emergence:
+	  - High coupling to bull+stable → high price
+	  - Low coupling to bear+chaos → low price
+	  - Current price = weighted sum by state probabilities
+	"""
+	var icon = Icon.new()
+	icon.emoji = emoji
+	icon.display_name = "Commodity " + emoji
+
+	# Hamiltonian couplings to money states (commodity ↔ money exchange)
+	# NO coupling to debt states (can't buy with debt)
+	icon.hamiltonian_couplings = {
+		"🐂💰🏛️": BASE_PRICE * BULL_BOOST * STABLE_BONUS,     # Highest price
+		"🐂💰🏚️": BASE_PRICE * BULL_BOOST * CHAOS_PENALTY,    # Bull but chaotic
+		"🐻💰🏛️": BASE_PRICE * BEAR_DISCOUNT * STABLE_BONUS,  # Bear but stable
+		"🐻💰🏚️": BASE_PRICE * BEAR_DISCOUNT * CHAOS_PENALTY, # Lowest price
+		# Debt states excluded: "🐂💳🏛️", "🐂💳🏚️", "🐻💳🏛️", "🐻💳🏚️"
+	}
+
+	# Commodity decays (spoilage if not traded)
+	icon.decay_rate = COMMODITY_DECAY_RATE
+	icon.decay_target = "🍂"  # Spoils to organic matter
+
+	# No outgoing Lindblad initially (added during trading)
+	icon.lindblad_outgoing = {}
+
+	return icon
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EMERGENT PRICING (Spectroscopic Model)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func get_commodity_price(emoji: String) -> float:
+	"""Calculate emergent price from Hamiltonian spectral overlap.
+
+	Price = effective tunneling rate from commodity to money states.
+	Weighted by current market state probabilities.
+
+	Physics:
+	    P = Σ_i Ω_i * P(money_state_i)
+
+	Where:
+	    Ω_i = Hamiltonian coupling to money state i
+	    P(money_state_i) = current probability of that state
+
+	Returns:
+	    Price in credits per unit (emergent from quantum dynamics)
+	"""
+	# Check commodity is injected
+	if not emoji in active_commodities:
+		return 0.0
+
+	# Get commodity Icon
+	var icon_registry = get_node("/root/IconRegistry")
+	var icon = icon_registry.get_icon(emoji)
+	if not icon:
+		return 0.0
+
+	# Calculate weighted price (spectral overlap)
+	var price = 0.0
+	for money_state in icon.hamiltonian_couplings:
+		var coupling = icon.hamiltonian_couplings[money_state]
+		var state_prob = bath.get_probability(money_state)
+		price += coupling * state_prob
+
+	# Detuning correction (sentiment modulation)
+	var detuning = _compute_detuning(emoji)
+	var omega_eff = price / (1.0 + detuning * detuning / GAMMA_SQUARED)
+
+	return max(0.1, omega_eff)  # Floor price to prevent zero
+
+
+func _compute_detuning(emoji: String) -> float:
+	"""Calculate energy detuning (affects price via spectral broadening).
+
+	Detuning increases in bear markets (widens gap, lowers price).
+	Detuning decreases in bull markets (narrows gap, raises price).
+
+	Returns:
+	    Detuning Δ (dimensionless)
+	"""
+	var sentiment = get_marginal_sentiment()  # P(🐂)
+
+	# Bear market (low sentiment) → high detuning → low price
+	# Bull market (high sentiment) → low detuning → high price
+	var delta = 2.0 * (1.0 - sentiment)  # Range: 0 (bull) to 2 (bear)
+
+	return delta
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MARGINAL PROBABILITIES (Qubit Queries)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func get_marginal_sentiment() -> float:
+	"""P(🐂) = sum of all states with 🐂 in first position.
+
+	Returns:
+	    Bull probability (0.0 = full bear, 1.0 = full bull)
+	"""
+	var bull_states = ["🐂💰🏛️", "🐂💰🏚️", "🐂💳🏛️", "🐂💳🏚️"]
+	var prob = 0.0
+	for state in bull_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+func get_marginal_liquidity() -> float:
+	"""P(💰) = sum of all states with 💰 in second position.
+
+	Returns:
+	    Money probability (0.0 = full debt, 1.0 = full liquidity)
+	"""
+	var money_states = ["🐂💰🏛️", "🐂💰🏚️", "🐻💰🏛️", "🐻💰🏚️"]
+	var prob = 0.0
+	for state in money_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+func get_marginal_stability() -> float:
+	"""P(🏛️) = sum of all states with 🏛️ in third position.
+
+	Returns:
+	    Stability probability (0.0 = full chaos, 1.0 = full order)
+	"""
+	var stable_states = ["🐂💰🏛️", "🐂💳🏛️", "🐻💰🏛️", "🐻💳🏛️"]
+	var prob = 0.0
+	for state in stable_states:
+		prob += bath.get_probability(state)
+	return prob
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TRADING API (Lindblad-Driven Exchange)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func buy_resource(emoji: String, amount: int) -> bool:
+	"""Player buys resource from Market (Lindblad trading).
+
+	Phase A (Injection): Activate Lindblad drive |💰⟩ → |emoji⟩
+	Phase B (Evolution): Automatic via bath.evolve() in _process()
+	Phase C (Extraction): Deduct credits, add commodity to economy
+
+	Args:
+	    emoji: Resource to buy (e.g., "🔥", "💧", "💨")
+	    amount: Credits to spend
+
+	Returns:
+	    true if trade successful
+	"""
+	if not farm_economy:
+		push_error("📈 Market: No economy reference!")
+		return false
+
+	# Ensure commodity is injected
+	if not emoji in active_commodities:
+		inject_commodity(emoji)
+
+	# Calculate price
+	var price_per_unit = get_commodity_price(emoji)
+	var units = int(amount / price_per_unit)
+	if units <= 0:
+		return false
+
+	var actual_cost = int(units * price_per_unit)
+
+	# Check player has money
+	if farm_economy.get_resource("💰") < actual_cost:
+		print("❌ Market: Not enough 💰! (have %d, need %d)" % [
+			farm_economy.get_resource("💰"), actual_cost])
+		return false
+
+	# Check liquidity
+	if not _check_liquidity_available(actual_cost):
+		print("⚠️ Market: Liquidity crisis! Not enough money in circulation.")
+		return false
+
+	# PHASE A: INJECTION
+	# Activate Lindblad drives: money states → commodity
+	_activate_buy_drives(emoji, units)
+
+	# PHASE C: EXTRACTION (after evolution in next frame)
+	# Deduct money from player
+	farm_economy.remove_resource("💰", actual_cost, "market_purchase")
+
+	# Add commodity to player
+	farm_economy.add_resource(emoji, units, "market_purchase")
+
+	print("📈 Market: Bought %d %s for %d 💰 (price: %.2f)" % [
+		units, emoji, actual_cost, price_per_unit])
+
+	# Market impact (backaction)
+	if actual_cost > LARGE_TRADE_THRESHOLD:
+		_apply_market_impact(-MARKET_IMPACT_STRENGTH)  # Large buy → bull shift
+
+	# Schedule drive cleanup
+	_schedule_drive_cleanup(emoji)
+
+	return true
+
+
+func sell_resource(emoji: String, amount: int) -> bool:
+	"""Player sells resource to Market (Lindblad trading).
+
+	Phase A (Injection): Activate Lindblad drive |emoji⟩ → |💰⟩
+	Phase B (Evolution): Automatic via bath.evolve()
+	Phase C (Extraction): Deduct commodity, add credits to economy
+
+	Args:
+	    emoji: Resource to sell (e.g., "🍞")
+	    amount: Units to sell
+
+	Returns:
+	    true if trade successful
+	"""
+	if not farm_economy:
+		push_error("📈 Market: No economy reference!")
+		return false
+
+	# Ensure commodity is injected
+	if not emoji in active_commodities:
+		inject_commodity(emoji)
+
+	# Check player has resource
+	if farm_economy.get_resource(emoji) < amount:
+		print("❌ Market: Not enough %s! (have %d, need %d)" % [
+			emoji, farm_economy.get_resource(emoji), amount])
+		return false
+
+	# Calculate reward
+	var price_per_unit = get_commodity_price(emoji)
+	var reward = int(amount * price_per_unit)
+
+	# PHASE A: INJECTION
+	# Activate Lindblad drives: commodity → money states
+	_activate_sell_drives(emoji, amount)
+
+	# PHASE C: EXTRACTION
+	# Deduct commodity from player
+	farm_economy.remove_resource(emoji, amount, "market_sale")
+
+	# Add money to player
+	farm_economy.add_resource("💰", reward, "market_sale")
+
+	print("📈 Market: Sold %d %s for %d 💰 (price: %.2f)" % [
+		amount, emoji, reward, price_per_unit])
+
+	# Market impact (backaction)
+	if amount > LARGE_TRADE_THRESHOLD:
+		_apply_market_impact(+MARKET_IMPACT_STRENGTH)  # Large sell → bear shift
+
+	# Schedule drive cleanup
+	_schedule_drive_cleanup(emoji)
+
+	return true
+
+
+func _activate_buy_drives(emoji: String, units: int) -> void:
+	"""Activate Lindblad drives for buying: money → commodity"""
+	var icon_registry = get_node("/root/IconRegistry")
+	var money_states = ["🐂💰🏛️", "🐂💰🏚️", "🐻💰🏛️", "🐻💰🏚️"]
+
+	for money_state in money_states:
+		var money_icon = icon_registry.get_icon(money_state)
+		if money_icon:
+			# Add temporary Lindblad transfer: money → commodity
+			money_icon.lindblad_outgoing[emoji] = TRADE_DRIVE_RATE * units / 100.0
+
+	# Rebuild Lindblad operators
+	bath.build_lindblad_from_icons(bath.active_icons)
+
+	# Track active drive
+	active_trade_drives[emoji] = {"direction": "buy", "units": units}
+
+
+func _activate_sell_drives(emoji: String, units: int) -> void:
+	"""Activate Lindblad drives for selling: commodity → money"""
+	var icon_registry = get_node("/root/IconRegistry")
+	var commodity_icon = icon_registry.get_icon(emoji)
+	var money_states = ["🐂💰🏛️", "🐂💰🏚️", "🐻💰🏛️", "🐻💰🏚️"]
+
+	if commodity_icon:
+		for money_state in money_states:
+			# Add temporary Lindblad transfer: commodity → money
+			commodity_icon.lindblad_outgoing[money_state] = TRADE_DRIVE_RATE * units / 100.0
+
+	# Rebuild Lindblad operators
+	bath.build_lindblad_from_icons(bath.active_icons)
+
+	# Track active drive
+	active_trade_drives[emoji] = {"direction": "sell", "units": units}
+
+
+func _schedule_drive_cleanup(emoji: String) -> void:
+	"""Schedule cleanup of trade drives after evolution.
+
+	Uses timer to clear drives after 0.5 seconds (enough for evolution).
+	"""
+	await get_tree().create_timer(0.5).timeout
+	_clear_trade_drives(emoji)
+
+
+func _clear_trade_drives(emoji: String) -> void:
+	"""Clear temporary Lindblad drives after trade completion"""
+	if not emoji in active_trade_drives:
 		return
 
-	var icons: Array[Icon] = []
-	for emoji in emojis:
-		var icon = icon_registry.get_icon(emoji)
-		if icon:
-			icons.append(icon)
+	var icon_registry = get_node("/root/IconRegistry")
+	var trade_info = active_trade_drives[emoji]
+
+	if trade_info["direction"] == "buy":
+		# Clear money → commodity drives
+		var money_states = ["🐂💰🏛️", "🐂💰🏚️", "🐻💰🏛️", "🐻💰🏚️"]
+		for money_state in money_states:
+			var money_icon = icon_registry.get_icon(money_state)
+			if money_icon and emoji in money_icon.lindblad_outgoing:
+				money_icon.lindblad_outgoing.erase(emoji)
+
+	elif trade_info["direction"] == "sell":
+		# Clear commodity → money drives
+		var commodity_icon = icon_registry.get_icon(emoji)
+		if commodity_icon:
+			commodity_icon.lindblad_outgoing.clear()
+
+	# Rebuild Lindblad operators
+	bath.build_lindblad_from_icons(bath.active_icons)
+
+	# Remove from active drives
+	active_trade_drives.erase(emoji)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MARKET IMPACT (Backaction on Sentiment)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func _apply_market_impact(sentiment_shift: float) -> void:
+	"""Apply market impact via backaction on sentiment qubit.
+
+	Large trades shift bull/bear probabilities.
+
+	Args:
+	    sentiment_shift > 0: Push toward bear (🐻)
+	    sentiment_shift < 0: Push toward bull (🐂)
+	"""
+	var icon_registry = get_node("/root/IconRegistry")
+	var bull_states = ["🐂💰🏛️", "🐂💰🏚️", "🐂💳🏛️", "🐂💳🏚️"]
+	var bear_states = ["🐻💰🏛️", "🐻💰🏚️", "🐻💳🏛️", "🐻💳🏚️"]
+
+	# Add temporary Lindblad transfers
+	for i in range(4):
+		var bull_icon = icon_registry.get_icon(bull_states[i])
+		var bear_icon = icon_registry.get_icon(bear_states[i])
+
+		if sentiment_shift > 0:
+			# Push toward bear: bull → bear
+			if bull_icon:
+				bull_icon.lindblad_outgoing[bear_states[i]] = abs(sentiment_shift)
 		else:
-			push_warning("🛁 Icon not found for emoji: " + emoji)
+			# Push toward bull: bear → bull
+			if bear_icon:
+				bear_icon.lindblad_outgoing[bull_states[i]] = abs(sentiment_shift)
 
-	# Build Hamiltonian and Lindblad operators from Icons
-	if not icons.is_empty():
-		bath.active_icons = icons
-		bath.build_hamiltonian_from_icons(icons)
-		bath.build_lindblad_from_icons(icons)
+	# Rebuild operators
+	bath.build_lindblad_from_icons(bath.active_icons)
 
-		print("  ✅ Bath initialized with %d emojis, %d icons" % [emojis.size(), icons.size()])
-		print("  ✅ Hamiltonian: %d non-zero terms" % bath.hamiltonian_sparse.size())
-		print("  ✅ Lindblad: %d transfer terms" % bath.lindblad_terms.size())
-	else:
-		push_warning("🛁 No icons found for Market bath")
-
-	print("  📈 Market ready for quantum trading dynamics!")
+	# Clear impact after 1 second
+	await get_tree().create_timer(1.0).timeout
+	_clear_market_impact()
 
 
-func _update_quantum_substrate(dt: float) -> void:
-	"""Override parent: Evolve market quantum state"""
-	# Bath mode: quantum evolution handled by BiomeBase
-	# Market sentiment and trader dynamics come from bath amplitudes
-	pass
+func _clear_market_impact() -> void:
+	"""Clear temporary market impact drives"""
+	var icon_registry = get_node("/root/IconRegistry")
+	var all_core_states = [
+		"🐂💰🏛️", "🐂💰🏚️", "🐂💳🏛️", "🐂💳🏚️",
+		"🐻💰🏛️", "🐻💰🏚️", "🐻💳🏛️", "🐻💳🏚️"
+	]
 
+	for state in all_core_states:
+		var icon = icon_registry.get_icon(state)
+		if icon:
+			# Clear any bull↔bear transfers (keep only base couplings)
+			var to_remove = []
+			for target in icon.lindblad_outgoing:
+				if target in all_core_states:
+					to_remove.append(target)
+			for target in to_remove:
+				icon.lindblad_outgoing.erase(target)
 
-func _apply_sentiment_oscillation(delta: float):
-	"""Sentiment qubit oscillates between bull and bear"""
-	if not sentiment_qubit:
-		return
-
-	# Oscillation parameters (like sun/moon)
-	var omega = TAU / sentiment_period
-	var t = time_tracker.time_elapsed
-
-	# Theta oscillates around equator with some amplitude
-	var amplitude = PI / 3.0  # ±60° swing
-	var base_theta = PI / 2.0
-	sentiment_qubit.theta = base_theta + amplitude * sin(omega * t)
-
-	# Phi rotates slowly (seasonal patterns)
-	sentiment_qubit.phi = fmod(omega * t * 0.1, TAU)
-
-	# Clamp theta to valid range
-	sentiment_qubit.theta = clamp(sentiment_qubit.theta, 0.0, PI)
-
-
-func _apply_market_hamiltonian(delta: float):
-	"""Apply market forces to all trader qubits"""
-	if not sentiment_qubit:
-		return
-
-	# Get current market mood
-	var bull_prob = pow(cos(sentiment_qubit.theta / 2.0), 2)  # P(bull)
-	var bear_prob = pow(sin(sentiment_qubit.theta / 2.0), 2)  # P(bear)
-
-	# Model B: Market qubit evolution is handled by quantum_computer and bath evolution
-	# Market forces (bull/bear sentiment) affect prices through Hamiltonian evolution
-	# Spring forces are applied through icon Hamiltonians, not direct qubit manipulation
+	bath.build_lindblad_from_icons(bath.active_icons)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# PUBLIC API: Market operations
+# LIQUIDITY CRISIS (Trace Conservation)
 # ═══════════════════════════════════════════════════════════════════════════
 
-func get_paired_emoji(emoji: String) -> String:
-	"""Get the paired emoji for this biome's axis"""
-	return emoji_pairings.get(emoji, "?")
+func _check_liquidity_available(amount: int) -> bool:
+	"""Check if market has enough liquidity for trade.
+
+	Total market money = P(💰) * MARKET_LIQUIDITY_POOL
+
+	Args:
+	    amount: Credits needed for trade
+
+	Returns:
+	    true if enough liquidity exists
+	"""
+	var money_prob = get_marginal_liquidity()
+	var available_money = int(money_prob * MARKET_LIQUIDITY_POOL)
+
+	return available_money >= amount
 
 
-func create_trader_qubit(position: Vector2i, initial_resources: float = 0.5) -> DualEmojiQubit:
-	"""Create a new trader qubit (💰/📦) at the given position"""
-	var qubit = BiomeUtilities.create_qubit("💰", "📦", PI / 2.0)
-	qubit.phi = randf() * TAU
-	qubit.radius = clamp(initial_resources, 0.1, 1.0)
-	# energy removed - derived from theta
-	# Model B: Trader state is managed by QuantumComputer, not stored in plots
-	return qubit
+# ═══════════════════════════════════════════════════════════════════════════
+# MARKET STATUS (Query API)
+# ═══════════════════════════════════════════════════════════════════════════
+
+func get_market_status() -> Dictionary:
+	"""Get full market state for UI display"""
+	return {
+		"sentiment": get_marginal_sentiment(),
+		"sentiment_label": _get_sentiment_label(),
+		"liquidity": get_marginal_liquidity(),
+		"stability": get_marginal_stability(),
+		"crash_probability": bath.get_probability("🐻💳🏚️"),
+		"active_commodities": active_commodities.size(),
+		"liquidity_pool": int(get_marginal_liquidity() * MARKET_LIQUIDITY_POOL),
+	}
 
 
-func get_current_price() -> int:
-	"""Calculate current price based on sentiment"""
-	if not sentiment_qubit:
-		return base_price
-
-	# Bull = high prices, Bear = low prices
-	var bull_prob = pow(cos(sentiment_qubit.theta / 2.0), 2)
-	var price_modifier = 0.5 + bull_prob  # Range: 0.5 to 1.5
-
-	return int(base_price * price_modifier)
-
-
-func get_sentiment_string() -> String:
-	"""Get human-readable sentiment"""
-	if not sentiment_qubit:
-		return "Unknown"
-
-	var bull_prob = pow(cos(sentiment_qubit.theta / 2.0), 2)
-	if bull_prob > 0.7:
+func _get_sentiment_label() -> String:
+	"""Convert sentiment probability to human label"""
+	var sentiment = get_marginal_sentiment()
+	if sentiment > 0.7:
 		return "🐂 Strong Bull"
-	elif bull_prob > 0.5:
+	elif sentiment > 0.5:
 		return "🐂 Mild Bull"
-	elif bull_prob > 0.3:
+	elif sentiment > 0.3:
 		return "🐻 Mild Bear"
 	else:
 		return "🐻 Strong Bear"
-
-
-func execute_trade(trader_qubit: DualEmojiQubit, sell_amount: float) -> Dictionary:
-	"""
-	Execute a trade - collapse part of the qubit to classical resources
-
-	The trader qubit is in superposition 💰/📦 (money/goods)
-	Selling collapses toward 💰 (money), buying collapses toward 📦 (goods)
-
-	Returns: {success, credits_received, goods_remaining}
-	"""
-	if not trader_qubit:
-		return {"success": false, "credits_received": 0, "goods_remaining": 0.0}
-
-	var current_price = get_current_price()
-	var credits = int(sell_amount * current_price)
-
-	# Selling shifts qubit toward 💰 (money side = north pole)
-	var shift_amount = sell_amount * 0.5  # Partial collapse
-	trader_qubit.theta = max(0.0, trader_qubit.theta - shift_amount)
-
-	# Reduce radius (goods consumed)
-	trader_qubit.radius = max(0.1, trader_qubit.radius - sell_amount)
-
-	# Affect market sentiment (large sales push toward bear)
-	if sell_amount > 0.5:
-		sentiment_qubit.theta = min(PI, sentiment_qubit.theta + 0.1)
-
-	return {
-		"success": true,
-		"credits_received": credits,
-		"goods_remaining": trader_qubit.radius,
-		"price_per_unit": current_price,
-		"sentiment": get_sentiment_string()
-	}
-
-
-func get_market_status() -> Dictionary:
-	"""Get full market state for display"""
-	if not sentiment_qubit:
-		return {}
-
-	var bull_prob = pow(cos(sentiment_qubit.theta / 2.0), 2)
-
-	return {
-		"sentiment": get_sentiment_string(),
-		"bull_probability": bull_prob,
-		"bear_probability": 1.0 - bull_prob,
-		"current_price": get_current_price(),
-		"sentiment_theta": sentiment_qubit.theta,
-		"sentiment_phi": sentiment_qubit.phi,
-		"volatility": volatility,
-		"time_elapsed": time_tracker.time_elapsed,
-	}
 
 
 func get_biome_type() -> String:

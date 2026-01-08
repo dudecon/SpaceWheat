@@ -1,0 +1,71 @@
+[gd_scene load_steps=6 format=3 uid="uid://cdxfwm3p04laq"]
+
+[ext_resource type="Script" path="res://UI/FarmUI.gd" id="1_farmui"]
+[ext_resource type="Script" path="res://UI/Panels/ResourcePanel.gd" id="2_resourcepanel"]
+[ext_resource type="Script" path="res://UI/PlotGridDisplay.gd" id="3_plotgrid"]
+[ext_resource type="Script" path="res://UI/Panels/ToolSelectionRow.gd" id="4_toolrow"]
+[ext_resource type="Script" path="res://UI/Panels/ActionPreviewRow.gd" id="5_actionrow"]
+
+[node name="FarmUI" type="Control"]
+layout_mode = 1
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
+script = ExtResource("1_farmui")
+
+[node name="PlotGridDisplay" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+z_index = -10
+mouse_filter = 2
+script = ExtResource("3_plotgrid")
+
+[node name="MainContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_left = 0.0
+anchors_top = 0.0
+anchors_right = 1.0
+anchors_bottom = 1.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+separation = 0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+z_index = 100
+mouse_filter = 2
+self_modulate = Color(1, 1, 1, 0)
+
+[node name="ResourcePanel" type="HBoxContainer" parent="MainContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 50)
+script = ExtResource("2_resourcepanel")
+
+[node name="PlayAreaSpacer" type="Control" parent="MainContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 400)
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="ActionPreviewRow" type="HBoxContainer" parent="MainContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 80)
+z_index = 500
+script = ExtResource("5_actionrow")
+
+[node name="ToolSelectionRow" type="HBoxContainer" parent="MainContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 60)
+script = ExtResource("4_toolrow")
+

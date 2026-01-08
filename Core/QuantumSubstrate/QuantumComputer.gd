@@ -9,8 +9,23 @@ extends Resource
 
 const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
+const RegisterMap = preload("res://Core/QuantumSubstrate/RegisterMap.gd")
 
 @export var biome_name: String = ""
+
+## Model C (Analog Upgrade): RegisterMap-based architecture
+var register_map: RegisterMap = RegisterMap.new()
+var density_matrix: ComplexMatrix = null
+
+## Lindblad evolution operators (set by biome via HamiltonianBuilder/LindbladBuilder)
+var hamiltonian: ComplexMatrix = null         # H matrix (Hermitian, dim×dim)
+var lindblad_operators: Array = []            # Array of L_k matrices (ComplexMatrix)
+
+## Gated Lindblad configurations (set by biome via LindbladBuilder)
+## Format: [{target_emoji: String, source_emoji: String, rate: float, gate: String, power: float}]
+## Evaluated each timestep: effective_rate = rate × P(gate)^power
+var gated_lindblad_configs: Array = []
+
 @export var components: Dictionary = {}  # component_id → QuantumComponent
 @export var register_to_component: Dictionary = {}  # register_id → component_id
 @export var entanglement_graph: Dictionary = {}  # register_id → Array[register_id] (adjacency)
@@ -40,9 +55,28 @@ func allocate_register(north_emoji: String = "🌾", south_emoji: String = "🌽
 	"""
 	Allocate a new single-qubit register (for a newly planted plot).
 
+	Kitchen v2: Validates basis states are orthogonal and registered.
+
 	Creates 1-qubit component initialized to |0⟩.
 	Returns: register_id (unique per biome)
+
+	Args:
+	    north_emoji: North pole of qubit axis (|0⟩ basis label)
+	    south_emoji: South pole of qubit axis (|1⟩ basis label)
+
+	Guardrails:
+	    - north_emoji must != south_emoji (orthogonal basis states)
+	    - Both emojis must be registered in IconRegistry
 	"""
+	# CRITICAL: Basis states must be orthogonal
+	if north_emoji == south_emoji:
+		push_error("PHYSICS ERROR: Invalid qubit basis: north='%s' south='%s' (must differ!)" %
+		           [north_emoji, south_emoji])
+		return -1
+
+	# Note: IconRegistry validation removed - not needed for quantum mechanics
+	# RegisterMap handles coordinate mapping in Model C architecture
+
 	# Generate unique register ID (could also use plot coordinates)
 	var reg_id = _next_component_id * 10 + register_to_component.size()
 
@@ -503,3 +537,524 @@ func debug_dump() -> String:
 			s += "  Register %d ↔ %s\n" % [reg_id, entanglement_graph[reg_id]]
 
 	return s
+
+
+# ============================================================================
+# MODEL C: Analog Upgrade - RegisterMap-based Architecture
+# ============================================================================
+
+func allocate_axis(qubit_index: int, north_emoji: String, south_emoji: String) -> void:
+	"""Register a qubit axis in the RegisterMap.
+
+	Args:
+	    qubit_index: Qubit number (0, 1, 2, ...)
+	    north_emoji: Emoji for |0⟩ (north pole)
+	    south_emoji: Emoji for |1⟩ (south pole)
+
+	Example:
+	    allocate_axis(0, "🔥", "❄️")  # Qubit 0: Temperature axis
+	"""
+	register_map.register_axis(qubit_index, north_emoji, south_emoji)
+	_resize_density_matrix()
+	print("📍 Allocated axis %d: %s (north) ↔ %s (south)" % [qubit_index, north_emoji, south_emoji])
+
+
+func _resize_density_matrix() -> void:
+	"""Resize density matrix when qubits are added."""
+	var num_qubits = register_map.num_qubits
+	var dim = register_map.dim()
+
+	if density_matrix == null or density_matrix.n != dim:
+		density_matrix = ComplexMatrix.zeros(dim)
+		print("🔧 Resized density matrix: %d qubits → %dD" % [num_qubits, dim])
+
+
+func initialize_basis(basis_index: int) -> void:
+	"""Initialize density matrix to pure state |i⟩⟨i|.
+
+	Args:
+	    basis_index: Computational basis index (0 to 2^n - 1)
+
+	Example:
+	    initialize_basis(7)  # |111⟩ for 3 qubits (ground state)
+	"""
+	var dim = register_map.dim()
+	if basis_index < 0 or basis_index >= dim:
+		push_error("❌ Basis index %d out of range [0, %d)" % [basis_index, dim])
+		return
+
+	density_matrix = ComplexMatrix.zeros(dim)
+	density_matrix.set_element(basis_index, basis_index, Complex.new(1.0, 0.0))
+	print("🎯 Initialized to |%d⟩ = %s" % [basis_index, register_map.basis_to_emojis(basis_index)])
+
+
+# Delegate RegisterMap queries
+func has(emoji: String) -> bool:
+	"""Check if emoji is registered in this quantum computer."""
+	return register_map.has(emoji)
+
+
+func qubit(emoji: String) -> int:
+	"""Get qubit index for emoji (-1 if not found)."""
+	return register_map.qubit(emoji)
+
+
+func pole(emoji: String) -> int:
+	"""Get pole for emoji (0=north, 1=south, -1 if not found)."""
+	return register_map.pole(emoji)
+
+
+func get_marginal(qubit_index: int, pole_value: int) -> float:
+	"""Get marginal probability P(qubit = pole) via partial trace.
+
+	Args:
+	    qubit_index: Which qubit to measure
+	    pole_value: 0 (north) or 1 (south)
+
+	Returns:
+	    Probability in [0, 1]
+
+	Example:
+	    get_marginal(0, 0)  # P(qubit 0 = north) = P(🔥)
+	"""
+	if density_matrix == null:
+		return 0.0
+
+	var num_qubits = register_map.num_qubits
+	var dim = register_map.dim()
+	var shift = num_qubits - 1 - qubit_index
+	var prob = 0.0
+
+	for i in range(dim):
+		if ((i >> shift) & 1) == pole_value:
+			prob += density_matrix.get_element(i, i).re
+
+	return clamp(prob, 0.0, 1.0)
+
+
+func get_population(emoji: String) -> float:
+	"""Get probability of emoji state via RegisterMap lookup.
+
+	Args:
+	    emoji: Emoji to query (must be registered)
+
+	Returns:
+	    P(emoji) in [0, 1]
+
+	Example:
+	    get_population("🔥")  # Returns P(qubit 0 = north)
+	"""
+	if not register_map.has(emoji):
+		push_warning("⚠️ Emoji '%s' not registered" % emoji)
+		return 0.0
+
+	var q = register_map.qubit(emoji)
+	var p = register_map.pole(emoji)
+	return get_marginal(q, p)
+
+
+func get_basis_probability(basis_index: int) -> float:
+	"""Get probability of computational basis state |i⟩.
+
+	Args:
+	    basis_index: Basis state index (0 to 2^n - 1)
+
+	Returns:
+	    P(|i⟩) = ρ[i,i] (diagonal element)
+
+	Example:
+	    get_basis_probability(0)  # P(|000⟩) = P(bread)
+	"""
+	if density_matrix == null:
+		return 0.0
+
+	var dim = register_map.dim()
+	if basis_index < 0 or basis_index >= dim:
+		return 0.0
+
+	return clamp(density_matrix.get_element(basis_index, basis_index).re, 0.0, 1.0)
+
+
+func apply_drive(target_emoji: String, rate: float, dt: float) -> void:
+	"""Apply Lindblad drive pushing population toward target emoji.
+
+	This implements trace-preserving population transfer:
+	    dρ/dt = γ(L ρ L† - {L†L, ρ}/2)
+
+	where L = √γ |target⟩⟨source| flips the qubit from opposite pole to target.
+
+	Args:
+	    target_emoji: Emoji to drive toward (must be registered)
+	    rate: Drive strength γ (1/s)
+	    dt: Time step (s)
+
+	Example:
+	    apply_drive("🔥", 2.0, 0.1)  # Drive toward hot for 0.1s
+	"""
+	if not register_map.has(target_emoji):
+		push_warning("⚠️ Cannot drive to unregistered emoji: %s" % target_emoji)
+		return
+
+	var q = register_map.qubit(target_emoji)
+	var target_pole = register_map.pole(target_emoji)
+	var source_pole = 1 - target_pole  # Opposite pole
+
+	_apply_lindblad_1q(q, source_pole, target_pole, rate, dt)
+
+
+func _apply_lindblad_1q(qubit_index: int, from_pole: int, to_pole: int,
+                        gamma: float, dt: float) -> void:
+	"""Apply single-qubit Lindblad operator L = √γ |to⟩⟨from|.
+
+	Updates density matrix:
+	    ρ → ρ + dt * γ(L ρ L† - {L†L, ρ}/2)
+
+	This preserves Tr(ρ) = 1 and positive semi-definiteness (to first order).
+	"""
+	if density_matrix == null:
+		return
+
+	var num_qubits = register_map.num_qubits
+	var dim = register_map.dim()
+	var shift = num_qubits - 1 - qubit_index
+	var rho_new = ComplexMatrix.zeros(dim)
+
+	# Build Lindblad superoperator: L ρ L† - {L†L, ρ}/2
+	for i in range(dim):
+		for j in range(dim):
+			var rho_ij = density_matrix.get_element(i, j)
+			var accum = Complex.new(0.0, 0.0)
+
+			# Term 1: L ρ L†
+			# L|k⟩ = |k'⟩ if k has from_pole at qubit, else 0
+			# where k' = k with qubit flipped to to_pole
+			var k_bit_i = (i >> shift) & 1
+			var k_bit_j = (j >> shift) & 1
+
+			if k_bit_i == to_pole and k_bit_j == to_pole:
+				# i and j both have to_pole: could have come from flipping from_pole
+				var i_source = i ^ (1 << shift)  # Flip back to from_pole
+				var j_source = j ^ (1 << shift)
+				accum = accum.add(density_matrix.get_element(i_source, j_source))
+
+			# Term 2: -{L†L, ρ}/2 = -(L†L ρ + ρ L†L)/2
+			# L†L|k⟩ = |k⟩ if k has from_pole, else 0
+			if k_bit_i == from_pole:
+				accum = accum.sub(rho_ij.scale(0.5))
+			if k_bit_j == from_pole:
+				accum = accum.sub(rho_ij.scale(0.5))
+
+			# ρ_new = ρ + dt * γ * L[ρ]
+			rho_new.set_element(i, j, rho_ij.add(accum.scale(gamma * dt)))
+
+	density_matrix = rho_new
+	_renormalize()
+
+
+func _renormalize() -> void:
+	"""Ensure Tr(ρ) = 1 after numerical integration."""
+	if density_matrix == null:
+		return
+
+	var trace = 0.0
+	var dim = register_map.dim()
+	for i in range(dim):
+		trace += density_matrix.get_element(i, i).re
+
+	if abs(trace) < 1e-10:
+		push_error("❌ Trace collapsed to zero!")
+		return
+
+	# Normalize: ρ → ρ / Tr(ρ)
+	for i in range(dim):
+		for j in range(dim):
+			var rho_ij = density_matrix.get_element(i, j)
+			density_matrix.set_element(i, j, rho_ij.scale(1.0 / trace))
+
+
+# ============================================================================
+# MODEL C: FULL LINDBLAD EVOLUTION
+# ============================================================================
+
+func evolve(dt: float) -> void:
+	"""Evolve density matrix under Lindblad master equation.
+
+	Implements: dρ/dt = -i[H,ρ] + Σ_k (L_k ρ L_k† - ½{L_k†L_k, ρ})
+
+	Uses first-order Euler integration: ρ(t+dt) = ρ(t) + dt * dρ/dt
+
+	For stability, use small dt (≤ 0.1 / max_rate). Adaptive stepping
+	can be added later if needed.
+
+	Args:
+	    dt: Time step (in game seconds, typically 1/60 for 60 FPS)
+
+	Requires:
+	    - density_matrix initialized (via initialize_basis or allocate_axis)
+	    - hamiltonian set (via HamiltonianBuilder.build)
+	    - lindblad_operators set (via LindbladBuilder.build)
+	"""
+	if density_matrix == null:
+		return  # Not initialized yet
+
+	var dim = register_map.dim()
+	if dim == 0:
+		return
+
+	# Accumulate dρ/dt
+	var drho = ComplexMatrix.zeros(dim)
+
+	# -------------------------------------------------------------------------
+	# Term 1: Hamiltonian evolution -i[H, ρ]
+	# -------------------------------------------------------------------------
+	if hamiltonian != null:
+		# [H, ρ] = Hρ - ρH
+		var commutator = hamiltonian.commutator(density_matrix)
+		# -i * commutator  →  multiply by Complex(0, -1)
+		var neg_i = Complex.new(0.0, -1.0)
+		drho = drho.add(commutator.scale(neg_i))
+
+	# -------------------------------------------------------------------------
+	# Term 2: Lindblad dissipation Σ_k (L_k ρ L_k† - ½{L_k†L_k, ρ})
+	# -------------------------------------------------------------------------
+	for L in lindblad_operators:
+		if L == null:
+			continue
+
+		# L ρ L†
+		var L_dag = L.dagger()
+		var L_rho = L.mul(density_matrix)
+		var L_rho_Ldag = L_rho.mul(L_dag)
+
+		# L†L for anticommutator
+		var Ldag_L = L_dag.mul(L)
+
+		# {L†L, ρ}/2 = (L†L ρ + ρ L†L)/2
+		var anticomm = Ldag_L.anticommutator(density_matrix)
+		var half_anticomm = anticomm.scale_real(0.5)
+
+		# Dissipator: L ρ L† - {L†L, ρ}/2
+		var dissipator = L_rho_Ldag.sub(half_anticomm)
+		drho = drho.add(dissipator)
+
+	# -------------------------------------------------------------------------
+	# Term 3: Gated Lindblad (evaluated each timestep)
+	# effective_rate = base_rate × P(gate)^power
+	# Only applies if P(gate) > threshold (optimization)
+	# -------------------------------------------------------------------------
+	for config in gated_lindblad_configs:
+		var gate_emoji: String = config.get("gate", "")
+		var power: float = config.get("power", 1.0)
+
+		# Skip if gate emoji not registered
+		if not register_map.has(gate_emoji):
+			continue
+
+		# Evaluate gate probability
+		var gate_prob = get_population(gate_emoji)
+		var effective_rate = config.get("rate", 0.0) * pow(gate_prob, power)
+
+		# Skip if negligible (optimization)
+		if effective_rate < 0.0001:
+			continue
+
+		# Build and apply jump operator for this timestep
+		var source_emoji: String = config.get("source_emoji", "")
+		var target_emoji: String = config.get("target_emoji", "")
+
+		if not register_map.has(source_emoji) or not register_map.has(target_emoji):
+			continue
+
+		var source_q = register_map.qubit(source_emoji)
+		var source_p = register_map.pole(source_emoji)
+		var target_q = register_map.qubit(target_emoji)
+		var target_p = register_map.pole(target_emoji)
+
+		# Build jump operator L = √γ_eff |target⟩⟨source|
+		var L_gated = _build_gated_jump(source_q, source_p, target_q, target_p,
+		                                effective_rate, register_map.num_qubits)
+
+		if L_gated != null:
+			# Apply Lindblad dissipator for this operator
+			var L_dag = L_gated.dagger()
+			var L_rho = L_gated.mul(density_matrix)
+			var L_rho_Ldag = L_rho.mul(L_dag)
+			var Ldag_L = L_dag.mul(L_gated)
+			var anticomm = Ldag_L.anticommutator(density_matrix)
+			var half_anticomm = anticomm.scale_real(0.5)
+			var dissipator = L_rho_Ldag.sub(half_anticomm)
+			drho = drho.add(dissipator)
+
+	# -------------------------------------------------------------------------
+	# Euler integration: ρ_new = ρ + dt * dρ/dt
+	# -------------------------------------------------------------------------
+	density_matrix = density_matrix.add(drho.scale_real(dt))
+
+	# Renormalize to maintain Tr(ρ) = 1 (numerical stability)
+	_renormalize()
+
+
+func _build_gated_jump(source_q: int, source_p: int, target_q: int, target_p: int,
+                       rate: float, num_qubits: int) -> ComplexMatrix:
+	"""Build jump operator L = √rate |target⟩⟨source| for gated Lindblad.
+
+	Args:
+	    source_q: Source qubit index
+	    source_p: Source pole (0=north, 1=south)
+	    target_q: Target qubit index
+	    target_p: Target pole (0=north, 1=south)
+	    rate: Effective rate (already scaled by gate probability)
+	    num_qubits: Total number of qubits in system
+
+	Returns:
+	    ComplexMatrix L operator, or null if invalid
+	"""
+	var dim = 1 << num_qubits
+	var L = ComplexMatrix.zeros(dim)
+	var amplitude = Complex.new(sqrt(rate), 0.0)
+
+	if source_q == target_q:
+		# Same qubit: flip pole
+		var shift = num_qubits - 1 - source_q
+
+		for i in range(dim):
+			# Check if qubit is in 'source' pole
+			if ((i >> shift) & 1) == source_p:
+				var j = i ^ (1 << shift)  # Flip bit
+				L.set_element(j, i, amplitude)
+	else:
+		# Different qubits: correlated transfer
+		var shift_from = num_qubits - 1 - source_q
+		var shift_to = num_qubits - 1 - target_q
+
+		for i in range(dim):
+			var bit_from = (i >> shift_from) & 1
+			var bit_to = (i >> shift_to) & 1
+
+			# Source qubit must be in source_p
+			# Target qubit must NOT already be in target_p
+			if bit_from == source_p and bit_to != target_p:
+				var j = i ^ (1 << shift_from) ^ (1 << shift_to)
+				L.set_element(j, i, amplitude)
+
+	return L
+
+
+func get_purity() -> float:
+	"""Get purity Tr(ρ²) of the quantum state.
+
+	Returns:
+	    1.0 for pure states, < 1.0 for mixed states
+	    Minimum is 1/dim for maximally mixed state
+	"""
+	if density_matrix == null:
+		return 0.0
+
+	var rho_squared = density_matrix.mul(density_matrix)
+	return rho_squared.trace().re
+
+
+func transfer_population(from_emoji: String, to_emoji: String,
+                         amount: float, phase: float = 0.0) -> void:
+	"""Transfer population between two basis states (Hamiltonian-based).
+
+	This creates/updates off-diagonal coherence:
+	    ρ[to, from] += amount * e^(iφ)
+	    ρ[from, to] += amount * e^(-iφ)
+
+	And adjusts populations to conserve trace:
+	    ρ[from, from] -= amount
+	    ρ[to, to] += amount
+
+	Args:
+	    from_emoji: Source basis state (array of emojis)
+	    to_emoji: Target basis state (array of emojis)
+	    amount: Population to transfer (0 to 1)
+	    phase: Coherence phase φ (radians)
+
+	Example:
+	    transfer_population("🌾", "💨", 0.1, PI/4)  # Grain → Flour
+	"""
+	# Convert emoji strings to basis indices
+	# Note: This is simplified - full implementation would parse emoji arrays
+	if not register_map.has(from_emoji) or not register_map.has(to_emoji):
+		push_warning("⚠️ Cannot transfer: emoji not registered")
+		return
+
+	# For single-qubit transfer, we can compute basis index
+	var from_q = register_map.qubit(from_emoji)
+	var from_p = register_map.pole(from_emoji)
+	var to_q = register_map.qubit(to_emoji)
+	var to_p = register_map.pole(to_emoji)
+
+	if from_q != to_q:
+		push_warning("⚠️ Cross-qubit transfer not yet implemented")
+		return
+
+	# Build basis indices for full state
+	# This is simplified - assumes all other qubits in south pole
+	var num_qubits = register_map.num_qubits
+	var from_index = 0
+	var to_index = 0
+
+	for q in range(num_qubits):
+		if q == from_q:
+			if from_p == 0:  # North pole
+				pass  # Bit is 0
+			else:
+				from_index |= (1 << (num_qubits - 1 - q))
+
+			if to_p == 0:
+				pass
+			else:
+				to_index |= (1 << (num_qubits - 1 - q))
+		else:
+			# Default to south pole (bit = 1)
+			from_index |= (1 << (num_qubits - 1 - q))
+			to_index |= (1 << (num_qubits - 1 - q))
+
+	# Update coherences with phase
+	var coherence = Complex.from_polar(amount, phase)
+	var current_off = density_matrix.get_element(to_index, from_index)
+	density_matrix.set_element(to_index, from_index, current_off.add(coherence))
+	density_matrix.set_element(from_index, to_index, current_off.add(coherence.conjugate()))
+
+	# Update populations
+	var pop_from = density_matrix.get_element(from_index, from_index)
+	var pop_to = density_matrix.get_element(to_index, to_index)
+	density_matrix.set_element(from_index, from_index,
+		pop_from.sub(Complex.new(amount, 0.0)))
+	density_matrix.set_element(to_index, to_index,
+		pop_to.add(Complex.new(amount, 0.0)))
+
+
+func apply_decay(qubit_index: int, rate: float, dt: float) -> void:
+	"""Apply spontaneous decay toward south pole (thermal relaxation).
+
+	Implements: dρ/dt = γ(L ρ L† - {L†L, ρ}/2)
+	where L = √γ |south⟩⟨north| pushes north → south.
+
+	Args:
+	    qubit_index: Which qubit to decay
+	    rate: Decay rate γ (1/s)
+	    dt: Time step (s)
+
+	Example:
+	    apply_decay(0, 0.5, 0.1)  # Temperature decays toward cold
+	"""
+	var from_pole = 0  # North
+	var to_pole = 1    # South
+	_apply_lindblad_1q(qubit_index, from_pole, to_pole, rate, dt)
+
+
+func get_trace() -> float:
+	"""Get trace of density matrix (should always be 1.0)."""
+	if density_matrix == null:
+		return 0.0
+
+	var trace = 0.0
+	var dim = register_map.dim()
+	for i in range(dim):
+		trace += density_matrix.get_element(i, i).re
+
+	return trace

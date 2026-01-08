@@ -1,7 +1,7 @@
 #!/usr/bin/env -S godot --headless -s
 extends SceneTree
 
-const FactionDatabase = preload("res://Core/Quests/FactionDatabase.gd")
+const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const QuestTheming = preload("res://Core/Quests/QuestTheming.gd")
 const QuantumBath = preload("res://Core/QuantumSubstrate/QuantumBath.gd")
 

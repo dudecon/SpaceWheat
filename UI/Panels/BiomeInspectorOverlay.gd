@@ -227,6 +227,9 @@ func _on_dimmer_input(event: InputEvent) -> void:
 			hide_overlay()
 
 	elif event is InputEventScreenTouch:
+		# TODO: Add gesture discrimination (tap vs accidental touch, swipe vs tap)
+		# Current implementation closes on any touch - needs refinement
+		# See: /home/tehcr33d/ws/SpaceWheat/llm_outbox/TOUCH_CODE_AUDIT.md
 		if event.pressed:
 			print("🔍 BiomeInspectorOverlay: Background tapped (touch), closing")
 			hide_overlay()

@@ -49,6 +49,7 @@ enum SlotState {
 
 func _init():
 	name = "QuestBoard"
+	z_index = 0  # OverlayLayer(100) + 0 = 100, above tools(55), below actions(200)
 
 	# Fill entire screen - proper modal design like ESC menu
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -155,34 +156,36 @@ func _create_ui() -> void:
 	"""Create the quest board UI - 2×2 QUADRANT LAYOUT with auto-scaling"""
 	var scale = layout_manager.scale_factor if layout_manager else 1.0
 
-	# Get viewport size for responsive scaling (defensive - fallback if not in tree yet)
-	var viewport_size = Vector2(1920, 1080)  # Default fallback
-	if is_inside_tree() and get_viewport():
-		viewport_size = get_viewport().get_visible_rect().size
-
-	# Scale fonts based on viewport height (more conservative)
-	var title_size = int(viewport_size.y * 0.04)  # 4% of screen height
-	var large_size = int(viewport_size.y * 0.022)  # 2.2% of screen height
-	var normal_size = int(viewport_size.y * 0.018)  # 1.8% of screen height
+	# Fixed font sizes for 960×540 base resolution
+	var title_size = 28
+	var large_size = 16
+	var normal_size = 13
 
 	# Background - fill screen to block interaction
 	background = ColorRect.new()
-	background.color = Color(0.0, 0.0, 0.0, 0.8)  # Darker for better contrast
+	background.color = Color(0.0, 0.0, 0.0, 0.95)  # High opacity to prevent biome bleed-through
 	background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	background.layout_mode = 1
 	add_child(background)
 
-	# Center container for panel
+	# Center container for panel - positioned in play zone (below top bar, above tool selection)
 	var center = CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.anchor_left = 0.0
+	center.anchor_right = 1.0
+	center.anchor_top = 0.06  # Start at 6% (below top bar)
+	center.anchor_bottom = 0.72  # End at 72% (above tool selection at 72%-87%)
+	center.offset_left = 0
+	center.offset_right = 0
+	center.offset_top = 40  # 40px margin below resource bar to avoid overlap
+	center.offset_bottom = 0
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	center.layout_mode = 1
 	add_child(center)
 
-	# Quest board panel - RESPONSIVE sizing (85% of viewport)
+	# Quest board panel - Fixed size for 960×540 base resolution (~85%)
 	menu_panel = PanelContainer.new()
-	menu_panel.custom_minimum_size = Vector2(viewport_size.x * 0.85, viewport_size.y * 0.85)
+	menu_panel.custom_minimum_size = Vector2(800, 450)
 	center.add_child(menu_panel)
 
 	var main_vbox = VBoxContainer.new()
@@ -707,16 +710,11 @@ class QuestSlot extends PanelContainer:
 		"""QUADRANT SLOT - Compact for 2×2 layout"""
 		var scale = layout_manager.scale_factor if layout_manager else 1.0
 
-		# Get viewport size for responsive font scaling (defensive)
-		var viewport_size = Vector2(1920, 1080)  # Default fallback
-		if is_inside_tree() and get_viewport():
-			viewport_size = get_viewport().get_visible_rect().size
-
-		# Responsive font sizes (% of viewport height)
-		var header_size = int(viewport_size.y * 0.028)  # 2.8% of screen height
-		var faction_size = int(viewport_size.y * 0.024)  # 2.4% of screen height
-		var normal_size = int(viewport_size.y * 0.018)  # 1.8% of screen height
-		var small_size = int(viewport_size.y * 0.015)  # 1.5% of screen height
+		# Fixed font sizes for 960×540 base resolution
+		var header_size = 18
+		var faction_size = 16
+		var normal_size = 13
+		var small_size = 11
 
 		# Slot expands to fill grid cell
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL

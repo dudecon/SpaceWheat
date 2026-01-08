@@ -1,10 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://cdxfwm3p04laq"]
+[gd_scene load_steps=4 format=3 uid="uid://cdxfwm3p04laq"]
 
 [ext_resource type="Script" path="res://UI/FarmUI.gd" id="1_farmui"]
 [ext_resource type="Script" path="res://UI/Panels/ResourcePanel.gd" id="2_resourcepanel"]
 [ext_resource type="Script" path="res://UI/PlotGridDisplay.gd" id="3_plotgrid"]
-[ext_resource type="Script" path="res://UI/Panels/ToolSelectionRow.gd" id="4_toolrow"]
-[ext_resource type="Script" path="res://UI/Panels/ActionPreviewRow.gd" id="5_actionrow"]
 
 [node name="FarmUI" type="Control"]
 layout_mode = 1
@@ -48,6 +46,7 @@ self_modulate = Color(1, 1, 1, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 custom_minimum_size = Vector2(0, 50)
+mouse_filter = 2
 script = ExtResource("2_resourcepanel")
 
 [node name="PlayAreaSpacer" type="Control" parent="MainContainer"]
@@ -55,17 +54,4 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 400)
 size_flags_vertical = 3
 mouse_filter = 2
-
-[node name="ActionPreviewRow" type="HBoxContainer" parent="MainContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-custom_minimum_size = Vector2(0, 80)
-z_index = 500
-script = ExtResource("5_actionrow")
-
-[node name="ToolSelectionRow" type="HBoxContainer" parent="MainContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-custom_minimum_size = Vector2(0, 60)
-script = ExtResource("4_toolrow")
 

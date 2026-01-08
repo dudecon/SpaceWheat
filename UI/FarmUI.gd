@@ -10,10 +10,10 @@
 class_name FarmUI
 extends Control
 
+signal farm_setup_complete  # Emitted when setup_farm() finishes and input_handler is ready
+
 const PlotGridDisplay = preload("res://UI/PlotGridDisplay.gd")
 const FarmInputHandler = preload("res://UI/FarmInputHandler.gd")
-const ToolSelectionRow = preload("res://UI/Panels/ToolSelectionRow.gd")
-const ActionPreviewRow = preload("res://UI/Panels/ActionPreviewRow.gd")
 const ResourcePanel = preload("res://UI/Panels/ResourcePanel.gd")
 const QuantumModeStatusIndicator = preload("res://UI/Panels/QuantumModeStatusIndicator.gd")
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
@@ -22,8 +22,6 @@ var farm: Node
 var grid_config: GridConfig
 var plot_grid_display = null  # From scene
 var input_handler = null  # Created dynamically
-var tool_selection_row = null  # From scene
-var action_preview_row = null  # From scene
 var resource_panel = null  # From scene
 var quantum_mode_indicator = null  # Created dynamically
 var quantum_visualization = null  # Optional - only if needed later
@@ -48,12 +46,9 @@ func _ready() -> void:
 	# Get references to scene-defined child nodes
 	resource_panel = get_node("MainContainer/ResourcePanel")
 	plot_grid_display = get_node("PlotGridDisplay")  # Now sibling of MainContainer
-	# quantum_visualization = get_node("QuantumVisualizationController")  # REMOVED - abandoned ghost node
-	tool_selection_row = get_node("MainContainer/ToolSelectionRow")
-	action_preview_row = get_node("MainContainer/ActionPreviewRow")
+	# Action bars (ToolSelectionRow, ActionPreviewRow) are now managed by PlayerShell's ActionBarManager
 
-	# Create quantum mode status indicator (Phase 1 UI integration)
-	_create_quantum_mode_indicator()
+	# Quantum mode status indicator removed - no longer needed in Phase 2 UI
 
 	print("   ✅ All child nodes referenced")
 
@@ -61,16 +56,13 @@ func _ready() -> void:
 	# This continues the delegation cascade: FarmView → PlayerShell → FarmUIContainer → FarmUI
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
-	# Explicitly match parent size (in case anchors don't work due to layout_mode mismatch)
-	if get_parent():
-		size = get_parent().size
+	# FarmUI.tscn already has full anchors (0,0,1,1), so size is automatically controlled
+	# MainContainer.tscn also has full anchors, so it automatically fills FarmUI
+	# NO manual size setting needed - anchors handle it!
 
-	# Also size MainContainer to fill FarmUI (it has layout_mode=1 which has the same issue)
-	# Use set_deferred to avoid being overridden by layout engine
+	# CRITICAL: MainContainer must pass input through to PlotGridDisplay below
 	var main_container = get_node_or_null("MainContainer")
 	if main_container:
-		main_container.set_deferred("size", size)
-		# CRITICAL: MainContainer must pass input through to PlotGridDisplay below
 		main_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		print("   ✅ MainContainer mouse_filter set to IGNORE for plot tile input")
 
@@ -109,26 +101,8 @@ func setup_farm(farm_ref: Node) -> void:
 
 		print("   ✅ PlotGridDisplay wired to farm")
 
-	# Quantum visualization optional - skip for now
-	# TODO: Wire QuantumVisualization to biomes when needed
-	#if farm and farm.grid and farm.grid.biomes and quantum_visualization:
-	#	for biome_name in farm.grid.biomes.keys():
-	#		var biome = farm.grid.biomes[biome_name]
-	#		quantum_visualization.connect_to_biome(biome, {})
-	#		break
-
-	# Wire tool selection
-	if tool_selection_row:
-		if not tool_selection_row.tool_selected.is_connected(_on_tool_selected):
-			tool_selection_row.tool_selected.connect(_on_tool_selected)
-		tool_selection_row.select_tool(1)
-
-	# Wire action preview
-	if action_preview_row:
-		action_preview_row.update_for_tool(1)
-		if not action_preview_row.action_pressed.is_connected(_on_action_pressed):
-			action_preview_row.action_pressed.connect(_on_action_pressed)
-			print("   📡 Connected to action_preview_row.action_pressed")
+	# Action bars (ToolSelectionRow, ActionPreviewRow) are now managed by PlayerShell's ActionBarManager
+	# Signal connections are handled in PlayerShell.load_farm_ui()
 
 	# Create input handler
 	input_handler = FarmInputHandler.new()
@@ -154,6 +128,7 @@ func setup_farm(farm_ref: Node) -> void:
 		print("   📡 Connected to plot selection changes")
 
 	print("✅ FarmUI farm setup complete")
+	farm_setup_complete.emit()  # Signal PlayerShell that input_handler is ready
 
 
 func _input(event: InputEvent) -> void:
@@ -171,12 +146,9 @@ func _input(event: InputEvent) -> void:
 func _select_tool(tool_num: int) -> void:
 	"""Switch to a different tool"""
 	current_tool = tool_num
-	if tool_selection_row:
-		tool_selection_row.select_tool(tool_num)
-	if action_preview_row:
-		action_preview_row.update_for_tool(tool_num)
 	if input_handler:
 		input_handler.current_tool = tool_num
+	# Action bars are updated via PlayerShell's ActionBarManager
 	print("🔧 Tool changed to %d" % tool_num)
 
 
@@ -185,23 +157,10 @@ func _on_tool_selected(tool_num: int) -> void:
 	_select_tool(tool_num)
 
 
-func _on_action_pressed(action_key: String) -> void:
-	"""Handle action button press from ActionPreviewRow (Q/E/R buttons clicked)"""
-	if input_handler:
-		print("🖱️  Action button clicked: %s" % action_key)
-		input_handler.execute_action(action_key)
-	else:
-		push_error("FarmUI: Cannot execute action - input_handler not initialized")
-
-
 func _on_input_tool_changed(tool_num: int, tool_info: Dictionary) -> void:
 	"""Handle tool change from keyboard input (FarmInputHandler)"""
 	print("🔄 Tool changed via input: %d (%s)" % [tool_num, tool_info.get("name", "unknown")])
-	# Update UI to match the tool that was selected via keyboard
-	if tool_selection_row:
-		tool_selection_row.select_tool(tool_num)
-	if action_preview_row:
-		action_preview_row.update_for_tool(tool_num)
+	# Action bars are updated via PlayerShell's ActionBarManager (connected to input_handler signals)
 	current_tool = tool_num
 
 
@@ -210,22 +169,17 @@ func _on_input_submenu_changed(submenu_name: String, submenu_info: Dictionary) -
 	if submenu_name == "":
 		print("📁 Submenu exited - restoring tool display")
 	else:
-		print("📂 Submenu entered: %s" % submenu_info.get("name", submenu_name))
-
-	# Update action preview row with submenu actions
-	if action_preview_row:
-		action_preview_row.update_for_submenu(submenu_name, submenu_info)
+		print("📂 Submenu entered: %s" % submenu_info.get("name", "submenu_name"))
+	# Action bars are updated via PlayerShell's ActionBarManager (connected to input_handler signals)
 
 
 func _on_selection_changed(count: int) -> void:
-	"""Handle plot selection changes - highlight action buttons when plots selected"""
-	if action_preview_row:
-		var has_selection = count > 0
-		action_preview_row.update_button_highlights(has_selection)
-		if has_selection:
-			print("✅ %d plot(s) selected - Q/E/R actions available" % count)
-		else:
-			print("❌ No plots selected - Q/E/R actions disabled" % count)
+	"""Handle plot selection changes"""
+	var has_selection = count > 0
+	if has_selection:
+		print("✅ %d plot(s) selected - Q/E/R actions available" % count)
+	else:
+		print("❌ No plots selected - Q/E/R actions disabled")
 
 
 func _apply_parametric_sizing() -> void:
@@ -235,14 +189,11 @@ func _apply_parametric_sizing() -> void:
 
 	# Parametric layout: divide viewport into zones
 	# 0-6% (Top): ResourcePanel
-	# 6-72% (Middle): PlotGridDisplay
-	# 72-87% (Bottom1): ActionPreviewRow
-	# 87-100% (Bottom2): ToolSelectionRow
+	# 6-100% (Middle): PlotGridDisplay
+	# Action bars are now in PlayerShell's ActionBarLayer (bottom, fixed 140px)
 
 	var resource_panel_height = viewport_height * 0.06
-	var plot_grid_height = viewport_height * 0.66  # 72% - 6%
-	var action_row_height = viewport_height * 0.15  # 87% - 72%
-	var tool_row_height = viewport_height * 0.13   # 100% - 87%
+	var plot_grid_height = viewport_height * 0.94  # Rest of viewport
 
 	# Apply to MainContainer children
 	if resource_panel:
@@ -250,12 +201,6 @@ func _apply_parametric_sizing() -> void:
 
 	if plot_grid_display:
 		plot_grid_display.custom_minimum_size = Vector2(0, plot_grid_height)
-
-	if action_preview_row:
-		action_preview_row.custom_minimum_size = Vector2(0, action_row_height)
-
-	if tool_selection_row:
-		tool_selection_row.custom_minimum_size = Vector2(0, tool_row_height)
 
 
 func _update_debug_display() -> void:
@@ -270,12 +215,7 @@ func _update_debug_display() -> void:
 
 		# Build debug text with detailed layout info
 		var debug_text = "=== LAYOUT DEBUG (Press F3 to toggle) ===\n"
-
-		if action_preview_row and action_preview_row.has_method("debug_layout"):
-			debug_text += "\n" + action_preview_row.debug_layout()
-
-		if tool_selection_row and tool_selection_row.has_method("debug_layout"):
-			debug_text += "\n" + tool_selection_row.debug_layout()
+		debug_text += "\n(Action bars debug available in PlayerShell)\n"
 
 		debug_text += "\nMainContainer:\n"
 		var main_container = get_node_or_null("MainContainer")

@@ -1,10 +1,13 @@
 class_name BasePlot
 extends Resource
 
-## BasePlot - Foundation class for all farm plots (Model B - Physics Correct)
+## BasePlot - Foundation class for all farm plots (Model C - Analog Bath)
 ##
-## Model B: Plot is a HARDWARE ATTACHMENT to a biome's QuantumComputer.
-## Does NOT own quantum state - only holds RegisterId reference and metadata.
+## Model C: Plot is a MEASUREMENT BASIS on a biome's QuantumBath.
+## Does NOT own quantum state - only tracks which bath subspace to measure.
+##
+## OLD (Model B): Plot referenced QuantumComputer register (digital/discrete)
+## NEW (Model C): Plot references QuantumBath measurement axis (analog/continuous)
 
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 const QuantumRigorConfig = preload("res://Core/GameState/QuantumRigorConfig.gd")
@@ -13,24 +16,27 @@ signal growth_complete
 signal state_collapsed(final_state: String)
 
 # ============================================================================
-# MODEL B: Register Reference (NOT Independent Quantum State)
+# MODEL C: Bath Measurement Axis (NOT Independent Quantum State)
 # ============================================================================
 
 # Plot identification
 @export var plot_id: String = ""
 @export var grid_position: Vector2i = Vector2i.ZERO
 
-# Model B: Register reference (points to QuantumComputer's logical qubit)
-@export var register_id: int = -1  # Logical qubit ID in parent biome's quantum computer
-var parent_biome: Node = null  # Reference to BiomeBase that owns quantum state
+# Model C: Measurement axis reference (which subspace of bath to measure)
+# OLD (Model B): @export var register_id: int = -1  # QuantumComputer register
+# NEW (Model C): Plot is identified by north/south emojis - bath measures this axis
+@export var bath_subplot_id: int = -1  # Which subplot in bath's composite state (-1 = not planted)
+var parent_biome: Node = null  # Reference to BiomeBase that owns quantum bath
 
-# Measurement basis labels (NOT quantum state!)
+# Measurement basis labels (defines which bath axis to measure)
 @export var north_emoji: String = "🌾"
 @export var south_emoji: String = "🌽"
 
 # Plot metadata (NOT quantum state)
 @export var is_planted: bool = false
 @export var has_been_measured: bool = false
+@export var theta_frozen: bool = false  # Measurement locked the theta value (stops Hamiltonian drift)
 @export var measured_outcome: String = ""  # Measurement result ("north", "south", or empty)
 
 # Conspiracy network connection
@@ -55,7 +61,7 @@ func _init():
 
 
 # ============================================================================
-# MODEL B: Quantum State Access (Computed from Parent Biome)
+# MODEL C: Quantum State Access (Computed from Parent Biome's Bath)
 # ============================================================================
 
 ## Get current measurement outcome (or empty if unmeasured)
@@ -66,49 +72,62 @@ func get_measurement_outcome() -> String:
 func get_basis_labels() -> Array[String]:
 	return [north_emoji, south_emoji]
 
-## Get purity from parent biome's quantum computer
+## Get purity from parent biome's quantum bath
 func get_purity() -> float:
-	"""Query purity from parent biome's quantum computer.
+	"""Query purity from parent biome's quantum bath.
 
-	Model B: Purity is computed from the shared state, not stored locally.
+	Model C: Purity is computed from the bath's density matrix.
+	For analog bath, we approximate purity from probability distribution.
 	Returns 0 if plot not planted or no parent_biome.
 	"""
-	if not is_planted or not parent_biome or register_id < 0:
+	if not is_planted or not parent_biome:
 		return 0.0
 
-	var reg = parent_biome.get_register_for_plot(grid_position)
-	if not reg:
+	# OLD (Model B): Query quantum_computer for marginal purity
+	# var comp = parent_biome.quantum_computer.get_component_containing(register_id)
+	# return parent_biome.quantum_computer.get_marginal_purity(comp, register_id)
+
+	# NEW (Model C): Query bath for purity
+	if not parent_biome.bath:
 		return 0.0
 
-	var comp = parent_biome.quantum_computer.get_component_containing(register_id)
-	if not comp:
-		return 0.0
+	return parent_biome.bath.get_purity()  # Overall bath purity (Tr(ρ²))
 
-	return parent_biome.quantum_computer.get_marginal_purity(comp, register_id)
-
-## Get coherence from parent biome's quantum computer
+## Get coherence from parent biome's quantum bath
 func get_coherence() -> float:
-	"""Query coherence from parent biome's quantum computer."""
-	if not is_planted or not parent_biome or register_id < 0:
+	"""Query coherence from parent biome's quantum bath."""
+	if not is_planted or not parent_biome:
 		return 0.0
 
-	var comp = parent_biome.quantum_computer.get_component_containing(register_id)
-	if not comp:
+	# OLD (Model B): Query quantum_computer for marginal coherence
+	# var comp = parent_biome.quantum_computer.get_component_containing(register_id)
+	# return parent_biome.quantum_computer.get_marginal_coherence(comp, register_id)
+
+	# NEW (Model C): Query bath for coherence
+	if not parent_biome.bath:
 		return 0.0
 
-	return parent_biome.quantum_computer.get_marginal_coherence(comp, register_id)
+	# Bath coherence is related to off-diagonal density matrix elements
+	# For now, approximate from purity
+	return parent_biome.bath.get_purity()
 
 ## Get mass (probability in subspace)
 func get_mass() -> float:
 	"""Get probability mass in measurement basis subspace."""
-	if not is_planted or not parent_biome or register_id < 0:
+	if not is_planted or not parent_biome:
 		return 0.0
 
-	var comp = parent_biome.quantum_computer.get_component_containing(register_id)
-	if not comp:
+	# OLD (Model B): Query quantum_computer for probability in subspace
+	# var comp = parent_biome.quantum_computer.get_component_containing(register_id)
+	# return parent_biome.quantum_computer.get_marginal_probability_subspace(comp, register_id, [north_emoji, south_emoji])
+
+	# NEW (Model C): Query bath for probability in north/south subspace
+	if not parent_biome.bath:
 		return 0.0
 
-	return parent_biome.quantum_computer.get_marginal_probability_subspace(comp, register_id, [north_emoji, south_emoji])
+	var p_north = parent_biome.bath.get_probability(north_emoji)
+	var p_south = parent_biome.bath.get_probability(south_emoji)
+	return p_north + p_south
 
 ## Core Methods
 
@@ -136,10 +155,13 @@ func get_plot_emojis() -> Dictionary:
 
 
 func plant(biome_or_labor = null, wheat_cost: float = 0.0, optional_biome = null) -> bool:
-	"""Plant this plot - allocate register in biome's quantum computer (Model B version)
+	"""Plant this plot - register measurement axis in biome's quantum bath (Model C version)
 
-	Model B: Planting allocates a logical qubit register in the parent biome's
-	QuantumComputer. Does NOT create an independent quantum state.
+	Model C: Planting registers this plot as a measurement axis on the biome's
+	QuantumBath. Does NOT create independent quantum state - bath is shared.
+
+	OLD (Model B): Allocated register in QuantumComputer
+	NEW (Model C): Register subplot in bath's composite state
 
 	Args:
 		biome_or_labor: BiomeBase (preferred), or labor amount (legacy)
@@ -151,12 +173,16 @@ func plant(biome_or_labor = null, wheat_cost: float = 0.0, optional_biome = null
 	"""
 	# Determine parent biome
 	var biome = null
-	if biome_or_labor is Node and biome_or_labor.has_method("allocate_register_for_plot"):
+	# OLD (Model B): Check for allocate_register_for_plot method
+	# if biome_or_labor is Node and biome_or_labor.has_method("allocate_register_for_plot"):
+
+	# NEW (Model C): Check for bath property
+	if biome_or_labor is Node and "bath" in biome_or_labor:
 		biome = biome_or_labor
-	elif optional_biome and optional_biome.has_method("allocate_register_for_plot"):
+	elif optional_biome and "bath" in optional_biome:
 		biome = optional_biome
 	else:
-		push_error("No valid biome provided for planting!")
+		push_error("No valid biome with bath provided for planting!")
 		return false
 
 	parent_biome = biome
@@ -166,32 +192,45 @@ func plant(biome_or_labor = null, wheat_cost: float = 0.0, optional_biome = null
 	north_emoji = emojis.get("north", "🌾")
 	south_emoji = emojis.get("south", "🌽")
 
-	# Allocate register in biome's quantum computer (Model B)
-	register_id = biome.allocate_register_for_plot(grid_position, north_emoji, south_emoji)
+	# OLD (Model B): Allocate register in quantum_computer
+	# register_id = biome.allocate_register_for_plot(grid_position, north_emoji, south_emoji)
+	# if register_id < 0:
+	# 	push_error("Failed to allocate register for plot %s!" % grid_position)
+	# 	return false
 
-	if register_id < 0:
-		push_error("Failed to allocate register for plot %s!" % grid_position)
-		return false
+	# NEW (Model C): Register subplot in bath
+	if biome.has_method("allocate_subplot_for_plot"):
+		bath_subplot_id = biome.allocate_subplot_for_plot(grid_position, north_emoji, south_emoji)
+		if bath_subplot_id < 0:
+			push_error("Failed to allocate subplot for plot %s!" % grid_position)
+			return false
+	else:
+		# Simplified: Just mark as planted if biome has bath
+		# Subplot ID not strictly needed for single-qubit measurement
+		bath_subplot_id = 0  # Placeholder - bath manages full state
 
 	# Mark as planted
 	is_planted = true
 	has_been_measured = false
 	measured_outcome = ""
 
-	print("🌱 Plot %s: allocated register %d in %s biome" % [grid_position, register_id, biome.get_biome_type()])
+	print("🌱 Plot %s: registered measurement axis (%s/%s) in %s biome bath" % [
+		grid_position, north_emoji, south_emoji, biome.get_biome_type()])
 	return true
 
 
 func measure(_icon_network = null) -> String:
-	"""Measure (collapse) quantum state at this plot (Model B version)
+	"""Measure (collapse) quantum state at this plot (Model C version)
 
-	Model B: Delegates to parent_biome's quantum_computer.measure_register()
-	for projective measurement.
+	Model C: Delegates to parent_biome's bath.measure_axis() for projective measurement.
 
-	Returns: The measurement outcome ("north" or "south")
+	OLD (Model B): Measured specific register in QuantumComputer
+	NEW (Model C): Measures north/south axis in QuantumBath
+
+	Returns: The measurement outcome emoji (north_emoji or south_emoji)
 	Sets: has_been_measured = true and measured_outcome on success
 	"""
-	if not parent_biome or register_id < 0:
+	if not parent_biome:
 		push_error("Plot %s not properly planted - no parent biome!" % grid_position)
 		return ""
 
@@ -201,31 +240,53 @@ func measure(_icon_network = null) -> String:
 
 	if has_been_measured:
 		push_warning("Plot %s already measured - outcome: %s" % [grid_position, measured_outcome])
+		# Convert outcome emoji back to basis name
+		if measured_outcome == north_emoji:
+			return "north"
+		elif measured_outcome == south_emoji:
+			return "south"
 		return measured_outcome
 
-	# Get component from quantum computer
-	var comp = parent_biome.quantum_computer.get_component_containing(register_id)
-	if not comp:
-		push_error("Register %d not in any component!" % register_id)
+	# OLD (Model B): Get component and measure register
+	# var comp = parent_biome.quantum_computer.get_component_containing(register_id)
+	# if not comp:
+	# 	push_error("Register %d not in any component!" % register_id)
+	# 	return ""
+	# var outcome = parent_biome.quantum_computer.measure_register(comp, register_id)
+
+	# NEW (Model C): Measure axis in bath
+	if not parent_biome.bath:
+		push_error("Parent biome %s has no bath!" % parent_biome.get_biome_type())
 		return ""
 
-	# Projective measurement via quantum_computer
-	var outcome = parent_biome.quantum_computer.measure_register(comp, register_id)
+	# Measure north/south axis using marginal measurement
+	# (sums over all states containing north/south emoji)
+	var outcome_emoji = parent_biome.bath.measure_marginal_axis(north_emoji, south_emoji)
+
+	if outcome_emoji == "":
+		push_error("Bath measurement failed for plot %s!" % grid_position)
+		return ""
+
+	# Convert emoji outcome to basis name for internal storage
+	var basis_outcome = "north" if outcome_emoji == north_emoji else "south"
 
 	# Record outcome
 	has_been_measured = true
-	measured_outcome = outcome
+	measured_outcome = basis_outcome
 
-	print("🔬 Plot %s measured: outcome=%s (north: %s, south: %s)" % [
-		grid_position, outcome, north_emoji, south_emoji])
+	print("🔬 Plot %s measured: outcome=%s (emoji: %s, north: %s, south: %s)" % [
+		grid_position, basis_outcome, outcome_emoji, north_emoji, south_emoji])
 
-	return outcome
+	return basis_outcome
 
 
 func harvest() -> Dictionary:
-	"""Harvest this plot - collect yield and clear quantum state (Model B version)
+	"""Harvest this plot - collect yield and clear quantum state (Model C version)
 
-	Model B: Queries purity from parent_biome's quantum_computer.
+	Model C: Queries purity from parent_biome's bath.
+
+	OLD (Model B): Queried quantum_computer for purity
+	NEW (Model C): Queries bath for purity
 
 	Manifest Section 4.4: Harvest follows Gozouta protocol:
 	- If POSTSELECT_COSTED enabled: cost = 1/P(subspace), yield *= (1/cost)
@@ -256,7 +317,7 @@ func harvest() -> Dictionary:
 	if not has_been_measured:
 		return {"success": false, "yield": 0, "energy": 0.0}
 
-	# Map basis outcome to emoji (Model B: measured_outcome is basis name, not emoji)
+	# Map basis outcome to emoji (measured_outcome is basis name "north" or "south")
 	if measured_outcome == "north":
 		outcome = north_emoji
 	elif measured_outcome == "south":
@@ -264,9 +325,11 @@ func harvest() -> Dictionary:
 	else:
 		outcome = "?"
 
-	# Get purity from parent biome's quantum computer (Model B)
-	# Purity Tr(ρ²): 1.0 = pure state, 1/N = maximally mixed
-	var purity = get_purity()
+	# OLD (Model B): Get purity from quantum_computer
+	# var purity = get_purity()  # Queries quantum_computer
+
+	# NEW (Model C): Get purity from bath
+	var purity = get_purity()  # Now queries bath.get_purity()
 	if purity == 0.0:
 		purity = 1.0  # Default to pure if no quantum state access
 
@@ -288,16 +351,23 @@ func harvest() -> Dictionary:
 	# INSPECTOR: cost = 1.0, so no penalty
 	var yield_amount = max(1, int(yield_with_purity / measurement_cost))
 
-	# Clear the plot (Model B: remove register from biome)
+	# Clear the plot
 	is_planted = false
-	register_id = -1
+	# OLD (Model B): register_id = -1
+	# NEW (Model C): bath_subplot_id = -1
+	bath_subplot_id = -1
 	has_been_measured = false
 	measured_outcome = ""  # Clear stored outcome
 	replant_cycles += 1
 
-	# Remove register from parent biome
-	if parent_biome and parent_biome.has_method("clear_register_for_plot"):
-		parent_biome.clear_register_for_plot(grid_position)
+	# OLD (Model B): Remove register from parent biome
+	# if parent_biome and parent_biome.has_method("clear_register_for_plot"):
+	# 	parent_biome.clear_register_for_plot(grid_position)
+
+	# NEW (Model C): Clear subplot from parent biome (if method exists)
+	if parent_biome and parent_biome.has_method("clear_subplot_for_plot"):
+		parent_biome.clear_subplot_for_plot(grid_position)
+	# Note: Bath state persists - not cleared on individual plot harvest
 
 	var result_dict = {
 		"success": true,
@@ -333,8 +403,10 @@ func reset() -> void:
 	is_planted = false
 	has_been_measured = false
 	measured_outcome = ""
-	# Model B: quantum_state is owned by parent_biome.quantum_computer, not by plot
-	register_id = -1  # Clear quantum computer register
+	# OLD (Model B): quantum_state is owned by parent_biome.quantum_computer, not by plot
+	# register_id = -1  # Clear quantum computer register
+	# NEW (Model C): quantum_state is owned by parent_biome.bath, not by plot
+	bath_subplot_id = -1  # Clear bath subplot reference
 	entangled_plots.clear()
 	plot_infrastructure_entanglements.clear()
 	conspiracy_node_id = ""

@@ -70,7 +70,7 @@ func _ready():
 	visual_oval_width = 220.0
 	visual_oval_height = 140.0
 
-	print("  ✅ QuantumKitchen running in bath-first mode")
+	print("  ✅ QuantumKitchen initialized (Model C)")
 
 
 func _initialize_bath() -> void:
@@ -111,66 +111,138 @@ func _initialize_bread_icon():
 
 
 func _initialize_bath_kitchen() -> void:
-	"""Initialize quantum bath for Kitchen biome (Bath-First)
+	"""Initialize Model C quantum computer for Kitchen biome.
 
-	Kitchen emojis: 🔥 ❄️ 🍞 🌾
-	Dynamics:
-	  - Fire/Cold oscillate with time-dependent self-energy (oven cycle)
-	  - Bread is produced from Wheat via Lindblad transfer
-	  - Heat accelerates bread production
+	MODEL C: 2-qubit analog system with RegisterMap
+	  Qubit 0 (Oven): 🔥 (north=hot) ↔ ❄️ (south=cold)
+	  Qubit 1 (Product): 🍞 (north=bread) ↔ 🌾 (south=wheat)
+
+	Basis states (4 total):
+	  |00⟩ = 🔥🍞 = Hot oven + bread (desired outcome)
+	  |01⟩ = 🔥🌾 = Hot oven + wheat (baking in progress)
+	  |10⟩ = ❄️🍞 = Cold oven + bread (cooling/done)
+	  |11⟩ = ❄️🌾 = Cold oven + wheat (not baking)
+
+	Dynamics (via Icon-defined operators):
+	  - Oven: Hamiltonian oscillation (heat cycle)
+	  - 🌾→🍞: Lindblad transfer (wheat becomes bread)
+	  - Heat coupling: Bread production faster when oven is hot
 	"""
-	print("🛁 Initializing Kitchen quantum bath...")
+	print("🍳 Initializing Kitchen Model C quantum computer...")
 
-	# Create bath with Kitchen emoji basis
-	bath = QuantumBath.new()
-	var emojis = ["🔥", "❄️", "🍞", "🌾"]
-	bath.initialize_with_emojis(emojis)
+	# Create QuantumComputer with RegisterMap
+	quantum_computer = QuantumComputer.new("Kitchen")
 
-	# Initialize weighted distribution
-	# Fire/Cold start balanced (moderate oven)
-	# Wheat is input material, Bread starts low
-	bath.initialize_weighted({
-		"🔥": 0.25,  # Fire - oven heat
-		"❄️": 0.25,  # Cold - oven rest
-		"🌾": 0.40,  # Wheat - raw input
-		"🍞": 0.10   # Bread - product (starts low)
-	})
+	# Allocate 2 qubits with emoji axes
+	quantum_computer.allocate_axis(0, "🔥", "❄️")  # Oven: Hot/Cold
+	quantum_computer.allocate_axis(1, "🍞", "🌾")  # Product: Bread/Wheat
 
-	# Collect Icons from registry
-	# Get IconRegistry (now guaranteed to be first autoload)
+	# Initialize to |01⟩ = 🔥🌾 (hot oven, wheat ready to bake)
+	# Basis index: qubit0=0 (🔥), qubit1=1 (🌾) → binary 01 = 1
+	quantum_computer.initialize_basis(1)
+
+	print("  📊 RegisterMap configured (2 qubits, 4 basis states)")
+
+	# Get Icons from IconRegistry
 	var icon_registry = get_node_or_null("/root/IconRegistry")
 	if not icon_registry:
-		push_error("🛁 IconRegistry not available!")
+		push_error("🍳 IconRegistry not available!")
 		return
 
-	var icons: Array[Icon] = []
-	for emoji in emojis:
+	var icon_emojis = ["🔥", "❄️", "🍞", "🌾"]
+	var icons = {}
+
+	for emoji in icon_emojis:
 		var icon = icon_registry.get_icon(emoji)
 		if icon:
-			icons.append(icon)
+			icons[emoji] = icon
 		else:
-			push_warning("🛁 Icon not found for emoji: " + emoji)
+			push_warning("🍳 Icon not found: %s" % emoji)
 
-	# Build Hamiltonian and Lindblad operators from Icons
-	if not icons.is_empty():
-		bath.active_icons = icons
-		bath.build_hamiltonian_from_icons(icons)
-		bath.build_lindblad_from_icons(icons)
+	# Tune Kitchen-specific Icon parameters
+	var bread_icon_ref = icon_registry.get_icon("🍞")
+	if bread_icon_ref:
+		# Bread gains from wheat (baking process)
+		bread_icon_ref.lindblad_incoming["🌾"] = 0.15  # Moderate baking rate
+		print("  🍞 Bread: Lindblad incoming from 🌾 = 0.15")
 
-		print("  ✅ Bath initialized with %d emojis, %d icons" % [emojis.size(), icons.size()])
-		print("  ✅ Hamiltonian: %d non-zero terms" % bath.hamiltonian_sparse.size())
-		print("  ✅ Lindblad: %d transfer terms" % bath.lindblad_terms.size())
-	else:
-		push_warning("🛁 No icons found for Kitchen bath")
+	# Build operators using HamiltonianBuilder and LindbladBuilder
+	var HamBuilder = load("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
+	var LindBuilder = load("res://Core/QuantumSubstrate/LindbladBuilder.gd")
 
-	print("  🍳 Kitchen ready for bread production!")
+	quantum_computer.hamiltonian = HamBuilder.build(icons, quantum_computer.register_map)
+
+	# LindbladBuilder now returns {operators, gated_configs}
+	var lindblad_result = LindBuilder.build(icons, quantum_computer.register_map)
+	quantum_computer.lindblad_operators = lindblad_result.get("operators", [])
+	quantum_computer.gated_lindblad_configs = lindblad_result.get("gated_configs", [])
+
+	print("  ✅ Hamiltonian: %dx%d matrix" % [
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0,
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0
+	])
+	print("  ✅ Lindblad: %d operators + %d gated configs" % [
+		quantum_computer.lindblad_operators.size(),
+		quantum_computer.gated_lindblad_configs.size()])
+	print("  ✅ Kitchen Model C ready (analog evolution enabled)")
+
+
+func rebuild_quantum_operators() -> void:
+	"""Rebuild Hamiltonian and Lindblad operators after IconRegistry is ready.
+
+	Called by BootManager in Stage 3A to ensure operators are built with
+	complete Icon definitions from the faction system.
+	"""
+	if not quantum_computer:
+		return
+
+	print("  🔧 Kitchen: Rebuilding quantum operators...")
+
+	# Get Icons from IconRegistry (now guaranteed to be ready)
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		push_warning("🍳 IconRegistry not available for Kitchen rebuild!")
+		return
+
+	var icon_emojis = ["🔥", "❄️", "🍞", "🌾"]
+	var icons = {}
+
+	for emoji in icon_emojis:
+		var icon = icon_registry.get_icon(emoji)
+		if icon:
+			icons[emoji] = icon
+		else:
+			push_warning("🍳 Icon not found during rebuild: %s" % emoji)
+
+	# Tune Kitchen-specific Icon parameters
+	var bread_icon_ref = icon_registry.get_icon("🍞")
+	if bread_icon_ref:
+		# Bread gains from wheat (baking process)
+		bread_icon_ref.lindblad_incoming["🌾"] = 0.15  # Moderate baking rate
+
+	# Rebuild operators using HamiltonianBuilder and LindbladBuilder
+	var HamBuilder = load("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
+	var LindBuilder = load("res://Core/QuantumSubstrate/LindbladBuilder.gd")
+
+	quantum_computer.hamiltonian = HamBuilder.build(icons, quantum_computer.register_map)
+
+	# LindbladBuilder returns {operators, gated_configs}
+	var lindblad_result = LindBuilder.build(icons, quantum_computer.register_map)
+	quantum_computer.lindblad_operators = lindblad_result.get("operators", [])
+	quantum_computer.gated_lindblad_configs = lindblad_result.get("gated_configs", [])
+
+	print("  ✅ Kitchen: Hamiltonian %dx%d, Lindblad %d operators + %d gated" % [
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0,
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0,
+		quantum_computer.lindblad_operators.size(),
+		quantum_computer.gated_lindblad_configs.size()])
 
 
 func _update_quantum_substrate(dt: float) -> void:
-	"""Override parent: Evolve kitchen quantum state"""
-	# Bath mode: bread production dynamics handled by BiomeBase
-	# Oven temperature and bread transformation come from bath Lindblad operators
-	pass
+	"""Override parent: Evolve kitchen quantum state (Model C)"""
+	# MODEL C: Evolve quantum computer under Lindblad master equation
+	if quantum_computer:
+		quantum_computer.evolve(dt)
 
 
 func _apply_oven_oscillation(delta: float):
