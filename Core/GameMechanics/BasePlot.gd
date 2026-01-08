@@ -176,13 +176,14 @@ func plant(biome_or_labor = null, wheat_cost: float = 0.0, optional_biome = null
 	# OLD (Model B): Check for allocate_register_for_plot method
 	# if biome_or_labor is Node and biome_or_labor.has_method("allocate_register_for_plot"):
 
-	# NEW (Model C): Check for bath property
-	if biome_or_labor is Node and "bath" in biome_or_labor:
+	# NEW (Model C): Check for bath OR quantum_computer property
+	# Model C biomes may use bath (MarketBiome, ForestEcosystem) or quantum_computer (BioticFlux, QuantumKitchen)
+	if biome_or_labor is Node and ("bath" in biome_or_labor or "quantum_computer" in biome_or_labor):
 		biome = biome_or_labor
-	elif optional_biome and "bath" in optional_biome:
+	elif optional_biome and ("bath" in optional_biome or "quantum_computer" in optional_biome):
 		biome = optional_biome
 	else:
-		push_error("No valid biome with bath provided for planting!")
+		push_error("No valid biome with bath or quantum_computer provided for planting!")
 		return false
 
 	parent_biome = biome

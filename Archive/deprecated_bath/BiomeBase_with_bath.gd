@@ -35,9 +35,8 @@ var quantum_computer: QuantumComputer = null
 ## Plot register mapping: Vector2i → QuantumRegister
 var plot_registers: Dictionary = {}  # Vector2i → QuantumRegister (metadata only)
 
-## DEPRECATED: bath is kept as null for compile compatibility
-## All biomes should use quantum_computer exclusively
-var bath = null  # DEPRECATED - kept for compile compatibility only
+## DEPRECATED: bath removed - use quantum_computer exclusively
+## var bath: QuantumBath = null  # REMOVED - unified to QuantumComputer
 
 ## Active projections (legacy - to be removed)
 var active_projections: Dictionary = {}

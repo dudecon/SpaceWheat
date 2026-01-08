@@ -1,6 +1,9 @@
 class_name OverlayManager
 extends Node
 
+# Access autoload safely (avoids compile-time errors)
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 ## Centralizes management of all overlays (Quests, Vocabulary, Network, Escape Menu, Save/Load)
 ## Handles overlay visibility, positioning, and menu actions
 
@@ -74,14 +77,14 @@ func setup(layout_mgr, vocab_sys, faction_mgr, conspiracy_net, quest_mgr = null)
 	faction_manager = faction_mgr
 	conspiracy_network = conspiracy_net
 	quest_manager = quest_mgr
-	VerboseConfig.info("ui", "📋", "OverlayManager initialized")
+	_verbose.info("ui", "📋", "OverlayManager initialized")
 
 
 func create_overlays(parent: Control) -> void:
 	"""Create all overlay panels and add them to parent"""
 	# HAUNTED UI FIX: Guard against duplicate overlay creation
 	if _overlays_created:
-		VerboseConfig.warn("ui", "⚠️", "OverlayManager.create_overlays() called multiple times, skipping duplicate creation")
+		_verbose.warn("ui", "⚠️", "OverlayManager.create_overlays() called multiple times, skipping duplicate creation")
 		return
 	_overlays_created = true
 
@@ -96,7 +99,7 @@ func create_overlays(parent: Control) -> void:
 	if parent.is_inside_tree():
 		var viewport_size = parent.get_viewport().get_visible_rect().size
 		parent.set_size(viewport_size)
-		VerboseConfig.debug("ui", "📏", "OverlayLayer forced to size: %s" % viewport_size)
+		_verbose.debug("ui", "📏", "OverlayLayer forced to size: %s" % viewport_size)
 
 	# Create Quest Panel
 	quest_panel = QuestPanel.new()
@@ -107,7 +110,7 @@ func create_overlays(parent: Control) -> void:
 	quest_panel.visible = false
 	quest_panel.z_index = 1001
 	parent.add_child(quest_panel)
-	VerboseConfig.info("ui", "📜", "Quest panel created (press C to toggle)")
+	_verbose.info("ui", "📜", "Quest panel created (press C to toggle)")
 
 	# Create Faction Quest Offers Panel (Legacy - kept for compatibility)
 	faction_quest_offers_panel = FactionQuestOffersPanel.new()
@@ -123,7 +126,7 @@ func create_overlays(parent: Control) -> void:
 	faction_quest_offers_panel.quest_offer_accepted.connect(_on_quest_offer_accepted)
 	faction_quest_offers_panel.panel_closed.connect(_on_quest_offers_panel_closed)
 
-	VerboseConfig.info("ui", "⚛️", "Faction Quest Offers panel created (legacy)")
+	_verbose.info("ui", "⚛️", "Faction Quest Offers panel created (legacy)")
 
 	# Create Quest Board (New Modal 4-Slot System - Primary Interface)
 	quest_board = QuestBoard.new()
@@ -141,12 +144,12 @@ func create_overlays(parent: Control) -> void:
 	quest_board.quest_abandoned.connect(_on_quest_board_quest_abandoned)
 	quest_board.board_closed.connect(_on_quest_board_closed)
 
-	VerboseConfig.info("ui", "📋", "Quest Board created (press C to toggle - modal 4-slot system)")
+	_verbose.info("ui", "📋", "Quest Board created (press C to toggle - modal 4-slot system)")
 
 	# Create Vocabulary Overlay
 	vocabulary_overlay = _create_vocabulary_overlay()
 	parent.add_child(vocabulary_overlay)
-	VerboseConfig.info("ui", "📖", "Vocabulary overlay created (press V to toggle)")
+	_verbose.info("ui", "📖", "Vocabulary overlay created (press V to toggle)")
 
 	# Network overlay - DISABLED (being redesigned)
 	# Will be implemented differently in future update
@@ -177,60 +180,60 @@ func create_overlays(parent: Control) -> void:
 	escape_menu.load_pressed.connect(_on_load_pressed)
 	escape_menu.reload_last_save_pressed.connect(_on_reload_last_save_pressed)
 	# Note: EscapeMenu doesn't have debug_environment_selected - removed this connection
-	VerboseConfig.info("ui", "🎮", "Escape menu created (ESC to toggle)")
+	_verbose.info("ui", "🎮", "Escape menu created (ESC to toggle)")
 
 	# Create Keyboard Hint Button (K key help) - positioned top-right
 	_create_keyboard_hint_button(parent)
 
 	# Create Save/Load Menu
-	VerboseConfig.debug("save", "💾", "Creating Save/Load menu...")
+	_verbose.debug("save", "💾", "Creating Save/Load menu...")
 	save_load_menu = SaveLoadMenu.new()
-	VerboseConfig.debug("save", "💾", "Save/Load menu instantiated, setting properties...")
+	_verbose.debug("save", "💾", "Save/Load menu instantiated, setting properties...")
 	save_load_menu.z_index = 4000  # HIGHEST - above ESC menu (max is 4096)
 	save_load_menu.hide_menu()
-	VerboseConfig.debug("save", "💾", "Adding Save/Load menu to parent...")
+	_verbose.debug("save", "💾", "Adding Save/Load menu to parent...")
 	parent.add_child(save_load_menu)
-	VerboseConfig.info("save", "💾", "Save/Load menu created")
+	_verbose.info("save", "💾", "Save/Load menu created")
 
 	# Connect save/load menu signals
-	VerboseConfig.debug("save", "💾", "Connecting save/load menu signals...")
+	_verbose.debug("save", "💾", "Connecting save/load menu signals...")
 	save_load_menu.slot_selected.connect(_on_save_load_slot_selected)
 	save_load_menu.debug_environment_selected.connect(_on_debug_environment_selected)
 	save_load_menu.menu_closed.connect(_on_save_load_menu_closed)
-	VerboseConfig.debug("save", "💾", "Save/Load menu signals connected")
+	_verbose.debug("save", "💾", "Save/Load menu signals connected")
 
 	# Create Biome Inspector Overlay
 	biome_inspector = BiomeInspectorOverlay.new()
 	biome_inspector.layer = 100  # Same layer as other overlays
 	parent.add_child(biome_inspector)
 	biome_inspector.overlay_closed.connect(_on_biome_inspector_closed)
-	VerboseConfig.info("ui", "🌍", "Biome inspector overlay created (B to toggle)")
+	_verbose.info("ui", "🌍", "Biome inspector overlay created (B to toggle)")
 
 	# Create Quantum Rigor Config UI (Phase 1 UI Integration)
 	quantum_config_ui = QuantumRigorConfigUI.new()
 	quantum_config_ui.visible = false
 	quantum_config_ui.z_index = 1003  # Above other overlays
 	parent.add_child(quantum_config_ui)
-	VerboseConfig.info("ui", "🔬", "Quantum rigor config panel created (Shift+Q to toggle)")
+	_verbose.info("ui", "🔬", "Quantum rigor config panel created (Shift+Q to toggle)")
 
 	# Create Touch Button Bar (for touch devices)
 	touch_button_bar = _create_touch_button_bar()
 	parent.add_child(touch_button_bar)
-	VerboseConfig.info("ui", "📱", "Touch button bar created (📖=V, 📋=C, ☰=ESC)")
-	VerboseConfig.debug("ui", "📏", "Parent (OverlayLayer) size: %s" % parent.size)
-	VerboseConfig.debug("ui", "📏", "Parent (OverlayLayer) position: (%s, %s)" % [parent.position.x, parent.position.y])
-	VerboseConfig.debug("ui", "📏", "TouchButtonBar position: (%s, %s)" % [touch_button_bar.position.x, touch_button_bar.position.y])
-	VerboseConfig.debug("ui", "📏", "TouchButtonBar size: %s" % touch_button_bar.size)
-	VerboseConfig.debug("ui", "📏", "TouchButtonBar global_position: (%s, %s)" % [touch_button_bar.global_position.x, touch_button_bar.global_position.y])
-	VerboseConfig.debug("ui", "📏", "TouchButtonBar z_index: %d" % touch_button_bar.z_index)
-	VerboseConfig.debug("ui", "📏", "TouchButtonBar visible: %s" % touch_button_bar.visible)
+	_verbose.info("ui", "📱", "Touch button bar created (📖=V, 📋=C, ☰=ESC)")
+	_verbose.debug("ui", "📏", "Parent (OverlayLayer) size: %s" % parent.size)
+	_verbose.debug("ui", "📏", "Parent (OverlayLayer) position: (%s, %s)" % [parent.position.x, parent.position.y])
+	_verbose.debug("ui", "📏", "TouchButtonBar position: (%s, %s)" % [touch_button_bar.position.x, touch_button_bar.position.y])
+	_verbose.debug("ui", "📏", "TouchButtonBar size: %s" % touch_button_bar.size)
+	_verbose.debug("ui", "📏", "TouchButtonBar global_position: (%s, %s)" % [touch_button_bar.global_position.x, touch_button_bar.global_position.y])
+	_verbose.debug("ui", "📏", "TouchButtonBar z_index: %d" % touch_button_bar.z_index)
+	_verbose.debug("ui", "📏", "TouchButtonBar visible: %s" % touch_button_bar.visible)
 
 	# Create Icon Detail Panel
 	icon_detail_panel = IconDetailPanel.new()
 	icon_detail_panel.set_layout_manager(layout_manager)
 	parent.add_child(icon_detail_panel)
 	icon_detail_panel.panel_closed.connect(_on_icon_detail_panel_closed)
-	VerboseConfig.info("ui", "📖", "Icon detail panel created (click emojis in vocab to view)")
+	_verbose.info("ui", "📖", "Icon detail panel created (click emojis in vocab to view)")
 
 	# Update positions after layout is ready
 	await get_tree().process_frame
@@ -263,143 +266,143 @@ func toggle_overlay(name: String) -> void:
 
 func show_overlay(name: String) -> void:
 	"""Show a specific overlay"""
-	VerboseConfig.debug("ui", "🔓", "show_overlay('%s') called" % name)
+	_verbose.debug("ui", "🔓", "show_overlay('%s') called" % name)
 	match name:
 		"quests":
 			# C key now shows quest offers (emergent system)
 			if faction_quest_offers_panel and farm:
-				VerboseConfig.debug("quest", "→", "Showing faction quest offers with current biome")
+				_verbose.debug("quest", "→", "Showing faction quest offers with current biome")
 				var biome = farm.biotic_flux_biome if "biotic_flux_biome" in farm else null
 				if biome:
 					faction_quest_offers_panel.show_offers(biome)
 					overlay_states["quest_offers"] = true
 					overlay_toggled.emit("quest_offers", true)
-					VerboseConfig.debug("quest", "✅", "faction_quest_offers_panel shown")
+					_verbose.debug("quest", "✅", "faction_quest_offers_panel shown")
 				else:
-					VerboseConfig.warn("quest", "❌", "No biome available!")
+					_verbose.warn("quest", "❌", "No biome available!")
 			elif not faction_quest_offers_panel:
-				VerboseConfig.warn("quest", "❌", "faction_quest_offers_panel is null!")
+				_verbose.warn("quest", "❌", "faction_quest_offers_panel is null!")
 			else:
-				VerboseConfig.warn("quest", "❌", "farm reference not set!")
+				_verbose.warn("quest", "❌", "farm reference not set!")
 		"quest_offers":
 			if faction_quest_offers_panel and farm:
-				VerboseConfig.debug("quest", "→", "Showing faction quest offers with current biome")
+				_verbose.debug("quest", "→", "Showing faction quest offers with current biome")
 				# Get current biome from farm
 				var biome = farm.biotic_flux_biome if "biotic_flux_biome" in farm else null
 				if biome:
 					faction_quest_offers_panel.show_offers(biome)
 					overlay_states["quest_offers"] = true
 					overlay_toggled.emit("quest_offers", true)
-					VerboseConfig.debug("quest", "✅", "faction_quest_offers_panel shown")
+					_verbose.debug("quest", "✅", "faction_quest_offers_panel shown")
 				else:
-					VerboseConfig.warn("quest", "❌", "No biome available!")
+					_verbose.warn("quest", "❌", "No biome available!")
 			elif not faction_quest_offers_panel:
-				VerboseConfig.warn("quest", "❌", "faction_quest_offers_panel is null!")
+				_verbose.warn("quest", "❌", "faction_quest_offers_panel is null!")
 			else:
-				VerboseConfig.warn("quest", "❌", "farm reference not set!")
+				_verbose.warn("quest", "❌", "farm reference not set!")
 		"vocabulary":
 			if vocabulary_overlay:
-				VerboseConfig.debug("ui", "→", "Setting vocabulary_overlay.visible = true")
+				_verbose.debug("ui", "→", "Setting vocabulary_overlay.visible = true")
 				vocabulary_overlay.visible = true
 				overlay_states["vocabulary"] = true
 				overlay_toggled.emit("vocabulary", true)
-				VerboseConfig.info("ui", "✅", "vocabulary_overlay shown")
+				_verbose.info("ui", "✅", "vocabulary_overlay shown")
 			else:
-				VerboseConfig.warn("ui", "❌", "vocabulary_overlay is null!")
+				_verbose.warn("ui", "❌", "vocabulary_overlay is null!")
 		"network":
 			if network_overlay:
-				VerboseConfig.debug("ui", "→", "Setting network_overlay.visible = true")
+				_verbose.debug("ui", "→", "Setting network_overlay.visible = true")
 				network_overlay.visible = true
 				if network_info_panel:
 					network_info_panel.visible = true
 				overlay_states["network"] = true
 				overlay_toggled.emit("network", true)
-				VerboseConfig.info("ui", "✅", "network_overlay shown")
+				_verbose.info("ui", "✅", "network_overlay shown")
 			else:
-				VerboseConfig.warn("ui", "❌", "network_overlay is null (disabled)")
+				_verbose.warn("ui", "❌", "network_overlay is null (disabled)")
 		"escape_menu":
 			if escape_menu:
-				VerboseConfig.debug("ui", "→", "Calling escape_menu.show_menu()")
+				_verbose.debug("ui", "→", "Calling escape_menu.show_menu()")
 				escape_menu.show_menu()
 				overlay_states["escape_menu"] = true
 				overlay_toggled.emit("escape_menu", true)
-				VerboseConfig.info("ui", "✅", "escape_menu shown")
+				_verbose.info("ui", "✅", "escape_menu shown")
 			else:
-				VerboseConfig.warn("ui", "❌", "escape_menu is null!")
+				_verbose.warn("ui", "❌", "escape_menu is null!")
 		"quantum_config":
 			if quantum_config_ui:
-				VerboseConfig.debug("ui", "→", "Setting quantum_config_ui.visible = true")
+				_verbose.debug("ui", "→", "Setting quantum_config_ui.visible = true")
 				quantum_config_ui.visible = true
 				overlay_states["quantum_config"] = true
 				overlay_toggled.emit("quantum_config", true)
-				VerboseConfig.info("ui", "✅", "quantum_config_ui shown")
+				_verbose.info("ui", "✅", "quantum_config_ui shown")
 			else:
-				VerboseConfig.warn("ui", "❌", "quantum_config_ui is null!")
+				_verbose.warn("ui", "❌", "quantum_config_ui is null!")
 		_:
 			push_warning("OverlayManager: Unknown overlay '%s'" % name)
 
 
 func hide_overlay(name: String) -> void:
 	"""Hide a specific overlay"""
-	VerboseConfig.debug("ui", "🔐", "hide_overlay('%s') called" % name)
+	_verbose.debug("ui", "🔐", "hide_overlay('%s') called" % name)
 	match name:
 		"quests":
 			# C key now hides quest offers (emergent system)
 			if faction_quest_offers_panel:
-				VerboseConfig.debug("quest", "→", "Setting faction_quest_offers_panel.visible = false")
+				_verbose.debug("quest", "→", "Setting faction_quest_offers_panel.visible = false")
 				faction_quest_offers_panel.visible = false
 				overlay_states["quest_offers"] = false
 				overlay_toggled.emit("quest_offers", false)
-				VerboseConfig.info("quest", "✅", "faction_quest_offers_panel hidden")
+				_verbose.info("quest", "✅", "faction_quest_offers_panel hidden")
 			else:
-				VerboseConfig.warn("quest", "❌", "faction_quest_offers_panel is null!")
+				_verbose.warn("quest", "❌", "faction_quest_offers_panel is null!")
 		"quest_offers":
 			if faction_quest_offers_panel:
-				VerboseConfig.debug("quest", "→", "Setting faction_quest_offers_panel.visible = false")
+				_verbose.debug("quest", "→", "Setting faction_quest_offers_panel.visible = false")
 				faction_quest_offers_panel.visible = false
 				overlay_states["quest_offers"] = false
 				overlay_toggled.emit("quest_offers", false)
-				VerboseConfig.info("quest", "✅", "faction_quest_offers_panel hidden")
+				_verbose.info("quest", "✅", "faction_quest_offers_panel hidden")
 			else:
-				VerboseConfig.warn("quest", "❌", "faction_quest_offers_panel is null!")
+				_verbose.warn("quest", "❌", "faction_quest_offers_panel is null!")
 		"vocabulary":
 			if vocabulary_overlay:
-				VerboseConfig.debug("ui", "→", "Setting vocabulary_overlay.visible = false")
+				_verbose.debug("ui", "→", "Setting vocabulary_overlay.visible = false")
 				vocabulary_overlay.visible = false
 				overlay_states["vocabulary"] = false
 				overlay_toggled.emit("vocabulary", false)
-				VerboseConfig.info("ui", "✅", "vocabulary_overlay hidden")
+				_verbose.info("ui", "✅", "vocabulary_overlay hidden")
 			else:
-				VerboseConfig.warn("ui", "❌", "vocabulary_overlay is null!")
+				_verbose.warn("ui", "❌", "vocabulary_overlay is null!")
 		"network":
 			if network_overlay:
-				VerboseConfig.debug("ui", "→", "Hiding network panels")
+				_verbose.debug("ui", "→", "Hiding network panels")
 				network_overlay.visible = false
 				if network_info_panel:
 					network_info_panel.visible = false
 				overlay_states["network"] = false
 				overlay_toggled.emit("network", false)
-				VerboseConfig.info("ui", "✅", "network_overlay hidden")
+				_verbose.info("ui", "✅", "network_overlay hidden")
 			else:
-				VerboseConfig.warn("ui", "❌", "network_overlay is null (disabled)")
+				_verbose.warn("ui", "❌", "network_overlay is null (disabled)")
 		"escape_menu":
 			if escape_menu:
-				VerboseConfig.debug("ui", "→", "Calling escape_menu.hide_menu()")
+				_verbose.debug("ui", "→", "Calling escape_menu.hide_menu()")
 				escape_menu.hide_menu()
 				overlay_states["escape_menu"] = false
 				overlay_toggled.emit("escape_menu", false)
-				VerboseConfig.info("ui", "✅", "escape_menu hidden")
+				_verbose.info("ui", "✅", "escape_menu hidden")
 			else:
-				VerboseConfig.warn("ui", "❌", "escape_menu is null!")
+				_verbose.warn("ui", "❌", "escape_menu is null!")
 		"quantum_config":
 			if quantum_config_ui:
-				VerboseConfig.debug("ui", "→", "Setting quantum_config_ui.visible = false")
+				_verbose.debug("ui", "→", "Setting quantum_config_ui.visible = false")
 				quantum_config_ui.visible = false
 				overlay_states["quantum_config"] = false
 				overlay_toggled.emit("quantum_config", false)
-				VerboseConfig.info("ui", "✅", "quantum_config_ui hidden")
+				_verbose.info("ui", "✅", "quantum_config_ui hidden")
 			else:
-				VerboseConfig.warn("ui", "❌", "quantum_config_ui is null!")
+				_verbose.warn("ui", "❌", "quantum_config_ui is null!")
 		_:
 			push_warning("OverlayManager: Unknown overlay '%s'" % name)
 
@@ -455,44 +458,44 @@ func is_menu_open() -> bool:
 
 func toggle_quest_panel() -> void:
 	"""Toggle quest panel visibility"""
-	VerboseConfig.debug("quest", "🔄", "toggle_quest_panel() called")
+	_verbose.debug("quest", "🔄", "toggle_quest_panel() called")
 	if quest_panel:
-		VerboseConfig.debug("quest", "→", "quest_panel exists, visible = %s" % quest_panel.visible)
+		_verbose.debug("quest", "→", "quest_panel exists, visible = %s" % quest_panel.visible)
 		if quest_panel.visible:
-			VerboseConfig.debug("quest", "→", "Panel is visible, calling hide_overlay()")
+			_verbose.debug("quest", "→", "Panel is visible, calling hide_overlay()")
 			hide_overlay("quests")
 		else:
-			VerboseConfig.debug("quest", "→", "Panel is hidden, calling show_overlay()")
+			_verbose.debug("quest", "→", "Panel is hidden, calling show_overlay()")
 			show_overlay("quests")
 	else:
-		VerboseConfig.warn("quest", "❌", "quest_panel is null!")
+		_verbose.warn("quest", "❌", "quest_panel is null!")
 
 
 func toggle_quest_offers_panel() -> void:
 	"""Toggle faction quest offers panel visibility (legacy)"""
-	VerboseConfig.debug("quest", "🔄", "toggle_quest_offers_panel() called")
+	_verbose.debug("quest", "🔄", "toggle_quest_offers_panel() called")
 	if faction_quest_offers_panel:
-		VerboseConfig.debug("quest", "→", "faction_quest_offers_panel exists, visible = %s" % faction_quest_offers_panel.visible)
+		_verbose.debug("quest", "→", "faction_quest_offers_panel exists, visible = %s" % faction_quest_offers_panel.visible)
 		if faction_quest_offers_panel.visible:
-			VerboseConfig.debug("quest", "→", "Panel is visible, calling hide_overlay()")
+			_verbose.debug("quest", "→", "Panel is visible, calling hide_overlay()")
 			hide_overlay("quest_offers")
 		else:
-			VerboseConfig.debug("quest", "→", "Panel is hidden, calling show_overlay()")
+			_verbose.debug("quest", "→", "Panel is hidden, calling show_overlay()")
 			show_overlay("quest_offers")
 	else:
-		VerboseConfig.warn("quest", "❌", "faction_quest_offers_panel is null!")
+		_verbose.warn("quest", "❌", "faction_quest_offers_panel is null!")
 
 
 func toggle_quest_board() -> void:
 	"""Toggle quest board visibility (modal 4-slot system)"""
-	VerboseConfig.debug("quest", "🔄", "toggle_quest_board() called")
+	_verbose.debug("quest", "🔄", "toggle_quest_board() called")
 	if quest_board:
-		VerboseConfig.debug("quest", "→", "quest_board exists, visible = %s" % quest_board.visible)
+		_verbose.debug("quest", "→", "quest_board exists, visible = %s" % quest_board.visible)
 		if quest_board.visible:
-			VerboseConfig.debug("quest", "→", "Board is visible, closing")
+			_verbose.debug("quest", "→", "Board is visible, closing")
 			quest_board.close_board()
 		else:
-			VerboseConfig.debug("quest", "→", "Board is hidden, opening")
+			_verbose.debug("quest", "→", "Board is hidden, opening")
 			if farm:
 				# Get current biome from farm
 				var biome = farm.biotic_flux_biome if "biotic_flux_biome" in farm else null
@@ -501,66 +504,66 @@ func toggle_quest_board() -> void:
 					quest_board.open_board()
 					overlay_states["quest_board"] = true
 					overlay_toggled.emit("quest_board", true)
-					VerboseConfig.info("quest", "✅", "Quest board opened")
+					_verbose.info("quest", "✅", "Quest board opened")
 				else:
-					VerboseConfig.warn("quest", "❌", "No biome available!")
+					_verbose.warn("quest", "❌", "No biome available!")
 			else:
-				VerboseConfig.warn("quest", "❌", "Farm reference not set!")
+				_verbose.warn("quest", "❌", "Farm reference not set!")
 	else:
-		VerboseConfig.warn("quest", "❌", "quest_board is null!")
+		_verbose.warn("quest", "❌", "quest_board is null!")
 
 
 func open_quest_board_faction_browser() -> void:
 	"""Open faction browser from quest board (C key while board open)"""
 	if quest_board and quest_board.visible:
 		quest_board.open_faction_browser()
-		VerboseConfig.info("quest", "📚", "Opened faction browser from quest board")
+		_verbose.info("quest", "📚", "Opened faction browser from quest board")
 
 
 func toggle_vocabulary_overlay() -> void:
 	"""Toggle vocabulary overlay visibility and refresh content"""
-	VerboseConfig.debug("ui", "🔄", "toggle_vocabulary_overlay() called")
+	_verbose.debug("ui", "🔄", "toggle_vocabulary_overlay() called")
 	if vocabulary_overlay:
-		VerboseConfig.debug("ui", "→", "vocabulary_overlay exists, visible = %s" % vocabulary_overlay.visible)
+		_verbose.debug("ui", "→", "vocabulary_overlay exists, visible = %s" % vocabulary_overlay.visible)
 		if vocabulary_overlay.visible:
-			VerboseConfig.debug("ui", "→", "Overlay is visible, calling hide_overlay()")
+			_verbose.debug("ui", "→", "Overlay is visible, calling hide_overlay()")
 			hide_overlay("vocabulary")
 		else:
-			VerboseConfig.debug("ui", "→", "Overlay is hidden, refreshing and showing")
+			_verbose.debug("ui", "→", "Overlay is hidden, refreshing and showing")
 			_refresh_vocabulary_overlay()
 			show_overlay("vocabulary")
 	else:
-		VerboseConfig.warn("ui", "❌", "vocabulary_overlay is null!")
+		_verbose.warn("ui", "❌", "vocabulary_overlay is null!")
 
 
 func toggle_network_overlay() -> void:
 	"""Toggle network overlay and info panel visibility"""
-	VerboseConfig.debug("ui", "🔄", "toggle_network_overlay() called")
+	_verbose.debug("ui", "🔄", "toggle_network_overlay() called")
 	if network_overlay:
-		VerboseConfig.debug("ui", "→", "network_overlay exists, visible = %s" % network_overlay.visible)
+		_verbose.debug("ui", "→", "network_overlay exists, visible = %s" % network_overlay.visible)
 		if network_overlay.visible:
-			VerboseConfig.debug("ui", "→", "Overlay is visible, calling hide_overlay()")
+			_verbose.debug("ui", "→", "Overlay is visible, calling hide_overlay()")
 			hide_overlay("network")
 		else:
-			VerboseConfig.debug("ui", "→", "Overlay is hidden, calling show_overlay()")
+			_verbose.debug("ui", "→", "Overlay is hidden, calling show_overlay()")
 			show_overlay("network")
 	else:
-		VerboseConfig.warn("ui", "❌", "network_overlay is null (disabled)")
+		_verbose.warn("ui", "❌", "network_overlay is null (disabled)")
 
 
 func toggle_escape_menu() -> void:
 	"""Toggle escape menu visibility"""
-	VerboseConfig.debug("ui", "🔄", "toggle_escape_menu() called")
+	_verbose.debug("ui", "🔄", "toggle_escape_menu() called")
 	if escape_menu:
-		VerboseConfig.debug("ui", "→", "escape_menu exists, is_visible() = %s" % escape_menu.is_visible())
+		_verbose.debug("ui", "→", "escape_menu exists, is_visible() = %s" % escape_menu.is_visible())
 		if escape_menu.is_visible():
-			VerboseConfig.debug("ui", "→", "Menu is visible, calling hide_overlay()")
+			_verbose.debug("ui", "→", "Menu is visible, calling hide_overlay()")
 			hide_overlay("escape_menu")
 		else:
-			VerboseConfig.debug("ui", "→", "Menu is hidden, calling show_overlay()")
+			_verbose.debug("ui", "→", "Menu is hidden, calling show_overlay()")
 			show_overlay("escape_menu")
 	else:
-		VerboseConfig.warn("ui", "❌", "escape_menu is null!")
+		_verbose.warn("ui", "❌", "escape_menu is null!")
 
 
 func toggle_keyboard_help() -> void:
@@ -568,45 +571,45 @@ func toggle_keyboard_help() -> void:
 	if keyboard_hint_button:
 		if keyboard_hint_button.has_method("toggle_hints"):
 			keyboard_hint_button.toggle_hints()
-			VerboseConfig.info("ui", "⌨️", "Keyboard help toggled via K key")
+			_verbose.info("ui", "⌨️", "Keyboard help toggled via K key")
 		else:
-			VerboseConfig.warn("ui", "⚠️", "keyboard_hint_button missing toggle_hints() method")
+			_verbose.warn("ui", "⚠️", "keyboard_hint_button missing toggle_hints() method")
 	else:
-		VerboseConfig.warn("ui", "⚠️", "Keyboard help not initialized")
+		_verbose.warn("ui", "⚠️", "Keyboard help not initialized")
 
 
 func toggle_biome_inspector() -> void:
 	"""Toggle biome inspector overlay (B key)"""
-	VerboseConfig.debug("ui", "🔄", "toggle_biome_inspector() called")
+	_verbose.debug("ui", "🔄", "toggle_biome_inspector() called")
 	if biome_inspector:
 		if not farm:
-			VerboseConfig.warn("ui", "⚠️", "Farm reference not set in OverlayManager")
+			_verbose.warn("ui", "⚠️", "Farm reference not set in OverlayManager")
 			return
 
-		VerboseConfig.debug("ui", "→", "biome_inspector exists, visible = %s" % biome_inspector.is_overlay_visible())
+		_verbose.debug("ui", "→", "biome_inspector exists, visible = %s" % biome_inspector.is_overlay_visible())
 		if biome_inspector.is_overlay_visible():
-			VerboseConfig.debug("ui", "→", "Overlay is visible, hiding")
+			_verbose.debug("ui", "→", "Overlay is visible, hiding")
 			biome_inspector.hide_overlay()
 		else:
-			VerboseConfig.debug("ui", "→", "Overlay is hidden, showing all biomes")
+			_verbose.debug("ui", "→", "Overlay is hidden, showing all biomes")
 			biome_inspector.show_all_biomes(farm)
 	else:
-		VerboseConfig.warn("ui", "❌", "biome_inspector is null!")
+		_verbose.warn("ui", "❌", "biome_inspector is null!")
 
 
 func toggle_quantum_config_ui() -> void:
 	"""Toggle quantum rigor config UI (Shift+Q)"""
-	VerboseConfig.debug("ui", "🔄", "toggle_quantum_config_ui() called")
+	_verbose.debug("ui", "🔄", "toggle_quantum_config_ui() called")
 	if quantum_config_ui:
-		VerboseConfig.debug("ui", "→", "quantum_config_ui exists, visible = %s" % quantum_config_ui.visible)
+		_verbose.debug("ui", "→", "quantum_config_ui exists, visible = %s" % quantum_config_ui.visible)
 		if quantum_config_ui.visible:
-			VerboseConfig.debug("ui", "→", "Panel is visible, hiding")
+			_verbose.debug("ui", "→", "Panel is visible, hiding")
 			hide_overlay("quantum_config")
 		else:
-			VerboseConfig.debug("ui", "→", "Panel is hidden, showing")
+			_verbose.debug("ui", "→", "Panel is hidden, showing")
 			show_overlay("quantum_config")
 	else:
-		VerboseConfig.warn("ui", "❌", "quantum_config_ui is null!")
+		_verbose.warn("ui", "❌", "quantum_config_ui is null!")
 
 
 func _on_biome_inspector_closed() -> void:
@@ -699,7 +702,7 @@ func _refresh_vocabulary_overlay() -> void:
 
 			emoji_grid.add_child(label)
 
-	VerboseConfig.debug("ui", "📖", "Vocabulary overlay refreshed: %d emojis, %d/%d factions accessible" % [
+	_verbose.debug("ui", "📖", "Vocabulary overlay refreshed: %d emojis, %d/%d factions accessible" % [
 		known_emojis.size(),
 		accessible,
 		total_factions
@@ -802,7 +805,7 @@ func _create_keyboard_hint_button(parent: Control) -> void:
 	if layout_manager and keyboard_hint_button.has_method("set_layout_manager"):
 		keyboard_hint_button.set_layout_manager(layout_manager)
 
-	VerboseConfig.info("ui", "⌨️", "Keyboard hint button created (top-right)")
+	_verbose.info("ui", "⌨️", "Keyboard hint button created (top-right)")
 
 
 func _create_touch_button_bar() -> Control:
@@ -884,47 +887,47 @@ func _on_menu_resume() -> void:
 
 func _on_restart_pressed() -> void:
 	"""Restart the game by reloading the current scene"""
-	VerboseConfig.info("ui", "🔄", "Restarting game...")
+	_verbose.info("ui", "🔄", "Restarting game...")
 	get_tree().reload_current_scene()
 	emit_signal("restart_requested")
 
 
 func _on_save_pressed() -> void:
 	"""Show save menu when Save is pressed from escape menu"""
-	VerboseConfig.debug("save", "📋", "OverlayManager._on_save_pressed() called")
-	VerboseConfig.debug("save", "→", "save_load_menu exists: %s" % (save_load_menu != null))
+	_verbose.debug("save", "📋", "OverlayManager._on_save_pressed() called")
+	_verbose.debug("save", "→", "save_load_menu exists: %s" % (save_load_menu != null))
 	if save_load_menu:
-		VerboseConfig.debug("save", "→", "Calling show_menu(SAVE)...")
+		_verbose.debug("save", "→", "Calling show_menu(SAVE)...")
 		save_load_menu.show_menu(SaveLoadMenu.Mode.SAVE)
-		VerboseConfig.debug("save", "→", "save_load_menu.visible = %s" % save_load_menu.visible)
-		VerboseConfig.info("save", "💾", "Save menu opened")
+		_verbose.debug("save", "→", "save_load_menu.visible = %s" % save_load_menu.visible)
+		_verbose.info("save", "💾", "Save menu opened")
 	else:
-		VerboseConfig.warn("save", "⚠️", "Save/Load menu not available")
+		_verbose.warn("save", "⚠️", "Save/Load menu not available")
 
 
 func _on_load_pressed() -> void:
 	"""Show load menu when Load is pressed from escape menu"""
-	VerboseConfig.debug("save", "📋", "OverlayManager._on_load_pressed() called")
-	VerboseConfig.debug("save", "→", "save_load_menu exists: %s" % (save_load_menu != null))
+	_verbose.debug("save", "📋", "OverlayManager._on_load_pressed() called")
+	_verbose.debug("save", "→", "save_load_menu exists: %s" % (save_load_menu != null))
 	if save_load_menu:
-		VerboseConfig.debug("save", "→", "Calling show_menu(LOAD)...")
+		_verbose.debug("save", "→", "Calling show_menu(LOAD)...")
 		save_load_menu.show_menu(SaveLoadMenu.Mode.LOAD)
-		VerboseConfig.debug("save", "→", "save_load_menu.visible = %s" % save_load_menu.visible)
-		VerboseConfig.info("save", "📂", "Load menu opened")
+		_verbose.debug("save", "→", "save_load_menu.visible = %s" % save_load_menu.visible)
+		_verbose.info("save", "📂", "Load menu opened")
 	else:
-		VerboseConfig.warn("save", "⚠️", "Save/Load menu not available")
+		_verbose.warn("save", "⚠️", "Save/Load menu not available")
 
 
 func _on_reload_last_save_pressed() -> void:
 	"""Reload the last saved game"""
 	if GameStateManager and GameStateManager.last_saved_slot >= 0:
 		if GameStateManager.load_and_apply(GameStateManager.last_saved_slot):
-			VerboseConfig.info("save", "✅", "Game reloaded from last save")
+			_verbose.info("save", "✅", "Game reloaded from last save")
 			emit_signal("load_completed")
 		else:
-			VerboseConfig.error("save", "❌", "Failed to reload last save")
+			_verbose.error("save", "❌", "Failed to reload last save")
 	else:
-		VerboseConfig.warn("save", "⚠️", "No previous save to reload")
+		_verbose.warn("save", "⚠️", "No previous save to reload")
 
 
 func _on_save_load_slot_selected(slot: int, mode: String) -> void:
@@ -932,18 +935,18 @@ func _on_save_load_slot_selected(slot: int, mode: String) -> void:
 	if mode == "save":
 		# Save to the selected slot
 		if GameStateManager.save_game(slot):
-			VerboseConfig.info("save", "✅", "Game saved to slot %d" % (slot + 1))
+			_verbose.info("save", "✅", "Game saved to slot %d" % (slot + 1))
 			save_requested.emit(slot)
 			save_load_menu.hide_menu()
 		else:
-			VerboseConfig.error("save", "❌", "Failed to save to slot %d" % (slot + 1))
+			_verbose.error("save", "❌", "Failed to save to slot %d" % (slot + 1))
 	elif mode == "load":
 		# Load from the selected slot and APPLY to game
-		VerboseConfig.info("save", "📂", "Loading save from slot %d..." % (slot + 1))
+		_verbose.info("save", "📂", "Loading save from slot %d..." % (slot + 1))
 
 		# Use load_and_apply to actually apply the state to the game
 		if GameStateManager.load_and_apply(slot):
-			VerboseConfig.info("save", "✅", "Save loaded and applied from slot %d" % (slot + 1))
+			_verbose.info("save", "✅", "Save loaded and applied from slot %d" % (slot + 1))
 
 			# Refresh UI to show loaded state
 			_refresh_ui_after_load()
@@ -953,47 +956,47 @@ func _on_save_load_slot_selected(slot: int, mode: String) -> void:
 			save_load_menu.hide_menu()
 			emit_signal("load_completed")
 		else:
-			VerboseConfig.error("save", "❌", "Failed to load/apply save from slot %d" % (slot + 1))
+			_verbose.error("save", "❌", "Failed to load/apply save from slot %d" % (slot + 1))
 
 
 func _refresh_ui_after_load() -> void:
 	"""Refresh all UI elements after loading a save"""
-	VerboseConfig.info("save", "🔄", "Refreshing UI after load...")
+	_verbose.info("save", "🔄", "Refreshing UI after load...")
 
 	# Find PlayerShell to access FarmUI
 	var player_shell = get_tree().get_first_node_in_group("player_shell")
 	if not player_shell:
-		VerboseConfig.warn("save", "⚠️", "PlayerShell not found - cannot refresh UI")
+		_verbose.warn("save", "⚠️", "PlayerShell not found - cannot refresh UI")
 		return
 
 	var farm_ui = player_shell.get_farm_ui() if player_shell.has_method("get_farm_ui") else null
 	if not farm_ui:
-		VerboseConfig.warn("save", "⚠️", "FarmUI not found - cannot refresh UI")
+		_verbose.warn("save", "⚠️", "FarmUI not found - cannot refresh UI")
 		return
 
 	# Refresh PlotGridDisplay
 	var plot_grid = farm_ui.get_node_or_null("PlotGridDisplay")
 	if plot_grid and plot_grid.has_method("refresh_all_tiles"):
 		plot_grid.refresh_all_tiles()
-		VerboseConfig.info("save", "✓", "PlotGridDisplay refreshed")
+		_verbose.info("save", "✓", "PlotGridDisplay refreshed")
 
 	# Refresh economy display if present
 	if farm_ui.has_method("refresh_resource_display"):
 		farm_ui.refresh_resource_display()
-		VerboseConfig.info("save", "✓", "Resource display refreshed")
+		_verbose.info("save", "✓", "Resource display refreshed")
 
 	# Refresh quantum visualization if present
 	var quantum_viz = farm_ui.get_node_or_null("QuantumVisualization")
 	if quantum_viz and quantum_viz.has_method("refresh"):
 		quantum_viz.refresh()
-		VerboseConfig.info("save", "✓", "Quantum visualization refreshed")
+		_verbose.info("save", "✓", "Quantum visualization refreshed")
 
-	VerboseConfig.info("save", "✅", "UI refresh complete")
+	_verbose.info("save", "✅", "UI refresh complete")
 
 
 func _on_debug_environment_selected(env_name: String) -> void:
 	"""Handle debug environment/scenario selection"""
-	VerboseConfig.info("save", "🎮", "Loading debug environment: %s" % env_name)
+	_verbose.info("save", "🎮", "Loading debug environment: %s" % env_name)
 
 	# Emit signal for debug scenario (other systems can listen for this)
 	debug_scenario_requested.emit(env_name)
@@ -1005,17 +1008,17 @@ func _on_debug_environment_selected(env_name: String) -> void:
 
 func _on_save_load_menu_closed() -> void:
 	"""Handle save/load menu closed - return to escape menu"""
-	VerboseConfig.debug("save", "📋", "Returning from save/load menu to escape menu")
+	_verbose.debug("save", "📋", "Returning from save/load menu to escape menu")
 	# When user presses ESC in save/load menu, return to main escape menu (don't close it)
 	if escape_menu:
 		escape_menu.show_menu()
 	else:
-		VerboseConfig.warn("save", "⚠️", "Escape menu not available to return to")
+		_verbose.warn("save", "⚠️", "Escape menu not available to return to")
 
 
 func _on_quest_offer_accepted(quest: Dictionary) -> void:
 	"""Handle when player accepts a quest offer from faction panel"""
-	VerboseConfig.info("quest", "⚛️", "Quest offer accepted: %s - %s" % [quest.get("faction", ""), quest.get("body", "")])
+	_verbose.info("quest", "⚛️", "Quest offer accepted: %s - %s" % [quest.get("faction", ""), quest.get("body", "")])
 	# Quest is already added to active quests by QuestManager in the panel
 	# Just refresh the active quests panel if it's visible
 	if quest_panel and quest_panel.visible:
@@ -1029,7 +1032,7 @@ func _on_quest_offers_panel_closed() -> void:
 
 func _on_quest_board_quest_accepted(quest: Dictionary) -> void:
 	"""Handle when player accepts a quest from quest board"""
-	VerboseConfig.info("quest", "📋", "Quest accepted from board: %s - %s" % [quest.get("faction", ""), quest.get("body", "")])
+	_verbose.info("quest", "📋", "Quest accepted from board: %s - %s" % [quest.get("faction", ""), quest.get("body", "")])
 	# Quest is already added to active quests by QuestManager
 	# Just refresh the active quests panel if it's visible
 	if quest_panel and quest_panel.visible:
@@ -1038,7 +1041,7 @@ func _on_quest_board_quest_accepted(quest: Dictionary) -> void:
 
 func _on_quest_board_quest_completed(quest_id: int, rewards: Dictionary) -> void:
 	"""Handle when player completes a quest from quest board"""
-	VerboseConfig.info("quest", "🎉", "Quest completed from board: ID %d" % quest_id)
+	_verbose.info("quest", "🎉", "Quest completed from board: ID %d" % quest_id)
 	# Refresh quest panel if visible
 	if quest_panel and quest_panel.visible:
 		quest_panel.refresh_display()
@@ -1046,7 +1049,7 @@ func _on_quest_board_quest_completed(quest_id: int, rewards: Dictionary) -> void
 
 func _on_quest_board_quest_abandoned(quest_id: int) -> void:
 	"""Handle when player abandons a quest from quest board"""
-	VerboseConfig.info("quest", "❌", "Quest abandoned from board: ID %d" % quest_id)
+	_verbose.info("quest", "❌", "Quest abandoned from board: ID %d" % quest_id)
 	# Refresh quest panel if visible
 	if quest_panel and quest_panel.visible:
 		quest_panel.refresh_display()

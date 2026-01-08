@@ -10,6 +10,9 @@
 class_name PlayerShell
 extends Control
 
+# Access autoload safely (avoids compile-time errors)
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 const OverlayManager = preload("res://UI/Managers/OverlayManager.gd")
 const QuestManager = preload("res://Core/Quests/QuestManager.gd")
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
@@ -33,15 +36,15 @@ func _input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 
-	VerboseConfig.debug("input", "⌨️", "PlayerShell._input() KEY: %s, modal_stack: %d" % [event.keycode, modal_stack.size()])
+	_verbose.debug("input", "⌨️", "PlayerShell._input() KEY: %s, modal_stack: %d" % [event.keycode, modal_stack.size()])
 
 	# LAYER 1: Modal input (highest priority)
 	if not modal_stack.is_empty():
 		var active_modal = modal_stack[-1]
-		VerboseConfig.debug("input", "→", "Routing to modal: %s" % active_modal.name)
+		_verbose.debug("input", "→", "Routing to modal: %s" % active_modal.name)
 		if active_modal.has_method("handle_input"):
 			var consumed = active_modal.handle_input(event)
-			VerboseConfig.debug("input", "→", "Modal consumed: %s" % consumed)
+			_verbose.debug("input", "→", "Modal consumed: %s" % consumed)
 			if consumed:
 				get_viewport().set_input_as_handled()
 				return
@@ -74,32 +77,32 @@ func _handle_shell_action(event: InputEvent) -> bool:
 
 func _toggle_quest_board() -> void:
 	"""Toggle quest board - pass biome via parameter"""
-	VerboseConfig.debug("ui", "🎯", "_toggle_quest_board() called")
+	_verbose.debug("ui", "🎯", "_toggle_quest_board() called")
 	if not overlay_manager:
-		VerboseConfig.warn("ui", "❌", "overlay_manager is null!")
+		_verbose.warn("ui", "❌", "overlay_manager is null!")
 		return
 	if not overlay_manager.quest_board:
-		VerboseConfig.warn("ui", "❌", "quest_board is null!")
+		_verbose.warn("ui", "❌", "quest_board is null!")
 		return
 	var quest_board = overlay_manager.quest_board
 	if quest_board.visible:
-		VerboseConfig.info("ui", "→", "Closing quest board")
+		_verbose.info("ui", "→", "Closing quest board")
 		quest_board.close_board()
 		_pop_modal(quest_board)
 	else:
-		VerboseConfig.info("ui", "→", "Opening quest board")
+		_verbose.info("ui", "→", "Opening quest board")
 		var biome = null
 		if farm and "biotic_flux_biome" in farm:
 			biome = farm.biotic_flux_biome
-		VerboseConfig.debug("ui", "→", "farm: %s" % farm)
-		VerboseConfig.debug("ui", "→", "biome: %s" % biome)
+		_verbose.debug("ui", "→", "farm: %s" % farm)
+		_verbose.debug("ui", "→", "biome: %s" % biome)
 		if biome:
 			quest_board.set_biome(biome)
 			quest_board.open_board()
 			_push_modal(quest_board)
-			VerboseConfig.info("ui", "✅", "Quest board opened")
+			_verbose.info("ui", "✅", "Quest board opened")
 		else:
-			VerboseConfig.warn("ui", "❌", "No biome available!")
+			_verbose.warn("ui", "❌", "No biome available!")
 
 
 func _toggle_keyboard_help() -> void:
@@ -138,7 +141,7 @@ func _push_modal(modal: Control) -> void:
 	"""Add modal to stack"""
 	if modal not in modal_stack:
 		modal_stack.append(modal)
-		VerboseConfig.debug("input", "📚", "Modal stack: %s" % str(modal_stack.map(func(m): return m.name)))
+		_verbose.debug("input", "📚", "Modal stack: %s" % str(modal_stack.map(func(m): return m.name)))
 
 
 func _pop_modal(modal: Control) -> void:
@@ -146,12 +149,12 @@ func _pop_modal(modal: Control) -> void:
 	var idx = modal_stack.find(modal)
 	if idx >= 0:
 		modal_stack.remove_at(idx)
-		VerboseConfig.debug("input", "📚", "Modal stack: %s" % str(modal_stack.map(func(m): return m.name)))
+		_verbose.debug("input", "📚", "Modal stack: %s" % str(modal_stack.map(func(m): return m.name)))
 
 
 func _ready() -> void:
 	"""Initialize player shell UI - children defined in scene"""
-	VerboseConfig.info("boot", "🎪", "PlayerShell initializing...")
+	_verbose.info("boot", "🎪", "PlayerShell initializing...")
 
 	# Add to group so overlay buttons can find us
 	add_to_group("player_shell")
@@ -169,7 +172,7 @@ func _ready() -> void:
 
 	# CRITICAL: FarmUIContainer must pass input through to PlotGridDisplay/QuantumForceGraph
 	farm_ui_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	VerboseConfig.info("ui", "✅", "FarmUIContainer mouse_filter set to IGNORE for plot/bubble input")
+	_verbose.info("ui", "✅", "FarmUIContainer mouse_filter set to IGNORE for plot/bubble input")
 
 	# CRITICAL: ActionBarLayer needs explicit size for ActionBarManager to work
 	# It has full anchors (0,0,1,1) which will maintain this size, but during _ready()
@@ -177,7 +180,7 @@ func _ready() -> void:
 	# The layout engine processes anchors AFTER _ready(), so this initial size is necessary.
 	var viewport_size = get_viewport_rect().size
 	action_bar_layer.size = viewport_size
-	VerboseConfig.info("ui", "✅", "ActionBarLayer sized for action bar creation: %.0f × %.0f" % [viewport_size.x, viewport_size.y])
+	_verbose.info("ui", "✅", "ActionBarLayer sized for action bar creation: %.0f × %.0f" % [viewport_size.x, viewport_size.y])
 
 	# Create and initialize UILayoutManager
 	const UILayoutManager = preload("res://UI/Managers/UILayoutManager.gd")
@@ -187,7 +190,7 @@ func _ready() -> void:
 	# Create quest manager (before overlays, since overlays need it)
 	quest_manager = QuestManager.new()
 	add_child(quest_manager)
-	VerboseConfig.info("ui", "✅", "Quest manager created")
+	_verbose.info("ui", "✅", "Quest manager created")
 
 	# ═══════════════════════════════════════════════════════════════
 	# CREATE ACTION BARS DIRECTLY IN ActionBarLayer
@@ -207,7 +210,7 @@ func _ready() -> void:
 	# Connect action button signal - will be connected to FarmInputHandler later
 	# (after farm setup completes and input_handler is available)
 
-	VerboseConfig.info("ui", "✅", "Action bars created")
+	_verbose.info("ui", "✅", "Action bars created")
 	# ═══════════════════════════════════════════════════════════════
 
 	# Create overlay manager and add to overlay layer
@@ -226,13 +229,13 @@ func _ready() -> void:
 	logger_config_panel.closed.connect(func():
 		_pop_modal(logger_config_panel)
 	)
-	VerboseConfig.info("ui", "✅", "Logger config panel created (press L to toggle)")
+	_verbose.info("ui", "✅", "Logger config panel created (press L to toggle)")
 
 	# Connect overlay signals
 	_connect_overlay_signals()
 
-	VerboseConfig.info("ui", "✅", "Overlay manager created")
-	VerboseConfig.info("boot", "✅", "PlayerShell ready")
+	_verbose.info("ui", "✅", "Overlay manager created")
+	_verbose.info("boot", "✅", "PlayerShell ready")
 
 
 func _connect_overlay_signals() -> void:
@@ -248,7 +251,7 @@ func _connect_overlay_signals() -> void:
 		overlay_manager.quest_board.selection_changed.connect(func(slot_state: int, is_locked: bool):
 			_update_action_toolbar_for_quest(slot_state, is_locked)
 		)
-		VerboseConfig.info("ui", "✅", "Quest board signals connected")
+		_verbose.info("ui", "✅", "Quest board signals connected")
 
 	if overlay_manager.escape_menu:
 		overlay_manager.escape_menu.resume_pressed.connect(func():
@@ -260,18 +263,18 @@ func _connect_overlay_signals() -> void:
 		overlay_manager.escape_menu.load_pressed.connect(func():
 			_push_modal(overlay_manager.save_load_menu)
 		)
-		VerboseConfig.info("ui", "✅", "Escape menu signals connected")
+		_verbose.info("ui", "✅", "Escape menu signals connected")
 
 	if overlay_manager.save_load_menu:
 		overlay_manager.save_load_menu.menu_closed.connect(func():
 			_pop_modal(overlay_manager.save_load_menu)
 		)
-		VerboseConfig.info("ui", "✅", "Save/Load menu signals connected")
+		_verbose.info("ui", "✅", "Save/Load menu signals connected")
 
 
 func load_farm(farm_ref: Node) -> void:
 	"""Load a farm into FarmUIContainer (swappable)"""
-	VerboseConfig.info("ui", "📂", "Loading farm into PlayerShell...")
+	_verbose.info("ui", "📂", "Loading farm into PlayerShell...")
 
 	# Clean up old farm UI if it exists
 	if current_farm_ui:
@@ -284,7 +287,7 @@ func load_farm(farm_ref: Node) -> void:
 	# Connect quest manager to farm economy
 	if quest_manager and farm.economy:
 		quest_manager.connect_to_economy(farm.economy)
-		VerboseConfig.info("ui", "✅", "Quest manager connected to economy")
+		_verbose.info("ui", "✅", "Quest manager connected to economy")
 
 		# Offer initial quest
 		_offer_initial_quest()
@@ -298,12 +301,12 @@ func load_farm(farm_ref: Node) -> void:
 		# Setup farm AFTER layout engine calculates sizes (proper Godot 4 pattern)
 		# call_deferred here is the CORRECT TOOL for "run after engine initialization"
 		current_farm_ui.call_deferred("setup_farm", farm_ref)
-		VerboseConfig.info("ui", "✅", "FarmUI loaded (setup deferred until after layout calculation)")
+		_verbose.info("ui", "✅", "FarmUI loaded (setup deferred until after layout calculation)")
 	else:
-		VerboseConfig.warn("ui", "❌", "FarmUI.tscn not found - cannot load farm UI")
+		_verbose.warn("ui", "❌", "FarmUI.tscn not found - cannot load farm UI")
 		return
 
-	VerboseConfig.info("ui", "✅", "Farm loaded into PlayerShell")
+	_verbose.info("ui", "✅", "Farm loaded into PlayerShell")
 
 
 func get_farm_ui():
@@ -323,12 +326,12 @@ func load_farm_ui(farm_ui: Control) -> void:
 	# Add to container
 	if farm_ui_container:
 		farm_ui_container.add_child(farm_ui)
-		VerboseConfig.info("ui", "✔", "FarmUI mounted in container")
+		_verbose.info("ui", "✔", "FarmUI mounted in container")
 
 	# Connect to farm_setup_complete signal to wire input_handler (created later in setup_farm())
 	if farm_ui.has_signal("farm_setup_complete"):
 		farm_ui.farm_setup_complete.connect(_connect_to_farm_input_handler)
-		VerboseConfig.info("ui", "⏳", "Will connect to input_handler when farm setup completes...")
+		_verbose.info("ui", "⏳", "Will connect to input_handler when farm setup completes...")
 	else:
 		push_error("FarmUI missing farm_setup_complete signal!")
 
@@ -355,13 +358,13 @@ func _connect_to_farm_input_handler() -> void:
 			var action_row = action_bar_manager.get_action_row()
 			if action_row and action_row.has_signal("action_pressed"):
 				action_row.action_pressed.connect(farm_ui.input_handler._execute_tool_action)
-				VerboseConfig.info("ui", "✔", "ActionPreviewRow → FarmInputHandler (direct connection)")
+				_verbose.info("ui", "✔", "ActionPreviewRow → FarmInputHandler (direct connection)")
 
 				# Inject input_handler reference for action validation
 				action_row.input_handler = farm_ui.input_handler
-				VerboseConfig.info("ui", "✔", "ActionPreviewRow validation dependencies injected")
+				_verbose.info("ui", "✔", "ActionPreviewRow validation dependencies injected")
 
-		VerboseConfig.info("ui", "✔", "Input handler connected to action bars")
+		_verbose.info("ui", "✔", "Input handler connected to action bars")
 
 		# Inject farm and plot_grid references into ActionPreviewRow for action availability
 		if action_bar_manager and farm_ui.farm and farm_ui.plot_grid_display:
@@ -374,7 +377,7 @@ func _connect_to_farm_input_handler() -> void:
 					if action_row and action_row.has_method("update_action_availability"):
 						action_row.update_action_availability()
 				)
-				VerboseConfig.info("ui", "✔", "Action buttons will update on selection changes")
+				_verbose.info("ui", "✔", "Action buttons will update on selection changes")
 
 			# Connect to resource changes to update action button availability (for planting)
 			if farm_ui.farm and farm_ui.farm.economy and farm_ui.farm.economy.has_signal("resource_changed"):
@@ -383,7 +386,7 @@ func _connect_to_farm_input_handler() -> void:
 					if action_row and action_row.has_method("update_action_availability"):
 						action_row.update_action_availability()
 				)
-				VerboseConfig.info("ui", "✔", "Action buttons will update on resource changes")
+				_verbose.info("ui", "✔", "Action buttons will update on resource changes")
 
 
 ## OVERLAY SYSTEM INITIALIZATION
@@ -410,7 +413,7 @@ func _initialize_overlay_system() -> void:
 	# Create the overlay UI panels
 	overlay_manager.create_overlays(self)
 
-	VerboseConfig.info("ui", "🎭", "Overlay system initialized")
+	_verbose.info("ui", "🎭", "Overlay system initialized")
 
 
 ## QUEST SYSTEM HELPERS
@@ -450,7 +453,7 @@ func _offer_initial_quest() -> void:
 	# Get random faction from database
 	var faction = FactionDatabase.get_random_faction()
 	if faction.is_empty():
-		VerboseConfig.warn("ui", "⚠️", "No factions available for quests")
+		_verbose.warn("ui", "⚠️", "No factions available for quests")
 		return
 
 	# Get resources from current biome
@@ -466,4 +469,4 @@ func _offer_initial_quest() -> void:
 	if not quest.is_empty():
 		# Auto-accept first quest for tutorial
 		quest_manager.accept_quest(quest)
-		VerboseConfig.info("ui", "📜", "Initial quest offered: %s - %s" % [quest.get("faction", ""), quest.get("body", "")])
+		_verbose.info("ui", "📜", "Initial quest offered: %s - %s" % [quest.get("faction", ""), quest.get("body", "")])

@@ -1,6 +1,9 @@
 class_name PlotGridDisplay
 extends Control
 
+# Access autoload safely (avoids compile-time errors)
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 ## INPUT CONTRACT (Layer 3 - Mouse Drag Selection)
 ## ═══════════════════════════════════════════════════════════════
 ## PHASE: _input() - Runs after FarmInputHandler
@@ -60,12 +63,12 @@ var time_accumulator: float = 0.0
 
 func _ready():
 	"""Initialize plot grid display with parametric positioning"""
-	VerboseConfig.debug("ui", "🌾", "PlotGridDisplay._ready() called (Instance: %s, child_count before: %d)" % [get_instance_id(), get_child_count()])
+	_verbose.debug("ui", "🌾", "PlotGridDisplay._ready() called (Instance: %s, child_count before: %d)" % [get_instance_id(), get_child_count()])
 
 	# Safety check: if tiles already exist, DON'T recreate them
 	if tiles.size() > 0:
-		VerboseConfig.warn("ui", "⚠️", "WARNING: PlotGridDisplay._ready() called but tiles already exist! tile_count=%d" % tiles.size())
-		VerboseConfig.warn("ui", "", "This suggests _ready() was called multiple times on the same instance!")
+		_verbose.warn("ui", "⚠️", "WARNING: PlotGridDisplay._ready() called but tiles already exist! tile_count=%d" % tiles.size())
+		_verbose.warn("ui", "", "This suggests _ready() was called multiple times on the same instance!")
 		return
 
 	# Configure this Control for absolute positioning
@@ -80,17 +83,17 @@ func _ready():
 	# REFACTORING: Create tiles immediately in _ready()
 	# Dependencies (grid_config, biomes) are injected BEFORE add_child(), so they're available now
 	if grid_config == null:
-		VerboseConfig.warn("ui", "⚠️", "PlotGridDisplay: grid_config is null - will be set later")
+		_verbose.warn("ui", "⚠️", "PlotGridDisplay: grid_config is null - will be set later")
 		return
 	if biomes.is_empty():
-		VerboseConfig.warn("ui", "⚠️", "PlotGridDisplay: biomes is empty - will be set later")
+		_verbose.warn("ui", "⚠️", "PlotGridDisplay: biomes is empty - will be set later")
 		return
 
 	# Calculate positions and create tiles SYNCHRONOUSLY
 	_calculate_parametric_positions()
 	_create_tiles()
 
-	VerboseConfig.info("ui", "✅", "PlotGridDisplay ready - %d tiles created synchronously (child_count after: %d)" % [tiles.size(), get_child_count()])
+	_verbose.info("ui", "✅", "PlotGridDisplay ready - %d tiles created synchronously (child_count after: %d)" % [tiles.size(), get_child_count()])
 
 	# TouchInputManager connection now happens in _create_tiles() after tiles are created
 
@@ -134,8 +137,8 @@ func inject_grid_config(config: GridConfig) -> void:
 			push_error("  - %s" % error)
 		return
 
-	VerboseConfig.info("ui", "💉", "GridConfig injected into PlotGridDisplay")
-	VerboseConfig.debug("ui", "⏳", "Tiles will be created once biomes are injected")
+	_verbose.info("ui", "💉", "GridConfig injected into PlotGridDisplay")
+	_verbose.debug("ui", "⏳", "Tiles will be created once biomes are injected")
 
 
 func inject_layout_calculator(calculator: BiomeLayoutCalculator) -> void:
@@ -145,20 +148,20 @@ func inject_layout_calculator(calculator: BiomeLayoutCalculator) -> void:
 	The calculator instance should come from QuantumForceGraph.layout_calculator.
 	"""
 	layout_calculator = calculator
-	VerboseConfig.info("ui", "💉", "BiomeLayoutCalculator injected into PlotGridDisplay")
+	_verbose.info("ui", "💉", "BiomeLayoutCalculator injected into PlotGridDisplay")
 
 	# If biomes are already injected, calculate positions and create tiles now
 	if not biomes.is_empty() and grid_config and tiles.size() == 0:
-		VerboseConfig.debug("ui", "🎨", "Layout calculator now available - calculating positions...")
+		_verbose.debug("ui", "🎨", "Layout calculator now available - calculating positions...")
 		_calculate_parametric_positions()
 		_create_tiles()
-		VerboseConfig.info("ui", "✅", "Tiles created after layout_calculator injection")
+		_verbose.info("ui", "✅", "Tiles created after layout_calculator injection")
 
 
 func inject_biomes(biomes_dict: Dictionary) -> void:
 	"""Inject biome objects for parametric positioning"""
 	biomes = biomes_dict
-	VerboseConfig.info("ui", "💉", "Biomes injected into PlotGridDisplay (%d biomes)" % biomes.size())
+	_verbose.info("ui", "💉", "Biomes injected into PlotGridDisplay (%d biomes)" % biomes.size())
 
 	# If layout_calculator is already available, calculate positions now
 	# Otherwise, positions will be calculated when inject_layout_calculator() is called
@@ -167,31 +170,31 @@ func inject_biomes(biomes_dict: Dictionary) -> void:
 
 		# Create tiles NOW that we have positions
 		if tiles.size() == 0 and grid_config:
-			VerboseConfig.debug("ui", "🎨", "Creating tiles with parametric positions...")
+			_verbose.debug("ui", "🎨", "Creating tiles with parametric positions...")
 			_create_tiles()
-			VerboseConfig.info("ui", "✅", "Tiles created after biome injection")
+			_verbose.info("ui", "✅", "Tiles created after biome injection")
 	else:
-		VerboseConfig.debug("ui", "⏳", "Waiting for layout_calculator injection before positioning tiles...")
+		_verbose.debug("ui", "⏳", "Waiting for layout_calculator injection before positioning tiles...")
 
 
 func _calculate_parametric_positions() -> void:
 	"""Calculate parametric plot positions using BiomeLayoutCalculator (SINGLE source of truth)"""
 	if not grid_config:
-		VerboseConfig.warn("ui", "⚠️", "PlotGridDisplay: GridConfig not available")
+		_verbose.warn("ui", "⚠️", "PlotGridDisplay: GridConfig not available")
 		return
 
 	if biomes.is_empty():
-		VerboseConfig.warn("ui", "⚠️", "PlotGridDisplay: Biomes not injected yet")
+		_verbose.warn("ui", "⚠️", "PlotGridDisplay: Biomes not injected yet")
 		return
 
 	if not layout_calculator:
 		push_error("PlotGridDisplay: layout_calculator not injected! Call inject_layout_calculator() first.")
 		return
 
-	VerboseConfig.debug("ui", "📐", "Calculating parametric positions (using SHARED BiomeLayoutCalculator)...")
-	VerboseConfig.debug("ui", "", "Grid: %dx%d" % [grid_config.grid_width, grid_config.grid_height])
-	VerboseConfig.debug("ui", "", "Biomes: %d" % biomes.size())
-	VerboseConfig.debug("ui", "", "Using injected layout: graph_center=%s, graph_radius=%.1f" % [
+	_verbose.debug("ui", "📐", "Calculating parametric positions (using SHARED BiomeLayoutCalculator)...")
+	_verbose.debug("ui", "", "Grid: %dx%d" % [grid_config.grid_width, grid_config.grid_height])
+	_verbose.debug("ui", "", "Biomes: %d" % biomes.size())
+	_verbose.debug("ui", "", "Using injected layout: graph_center=%s, graph_radius=%.1f" % [
 		layout_calculator.graph_center, layout_calculator.graph_radius
 	])
 
@@ -215,7 +218,7 @@ func _calculate_parametric_positions() -> void:
 		var oval = layout_calculator.get_biome_oval(biome_name)
 
 		if oval.is_empty():
-			VerboseConfig.warn("ui", "⚠️", "No oval found for biome '%s'" % biome_name)
+			_verbose.warn("ui", "⚠️", "No oval found for biome '%s'" % biome_name)
 			continue
 
 		# Get positions within the biome's oval using biome's method
@@ -228,7 +231,7 @@ func _calculate_parametric_positions() -> void:
 		var semi_b = oval.get("semi_b", 0.0)
 		var viewport_scale = layout_calculator.graph_radius / layout_calculator.BASE_REFERENCE_RADIUS
 
-		VerboseConfig.debug("ui", "🔵", "Biome '%s': %d plots, center=(%.1f, %.1f), semi_a=%.1f, semi_b=%.1f, scale=%.3f" % [
+		_verbose.debug("ui", "🔵", "Biome '%s': %d plots, center=(%.1f, %.1f), semi_a=%.1f, semi_b=%.1f, scale=%.3f" % [
 			biome_name, plot_list.size(), biome_center.x, biome_center.y, semi_a, semi_b, viewport_scale
 		])
 
@@ -238,7 +241,7 @@ func _calculate_parametric_positions() -> void:
 			viewport_scale
 		)
 
-		VerboseConfig.debug("ui", "", "→ Got %d positions from biome" % plot_positions.size())
+		_verbose.debug("ui", "", "→ Got %d positions from biome" % plot_positions.size())
 
 		# Assign positions to plots (in grid order)
 		for i in range(plot_list.size()):
@@ -247,31 +250,31 @@ func _calculate_parametric_positions() -> void:
 				# Store position directly (no offset - tiles are centered via tile.position calculation)
 				classical_plot_positions[plot_list[i]] = screen_pos
 
-	VerboseConfig.info("ui", "✅", "PlotGridDisplay: Calculated %d parametric plot positions" % classical_plot_positions.size())
+	_verbose.info("ui", "✅", "PlotGridDisplay: Calculated %d parametric plot positions" % classical_plot_positions.size())
 	if classical_plot_positions.size() > 0:
 		for key in classical_plot_positions.keys().slice(0, 3):
-			VerboseConfig.debug("ui", "", "%s → %s" % [key, classical_plot_positions[key]])
+			_verbose.debug("ui", "", "%s → %s" % [key, classical_plot_positions[key]])
 
 
 func _create_tiles() -> void:
 	"""Create plot tiles with parametric positioning around biomes"""
 	# Guard: Don't create tiles if they already exist
 	if tiles.size() > 0:
-		VerboseConfig.warn("ui", "⚠️", "PlotGridDisplay._create_tiles(): Tiles already exist (%d), skipping" % tiles.size())
+		_verbose.warn("ui", "⚠️", "PlotGridDisplay._create_tiles(): Tiles already exist (%d), skipping" % tiles.size())
 		return
 
 	if not grid_config:
-		VerboseConfig.warn("ui", "⚠️", "PlotGridDisplay._create_tiles(): GridConfig not available")
+		_verbose.warn("ui", "⚠️", "PlotGridDisplay._create_tiles(): GridConfig not available")
 		return
 
 	# Get all active plots
 	var active_plots = grid_config.get_all_active_plots()
-	VerboseConfig.debug("ui", "🌾", "Creating %d plot tiles with parametric positioning..." % active_plots.size())
-	VerboseConfig.debug("ui", "📍", "Classical positions available: %d" % classical_plot_positions.size())
-	VerboseConfig.debug("ui", "🔷", "Biomes available: %d" % biomes.size())
-	VerboseConfig.debug("ui", "📏", "PlotGridDisplay size: %s" % size)
-	VerboseConfig.debug("ui", "📍", "PlotGridDisplay global_position: %s" % global_position)
-	VerboseConfig.debug("ui", "📍", "PlotGridDisplay position: %s" % position)
+	_verbose.debug("ui", "🌾", "Creating %d plot tiles with parametric positioning..." % active_plots.size())
+	_verbose.debug("ui", "📍", "Classical positions available: %d" % classical_plot_positions.size())
+	_verbose.debug("ui", "🔷", "Biomes available: %d" % biomes.size())
+	_verbose.debug("ui", "📏", "PlotGridDisplay size: %s" % size)
+	_verbose.debug("ui", "📍", "PlotGridDisplay global_position: %s" % global_position)
+	_verbose.debug("ui", "📍", "PlotGridDisplay position: %s" % position)
 
 	var positioned_count = 0
 	var fallback_count = 0
@@ -279,7 +282,7 @@ func _create_tiles() -> void:
 	for plot_config in active_plots:
 		var pos = plot_config.position
 		if positioned_count < 3:
-			VerboseConfig.debug("ui", "🔍", "Checking plot at %s - in positions? %s" % [pos, classical_plot_positions.has(pos)])
+			_verbose.debug("ui", "🔍", "Checking plot at %s - in positions? %s" % [pos, classical_plot_positions.has(pos)])
 
 		# Create tile
 		var tile = PlotTile.new()
@@ -306,17 +309,17 @@ func _create_tiles() -> void:
 			tile.position = local_pos - tile.custom_minimum_size / 2
 			positioned_count += 1
 			if positioned_count <= 3:  # Only log first 3
-				VerboseConfig.debug("ui", "📍", "Tile grid %s → screen (%.1f, %.1f) → local (%.1f, %.1f) → final (%.1f, %.1f)" % [
+				_verbose.debug("ui", "📍", "Tile grid %s → screen (%.1f, %.1f) → local (%.1f, %.1f) → final (%.1f, %.1f)" % [
 					pos, screen_pos.x, screen_pos.y, local_pos.x, local_pos.y,
 					tile.position.x, tile.position.y
 				])
-				VerboseConfig.debug("ui", "", "PlotGridDisplay global_transform.origin: %s" % get_global_transform().origin)
+				_verbose.debug("ui", "", "PlotGridDisplay global_transform.origin: %s" % get_global_transform().origin)
 		else:
 			# Fallback: position in a temporary grid at origin
 			# This shouldn't happen if biomes are properly injected
 			fallback_count += 1
-			VerboseConfig.warn("ui", "⚠️", "Tile at grid %s NOT in classical_plot_positions!" % [pos])
-			VerboseConfig.debug("ui", "", "Available positions: %s" % classical_plot_positions.keys())
+			_verbose.warn("ui", "⚠️", "Tile at grid %s NOT in classical_plot_positions!" % [pos])
+			_verbose.debug("ui", "", "Available positions: %s" % classical_plot_positions.keys())
 
 		add_child(tile)
 		tiles[pos] = tile
@@ -327,14 +330,14 @@ func _create_tiles() -> void:
 			tile.set_label_text(label)
 
 	if positioned_count > 3:
-		VerboseConfig.debug("ui", "📍", "... and %d more tiles positioned parametrically" % (positioned_count - 3))
+		_verbose.debug("ui", "📍", "... and %d more tiles positioned parametrically" % (positioned_count - 3))
 
-	VerboseConfig.info("ui", "✅", "Created %d plot tiles: %d positioned parametrically, %d without positions" % [tiles.size(), positioned_count, fallback_count])
+	_verbose.info("ui", "✅", "Created %d plot tiles: %d positioned parametrically, %d without positions" % [tiles.size(), positioned_count, fallback_count])
 
 	# Connect to TouchInputManager for touch selection (do it here after tiles are created)
 	if TouchInputManager and not TouchInputManager.tap_detected.is_connected(_on_touch_tap):
 		TouchInputManager.tap_detected.connect(_on_touch_tap)
-		VerboseConfig.info("ui", "✅", "Touch: Tap-to-select connected (PlotGridDisplay → TouchInputManager.tap_detected)")
+		_verbose.info("ui", "✅", "Touch: Tap-to-select connected (PlotGridDisplay → TouchInputManager.tap_detected)")
 
 
 func inject_farm(farm_ref: Node) -> void:
@@ -353,29 +356,29 @@ func inject_farm(farm_ref: Node) -> void:
 	if farm.has_signal("plot_planted"):
 		if not farm.plot_planted.is_connected(_on_farm_plot_planted):
 			farm.plot_planted.connect(_on_farm_plot_planted)
-			VerboseConfig.debug("ui", "📡", "Connected to farm.plot_planted")
+			_verbose.debug("ui", "📡", "Connected to farm.plot_planted")
 	if farm.has_signal("plot_measured"):
 		if not farm.plot_measured.is_connected(_on_farm_plot_measured):
 			farm.plot_measured.connect(_on_farm_plot_measured)
-			VerboseConfig.debug("ui", "📡", "Connected to farm.plot_measured")
+			_verbose.debug("ui", "📡", "Connected to farm.plot_measured")
 	if farm.has_signal("plot_harvested"):
 		if not farm.plot_harvested.is_connected(_on_farm_plot_harvested):
 			farm.plot_harvested.connect(_on_farm_plot_harvested)
-			VerboseConfig.debug("ui", "📡", "Connected to farm.plot_harvested")
+			_verbose.debug("ui", "📡", "Connected to farm.plot_harvested")
 
 	# Connect to entanglement signals from FarmGrid
 	if farm.grid and farm.grid.has_signal("entanglement_created"):
 		if not farm.grid.entanglement_created.is_connected(_on_entanglement_created):
 			farm.grid.entanglement_created.connect(_on_entanglement_created)
-			VerboseConfig.debug("ui", "📡", "Connected to farm.grid.entanglement_created")
+			_verbose.debug("ui", "📡", "Connected to farm.grid.entanglement_created")
 
 	# Connect to visualization_changed signal for gate/entanglement redraws
 	if farm.grid and farm.grid.has_signal("visualization_changed"):
 		if not farm.grid.visualization_changed.is_connected(queue_redraw):
 			farm.grid.visualization_changed.connect(queue_redraw)
-			VerboseConfig.debug("ui", "📡", "Connected to farm.grid.visualization_changed")
+			_verbose.debug("ui", "📡", "Connected to farm.grid.visualization_changed")
 
-	VerboseConfig.info("ui", "💉", "Farm injected into PlotGridDisplay")
+	_verbose.info("ui", "💉", "Farm injected into PlotGridDisplay")
 
 
 func rebuild_from_grid() -> void:
@@ -384,7 +387,7 @@ func rebuild_from_grid() -> void:
 	Called by GameStateManager.apply_state_to_game() to rebuild UI from simulation.
 	This clears old tiles and recreates them based on current grid_config and farm state.
 	"""
-	VerboseConfig.info("ui", "🔄", "PlotGridDisplay: Rebuilding from grid configuration...")
+	_verbose.info("ui", "🔄", "PlotGridDisplay: Rebuilding from grid configuration...")
 
 	# Clear existing tiles
 	for tile in tiles.values():
@@ -401,9 +404,9 @@ func rebuild_from_grid() -> void:
 			for pos in tiles.keys():
 				update_tile_from_farm(pos)
 
-			VerboseConfig.info("ui", "✅", "PlotGridDisplay rebuilt: %d tiles recreated and synced with farm" % tiles.size())
+			_verbose.info("ui", "✅", "PlotGridDisplay rebuilt: %d tiles recreated and synced with farm" % tiles.size())
 	else:
-		VerboseConfig.warn("ui", "⚠️", "PlotGridDisplay rebuild incomplete: grid_config=%s, biomes=%d" % [
+		_verbose.warn("ui", "⚠️", "PlotGridDisplay rebuild incomplete: grid_config=%s, biomes=%d" % [
 			"available" if grid_config else "null",
 			biomes.size()
 		])
@@ -412,7 +415,7 @@ func rebuild_from_grid() -> void:
 func inject_ui_controller(controller: Node) -> void:
 	"""Inject UI controller for callbacks"""
 	ui_controller = controller
-	VerboseConfig.debug("ui", "📡", "UI controller injected into PlotGridDisplay")
+	_verbose.debug("ui", "📡", "UI controller injected into PlotGridDisplay")
 
 
 func wire_to_farm(farm_ref: Node) -> void:
@@ -422,7 +425,7 @@ func wire_to_farm(farm_ref: Node) -> void:
 	Called by FarmUIController during farm injection phase.
 	"""
 	inject_farm(farm_ref)
-	VerboseConfig.debug("ui", "📡", "PlotGridDisplay wired to farm")
+	_verbose.debug("ui", "📡", "PlotGridDisplay wired to farm")
 
 
 func set_selected_plot(pos: Vector2i) -> void:
@@ -435,7 +438,7 @@ func set_selected_plot(pos: Vector2i) -> void:
 	if tiles.has(pos):
 		current_selection = pos
 		tiles[pos].set_selected(true)
-		VerboseConfig.debug("ui", "🎯", "Selected plot: %s" % pos)
+		_verbose.debug("ui", "🎯", "Selected plot: %s" % pos)
 
 
 func update_tile_from_farm(pos: Vector2i) -> void:
@@ -444,17 +447,17 @@ func update_tile_from_farm(pos: Vector2i) -> void:
 	Transforms farm plot state into PlotUIData inline (no FarmUIState layer).
 	"""
 	if not tiles.has(pos):
-		VerboseConfig.debug("ui", "✗", "update_tile_from_farm(%s): tile not found!" % pos)
+		_verbose.debug("ui", "✗", "update_tile_from_farm(%s): tile not found!" % pos)
 		return
 
 	if not farm:
-		VerboseConfig.debug("ui", "✗", "update_tile_from_farm(%s): farm is null!" % pos)
+		_verbose.debug("ui", "✗", "update_tile_from_farm(%s): farm is null!" % pos)
 		var tile = tiles[pos]
 		tile.set_plot_data(null, pos, -1)
 		return
 
 	if not farm.grid:
-		VerboseConfig.debug("ui", "✗", "update_tile_from_farm(%s): farm.grid is null!" % pos)
+		_verbose.debug("ui", "✗", "update_tile_from_farm(%s): farm.grid is null!" % pos)
 		var tile = tiles[pos]
 		tile.set_plot_data(null, pos, -1)
 		return
@@ -462,17 +465,17 @@ func update_tile_from_farm(pos: Vector2i) -> void:
 	var plot = farm.grid.get_plot(pos)
 	if not plot:
 		# Empty plot
-		VerboseConfig.debug("ui", "⚠️", "update_tile_from_farm(%s): plot is null/empty" % pos)
+		_verbose.debug("ui", "⚠️", "update_tile_from_farm(%s): plot is null/empty" % pos)
 		var tile = tiles[pos]
 		tile.set_plot_data(null, pos, -1)
 		return
 
 	# Transform plot → PlotUIData inline
-	VerboseConfig.debug("ui", "✓", "update_tile_from_farm(%s): found plot, transforming data..." % pos)
+	_verbose.debug("ui", "✓", "update_tile_from_farm(%s): found plot, transforming data..." % pos)
 	var ui_data = _transform_plot_to_ui_data(pos, plot)
 	var tile = tiles[pos]
 	tile.set_plot_data(ui_data, pos, -1)
-	VerboseConfig.debug("ui", "🌾", "PlotGridDisplay updating tile for plot %s" % pos)
+	_verbose.debug("ui", "🌾", "PlotGridDisplay updating tile for plot %s" % pos)
 
 
 ## PHASE 4: PLOT TRANSFORMATION HELPER
@@ -552,10 +555,10 @@ func _get_plot_type_string(plot_type_enum: int) -> String:
 
 func refresh_all_tiles() -> void:
 	"""Refresh all tiles from current farm state (used after save/load)"""
-	VerboseConfig.info("ui", "🔄", "PlotGridDisplay: Refreshing all tiles...")
+	_verbose.info("ui", "🔄", "PlotGridDisplay: Refreshing all tiles...")
 	for pos in tiles.keys():
 		update_tile_from_farm(pos)
-	VerboseConfig.info("ui", "✅", "PlotGridDisplay: All %d tiles refreshed" % tiles.size())
+	_verbose.info("ui", "✅", "PlotGridDisplay: All %d tiles refreshed" % tiles.size())
 
 
 func _on_tile_clicked(pos: Vector2i) -> void:
@@ -563,10 +566,10 @@ func _on_tile_clicked(pos: Vector2i) -> void:
 	# Skip if we just completed a multi-plot drag (prevents double-select)
 	if _skip_next_click:
 		_skip_next_click = false
-		VerboseConfig.debug("ui", "🖱️", "Click skipped (multi-drag just completed)")
+		_verbose.debug("ui", "🖱️", "Click skipped (multi-drag just completed)")
 		return
 
-	VerboseConfig.debug("ui", "🖱️", "Plot tile clicked: %s" % pos)
+	_verbose.debug("ui", "🖱️", "Plot tile clicked: %s" % pos)
 	toggle_plot_selection(pos)  # Multi-select toggle like keyboard
 
 	# Notify controllers
@@ -578,25 +581,25 @@ func _on_tile_clicked(pos: Vector2i) -> void:
 
 func _on_farm_plot_planted(pos: Vector2i, plant_type: String) -> void:
 	"""Handle plot planted event from farm - PHASE 4: Direct signal"""
-	VerboseConfig.debug("ui", "🌱", "Farm.plot_planted received at PlotGridDisplay")
+	_verbose.debug("ui", "🌱", "Farm.plot_planted received at PlotGridDisplay")
 	update_tile_from_farm(pos)
 
 
 func _on_farm_plot_measured(pos: Vector2i, outcome: String) -> void:
 	"""Handle plot measured event from farm - update tile to show collapsed emoji"""
-	VerboseConfig.debug("ui", "👁️", "Farm.plot_measured received at PlotGridDisplay: %s → %s" % [pos, outcome])
+	_verbose.debug("ui", "👁️", "Farm.plot_measured received at PlotGridDisplay: %s → %s" % [pos, outcome])
 	update_tile_from_farm(pos)
 
 
 func _on_farm_plot_harvested(pos: Vector2i, yield_data: Dictionary) -> void:
 	"""Handle plot harvested event from farm - PHASE 4: Direct signal"""
-	VerboseConfig.debug("ui", "✂️", "Farm.plot_harvested received at PlotGridDisplay")
+	_verbose.debug("ui", "✂️", "Farm.plot_harvested received at PlotGridDisplay")
 	update_tile_from_farm(pos)
 
 
 func _on_entanglement_created(pos_a: Vector2i, pos_b: Vector2i) -> void:
 	"""Handle entanglement created event - update both tiles to show entanglement ring"""
-	VerboseConfig.debug("ui", "🔗", "Entanglement created: %s ↔ %s - updating tiles" % [pos_a, pos_b])
+	_verbose.debug("ui", "🔗", "Entanglement created: %s ↔ %s - updating tiles" % [pos_a, pos_b])
 	update_tile_from_farm(pos_a)
 	update_tile_from_farm(pos_b)
 	queue_redraw()  # Trigger connection line drawing immediately
@@ -621,7 +624,7 @@ func select_plot_by_key(action: String) -> void:
 	if ui_controller and ui_controller.has_method("on_plot_selected"):
 		ui_controller.on_plot_selected(pos)
 
-	VerboseConfig.debug("ui", "⌨️", "Selected plot %s via keyboard action %s" % [pos, action])
+	_verbose.debug("ui", "⌨️", "Selected plot %s via keyboard action %s" % [pos, action])
 
 
 ## MULTI-SELECT SUPPORT (NEW)
@@ -629,11 +632,11 @@ func select_plot_by_key(action: String) -> void:
 func toggle_plot_selection(pos: Vector2i) -> void:
 	"""Toggle a plot in the multi-select group (NEW)"""
 	if not tiles.has(pos):
-		VerboseConfig.warn("ui", "⚠️", "Invalid plot position: %s" % pos)
+		_verbose.warn("ui", "⚠️", "Invalid plot position: %s" % pos)
 		return
 
 	if not tiles[pos]:
-		VerboseConfig.warn("ui", "⚠️", "Tile at %s not found!" % pos)
+		_verbose.warn("ui", "⚠️", "Tile at %s not found!" % pos)
 		return
 
 	# Save state before toggling (for ] restoration)
@@ -651,7 +654,7 @@ func toggle_plot_selection(pos: Vector2i) -> void:
 	# Update visual
 	tiles[pos].set_checkbox_selected(now_selected)
 
-	VerboseConfig.debug("ui", "☑️", "Plot %s %s (total selected: %d)" % [pos, "selected" if now_selected else "deselected", selected_plots.size()])
+	_verbose.debug("ui", "☑️", "Plot %s %s (total selected: %d)" % [pos, "selected" if now_selected else "deselected", selected_plots.size()])
 	selection_count_changed.emit(selected_plots.size())
 
 
@@ -663,7 +666,7 @@ func clear_all_selection() -> void:
 	for pos in tiles.keys():
 		tiles[pos].set_checkbox_selected(false)
 
-	VerboseConfig.debug("ui", "🗑️", "All selections cleared")
+	_verbose.debug("ui", "🗑️", "All selections cleared")
 	selection_count_changed.emit(0)
 
 
@@ -730,29 +733,29 @@ func _input(event: InputEvent) -> void:
 		if event.device == -1:
 			# device == -1 means real mouse (not touch-generated)
 			if event.button_index == MOUSE_BUTTON_LEFT:
-				VerboseConfig.debug("ui", "🎯", "PlotGridDisplay._input: Mouse click at %s" % event.global_position)
+				_verbose.debug("ui", "🎯", "PlotGridDisplay._input: Mouse click at %s" % event.global_position)
 				var plot_pos = _get_plot_at_screen_position(event.global_position)
-				VerboseConfig.debug("ui", "", "Plot at position: %s" % plot_pos)
+				_verbose.debug("ui", "", "Plot at position: %s" % plot_pos)
 				if event.pressed:
 					# Start drag if over a plot
 					if plot_pos != Vector2i(-1, -1):
 						_start_drag(plot_pos)
 						# CRITICAL: Mark event as handled so quantum bubbles don't also respond
 						get_viewport().set_input_as_handled()
-						VerboseConfig.debug("ui", "✅", "Consumed by PlotGridDisplay (plot click)")
+						_verbose.debug("ui", "✅", "Consumed by PlotGridDisplay (plot click)")
 					else:
 						# NOT over a plot - let event pass to quantum bubbles
-						VerboseConfig.debug("ui", "⏩", "Forwarding to _unhandled_input (not on plot)")
+						_verbose.debug("ui", "⏩", "Forwarding to _unhandled_input (not on plot)")
 						# Don't return, don't consume - let it flow naturally
 				else:
 					# End drag
 					if is_dragging:
 						_end_drag()
 						get_viewport().set_input_as_handled()
-						VerboseConfig.debug("ui", "✅", "Consumed by PlotGridDisplay (drag end)")
+						_verbose.debug("ui", "✅", "Consumed by PlotGridDisplay (drag end)")
 		else:
 			# Touch-generated mouse event - ignore, let TouchInputManager handle it
-			VerboseConfig.debug("ui", "🎯", "PlotGridDisplay._input: Touch-generated mouse event (device=%d) - ignoring for TouchInputManager" % event.device)
+			_verbose.debug("ui", "🎯", "PlotGridDisplay._input: Touch-generated mouse event (device=%d) - ignoring for TouchInputManager" % event.device)
 
 	elif event is InputEventMouseMotion:
 		if is_dragging:
@@ -777,17 +780,17 @@ func _on_touch_tap(position: Vector2) -> void:
 	PHASE 2 FIX: Implements spatial hierarchy by consuming taps on plots.
 	If tap is on a plot, consume it so bubbles don't also process it.
 	"""
-	VerboseConfig.debug("ui", "🎯", "PlotGridDisplay._on_touch_tap received! Position: %s" % position)
+	_verbose.debug("ui", "🎯", "PlotGridDisplay._on_touch_tap received! Position: %s" % position)
 	var plot_pos = _get_plot_at_screen_position(position)
-	VerboseConfig.debug("ui", "", "Converted to plot grid position: %s" % plot_pos)
+	_verbose.debug("ui", "", "Converted to plot grid position: %s" % plot_pos)
 	if plot_pos != Vector2i(-1, -1):
 		# FOUND PLOT: Toggle checkbox and consume tap (don't let bubbles process it)
 		toggle_plot_selection(plot_pos)
 		TouchInputManager.consume_current_tap()
-		VerboseConfig.debug("ui", "✅", "Plot checkbox toggled via touch tap: %s (tap CONSUMED)" % plot_pos)
+		_verbose.debug("ui", "✅", "Plot checkbox toggled via touch tap: %s (tap CONSUMED)" % plot_pos)
 	else:
 		# NO PLOT: Let tap pass through to bubble detection
-		VerboseConfig.debug("ui", "⏩", "Touch tap at %s - no plot found, passing to bubble detection" % position)
+		_verbose.debug("ui", "⏩", "Touch tap at %s - no plot found, passing to bubble detection" % position)
 
 
 func _start_drag(pos: Vector2i) -> void:
@@ -797,7 +800,7 @@ func _start_drag(pos: Vector2i) -> void:
 	drag_start_pos = pos
 	# First plot in drag is automatically included
 	drag_plots[pos] = true
-	VerboseConfig.debug("ui", "📱", "Drag started at %s" % pos)
+	_verbose.debug("ui", "📱", "Drag started at %s" % pos)
 
 
 func _drag_over_plot(pos: Vector2i) -> void:
@@ -807,7 +810,7 @@ func _drag_over_plot(pos: Vector2i) -> void:
 		# Visual feedback - immediately toggle during drag
 		if tiles.has(pos):
 			tiles[pos].set_checkbox_selected(true)
-		VerboseConfig.debug("ui", "📱", "Drag over %s (total: %d plots)" % [pos, drag_plots.size()])
+		_verbose.debug("ui", "📱", "Drag over %s (total: %d plots)" % [pos, drag_plots.size()])
 
 
 func _end_drag() -> void:
@@ -827,7 +830,7 @@ func _end_drag() -> void:
 	previous_selection = selected_plots.duplicate()
 
 	# Toggle all dragged plots
-	VerboseConfig.debug("ui", "📱", "Drag ended - selecting %d plots: %s" % [drag_plots.size(), drag_plots.keys()])
+	_verbose.debug("ui", "📱", "Drag ended - selecting %d plots: %s" % [drag_plots.size(), drag_plots.keys()])
 	for pos in drag_plots.keys():
 		if not selected_plots.has(pos):
 			selected_plots[pos] = true

@@ -51,7 +51,7 @@ func get_plot_emojis() -> Dictionary:
 	"""Get the dual-emoji pair for this plot type"""
 	match plot_type:
 		PlotType.WHEAT:
-			return {"north": "🌾", "south": "👥"}  # Wheat ↔ Labor (agriculture)
+			return {"north": "🌾", "south": "🍄"}  # Wheat ↔ Mushroom (BioticFlux Flora axis)
 		PlotType.TOMATO:
 			return {"north": "🍅", "south": "🌌"}  # Tomato ↔ Cosmic Chaos (counter-axial: life vs entropy)
 		PlotType.MUSHROOM:

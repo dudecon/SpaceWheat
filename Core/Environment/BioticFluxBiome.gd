@@ -61,9 +61,11 @@ func _ready():
 	# which calls our _initialize_bath_biotic_flux() override
 
 	# Register emoji pairings for this biome (uses BiomeBase system)
-	register_emoji_pair("🌾", "👥")  # Wheat ↔ People (agrarian/imperium axis)
-	register_emoji_pair("🍄", "🍂")  # Mushroom ↔ Autumn leaves (moon-influenced)
-	register_emoji_pair("☀️", "🌑")  # Sun ↔ Moon
+	# Must align with quantum_computer axes: ☀/🌙, 🌾/🍄, 🍂/💀
+	register_emoji_pair("🌾", "🍄")  # Wheat ↔ Mushroom (Flora axis - qubit 1)
+	register_emoji_pair("🍄", "🍂")  # Mushroom ↔ Detritus (for mushroom plots)
+	register_emoji_pair("☀", "🌙")   # Sun ↔ Moon (Celestial axis - qubit 0)
+	register_emoji_pair("🍂", "💀")  # Detritus ↔ Death (Matter axis - qubit 2)
 
 	# Configure visual properties for QuantumForceGraph
 	# Layout: BioticFlux (UIOP) in bottom-center

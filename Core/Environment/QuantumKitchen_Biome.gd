@@ -60,7 +60,10 @@ func _ready():
 	super._ready()
 
 	# Register emoji pairings for this biome (uses BiomeBase system)
-	register_emoji_pair("🔥", "❄️")  # Hot ↔ Cold
+	# Must align with quantum_computer axes: 🔥/❄️, 💧/🏜️, 💨/🌾
+	register_emoji_pair("🔥", "❄️")  # Hot ↔ Cold (axis 0)
+	register_emoji_pair("💧", "🏜️")  # Wet ↔ Dry (axis 1)
+	register_emoji_pair("💨", "🌾")  # Flour ↔ Wheat (axis 2)
 	register_resource("🍞", true, false)  # Bread is producible
 
 	# Configure visual properties for QuantumForceGraph
@@ -133,15 +136,16 @@ func _initialize_bath_kitchen() -> void:
 	# Create QuantumComputer with RegisterMap
 	quantum_computer = QuantumComputer.new("Kitchen")
 
-	# Allocate 2 qubits with emoji axes
+	# Allocate 3 qubits with emoji axes (full kitchen system)
 	quantum_computer.allocate_axis(0, "🔥", "❄️")  # Oven: Hot/Cold
-	quantum_computer.allocate_axis(1, "🍞", "🌾")  # Product: Bread/Wheat
+	quantum_computer.allocate_axis(1, "💧", "🏜️")  # Moisture: Wet/Dry
+	quantum_computer.allocate_axis(2, "💨", "🌾")  # Substance: Flour/Wheat
 
-	# Initialize to |01⟩ = 🔥🌾 (hot oven, wheat ready to bake)
-	# Basis index: qubit0=0 (🔥), qubit1=1 (🌾) → binary 01 = 1
-	quantum_computer.initialize_basis(1)
+	# Initialize to |010⟩ = 🔥🏜️🌾 (hot oven, dry, wheat ready)
+	# Basis index: qubit0=0 (🔥), qubit1=1 (🏜️), qubit2=1 (🌾) → binary 011 = 3
+	quantum_computer.initialize_basis(3)
 
-	print("  📊 RegisterMap configured (2 qubits, 4 basis states)")
+	print("  📊 RegisterMap configured (3 qubits, 8 basis states)")
 
 	# Get Icons from IconRegistry
 	var icon_registry = get_node_or_null("/root/IconRegistry")
@@ -149,7 +153,7 @@ func _initialize_bath_kitchen() -> void:
 		push_error("🍳 IconRegistry not available!")
 		return
 
-	var icon_emojis = ["🔥", "❄️", "🍞", "🌾"]
+	var icon_emojis = ["🔥", "❄️", "💧", "🏜️", "💨", "🌾"]
 	var icons = {}
 
 	for emoji in icon_emojis:
@@ -204,7 +208,7 @@ func rebuild_quantum_operators() -> void:
 		push_warning("🍳 IconRegistry not available for Kitchen rebuild!")
 		return
 
-	var icon_emojis = ["🔥", "❄️", "🍞", "🌾"]
+	var icon_emojis = ["🔥", "❄️", "💧", "🏜️", "💨", "🌾"]
 	var icons = {}
 
 	for emoji in icon_emojis:

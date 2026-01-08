@@ -17,9 +17,9 @@ config/features=PackedStringArray("4.5")
 
 [autoload]
 
+VerboseConfig="*res://Core/Config/VerboseConfig.gd"
 BootManager="*res://Core/Boot/BootManager.gd"
 IconRegistry="*res://Core/QuantumSubstrate/IconRegistry.gd"
-VerboseConfig="*res://Core/Config/VerboseConfig.gd"
 GameStateManager="*res://Core/GameState/GameStateManager.gd"
 TouchInputManager="*res://UI/Input/TouchInputManager.gd"
 

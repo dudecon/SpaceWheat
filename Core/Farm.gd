@@ -44,6 +44,14 @@ var biotic_icon = null
 var chaos_icon = null
 var imperium_icon = null
 
+# PERFORMANCE: Cached mushroom count (avoid O(n) iteration every frame)
+var _cached_mushroom_count: int = 0
+var _mushroom_count_dirty: bool = true  # Set true when plots change
+
+func invalidate_mushroom_cache() -> void:
+	"""Call when plots are planted/harvested to recalculate mushroom count on next frame"""
+	_mushroom_count_dirty = true
+
 # Configuration
 
 # Biome availability (may fail to load if icon dependencies are missing)
@@ -232,6 +240,10 @@ func _ready():
 	grid = FarmGrid.new()
 	grid.grid_width = grid_config.grid_width
 	grid.grid_height = grid_config.grid_height
+
+	# PERFORMANCE: Connect grid signals to invalidate mushroom cache
+	grid.plot_planted.connect(func(_pos): invalidate_mushroom_cache())
+	grid.plot_harvested.connect(func(_pos, _data): invalidate_mushroom_cache())
 
 	# Connect economy to grid for mill/market/kitchen flour & bread processing
 	grid.farm_economy = economy
@@ -435,15 +447,17 @@ func _process_mushroom_composting(delta: float):
 	if not economy or not grid:
 		return
 
-	# Count planted mushrooms to determine composting power
-	var mushroom_count = 0
-	for y in range(grid.grid_height):
-		for x in range(grid.grid_width):
-			var plot = grid.get_plot(Vector2i(x, y))
-			if plot and plot.is_planted and plot.plot_type == FarmPlot.PlotType.MUSHROOM:
-				mushroom_count += 1
+	# PERFORMANCE: Use cached mushroom count instead of iterating every frame
+	if _mushroom_count_dirty:
+		_cached_mushroom_count = 0
+		for y in range(grid.grid_height):
+			for x in range(grid.grid_width):
+				var plot = grid.get_plot(Vector2i(x, y))
+				if plot and plot.is_planted and plot.plot_type == FarmPlot.PlotType.MUSHROOM:
+					_cached_mushroom_count += 1
+		_mushroom_count_dirty = false
 
-	if mushroom_count == 0:
+	if _cached_mushroom_count == 0:
 		return  # No composting without mushrooms
 
 	# Only compost if we have detritus
@@ -456,7 +470,7 @@ func _process_mushroom_composting(delta: float):
 	const COMPOSTING_RATIO = 0.5  # 2 detritus → 1 mushroom
 
 	# Calculate composting power (scales with mushroom count)
-	var activation = min(1.0, float(mushroom_count) / 4.0)  # Full power at 4 mushrooms
+	var activation = min(1.0, float(_cached_mushroom_count) / 4.0)  # Full power at 4 mushrooms
 	var detritus_per_frame = COMPOSTING_RATE * activation * delta
 
 	# Accumulate fractional detritus
@@ -484,7 +498,7 @@ func _process_mushroom_composting(delta: float):
 			set_meta("composting_accumulator", accumulator - detritus_consumed)
 
 			if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_ECONOMY") == "1":
-				print("🍄 Composting: %d 🍂 → %d 🍄 (%.1f%% activation, %d mushrooms planted)" % [detritus_consumed, mushrooms_produced, activation * 100, mushroom_count])
+				print("🍄 Composting: %d 🍂 → %d 🍄 (%.1f%% activation, %d mushrooms planted)" % [detritus_consumed, mushrooms_produced, activation * 100, _cached_mushroom_count])
 		else:
 			# Conversion failed, keep accumulator for next frame
 			set_meta("composting_accumulator", accumulator)

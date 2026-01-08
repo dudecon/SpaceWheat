@@ -14,47 +14,51 @@ var shell = null  # PlayerShell (from scene)
 var farm: Node = null
 var quantum_viz: BathQuantumViz = null
 
+# Helpers to access autoloads safely (avoids compile-time errors in tests)
+@onready var _verbose = get_node("/root/VerboseConfig")
+@onready var _boot_mgr = get_node("/root/BootManager")
+@onready var _game_state = get_node("/root/GameStateManager")
+
 
 func _ready() -> void:
 	"""Initialize: create farm and shell, wire them together"""
-	VerboseConfig.info("ui", "🌾", "FarmView starting...")
+	_verbose.info("ui", "🌾", "FarmView starting...")
 
 	# DEBUG: Check if FarmView is properly sized
-	VerboseConfig.debug("ui", "📏", "FarmView size: %.0f × %.0f" % [size.x, size.y])
-	VerboseConfig.debug("ui", "", "FarmView anchors: L%.1f T%.1f R%.1f B%.1f" % [anchor_left, anchor_top, anchor_right, anchor_bottom])
-	VerboseConfig.debug("ui", "", "Viewport: %.0f × %.0f" % [get_viewport_rect().size.x, get_viewport_rect().size.y])
+	_verbose.debug("ui", "📏", "FarmView size: %.0f × %.0f" % [size.x, size.y])
+	_verbose.debug("ui", "", "FarmView anchors: L%.1f T%.1f R%.1f B%.1f" % [anchor_left, anchor_top, anchor_right, anchor_bottom])
+	_verbose.debug("ui", "", "Viewport: %.0f × %.0f" % [get_viewport_rect().size.x, get_viewport_rect().size.y])
 
 	# Load PlayerShell scene
-	VerboseConfig.debug("ui", "🎪", "Loading player shell scene...")
+	_verbose.debug("ui", "🎪", "Loading player shell scene...")
 	var shell_scene = load("res://UI/PlayerShell.tscn")
 	if shell_scene:
 		shell = shell_scene.instantiate()
 		add_child(shell)
-		VerboseConfig.info("ui", "✅", "Player shell loaded and added to tree")
+		_verbose.info("ui", "✅", "Player shell loaded and added to tree")
 	else:
-		VerboseConfig.warn("ui", "❌", "PlayerShell.tscn not found!")
+		_verbose.warn("ui", "❌", "PlayerShell.tscn not found!")
 		return
 
 	# Create farm (synchronous)
-	VerboseConfig.info("farm", "📝", "Creating farm...")
+	_verbose.info("farm", "📝", "Creating farm...")
 	farm = Farm.new()
 	add_child(farm)
-	VerboseConfig.info("farm", "✅", "Farm created and added to tree")
+	_verbose.info("farm", "✅", "Farm created and added to tree")
 
 	# Register farm with GameStateManager for save/load (if available)
-	var game_state_mgr = get_node_or_null("/root/GameStateManager")
-	if game_state_mgr:
-		game_state_mgr.active_farm = farm
-		VerboseConfig.info("farm", "✅", "Farm registered with GameStateManager")
+	if _game_state:
+		_game_state.active_farm = farm
+		_verbose.info("farm", "✅", "Farm registered with GameStateManager")
 	else:
-		VerboseConfig.warn("farm", "⚠️", "GameStateManager not available (test mode)")
+		_verbose.warn("farm", "⚠️", "GameStateManager not available (test mode)")
 
 	# Wait for farm._ready() to complete
 	await get_tree().process_frame
 	await get_tree().process_frame
 
 	# Create quantum visualization
-	VerboseConfig.debug("ui", "🛁", "Creating bath-first quantum visualization...")
+	_verbose.debug("ui", "🛁", "Creating bath-first quantum visualization...")
 	quantum_viz = BathQuantumViz.new()
 
 	# Add to same CanvasLayer as UI (layer 0) so we can control z_index
@@ -80,9 +84,9 @@ func _ready() -> void:
 	# ═══════════════════════════════════════════════════════════════════════
 	# CLEAN BOOT SEQUENCE - Explicit multi-phase initialization
 	# ═══════════════════════════════════════════════════════════════════════
-	VerboseConfig.info("farm", "🚀", "Starting Clean Boot Sequence...")
-	await BootManager.boot(farm, shell, quantum_viz)
-	VerboseConfig.info("farm", "✅", "Clean Boot Sequence complete")
+	_verbose.info("farm", "🚀", "Starting Clean Boot Sequence...")
+	await _boot_mgr.boot(farm, shell, quantum_viz)
+	_verbose.info("farm", "✅", "Clean Boot Sequence complete")
 
 	# ═══════════════════════════════════════════════════════════════════════
 	# POST-BOOT: Signal connections and final setup
@@ -96,32 +100,32 @@ func _ready() -> void:
 		if quantum_viz.graph:
 			var swipe_result = quantum_viz.graph.node_swiped_to.connect(_on_quantum_nodes_swiped)
 			if swipe_result != OK:
-				VerboseConfig.warn("ui", "⚠️", "Failed to connect node_swiped_to signal")
+				_verbose.warn("ui", "⚠️", "Failed to connect node_swiped_to signal")
 			else:
-				VerboseConfig.info("ui", "✅", "Touch: Swipe-to-entangle connected")
+				_verbose.info("ui", "✅", "Touch: Swipe-to-entangle connected")
 
 			var click_result = quantum_viz.graph.node_clicked.connect(_on_quantum_node_clicked)
 			if click_result != OK:
-				VerboseConfig.warn("ui", "⚠️", "Failed to connect node_clicked signal")
+				_verbose.warn("ui", "⚠️", "Failed to connect node_clicked signal")
 			else:
-				VerboseConfig.info("ui", "✅", "Touch: Tap-to-measure connected")
+				_verbose.info("ui", "✅", "Touch: Tap-to-measure connected")
 
 	# Input is now handled by PlayerShell._input() → modal stack → FarmInputHandler._unhandled_input()
 	# No need for InputController anymore!
-	VerboseConfig.info("ui", "✅", "Input routing handled by PlayerShell modal stack")
+	_verbose.info("ui", "✅", "Input routing handled by PlayerShell modal stack")
 
-	VerboseConfig.info("ui", "✅", "FarmView ready - game started!")
+	_verbose.info("ui", "✅", "FarmView ready - game started!")
 
 
 func _on_quit_requested() -> void:
 	"""Handle quit request"""
-	VerboseConfig.info("ui", "🛑", "Quit requested - exiting game")
+	_verbose.info("ui", "🛑", "Quit requested - exiting game")
 	get_tree().quit()
 
 
 func _on_restart_requested() -> void:
 	"""Handle restart request"""
-	VerboseConfig.info("ui", "🔄", "Restart requested - reloading scene")
+	_verbose.info("ui", "🔄", "Restart requested - reloading scene")
 	get_tree().reload_current_scene()
 
 
@@ -140,26 +144,26 @@ func _on_quantum_node_clicked(grid_pos: Vector2i, button_index: int) -> void:
 	- Planted/unmeasured → MEASURE (collapse quantum state)
 	- Measured → HARVEST
 	"""
-	VerboseConfig.debug("ui", "🎯", "BUBBLE TAP HANDLER CALLED! Grid pos: %s, button: %d" % [grid_pos, button_index])
+	_verbose.debug("ui", "🎯", "BUBBLE TAP HANDLER CALLED! Grid pos: %s, button: %d" % [grid_pos, button_index])
 
 	if not farm or not farm.grid:
-		VerboseConfig.warn("ui", "⚠️", "No farm available")
+		_verbose.warn("ui", "⚠️", "No farm available")
 		return
 
 	var plot = farm.grid.get_plot(grid_pos)
 	if not plot:
-		VerboseConfig.warn("ui", "⚠️", "No plot at %s" % grid_pos)
+		_verbose.warn("ui", "⚠️", "No plot at %s" % grid_pos)
 		return
 
 	# Contextual action based on plot state
 	if not plot.is_planted:
-		VerboseConfig.debug("ui", "→", "Plot empty - planting wheat")
+		_verbose.debug("ui", "→", "Plot empty - planting wheat")
 		farm.plant_wheat(grid_pos)
 	elif not plot.has_been_measured:
-		VerboseConfig.debug("ui", "→", "Plot planted - MEASURING quantum state")
+		_verbose.debug("ui", "→", "Plot planted - MEASURING quantum state")
 		farm.measure_plot(grid_pos)
 	else:
-		VerboseConfig.debug("ui", "→", "Plot measured - HARVESTING")
+		_verbose.debug("ui", "→", "Plot measured - HARVESTING")
 		farm.harvest_plot(grid_pos)
 
 
@@ -169,10 +173,10 @@ func _on_quantum_nodes_swiped(from_grid_pos: Vector2i, to_grid_pos: Vector2i) ->
 	Triggered when user drags from one bubble to another (≥50px, ≤1.0s).
 	Creates quantum entanglement between the two plots.
 	"""
-	VerboseConfig.debug("ui", "✨", "BUBBLE SWIPE HANDLER CALLED! %s → %s" % [from_grid_pos, to_grid_pos])
+	_verbose.debug("ui", "✨", "BUBBLE SWIPE HANDLER CALLED! %s → %s" % [from_grid_pos, to_grid_pos])
 
 	if not farm or not farm.grid:
-		VerboseConfig.warn("ui", "⚠️", "No farm available")
+		_verbose.warn("ui", "⚠️", "No farm available")
 		return
 
 	# Create entanglement using default Bell state (phi_plus)
@@ -181,9 +185,9 @@ func _on_quantum_nodes_swiped(from_grid_pos: Vector2i, to_grid_pos: Vector2i) ->
 	var success = farm.grid.create_entanglement(from_grid_pos, to_grid_pos, bell_state)
 
 	if success:
-		VerboseConfig.info("ui", "✅", "Entanglement created: %s ↔ %s (Φ+)" % [from_grid_pos, to_grid_pos])
+		_verbose.info("ui", "✅", "Entanglement created: %s ↔ %s (Φ+)" % [from_grid_pos, to_grid_pos])
 	else:
-		VerboseConfig.warn("ui", "❌", "Failed to create entanglement")
+		_verbose.warn("ui", "❌", "Failed to create entanglement")
 
 
 func get_farm() -> Node:

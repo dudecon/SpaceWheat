@@ -653,6 +653,84 @@ func get_population(emoji: String) -> float:
 	return get_marginal(q, p)
 
 
+func measure_axis(north_emoji: String, south_emoji: String) -> String:
+	"""Projective measurement on a north/south emoji axis.
+
+	Model C measurement: samples from Born probabilities and collapses state.
+
+	Args:
+	    north_emoji: North pole emoji (e.g., "🌾")
+	    south_emoji: South pole emoji (e.g., "🍄")
+
+	Returns:
+	    Measured emoji (north_emoji or south_emoji), or "" on error
+	"""
+	if not register_map.has(north_emoji) or not register_map.has(south_emoji):
+		push_warning("⚠️ Emoji axis not registered: %s/%s" % [north_emoji, south_emoji])
+		return ""
+
+	var q_north = register_map.qubit(north_emoji)
+	var q_south = register_map.qubit(south_emoji)
+
+	if q_north != q_south:
+		push_warning("⚠️ Emojis not on same qubit: %s (q%d) / %s (q%d)" % [
+			north_emoji, q_north, south_emoji, q_south])
+		return ""
+
+	var qubit_idx = q_north
+	var p_north = get_marginal(qubit_idx, 0)  # pole 0 = north
+	var p_south = get_marginal(qubit_idx, 1)  # pole 1 = south
+	var p_total = p_north + p_south
+
+	if p_total < 1e-14:
+		push_error("⚠️ Measurement probabilities sum to zero for axis %s/%s" % [north_emoji, south_emoji])
+		return north_emoji  # Default
+
+	# Sample outcome
+	var rand = randf()
+	var outcome_pole = 0 if (rand < p_north / p_total) else 1
+	var outcome_emoji = north_emoji if outcome_pole == 0 else south_emoji
+
+	# Project density matrix onto outcome
+	_project_qubit(qubit_idx, outcome_pole)
+
+	print("🔬 Measured axis %s/%s: outcome=%s (p_north=%.3f, p_south=%.3f)" % [
+		north_emoji, south_emoji, outcome_emoji, p_north, p_south])
+
+	return outcome_emoji
+
+
+func _project_qubit(qubit_index: int, outcome_pole: int) -> void:
+	"""Project density matrix onto qubit measurement outcome.
+
+	Implements projective measurement collapse:
+	ρ → P_k ρ P_k / Tr(P_k ρ)
+
+	where P_k is the projector onto |k⟩⟨k| for the measured qubit.
+	"""
+	var num_qubits = register_map.num_qubits
+	var dim = register_map.dim()
+	var shift = num_qubits - 1 - qubit_index
+	var rho_new = ComplexMatrix.zeros(dim)
+
+	# Apply projector: keep only states where qubit = outcome_pole
+	for i in range(dim):
+		var qubit_i = (i >> shift) & 1
+		if qubit_i != outcome_pole:
+			continue  # Project out
+
+		for j in range(dim):
+			var qubit_j = (j >> shift) & 1
+			if qubit_j != outcome_pole:
+				continue  # Project out
+
+			rho_new.set_element(i, j, density_matrix.get_element(i, j))
+
+	# Renormalize
+	density_matrix = rho_new
+	density_matrix.renormalize_trace()
+
+
 func get_basis_probability(basis_index: int) -> float:
 	"""Get probability of computational basis state |i⟩.
 

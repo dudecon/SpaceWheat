@@ -1,6 +1,9 @@
 class_name FarmGrid
 extends Node
 
+# Access autoload safely (avoids compile-time errors)
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 ## Farm Grid Manager
 ## Manages a grid of wheat plots and their interactions
 ## NOTE: plot_planted/plot_harvested signals are internal (Farm.gd is the public API)
@@ -84,9 +87,13 @@ var icon_scopes: Dictionary = {}  # Icon → Array[String] (biome names the icon
 # Stats
 var total_plots_planted: int = 0
 
+# PERFORMANCE: Throttle slower subsystems (don't need 60Hz)
+const MILL_MARKET_UPDATE_INTERVAL: float = 0.1  # 10 Hz for mills/markets/kitchens
+var _mill_market_accumulator: float = 0.0
+
 
 func _ready():
-	VerboseConfig.info("farm", "🌾", "FarmGrid initialized: %dx%d = %d plots" % [grid_width, grid_height, grid_width * grid_height])
+	_verbose.info("farm", "🌾", "FarmGrid initialized: %dx%d = %d plots" % [grid_width, grid_height, grid_width * grid_height])
 
 	# Initialize topology analyzer
 	topology_analyzer = TopologyAnalyzer.new()
@@ -94,7 +101,7 @@ func _ready():
 	# Initialize Biome ONLY if not already injected by Farm
 	# Farm will handle Biome creation and pass it if available
 	if not biome:
-		VerboseConfig.info("farm", "ℹ️", "No biome injected - running in simple mode")
+		_verbose.info("farm", "ℹ️", "No biome injected - running in simple mode")
 		# Don't create biome here - let Farm control it
 
 	# Pre-initialize all plots for headless testing compatibility
@@ -124,7 +131,7 @@ func _initialize_all_plots() -> void:
 func _process(delta):
 	# Debug: Check if grid processing is called
 	if OS.get_environment("DEBUG_GRID") == "1":
-		VerboseConfig.debug("farm", "🌾", "FarmGrid._process called, delta=%.3f" % delta)
+		_verbose.debug("farm", "🌾", "FarmGrid._process called, delta=%.3f" % delta)
 
 	# In multi-biome mode, always process (mills, markets, kitchens don't depend on legacy biome field)
 	# Only skip full quantum evolution if in single-biome legacy mode with no biome set
@@ -141,34 +148,40 @@ func _process(delta):
 	# Build icon_network for growth modifiers (QUANTUM LAYER)
 	var icon_network = _build_icon_network()
 
-	# Grow all planted plots
+	# Grow all planted plots (needs every frame for smooth visuals)
 	for position in plots.keys():
 		var plot = plots[position]
 		if plot.is_planted:
 			var plot_biome = get_biome_for_plot(position)  # Phase 2c: Route to correct biome
 			plot.grow(delta, plot_biome, faction_territory_manager, icon_network, conspiracy_network)
 
-	# PHASE 4: Process energy taps (collect Lindblad drain flux)
-	_process_energy_taps(delta)
+	# PERFORMANCE: Throttle slower subsystems to 10 Hz
+	_mill_market_accumulator += delta
+	if _mill_market_accumulator >= MILL_MARKET_UPDATE_INTERVAL:
+		var accumulated_dt = _mill_market_accumulator
+		_mill_market_accumulator = 0.0
 
-	# Update vocabulary mutation pressure from active energy taps
-	if vocabulary_evolution:
-		var tap_boost = get_tap_mutation_pressure_boost()
+		# PHASE 4: Process energy taps (collect Lindblad drain flux)
+		_process_energy_taps(accumulated_dt)
 
-		# Apply boost (additive, capped at 2.0)
-		vocabulary_evolution.mutation_pressure = min(
-			0.15 + tap_boost,  # Base 0.15 + tap boost
-			2.0  # Max cap
-		)
+		# Update vocabulary mutation pressure from active energy taps
+		if vocabulary_evolution:
+			var tap_boost = get_tap_mutation_pressure_boost()
 
-	# Process quantum mills (QuantumMill objects with non-destructive measurement)
-	_process_quantum_mills(delta)
+			# Apply boost (additive, capped at 2.0)
+			vocabulary_evolution.mutation_pressure = min(
+				0.15 + tap_boost,  # Base 0.15 + tap boost
+				2.0  # Max cap
+			)
 
-	# Process markets (sell flour for credits)
-	_process_markets(delta)
+		# Process quantum mills (QuantumMill objects with non-destructive measurement)
+		_process_quantum_mills(accumulated_dt)
 
-	# Process kitchens (convert flour to bread)
-	_process_kitchens(delta)
+		# Process markets (sell flour for credits)
+		_process_markets(accumulated_dt)
+
+		# Process kitchens (convert flour to bread)
+		_process_kitchens(accumulated_dt)
 
 	# Mills and markets are now processed via QuantumMill/QuantumMarket objects in the multi-biome system
 
@@ -186,7 +199,7 @@ func register_biome(biome_name: String, biome_instance) -> void:
 		return
 
 	biomes[biome_name] = biome_instance
-	VerboseConfig.info("biome", "📍", "Biome registered: %s" % biome_name)
+	_verbose.info("biome", "📍", "Biome registered: %s" % biome_name)
 
 
 func assign_plot_to_biome(position: Vector2i, biome_name: String) -> void:
@@ -435,7 +448,7 @@ func _process_energy_taps(delta: float) -> void:
 
 				# Debug output (can be disabled in production)
 				if flux > 0.001:  # Only log meaningful flux
-					VerboseConfig.debug("energy", "⚡", "Energy tap at %s: drained %.4f from %s → %d credits" % [
+					_verbose.debug("energy", "⚡", "Energy tap at %s: drained %.4f from %s → %d credits" % [
 						plot.plot_id, flux, target_emoji, flux_credits
 					])
 
@@ -467,7 +480,7 @@ func process_mill_flour(flour_amount: int) -> void:
 		flour_amount: Number of flour units produced by mill measurement
 	"""
 	if not farm_economy or flour_amount <= 0:
-		VerboseConfig.error("farm", "❌", "process_mill_flour called with invalid params (amount=%d)" % flour_amount)
+		_verbose.error("farm", "❌", "process_mill_flour called with invalid params (amount=%d)" % flour_amount)
 		return
 
 	# Mill produces flour directly from quantum measurement
@@ -475,7 +488,7 @@ func process_mill_flour(flour_amount: int) -> void:
 	var flour_credits = flour_amount * FarmEconomy.QUANTUM_TO_CREDITS
 	farm_economy.add_resource("💨", flour_credits, "mill_quantum_measurement")
 
-	VerboseConfig.info("economy", "🏭", "Mill: Produced %d flour → %d credits" % [
+	_verbose.info("economy", "🏭", "Mill: Produced %d flour → %d credits" % [
 		flour_amount,
 		flour_credits
 	])
@@ -515,7 +528,7 @@ func _process_markets(delta: float) -> void:
 			market_biome.inject_commodity("💨", flour_units)
 			# Flour is now part of market dynamics - no classical "sale" occurs
 			# Instead, price emerges from quantum coupling between sentiment and commodity
-			VerboseConfig.info("economy", "💨", "Market at %s: injected %d flour units into quantum bath" % [
+			_verbose.info("economy", "💨", "Market at %s: injected %d flour units into quantum bath" % [
 				plot.plot_id, flour_units
 			])
 
@@ -556,7 +569,7 @@ func kitchen_add_resource(emoji: String, credits: int) -> bool:
 
 	# Validate player has credits
 	if farm_economy.get_resource(emoji) < credits:
-		VerboseConfig.warn("economy", "❌", "Not enough %s credits! (have %d, need %d)" % [
+		_verbose.warn("economy", "❌", "Not enough %s credits! (have %d, need %d)" % [
 			emoji, farm_economy.get_resource(emoji), credits])
 		return false
 
@@ -578,7 +591,7 @@ func kitchen_add_resource(emoji: String, credits: int) -> bool:
 			push_error("Unknown kitchen resource: %s" % emoji)
 			return false
 
-	VerboseConfig.info("farm", "🍳", "Kitchen: Spent %d %s credits → drive activated" % [credits, emoji])
+	_verbose.info("farm", "🍳", "Kitchen: Spent %d %s credits → drive activated" % [credits, emoji])
 	return true
 
 
@@ -609,10 +622,10 @@ func kitchen_harvest() -> Dictionary:
 	if result["got_bread"]:
 		var bread_credits = result["yield"] * FarmEconomy.QUANTUM_TO_CREDITS
 		farm_economy.add_resource("🍞", bread_credits, "kitchen_harvest")
-		VerboseConfig.info("farm", "🍳", "Kitchen harvest: %s → %d 🍞 credits" % [
+		_verbose.info("farm", "🍳", "Kitchen harvest: %s → %d 🍞 credits" % [
 			result["outcome"], bread_credits])
 	else:
-		VerboseConfig.warn("farm", "🍳", "Kitchen harvest failed: %s (state |%d⟩)" % [
+		_verbose.warn("farm", "🍳", "Kitchen harvest failed: %s (state |%d⟩)" % [
 			result["outcome"], result["collapsed_to"]])
 
 	return result
@@ -715,15 +728,6 @@ func plant(position: Vector2i, plant_type: String, quantum_state: Resource = nul
 
 	plot.plot_type = plot_type_map[plant_type]
 
-	# Special handling for tomato: assign conspiracy node
-	if plant_type == "tomato":
-		var node_ids = ["seed", "observer", "underground", "genetic", "ripening", "market",
-						"sauce", "identity", "solar", "water", "meaning", "meta"]
-		var node_index = total_plots_planted % node_ids.size()
-		plot.conspiracy_node_id = node_ids[node_index]
-		VerboseConfig.info("farm", "🍅", "Planted tomato at %s connected to node: %s" % [plot.plot_id, plot.conspiracy_node_id])
-
-	# Plant with biome injection (Model B)
 	# Get plot-specific biome from multi-biome registry
 	var plot_biome = null
 	if plot_biome_assignments.has(position):
@@ -733,7 +737,25 @@ func plant(position: Vector2i, plant_type: String, quantum_state: Resource = nul
 		# Fallback to BioticFlux if no assignment
 		plot_biome = biomes.get("BioticFlux", biome)
 
-	# Plant through biome's quantum computer (Model B)
+	# VALIDATION: Check if biome supports this plant's emoji pair
+	var emojis = plot.get_plot_emojis()
+	if plot_biome and plot_biome.has_method("supports_emoji_pair"):
+		if not plot_biome.supports_emoji_pair(emojis.north, emojis.south):
+			push_warning("⚠️ Biome %s doesn't support %s/%s pair - plant may not function correctly" % [
+				plot_biome.get_biome_type() if plot_biome.has_method("get_biome_type") else "unknown",
+				emojis.north, emojis.south])
+			# Don't block planting, but warn - allows player experimentation
+
+	# Special handling for tomato: assign conspiracy node
+	if plant_type == "tomato":
+		var node_ids = ["seed", "observer", "underground", "genetic", "ripening", "market",
+						"sauce", "identity", "solar", "water", "meaning", "meta"]
+		var node_index = total_plots_planted % node_ids.size()
+		plot.conspiracy_node_id = node_ids[node_index]
+		_verbose.info("farm", "🍅", "Planted tomato at %s connected to node: %s" % [plot.plot_id, plot.conspiracy_node_id])
+
+	# Plant through biome's quantum computer (Model B/C)
+	# Note: plot_biome already resolved above for validation
 	plot.plant(0.0, 0.1, plot_biome)  # 0.1 quantum wheat, 0 labor
 
 	# MODEL B/C Hybrid: Track register/subplot allocation
@@ -795,7 +817,7 @@ func plant_energy_tap(position: Vector2i, target_emoji: String, drain_rate: floa
 	# VALIDATION: Check if emoji is in discovered vocabulary
 	var available_emojis = get_available_tap_emojis()
 	if not available_emojis.has(target_emoji):
-		VerboseConfig.warn("farm", "⚠️", "Cannot plant tap: %s not in discovered vocabulary" % target_emoji)
+		_verbose.warn("farm", "⚠️", "Cannot plant tap: %s not in discovered vocabulary" % target_emoji)
 		return false
 
 	# Get biome for this plot
@@ -822,12 +844,12 @@ func plant_energy_tap(position: Vector2i, target_emoji: String, drain_rate: floa
 	# Ensure target emoji is in bath
 	var bath = plot_biome.bath
 	if not bath.has_emoji(target_emoji):
-		VerboseConfig.info("energy", "ℹ️", "Injecting %s into bath for energy tap" % target_emoji)
+		_verbose.info("energy", "ℹ️", "Injecting %s into bath for energy tap" % target_emoji)
 		bath.inject_emoji(target_emoji, target_icon)
 
 	# Ensure sink state is in bath
 	if not bath.has_emoji(bath.sink_emoji):
-		VerboseConfig.info("energy", "ℹ️", "Injecting sink state %s into bath" % bath.sink_emoji)
+		_verbose.info("energy", "ℹ️", "Injecting sink state %s into bath" % bath.sink_emoji)
 		var sink_icon = Icon.new()
 		sink_icon.emoji = bath.sink_emoji
 		sink_icon.display_name = "Sink"
@@ -849,7 +871,7 @@ func plant_energy_tap(position: Vector2i, target_emoji: String, drain_rate: floa
 	total_plots_planted += 1
 	plot_planted.emit(position)
 
-	VerboseConfig.info("farm", "⚡", "Planted energy tap at %s targeting %s (κ=%.3f/sec, sink-based drain)" % [
+	_verbose.info("farm", "⚡", "Planted energy tap at %s targeting %s (κ=%.3f/sec, sink-based drain)" % [
 		plot.plot_id, target_emoji, drain_rate
 	])
 	return true
@@ -884,7 +906,7 @@ func place_mill(position: Vector2i) -> bool:
 	quantum_mills[position] = mill
 
 	plot_planted.emit(position)
-	VerboseConfig.info("farm", "🏭", "Placed quantum mill at %s with %d adjacent wheat" % [plot.plot_id, adjacent_wheat.size()])
+	_verbose.info("farm", "🏭", "Placed quantum mill at %s with %d adjacent wheat" % [plot.plot_id, adjacent_wheat.size()])
 	return true
 
 
@@ -924,7 +946,7 @@ func place_market(position: Vector2i) -> bool:
 	# Quantum-only: No is_mature property (instant full size)
 	plot_planted.emit(position)
 
-	VerboseConfig.info("farm", "💰", "Placed market at %s → entangled with 💰→📈 market node (value fluctuation)" % plot.plot_id)
+	_verbose.info("farm", "💰", "Placed market at %s → entangled with 💰→📈 market node (value fluctuation)" % plot.plot_id)
 	return true
 
 
@@ -948,7 +970,7 @@ func place_kitchen(position: Vector2i) -> bool:
 	plot.is_planted = true
 	plot_planted.emit(position)
 
-	VerboseConfig.info("farm", "🍳", "Placed kitchen at %s - ready for Bell state baking!" % position)
+	_verbose.info("farm", "🍳", "Placed kitchen at %s - ready for Bell state baking!" % position)
 	return true
 
 
@@ -967,7 +989,7 @@ func harvest_wheat(position: Vector2i) -> Dictionary:
 		var plot_biome = get_biome_for_plot(position)
 		if plot_biome and plot_biome.has_method("remove_projection"):
 			plot_biome.remove_projection(position)
-			VerboseConfig.debug("farm", "🗑️", "Removed projection from biome at %s" % position)
+			_verbose.debug("farm", "🗑️", "Removed projection from biome at %s" % position)
 
 		plot_harvested.emit(position, yield_data)
 
@@ -1018,7 +1040,7 @@ func harvest_energy_tap(position: Vector2i) -> Dictionary:
 		"amount": resource_amount
 	})
 
-	VerboseConfig.info("farm", "⚡", "Harvested %d × %s from energy tap at %s" % [resource_amount, target_emoji, plot.plot_id])
+	_verbose.info("farm", "⚡", "Harvested %d × %s from energy tap at %s" % [resource_amount, target_emoji, plot.plot_id])
 
 	return {
 		"success": true,
@@ -1218,7 +1240,7 @@ func harvest_with_topology(position: Vector2i, local_radius: int = 2) -> Diction
 		# Use bath marginal measurement - sums over states containing emoji
 		measurement_result = biome.bath.measure_marginal_axis(plot.north_emoji, plot.south_emoji)
 		if measurement_result != "":
-			VerboseConfig.debug("farm", "📊", "Harvest measurement (bath) at %s: outcome = %s" % [position, measurement_result])
+			_verbose.debug("farm", "📊", "Harvest measurement (bath) at %s: outcome = %s" % [position, measurement_result])
 	# MODEL B: Fall back to quantum_computer measurement
 	elif biome and biome.quantum_computer:
 		var register_id = plot_register_mapping.get(position, -1)
@@ -1229,7 +1251,7 @@ func harvest_with_topology(position: Vector2i, local_radius: int = 2) -> Diction
 				var basis_outcome = biome.quantum_computer.measure_register(comp, register_id)
 				# Map basis outcome to emoji
 				measurement_result = plot.north_emoji if basis_outcome == "north" else plot.south_emoji
-				VerboseConfig.debug("farm", "📊", "Harvest measurement (quantum_computer) at %s: outcome = %s" % [position, measurement_result])
+				_verbose.debug("farm", "📊", "Harvest measurement (quantum_computer) at %s: outcome = %s" % [position, measurement_result])
 			else:
 				# Register not in any component - unentangled single qubit
 				measurement_result = plot.north_emoji  # Default to north state
@@ -1329,7 +1351,7 @@ func measure_plot(position: Vector2i) -> String:
 	# Get biome for this plot
 	var biome = get_biome_for_plot(position)
 	if not biome:
-		VerboseConfig.warn("farm", "⚠️", "No biome for plot at %s" % position)
+		_verbose.warn("farm", "⚠️", "No biome for plot at %s" % position)
 		return ""
 
 	var result = ""
@@ -1337,17 +1359,40 @@ func measure_plot(position: Vector2i) -> String:
 	# MODEL C: Try bath-based measurement first (analog model)
 	if "bath" in biome and biome.bath:
 		# Use BasePlot's measure() method which calls bath.measure_axis()
-		var basis_outcome = plot.measure()  # Returns "north" or "south"
+		var basis_outcome = plot.measure()  # Returns "north", "south", or "" on failure
+
+		# Handle measurement failure
+		if basis_outcome == "":
+			_verbose.warn("farm", "⚠️", "Measurement failed for plot at %s - biome may not support these emojis" % position)
+			return ""
+
 		result = plot.north_emoji if basis_outcome == "north" else plot.south_emoji
-		VerboseConfig.debug("farm", "📊", "Measure operation (bath): %s collapsed to %s" % [position, result])
+		_verbose.debug("farm", "📊", "Measure operation (bath): %s collapsed to %s" % [position, result])
 		return result
 
-	# MODEL B: Fall back to quantum_computer (digital model)
+	# MODEL C (density matrix): Try quantum_computer with measure_axis() method
+	if biome.quantum_computer and biome.quantum_computer.has_method("measure_axis"):
+		# Direct axis measurement using plot's emoji pair
+		var outcome_emoji = biome.quantum_computer.measure_axis(plot.north_emoji, plot.south_emoji)
+
+		if outcome_emoji == "":
+			_verbose.warn("farm", "⚠️", "Measurement failed (quantum_computer) for plot at %s - emojis %s/%s not in biome" % [
+				position, plot.north_emoji, plot.south_emoji])
+			return ""
+
+		# Update plot state
+		plot.has_been_measured = true
+		plot.measured_outcome = "north" if outcome_emoji == plot.north_emoji else "south"
+
+		_verbose.debug("farm", "📊", "Measure operation (quantum_computer.measure_axis): %s collapsed to %s" % [position, outcome_emoji])
+		return outcome_emoji
+
+	# MODEL B: Fall back to quantum_computer component-based (legacy digital model)
 	var register_id = plot_register_mapping.get(position, -1)
 
 	if not biome.quantum_computer or register_id < 0:
 		# No quantum system available
-		VerboseConfig.warn("farm", "⚠️", "No quantum system (bath or quantum_computer) for plot at %s" % position)
+		_verbose.warn("farm", "⚠️", "No quantum system (bath or quantum_computer) for plot at %s" % position)
 		return plot.north_emoji  # Default fallback
 
 	var comp = biome.quantum_computer.get_component_containing(register_id)
@@ -1364,7 +1409,11 @@ func measure_plot(position: Vector2i) -> String:
 	var basis_outcome = biome.quantum_computer.measure_register(comp, register_id)
 	# Map basis outcome to emoji
 	result = plot.north_emoji if basis_outcome == "north" else plot.south_emoji
-	VerboseConfig.debug("farm", "📊", "Measure operation (quantum_computer): %s collapsed to %s" % [position, result])
+	_verbose.debug("farm", "📊", "Measure operation (quantum_computer): %s collapsed to %s" % [position, result])
+
+	# UPDATE PLOT STATE (was missing - causing has_been_measured to remain false)
+	plot.has_been_measured = true
+	plot.measured_outcome = basis_outcome  # "north" or "south"
 
 	# For compatibility, still track which plots were in the component
 	# (This is purely for logging/visualization - quantum collapse already happened in quantum_computer)
@@ -1394,7 +1443,7 @@ func measure_plot(position: Vector2i) -> String:
 			continue
 
 		# Mark as measured (quantum_computer already handled the measurement)
-		VerboseConfig.debug("quantum", "↪", "Entanglement network collapsed %s (via quantum_computer)" % current_id)
+		_verbose.debug("quantum", "↪", "Entanglement network collapsed %s (via quantum_computer)" % current_id)
 		measured_ids[current_id] = true
 
 		# Add its entangled partners to the queue
@@ -1419,7 +1468,7 @@ func measure_plot(position: Vector2i) -> String:
 		if not measured_plot.entangled_plots.is_empty():
 			var num_broken = measured_plot.entangled_plots.size()
 			measured_plot.entangled_plots.clear()
-			VerboseConfig.debug("quantum", "🔓", "Measurement broke %d entanglements for %s (classical state)" % [num_broken, measured_id])
+			_verbose.debug("quantum", "🔓", "Measurement broke %d entanglements for %s (classical state)" % [num_broken, measured_id])
 
 	# Note: EntangledPair objects were Model A artifacts managed via plot.quantum_state
 	# Model B: Entanglement is managed by quantum_computer via registers and components
@@ -1459,7 +1508,7 @@ func _add_to_cluster(cluster, new_plot: FarmPlot, control_index: int) -> bool:
 
 	# Check cluster size limit (recommend 6-qubit max)
 	if cluster.get_qubit_count() >= 6:
-		VerboseConfig.warn("quantum", "⚠️", "Cluster at max size (6 qubits)")
+		_verbose.warn("quantum", "⚠️", "Cluster at max size (6 qubits)")
 		return false
 
 	# Add qubit to cluster with CNOT gate
@@ -1472,7 +1521,7 @@ func _add_to_cluster(cluster, new_plot: FarmPlot, control_index: int) -> bool:
 	# Update gameplay entanglement tracking (for topology)
 	_update_cluster_gameplay_connections(cluster)
 
-	VerboseConfig.info("quantum", "🔗", "Added %s to cluster (size: %d)" % [new_plot.plot_id, cluster.get_qubit_count()])
+	_verbose.info("quantum", "🔗", "Added %s to cluster (size: %d)" % [new_plot.plot_id, cluster.get_qubit_count()])
 	return true
 
 
@@ -1487,7 +1536,7 @@ func _upgrade_pair_to_cluster(pair, new_plot: FarmPlot) -> bool:
 	var plot_b = _get_plot_by_id(pair.qubit_b_id)
 
 	if not plot_a or not plot_b:
-		VerboseConfig.warn("quantum", "⚠️", "Cannot find plots in pair")
+		_verbose.warn("quantum", "⚠️", "Cannot find plots in pair")
 		return false
 
 	# Add both qubits to cluster
@@ -1519,7 +1568,7 @@ func _upgrade_pair_to_cluster(pair, new_plot: FarmPlot) -> bool:
 	# Update gameplay connections
 	_update_cluster_gameplay_connections(cluster)
 
-	VerboseConfig.info("quantum", "✨", "Upgraded pair to 3-qubit cluster: %s" % cluster.get_state_string())
+	_verbose.info("quantum", "✨", "Upgraded pair to 3-qubit cluster: %s" % cluster.get_state_string())
 	return true
 
 
@@ -1548,7 +1597,7 @@ func _handle_cluster_collapse(cluster):
 	# Remove cluster from tracking
 	entangled_clusters.erase(cluster)
 
-	VerboseConfig.info("quantum", "💥", "Cluster collapsed - %d qubits now separable" % plot_ids.size())
+	_verbose.info("quantum", "💥", "Cluster collapsed - %d qubits now separable" % plot_ids.size())
 
 
 ## Entanglement (Density Matrix System)
@@ -1570,7 +1619,7 @@ func _auto_entangle_from_infrastructure(position: Vector2i):
 				# Recursively call create_entanglement to set up quantum state entanglement
 				# This will skip the infrastructure setup (already done) and go straight to quantum entanglement
 				_create_quantum_entanglement(position, partner_pos)
-				VerboseConfig.info("quantum", "⚡", "Auto-entangled %s ↔ %s (infrastructure activated)" % [position, partner_pos])
+				_verbose.info("quantum", "⚡", "Auto-entangled %s ↔ %s (infrastructure activated)" % [position, partner_pos])
 
 
 func _auto_apply_persistent_gates(position: Vector2i) -> void:
@@ -1599,7 +1648,7 @@ func _auto_apply_persistent_gates(position: Vector2i) -> void:
 	if active_gates.is_empty():
 		return
 
-	VerboseConfig.debug("farm", "🔧", "Auto-applying %d persistent gates to %s" % [active_gates.size(), position])
+	_verbose.debug("farm", "🔧", "Auto-applying %d persistent gates to %s" % [active_gates.size(), position])
 
 	for gate in active_gates:
 		var gate_type = gate.get("type", "")
@@ -1614,9 +1663,9 @@ func _auto_apply_persistent_gates(position: Vector2i) -> void:
 				_auto_cluster_from_gate(position, linked_plots)
 			"measure_trigger":
 				# Mark plot for cascade measurement when triggered
-				VerboseConfig.debug("farm", "👁️", "Measure trigger active on %s" % position)
+				_verbose.debug("farm", "👁️", "Measure trigger active on %s" % position)
 			_:
-				VerboseConfig.warn("farm", "⚠️", "Unknown gate type: %s" % gate_type)
+				_verbose.warn("farm", "⚠️", "Unknown gate type: %s" % gate_type)
 
 
 func _auto_cluster_from_gate(position: Vector2i, linked_plots: Array) -> void:
@@ -1638,7 +1687,7 @@ func _auto_cluster_from_gate(position: Vector2i, linked_plots: Array) -> void:
 			# Check if already entangled
 			if not plot.entangled_plots.has(linked_plot.plot_id):
 				_create_quantum_entanglement(position, linked_pos)
-				VerboseConfig.info("quantum", "🔗", "Cluster gate: entangled %s ↔ %s" % [position, linked_pos])
+				_verbose.info("quantum", "🔗", "Cluster gate: entangled %s ↔ %s" % [position, linked_pos])
 
 
 func _create_quantum_entanglement(pos_a: Vector2i, pos_b: Vector2i, bell_type: String = "phi_plus") -> bool:
@@ -1652,8 +1701,8 @@ func _create_quantum_entanglement(pos_a: Vector2i, pos_b: Vector2i, bell_type: S
 	# MODEL C (Bath): Entanglement is implicit through shared bath
 	# Check if either plot is bath-based (has bath_subplot_id instead of quantum_state)
 	if ("bath_subplot_id" in plot_a and plot_a.bath_subplot_id >= 0) or ("bath_subplot_id" in plot_b and plot_b.bath_subplot_id >= 0):
-		VerboseConfig.info("quantum", "ℹ️", "Bath-based plots are implicitly entangled through shared quantum bath")
-		VerboseConfig.debug("quantum", "ℹ️", "All plots in same bath share composite quantum state")
+		_verbose.info("quantum", "ℹ️", "Bath-based plots are implicitly entangled through shared quantum bath")
+		_verbose.debug("quantum", "ℹ️", "All plots in same bath share composite quantum state")
 		return true  # Success - entanglement exists via bath
 
 	# MODEL A/B: Explicit quantum_state entanglement (legacy code below)
@@ -1753,7 +1802,7 @@ func create_entanglement(pos_a: Vector2i, pos_b: Vector2i, bell_type: String = "
 	# NEW: Set up plot infrastructure FIRST (works even if not planted)
 	if not plot_a.plot_infrastructure_entanglements.has(pos_b):
 		plot_a.plot_infrastructure_entanglements.append(pos_b)
-		VerboseConfig.debug("farm", "🏗️", "Plot infrastructure: %s ↔ %s (entanglement gate installed)" % [pos_a, pos_b])
+		_verbose.debug("farm", "🏗️", "Plot infrastructure: %s ↔ %s (entanglement gate installed)" % [pos_a, pos_b])
 
 	if not plot_b.plot_infrastructure_entanglements.has(pos_a):
 		plot_b.plot_infrastructure_entanglements.append(pos_a)
@@ -1765,7 +1814,7 @@ func create_entanglement(pos_a: Vector2i, pos_b: Vector2i, bell_type: String = "
 
 	# If both plots are NOT planted, just set up infrastructure and return
 	if not plot_a.is_planted or not plot_b.is_planted:
-		VerboseConfig.info("farm", "→", "Infrastructure ready. Quantum entanglement will auto-activate when both plots are planted.")
+		_verbose.info("farm", "→", "Infrastructure ready. Quantum entanglement will auto-activate when both plots are planted.")
 		entanglement_created.emit(pos_a, pos_b)
 		# Emit generic signals
 		plot_changed.emit(pos_a, "entangled", {"partner": pos_b})
@@ -1817,7 +1866,7 @@ func create_triplet_entanglement(pos_a: Vector2i, pos_b: Vector2i, pos_c: Vector
 	var biome_a = get_biome_for_plot(pos_a)  # Phase 2c: Use first plot's biome
 	if biome_a and biome_a.has_method("mark_bell_gate"):
 		biome_a.mark_bell_gate([pos_a, pos_b, pos_c])
-		VerboseConfig.info("farm", "🔔", "Triple entanglement marked: %s, %s, %s (kitchen ready)" % [pos_a, pos_b, pos_c])
+		_verbose.info("farm", "🔔", "Triple entanglement marked: %s, %s, %s (kitchen ready)" % [pos_a, pos_b, pos_c])
 
 	# Emit signal for UI feedback
 	entanglement_created.emit(pos_a, pos_b)  # Use first two positions for signal
@@ -1868,7 +1917,7 @@ func add_icon(icon) -> void:
 	"""Add Icon to farm for quantum effects"""
 	if icon not in active_icons:
 		active_icons.append(icon)
-		VerboseConfig.info("farm", "✨", "Added Icon to farm: %s" % icon.icon_name)
+		_verbose.info("farm", "✨", "Added Icon to farm: %s" % icon.icon_name)
 
 
 func add_scoped_icon(icon, biome_names: Array[String]) -> void:
@@ -1881,18 +1930,18 @@ func add_scoped_icon(icon, biome_names: Array[String]) -> void:
 	if icon not in active_icons:
 		active_icons.append(icon)
 		icon_scopes[icon] = biome_names
-		VerboseConfig.info("farm", "✨", "Scoped Icon added to farm: %s → %s" % [icon.icon_name, biome_names])
+		_verbose.info("farm", "✨", "Scoped Icon added to farm: %s → %s" % [icon.icon_name, biome_names])
 	else:
 		# Icon already active - just update scope
 		icon_scopes[icon] = biome_names
-		VerboseConfig.info("farm", "📍", "Updated scope for %s → %s" % [icon.icon_name, biome_names])
+		_verbose.info("farm", "📍", "Updated scope for %s → %s" % [icon.icon_name, biome_names])
 
 
 func remove_icon(icon) -> void:
 	"""Remove Icon from farm"""
 	if icon in active_icons:
 		active_icons.erase(icon)
-		VerboseConfig.info("farm", "🚫", "Removed Icon from farm: %s" % icon.icon_name)
+		_verbose.info("farm", "🚫", "Removed Icon from farm: %s" % icon.icon_name)
 
 
 func get_effective_temperature() -> float:
@@ -1970,9 +2019,9 @@ func get_grid_stats() -> Dictionary:
 
 func print_grid_state():
 	"""Debug: Print current grid state"""
-	VerboseConfig.debug("farm", "=", "FARM GRID STATE")
+	_verbose.debug("farm", "=", "FARM GRID STATE")
 	var stats = get_grid_stats()
-	VerboseConfig.debug("farm", "📊", "Plots: %d | Planted: %d | Mature: %d | Entangled: %d" % [
+	_verbose.debug("farm", "📊", "Plots: %d | Planted: %d | Mature: %d | Entangled: %d" % [
 		stats["total_plots"],
 		stats["planted"],
 		stats["mature"],
@@ -1991,6 +2040,6 @@ func print_grid_state():
 				# Quantum-only: all planted plots shown as [M]
 				row += "[M]"
 
-		VerboseConfig.debug("farm", "🌾", row)
+		_verbose.debug("farm", "🌾", row)
 
-	VerboseConfig.debug("farm", "=", "Grid state complete")
+	_verbose.debug("farm", "=", "Grid state complete")

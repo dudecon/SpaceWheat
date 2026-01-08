@@ -2,8 +2,8 @@ extends Node
 
 ## Global logging configuration with category-based filtering and log levels
 ##
-## NOTE: This is an autoload singleton. Cannot use class_name due to Godot restriction.
-## Access via VerboseConfig autoload at runtime, not during compilation.
+## NOTE: This is an autoload singleton. Cannot use class_name VerboseConfig (Godot restriction).
+## Access via autoload singleton 'VerboseConfig' at runtime.
 ##
 ## Usage:
 ##   VerboseConfig.info("farm", "🌾", "Planting wheat at position %s" % pos)

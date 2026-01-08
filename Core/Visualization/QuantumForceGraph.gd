@@ -1,6 +1,9 @@
 class_name QuantumForceGraph
 extends Node2D
 
+# Access autoload safely (avoids compile-time errors)
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 ## INPUT CONTRACT (Layer 5 - Bubble Touch Gestures)
 ## ═══════════════════════════════════════════════════════════════
 ## PHASE: _unhandled_input() - Lowest priority, receives leftover events
@@ -124,6 +127,10 @@ const DEBUG_MODE = true  # Set to true for debugging node positions and scaling
 var debug_frame_count = 0
 var frame_count = 0
 
+# PERFORMANCE OPTIMIZATION: Throttle all processing to 10 Hz
+const PROCESS_INTERVAL: float = 0.1  # 10 Hz for everything
+var process_accumulator: float = 0.0
+
 
 func _ready():
 	set_process(true)
@@ -131,14 +138,14 @@ func _ready():
 	set_process_unhandled_input(true)
 	# Create layout calculator
 	layout_calculator = BiomeLayoutCalculator.new()
-	VerboseConfig.info("quantum", "⚛️", "QuantumForceGraph initialized (input enabled)")
+	_verbose.info("quantum", "⚛️", "QuantumForceGraph initialized (input enabled)")
 
 	# Connect to TouchInputManager for bubble interactions
 	if TouchInputManager:
 		TouchInputManager.tap_detected.connect(_on_bubble_tap)
 		TouchInputManager.swipe_detected.connect(_on_bubble_swipe)
-		VerboseConfig.info("input", "✅", "Touch: Tap-to-measure connected")
-		VerboseConfig.info("input", "✅", "Touch: Swipe-to-entangle connected")
+		_verbose.info("input", "✅", "Touch: Tap-to-measure connected")
+		_verbose.info("input", "✅", "Touch: Swipe-to-entangle connected")
 
 
 # REMOVED: show_rejection_effect() - now handled by PlotGridDisplay (UI layer)
@@ -180,7 +187,7 @@ func update_layout(force: bool = false) -> void:
 	queue_redraw()
 
 	if DEBUG_MODE:
-		VerboseConfig.info("ui", "📐", "Layout updated: %s" % layout_calculator.debug_info())
+		_verbose.info("ui", "📐", "Layout updated: %s" % layout_calculator.debug_info())
 
 
 func initialize(grid: FarmGrid, center_pos: Vector2, radius: float, provided_positions: Dictionary = {}):
@@ -206,7 +213,7 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float, provided_pos
 
 		# If positions were provided by PlotGridDisplay, use those (plots are foundation)
 		if not provided_positions.is_empty():
-			VerboseConfig.info("quantum", "⚛️", "QuantumForceGraph: Using provided plot positions from PlotGridDisplay")
+			_verbose.info("quantum", "⚛️", "QuantumForceGraph: Using provided plot positions from PlotGridDisplay")
 			classical_plot_positions = provided_positions.duplicate()
 		else:
 			# Fall back to calculating positions internally
@@ -220,8 +227,8 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float, provided_pos
 			var plots_by_biome: Dictionary = {}  # biome_name -> Array[Vector2i]
 
 			# First pass: group all plots by their assigned biome
-			VerboseConfig.debug("quantum", "🔍", "Grouping plots by biome (grid size: %dx%d, scale=%.2f)" % [grid.grid_width, grid.grid_height, viewport_scale])
-			VerboseConfig.debug("quantum", "🔍", "   plot_biome_assignments has %d entries" % grid.plot_biome_assignments.size())
+			_verbose.debug("quantum", "🔍", "Grouping plots by biome (grid size: %dx%d, scale=%.2f)" % [grid.grid_width, grid.grid_height, viewport_scale])
+			_verbose.debug("quantum", "🔍", "   plot_biome_assignments has %d entries" % grid.plot_biome_assignments.size())
 
 			for y in range(grid.grid_height):
 				for x in range(grid.grid_width):
@@ -232,9 +239,9 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float, provided_pos
 						if biome_name == "":
 							if biomes.size() > 0:
 								biome_name = biomes.keys()[0]  # Use first registered biome as default
-								VerboseConfig.warn("quantum", "⚠️", "   [%s] No assignment, using default biome '%s'" % [grid_pos, biome_name])
+								_verbose.warn("quantum", "⚠️", "   [%s] No assignment, using default biome '%s'" % [grid_pos, biome_name])
 							else:
-								VerboseConfig.warn("quantum", "❌", "   [%s] No assignment and no biomes registered!" % grid_pos)
+								_verbose.warn("quantum", "❌", "   [%s] No assignment and no biomes registered!" % grid_pos)
 
 						if biome_name != "":
 							if not plots_by_biome.has(biome_name):
@@ -244,15 +251,15 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float, provided_pos
 			var total_plots_grouped = 0
 			for biome_name in plots_by_biome:
 				total_plots_grouped += plots_by_biome[biome_name].size()
-				VerboseConfig.debug("quantum", "🔍", "     - %s: %d plots" % [biome_name, plots_by_biome[biome_name].size()])
+				_verbose.debug("quantum", "🔍", "     - %s: %d plots" % [biome_name, plots_by_biome[biome_name].size()])
 
-			VerboseConfig.debug("quantum", "🔍", "   Total: %d biomes with %d plots" % [plots_by_biome.keys().size(), total_plots_grouped])
+			_verbose.debug("quantum", "🔍", "   Total: %d biomes with %d plots" % [plots_by_biome.keys().size(), total_plots_grouped])
 
 			# PARAMETRIC LAYOUT: Assign parametric coordinates to each plot
 			# The layout calculator will compute actual positions from these
 			for bname in plots_by_biome:
 				if not biomes.has(bname):
-					VerboseConfig.warn("quantum", "⚠️", "Biome '%s' not found in registry!" % bname)
+					_verbose.warn("quantum", "⚠️", "Biome '%s' not found in registry!" % bname)
 					continue
 
 				var biome_plots = plots_by_biome[bname]
@@ -264,7 +271,7 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float, provided_pos
 					0  # seed_offset
 				)
 
-				VerboseConfig.debug("quantum", "🔵", "Biome '%s': %d plots → %d parametric coords" % [
+				_verbose.debug("quantum", "🔵", "Biome '%s': %d plots → %d parametric coords" % [
 					bname,
 					biome_plots.size(),
 					parametric_coords.size()
@@ -296,16 +303,16 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float, provided_pos
 
 		# Create quantum nodes for all plots
 		if classical_plot_positions.size() > 0:
-			VerboseConfig.debug("ui", "📍", "\n📍 Classical plot positions:")
+			_verbose.debug("ui", "📍", "\n📍 Classical plot positions:")
 			for grid_pos in classical_plot_positions.keys().slice(0, 3):
 				var pos = classical_plot_positions[grid_pos]
-				VerboseConfig.debug("ui", "📍", "   Grid %s → Position (%.1f, %.1f)" % [grid_pos, pos.x, pos.y])
+				_verbose.debug("ui", "📍", "   Grid %s → Position (%.1f, %.1f)" % [grid_pos, pos.x, pos.y])
 			if classical_plot_positions.size() > 3:
-				VerboseConfig.debug("ui", "📍", "   ... and %d more" % (classical_plot_positions.size() - 3))
+				_verbose.debug("ui", "📍", "   ... and %d more" % (classical_plot_positions.size() - 3))
 
 			# Store ALL plot positions for persistent gate infrastructure visualization
 			all_plot_positions = classical_plot_positions.duplicate()
-			VerboseConfig.debug("ui", "📍", "Stored %d plot positions in all_plot_positions" % all_plot_positions.size())
+			_verbose.debug("ui", "📍", "Stored %d plot positions in all_plot_positions" % all_plot_positions.size())
 
 			create_quantum_nodes(classical_plot_positions)
 
@@ -319,17 +326,17 @@ func initialize(grid: FarmGrid, center_pos: Vector2, radius: float, provided_pos
 					node.parametric_t = params["t"]
 					node.parametric_ring = params["ring"]
 
-			VerboseConfig.info("quantum", "⚛️", "QuantumForceGraph initialized with %d quantum nodes (parametric layout)" % quantum_nodes.size())
+			_verbose.info("quantum", "⚛️", "QuantumForceGraph initialized with %d quantum nodes (parametric layout)" % quantum_nodes.size())
 
 			# Verify nodes were created with parametric coords
 			if quantum_nodes.size() > 0:
 				var node = quantum_nodes[0]
-				VerboseConfig.debug("quantum", "⚛️", "   First node: biome='%s', t=%.2f, ring=%.2f, pos=(%.1f, %.1f)" % [
+				_verbose.debug("quantum", "⚛️", "   First node: biome='%s', t=%.2f, ring=%.2f, pos=(%.1f, %.1f)" % [
 					node.biome_name, node.parametric_t, node.parametric_ring,
 					node.position.x, node.position.y
 				])
 		else:
-			VerboseConfig.warn("quantum", "⚠️", "QuantumForceGraph: No plots found to create quantum nodes")
+			_verbose.warn("quantum", "⚠️", "QuantumForceGraph: No plots found to create quantum nodes")
 
 
 func _unhandled_input(event: InputEvent):
@@ -353,30 +360,30 @@ func _unhandled_input(event: InputEvent):
 	# Check if this is a touch-generated mouse event
 	if event.device != -1:
 		# Touch-generated mouse event - ignore, let TouchInputManager handle it
-		VerboseConfig.debug("input", "🖱️", "QuantumForceGraph: Touch-generated mouse event (device=%d) - ignoring for TouchInputManager" % event.device)
+		_verbose.debug("input", "🖱️", "QuantumForceGraph: Touch-generated mouse event (device=%d) - ignoring for TouchInputManager" % event.device)
 		return
 
 	# Real mouse event - handle it
 	var local_pos: Vector2 = get_global_transform().affine_inverse() * event.global_position
 	var is_press: bool = event.pressed
 	var is_release: bool = not event.pressed
-	VerboseConfig.debug("input", "🖱️", "QuantumForceGraph: Mouse %s at local %s" % ["PRESS" if is_press else "RELEASE", local_pos])
+	_verbose.debug("input", "🖱️", "QuantumForceGraph: Mouse %s at local %s" % ["PRESS" if is_press else "RELEASE", local_pos])
 
 	var clicked_node = get_node_at_position(local_pos)
-	VerboseConfig.debug("input", "🖱️", "   Local pos: %s, Node: %s" % [local_pos, clicked_node])
+	_verbose.debug("input", "🖱️", "   Local pos: %s, Node: %s" % [local_pos, clicked_node])
 
 	if is_press:
 		# PRESS/TOUCH DOWN: Start tracking for potential swipe
 		if clicked_node:
-			VerboseConfig.debug("input", "✅", "   Found quantum node at grid pos: %s" % clicked_node.grid_position)
+			_verbose.debug("input", "✅", "   Found quantum node at grid pos: %s" % clicked_node.grid_position)
 			swipe_start_pos = local_pos
 			swipe_start_node = clicked_node
 			is_swiping = true
 			swipe_start_time = Time.get_ticks_msec() / 1000.0
 			get_viewport().set_input_as_handled()
-			VerboseConfig.debug("input", "🖱️", "   Starting swipe tracking from: %s" % clicked_node.grid_position)
+			_verbose.debug("input", "🖱️", "   Starting swipe tracking from: %s" % clicked_node.grid_position)
 		else:
-			VerboseConfig.debug("input", "⏩", "   No quantum node at position")
+			_verbose.debug("input", "⏩", "   No quantum node at position")
 
 	elif is_release:
 		# RELEASE/TOUCH UP: Determine if it was a tap or swipe
@@ -384,25 +391,25 @@ func _unhandled_input(event: InputEvent):
 			var swipe_distance = swipe_start_pos.distance_to(local_pos)
 			var swipe_time = (Time.get_ticks_msec() / 1000.0) - swipe_start_time
 
-			VerboseConfig.debug("input", "🖱️", "   Swipe distance: %.1f, time: %.2fs" % [swipe_distance, swipe_time])
+			_verbose.debug("input", "🖱️", "   Swipe distance: %.1f, time: %.2fs" % [swipe_distance, swipe_time])
 
 			if swipe_distance >= SWIPE_MIN_DISTANCE and swipe_time <= SWIPE_MAX_TIME:
 				# SWIPE GESTURE: Check if end is on another node
 				var end_node = get_node_at_position(local_pos)
 				if end_node and end_node != swipe_start_node:
-					VerboseConfig.info("input", "✨", "SWIPE DETECTED: %s → %s" % [swipe_start_node.grid_position, end_node.grid_position])
+					_verbose.info("input", "✨", "SWIPE DETECTED: %s → %s" % [swipe_start_node.grid_position, end_node.grid_position])
 					node_swiped_to.emit(swipe_start_node.grid_position, end_node.grid_position)
 					get_viewport().set_input_as_handled()
 				else:
 					# Swipe but didn't land on another node - treat as tap
-					VerboseConfig.debug("input", "🖱️", "   Swipe but no target - treating as tap")
+					_verbose.debug("input", "🖱️", "   Swipe but no target - treating as tap")
 					if swipe_start_node:
 						node_clicked.emit(swipe_start_node.grid_position, 0)
 						get_viewport().set_input_as_handled()
 			else:
 				# SHORT TAP: Regular tap/click
 				if swipe_start_node:
-					VerboseConfig.info("input", "👆", "TAP DETECTED on: %s" % swipe_start_node.grid_position)
+					_verbose.info("input", "👆", "TAP DETECTED on: %s" % swipe_start_node.grid_position)
 					node_clicked.emit(swipe_start_node.grid_position, 0)
 					get_viewport().set_input_as_handled()
 
@@ -415,28 +422,28 @@ func _on_bubble_tap(position: Vector2) -> void:
 
 	PHASE 2 FIX: Check spatial hierarchy - only process if PlotGridDisplay didn't consume tap
 	"""
-	VerboseConfig.debug("input", "⚛️", "QuantumForceGraph._on_bubble_tap() called! position=%s, nodes=%d" % [position, quantum_nodes.size()])
+	_verbose.debug("input", "⚛️", "QuantumForceGraph._on_bubble_tap() called! position=%s, nodes=%d" % [position, quantum_nodes.size()])
 
 	# PHASE 2 FIX: Spatial hierarchy - skip if tap already consumed by plot detection
 	if TouchInputManager.is_current_tap_consumed():
-		VerboseConfig.debug("input", "⏩", "   Tap already consumed by plot detection, skipping bubble check")
+		_verbose.debug("input", "⏩", "   Tap already consumed by plot detection, skipping bubble check")
 		return
 
 	# Convert global screen position to local force graph coordinates
 	var local_pos = get_global_transform().affine_inverse() * position
-	VerboseConfig.debug("input", "🖱️", "   Global transform origin: %s, local_pos: %s" % [get_global_transform().origin, local_pos])
+	_verbose.debug("input", "🖱️", "   Global transform origin: %s, local_pos: %s" % [get_global_transform().origin, local_pos])
 
 	var tapped_node = get_node_at_position(local_pos)
 
 	if tapped_node:
-		VerboseConfig.info("input", "📱", "Bubble tapped: %s (measure/collapse)" % tapped_node.grid_position)
+		_verbose.info("input", "📱", "Bubble tapped: %s (measure/collapse)" % tapped_node.grid_position)
 		# Emit click signal - this triggers measurement/collapse
 		node_clicked.emit(tapped_node.grid_position, 0)
 		# Consume the tap now that we handled it
 		TouchInputManager.consume_current_tap()
-		VerboseConfig.debug("input", "✅", "   Bubble tap CONSUMED")
+		_verbose.debug("input", "✅", "   Bubble tap CONSUMED")
 	else:
-		VerboseConfig.debug("input", "📱", "Touch tap at %s - no bubble found (checked %d nodes)" % [position, quantum_nodes.size()])
+		_verbose.debug("input", "📱", "Touch tap at %s - no bubble found (checked %d nodes)" % [position, quantum_nodes.size()])
 
 
 func _on_bubble_swipe(start_pos: Vector2, end_pos: Vector2, direction: Vector2) -> void:
@@ -449,15 +456,15 @@ func _on_bubble_swipe(start_pos: Vector2, end_pos: Vector2, direction: Vector2) 
 	var end_node = get_node_at_position(local_end)
 
 	if start_node and end_node and start_node != end_node:
-		VerboseConfig.info("input", "📱", "Swipe entanglement: %s → %s" % [start_node.grid_position, end_node.grid_position])
+		_verbose.info("input", "📱", "Swipe entanglement: %s → %s" % [start_node.grid_position, end_node.grid_position])
 		# Emit swipe signal - this creates entanglement
 		node_swiped_to.emit(start_node.grid_position, end_node.grid_position)
 	elif start_node and not end_node:
 		# Swiped from a bubble but didn't land on another - treat as tap
-		VerboseConfig.debug("input", "📱", "Swipe from %s but no end bubble - treating as tap" % start_node.grid_position)
+		_verbose.debug("input", "📱", "Swipe from %s but no end bubble - treating as tap" % start_node.grid_position)
 		node_clicked.emit(start_node.grid_position, 0)
 	else:
-		VerboseConfig.debug("input", "📱", "Swipe gesture but no bubbles found")
+		_verbose.debug("input", "📱", "Swipe gesture but no bubbles found")
 
 
 func set_icons(biotic, chaos, imperium):
@@ -470,7 +477,7 @@ func set_icons(biotic, chaos, imperium):
 func set_biome(biome_ref):
 	"""Set reference to Biome for sun_qubit access"""
 	biome = biome_ref
-	VerboseConfig.info("quantum", "⚛️", "QuantumForceGraph connected to Biome (sun_qubit)")
+	_verbose.info("quantum", "⚛️", "QuantumForceGraph connected to Biome (sun_qubit)")
 
 
 func wire_to_farm(farm: Node) -> void:
@@ -480,7 +487,7 @@ func wire_to_farm(farm: Node) -> void:
 	Called by FarmUIController during farm injection phase.
 	"""
 	if not farm or not farm.has_meta("grid"):
-		VerboseConfig.warn("quantum", "⚠️", "QuantumForceGraph.wire_to_farm(): farm has no grid metadata")
+		_verbose.warn("quantum", "⚠️", "QuantumForceGraph.wire_to_farm(): farm has no grid metadata")
 		return
 
 	# Calculate visualization parameters
@@ -498,7 +505,7 @@ func wire_to_farm(farm: Node) -> void:
 		for biome_name in registered_biomes:
 			var biome_obj = registered_biomes[biome_name]
 			biomes[biome_name] = biome_obj
-			VerboseConfig.info("quantum", "⚛️", "QuantumForceGraph registered biome: %s" % biome_name)
+			_verbose.info("quantum", "⚛️", "QuantumForceGraph registered biome: %s" % biome_name)
 
 			# Store BioticFlux reference for backward compatibility (sun_qubit access)
 			if biome_name == "BioticFlux":
@@ -518,7 +525,7 @@ func wire_to_farm(farm: Node) -> void:
 	# This eliminates the signal cascade that caused "haunted" behavior
 	# Nodes will be updated during _draw() by checking current Farm state
 
-	VerboseConfig.info("quantum", "⚛️", "QuantumForceGraph wired to farm with multi-biome support (no signals - direct state reading)")
+	_verbose.info("quantum", "⚛️", "QuantumForceGraph wired to farm with multi-biome support (no signals - direct state reading)")
 
 
 # REFACTOR: Signal handlers removed - no longer needed
@@ -580,10 +587,10 @@ func create_quantum_nodes(classical_plot_positions: Dictionary):
 	quantum_nodes_by_grid_pos.clear()
 
 	if DEBUG_MODE:
-		VerboseConfig.debug("quantum", "⚛️", "\n⚛️ ===== CREATING QUANTUM NODES =====")
-		VerboseConfig.debug("quantum", "⚛️", "Center position: %s" % center_position)
-		VerboseConfig.debug("quantum", "⚛️", "Graph radius: %.1f" % graph_radius)
-		VerboseConfig.debug("quantum", "⚛️", "Classical positions count: %d" % classical_plot_positions.size())
+		_verbose.debug("quantum", "⚛️", "\n⚛️ ===== CREATING QUANTUM NODES =====")
+		_verbose.debug("quantum", "⚛️", "Center position: %s" % center_position)
+		_verbose.debug("quantum", "⚛️", "Graph radius: %.1f" % graph_radius)
+		_verbose.debug("quantum", "⚛️", "Classical positions count: %d" % classical_plot_positions.size())
 
 	for grid_pos in classical_plot_positions:
 		var classical_pos = classical_plot_positions[grid_pos]
@@ -609,14 +616,14 @@ func create_quantum_nodes(classical_plot_positions: Dictionary):
 			node_by_plot_id[plot_id] = node
 
 		if DEBUG_MODE and quantum_nodes.size() <= 3:
-			VerboseConfig.debug("quantum", "⚛️", "Node %d: grid=%s, classical_pos=%s, initial_pos=%s" % [
+			_verbose.debug("quantum", "⚛️", "Node %d: grid=%s, classical_pos=%s, initial_pos=%s" % [
 				quantum_nodes.size() - 1, grid_pos, classical_pos, node.position
 			])
 
-	VerboseConfig.info("quantum", "⚛️", "Created %d quantum nodes" % quantum_nodes.size())
+	_verbose.info("quantum", "⚛️", "Created %d quantum nodes" % quantum_nodes.size())
 
 	if DEBUG_MODE:
-		VerboseConfig.debug("quantum", "⚛️", "===================================\n")
+		_verbose.debug("quantum", "⚛️", "===================================\n")
 
 
 func rebuild_from_biomes(classical_plot_positions: Dictionary) -> void:
@@ -628,7 +635,7 @@ func rebuild_from_biomes(classical_plot_positions: Dictionary) -> void:
 	Args:
 		classical_plot_positions: Dictionary mapping Vector2i grid position -> Vector2 screen position
 	"""
-	VerboseConfig.info("quantum", "🔄", "QuantumForceGraph: Rebuilding from biome states...")
+	_verbose.info("quantum", "🔄", "QuantumForceGraph: Rebuilding from biome states...")
 
 	# Clear existing visualization
 	quantum_nodes.clear()
@@ -644,7 +651,7 @@ func rebuild_from_biomes(classical_plot_positions: Dictionary) -> void:
 	if biotic_flux_biome:
 		create_sun_qubit_node()
 
-	VerboseConfig.info("quantum", "✅", "   QuantumForceGraph rebuilt: %d nodes recreated from biome states" % quantum_nodes.size())
+	_verbose.info("quantum", "✅", "   QuantumForceGraph rebuilt: %d nodes recreated from biome states" % quantum_nodes.size())
 
 
 func create_sun_qubit_node():
@@ -655,13 +662,13 @@ func create_sun_qubit_node():
 	"""
 	# Use biotic_flux_biome specifically for sun qubit
 	if not biotic_flux_biome or not biotic_flux_biome.sun_qubit:
-		VerboseConfig.warn("quantum", "⚠️", "Cannot create sun node: biotic_flux_biome or sun_qubit not available")
+		_verbose.warn("quantum", "⚠️", "Cannot create sun node: biotic_flux_biome or sun_qubit not available")
 		return
 
 	# Position sun in BioticFlux biome region (bottom-left area)
 	var biome_config = biotic_flux_biome.get_visual_config()
 	if not biome_config:
-		VerboseConfig.warn("quantum", "⚠️", "Cannot create sun node: BioticFlux biome config not found")
+		_verbose.warn("quantum", "⚠️", "Cannot create sun node: BioticFlux biome config not found")
 		return
 
 	var biome_center = center_position + biome_config.center_offset * graph_radius
@@ -690,7 +697,7 @@ func create_sun_qubit_node():
 	# quantum_behavior = 2 (FIXED) means no forces applied
 	sun_qubit_node.set_meta("quantum_behavior", 2)
 
-	VerboseConfig.info("quantum", "☀️", "Created sun qubit node at position: %s in BioticFlux region (FORCE-IMMUNE)" % sun_classical_pos)
+	_verbose.info("quantum", "☀️", "Created sun qubit node at position: %s in BioticFlux region (FORCE-IMMUNE)" % sun_classical_pos)
 
 
 func _process(delta):
@@ -699,30 +706,36 @@ func _process(delta):
 
 	# Accumulate time for animations
 	time_accumulator += delta
+	process_accumulator += delta
+
+	# THROTTLE: All processing at 10 Hz
+	if process_accumulator < PROCESS_INTERVAL:
+		return
+
+	var accumulated_dt = process_accumulator
+	process_accumulator = 0.0
 
 	# Update quantum node visual properties from plot states
 	_update_node_visuals()
 
 	# Update node animations (fade-in effects)
-	_update_node_animations(delta)
+	_update_node_animations(accumulated_dt)
 
-	# Update particle system
-	_update_particles(delta)
-
-	# Update Icon particle field
-	_update_icon_particles(delta)
+	# Update particle systems
+	_update_particles(accumulated_dt)
+	_update_icon_particles(accumulated_dt)
 
 	# NOTE: Rejection effects removed - now handled by PlotGridDisplay (UI layer)
 
 	# Update Carrion Throne political attractor (if active)
 	if imperium_icon and imperium_icon.has_method("update_political_season"):
-		imperium_icon.update_political_season(delta)
+		imperium_icon.update_political_season(accumulated_dt)
 
-	# Calculate and apply forces
-	_update_forces(delta)
+	# Calculate and apply forces (LAZY: only for planted nodes)
+	_update_forces(accumulated_dt)
 
 	# Update positions
-	_update_positions(delta)
+	_update_positions(accumulated_dt)
 
 	# Redraw
 	queue_redraw()
@@ -937,7 +950,13 @@ func _spawn_icon_particles(delta: float):
 
 
 func _update_forces(delta: float):
-	"""Calculate and apply all forces to quantum nodes"""
+	"""Calculate and apply all forces to quantum nodes (LAZY: only planted nodes)"""
+	# Build list of active (planted) nodes for O(n²) calculations
+	var active_nodes: Array[QuantumNode] = []
+	for node in quantum_nodes:
+		if node.plot and node.plot.is_planted:
+			active_nodes.append(node)
+
 	for node in quantum_nodes:
 		var total_force = Vector2.ZERO
 
@@ -945,46 +964,35 @@ func _update_forces(delta: float):
 		var quantum_behavior = node.plot.quantum_behavior if node.plot and "quantum_behavior" in node.plot else -1
 
 		# FIXED PLOTS: Don't move at all (celestial bodies, quantum_behavior=2)
-		# These are completely locked to their position
 		if quantum_behavior == 2:
-			continue  # No forces, no movement for fixed plots
+			continue
 
 		# HOVERING PLOTS: Fixed relative to their anchor (biome measurement plots, quantum_behavior=1)
-		# These don't move but stay positioned over their measurement location
 		if quantum_behavior == 1:
-			node.position = node.classical_anchor  # Always at anchor
-			continue  # Skip force calculations
+			node.position = node.classical_anchor
+			continue
 
-		# MEASURED NODES: Pull strongly to classical position (collapsed to definite state)
-		# Quantum mechanics: Measurement collapses wavefunction to classical anchor
-		if node.plot and node.plot.has_been_measured:
-			# STRONG tether force - measured nodes snap to their classical position
+		# LAZY: Skip unplanted nodes entirely
+		if not node.plot or not node.plot.is_planted:
+			continue
+
+		# MEASURED NODES: Pull strongly to classical position
+		if node.plot.has_been_measured:
 			total_force += _calculate_tether_force(node, true)
-
-			# Apply force with strong damping (settle quickly to anchor)
 			node.apply_force(total_force, delta)
 			node.apply_damping(MEASURED_DAMPING)
-			continue  # Skip quantum forces (no repulsion, no entanglement)
+			continue
 
 		# UNMEASURED FLOATING NODES: Full quantum dynamics
-
-		# 1. Weak tether spring force (toward classical anchor)
 		total_force += _calculate_tether_force(node, false)
-
-		# 2. Repulsion from all other nodes (only from unmeasured nodes)
-		total_force += _calculate_repulsion_forces(node)
-
-		# 3. Attraction to entangled partners (only to unmeasured nodes)
+		total_force += _calculate_repulsion_forces_lazy(node, active_nodes)
 		total_force += _calculate_entanglement_forces(node)
 
-		# Apply force
 		node.apply_force(total_force, delta)
-
-		# Apply damping
 		node.apply_damping(DAMPING)
 
-	# 4. Semantic coupling between neighboring plots (affects quantum states directly)
-	_apply_semantic_coupling(delta)
+	# Semantic coupling only between active nodes
+	_apply_semantic_coupling_lazy(delta, active_nodes)
 
 
 func _calculate_tether_force(node: QuantumNode, is_measured: bool = false) -> Vector2:
@@ -1003,22 +1011,20 @@ func _calculate_tether_force(node: QuantumNode, is_measured: bool = false) -> Ve
 	return tether_vector * spring_constant
 
 
-func _calculate_repulsion_forces(node: QuantumNode) -> Vector2:
-	"""Calculate repulsion forces from all other quantum nodes"""
+func _calculate_repulsion_forces_lazy(node: QuantumNode, active_nodes: Array[QuantumNode]) -> Vector2:
+	"""Calculate repulsion forces only from other ACTIVE (planted) nodes"""
 	var repulsion = Vector2.ZERO
 
-	for other_node in quantum_nodes:
+	for other_node in active_nodes:
 		if other_node == node:
 			continue
 
 		var delta_pos = node.position - other_node.position
 		var distance = delta_pos.length()
 
-		# Avoid division by zero
 		if distance < MIN_DISTANCE:
 			distance = MIN_DISTANCE
 
-		# Inverse square repulsion
 		var force_magnitude = REPULSION_STRENGTH / (distance * distance)
 		repulsion += delta_pos.normalized() * force_magnitude
 
@@ -1049,55 +1055,15 @@ func _calculate_entanglement_forces(node: QuantumNode) -> Vector2:
 	return attraction
 
 
-func _apply_semantic_coupling(delta: float):
-	"""Apply semantic coupling between neighboring plots
+func _apply_semantic_coupling_lazy(_delta: float, _active_nodes: Array[QuantumNode]):
+	"""Apply semantic coupling between neighboring plots (LAZY: pre-filtered active nodes)
 
-	Based on Vocabulary Virus design:
-	- Similar wheat attracts (monocultures stabilize)
-	- Different wheat repels (polycultures innovate)
-	- Neutral wheat drifts (Brownian motion)
-
-	Only affects plots within coupling distance (adjacent or close neighbors).
+	NOTE: Coupling logic is currently disabled - this is a placeholder for future implementation.
+	The coupling should happen in game mechanics layer, not visualization.
 	"""
-	const SemanticCoupling = preload("res://Core/QuantumSubstrate/SemanticCoupling.gd")
-	const COUPLING_DISTANCE = 150.0  # Max distance for coupling effect
-	const COUPLING_STRENGTH = 0.3    # Modulate effect strength
-
-	for i in range(quantum_nodes.size()):
-		var node_a = quantum_nodes[i]
-		if not node_a.plot or not node_a.plot.is_planted or not node_a.plot.parent_biome or node_a.plot.bath_subplot_id < 0:
-			continue
-
-		# Find neighboring nodes within coupling distance
-		for j in range(i + 1, quantum_nodes.size()):
-			var node_b = quantum_nodes[j]
-			if not node_b.plot or not node_b.plot.is_planted or not node_b.plot.parent_biome or node_b.plot.bath_subplot_id < 0:
-				continue
-
-			# Check distance (only couple nearby plots)
-			var distance = node_a.position.distance_to(node_b.position)
-			if distance > COUPLING_DISTANCE:
-				continue
-
-			# Apply coupling (modulates by distance)
-			var distance_factor = 1.0 - (distance / COUPLING_DISTANCE)
-			var strength = COUPLING_STRENGTH * distance_factor
-
-			# NOTE: Coupling is a SIMULATION concern, not display
-			# Removed display-layer calls to quantum coupling
-			# This should be handled by game mechanics, not visualization
-			# SemanticCoupling.apply_semantic_coupling(
-			#	node_a.plot.quantum_state,
-			#	node_b.plot.quantum_state,
-			#	delta,
-			#	strength
-			# )
-			# SemanticCoupling.apply_semantic_coupling(
-			#	node_b.plot.quantum_state,
-			#	node_a.plot.quantum_state,
-			#	delta,
-			#	strength
-			# )
+	# Semantic coupling disabled - was never actually doing anything (commented out)
+	# When re-enabled, iterate over active_nodes instead of quantum_nodes
+	pass
 
 
 func _find_node_by_qubit(qubit) -> QuantumNode:
@@ -1432,7 +1398,7 @@ func _draw_entanglement_lines():
 			entanglement_count += 1
 
 	if DEBUG_MODE and entanglement_count > 0:
-		VerboseConfig.debug("quantum", "🔗", "Drew %d entanglement lines" % entanglement_count)
+		_verbose.debug("quantum", "🔗", "Drew %d entanglement lines" % entanglement_count)
 
 
 func _draw_food_web_edges():
@@ -1712,7 +1678,7 @@ func _draw_persistent_gate_infrastructure():
 
 	# Debug: Log available positions on first few frames
 	if frame_count < 5:
-		VerboseConfig.debug("quantum", "📍", "Gate draw: all_plot_positions has %d entries, checking %d plots" % [all_plot_positions.size(), farm_grid.plots.size()])
+		_verbose.debug("quantum", "📍", "Gate draw: all_plot_positions has %d entries, checking %d plots" % [all_plot_positions.size(), farm_grid.plots.size()])
 
 	# Iterate ALL plots in the grid (not just quantum nodes)
 	# NOTE: farm_grid.plots is a Dictionary {Vector2i -> PlotBase}, so iterate keys and get values
@@ -1767,9 +1733,9 @@ func _draw_persistent_gate_infrastructure():
 
 	# Debug: Always print gate count on first few frames
 	if gate_count > 0 and frame_count < 10:
-		VerboseConfig.debug("quantum", "🔧", "Drew %d persistent gate infrastructure (frame %d)" % [gate_count, frame_count])
+		_verbose.debug("quantum", "🔧", "Drew %d persistent gate infrastructure (frame %d)" % [gate_count, frame_count])
 	elif DEBUG_MODE and gate_count > 0:
-		VerboseConfig.debug("quantum", "🔧", "Drew %d persistent gate infrastructure" % gate_count)
+		_verbose.debug("quantum", "🔧", "Drew %d persistent gate infrastructure" % gate_count)
 
 
 func _draw_bell_gate_infrastructure(positions: Array[Vector2], base_width: float, max_width: float, corner_radius: float):
@@ -1965,7 +1931,7 @@ func _draw_energy_transfer_forces():
 		force_arrows_drawn += 1
 
 	if DEBUG_MODE and force_arrows_drawn > 0:
-		VerboseConfig.debug("quantum", "⚡", "Drew %d energy transfer force arrows (sun coupling)" % force_arrows_drawn)
+		_verbose.debug("quantum", "⚡", "Drew %d energy transfer force arrows (sun coupling)" % force_arrows_drawn)
 
 	# Draw icon influence forces (spring attraction to stable points)
 	_draw_icon_influence_forces()
@@ -2052,7 +2018,7 @@ func _draw_icon_influence_forces():
 				icon_influence_arrows_drawn += 1
 
 	if DEBUG_MODE and icon_influence_arrows_drawn > 0:
-		VerboseConfig.debug("quantum", "🎯", "Drew %d icon influence force indicators" % icon_influence_arrows_drawn)
+		_verbose.debug("quantum", "🎯", "Drew %d icon influence force indicators" % icon_influence_arrows_drawn)
 
 
 func _draw_particles():
@@ -2316,7 +2282,7 @@ func _draw_quantum_bubble(node: QuantumNode, is_celestial: bool = false) -> void
 	elif node.emoji_north != "" and node.emoji_north_opacity <= 0.01 and node.plot and node.plot.is_planted:
 		# DEBUG: Log when a planted plot has zero opacity (shouldn't happen)
 		if frame_count % 120 == 0:
-			VerboseConfig.warn("perf", "⚠️", "PLANTED plot with zero opacity: grid=%s, emoji='%s', opacity=%.3f" % [
+			_verbose.warn("perf", "⚠️", "PLANTED plot with zero opacity: grid=%s, emoji='%s', opacity=%.3f" % [
 				node.grid_position, node.emoji_north, node.emoji_north_opacity
 			])
 
@@ -2367,10 +2333,10 @@ func _draw_quantum_nodes():
 
 	# Log detailed info on every frame (high spam but useful for debugging)
 	if DEBUG_MODE and frame_count % 30 == 0:  # Log every 0.5 seconds at 60fps
-		VerboseConfig.debug("quantum", "⚛️", "\n⚛️ Frame %d: %d nodes drawn, %d planted" % [frame_count, nodes_drawn, planted_plots.size()])
+		_verbose.debug("quantum", "⚛️", "\n⚛️ Frame %d: %d nodes drawn, %d planted" % [frame_count, nodes_drawn, planted_plots.size()])
 		for debug_info in debug_first_3:
 			var planted_str = "PLANTED" if debug_info["planted"] else "EMPTY"
-			VerboseConfig.debug("quantum", "⚛️", "   Grid %s: pos=(%.1f, %.1f) r=%.0f opacity=%.2f scale=%.2f [%s]" % [
+			_verbose.debug("quantum", "⚛️", "   Grid %s: pos=(%.1f, %.1f) r=%.0f opacity=%.2f scale=%.2f [%s]" % [
 				debug_info["grid_pos"],
 				debug_info["pos"].x,
 				debug_info["pos"].y,
@@ -2381,9 +2347,9 @@ func _draw_quantum_nodes():
 			])
 		# Show all planted plots
 		if planted_plots.size() > 0:
-			VerboseConfig.debug("quantum", "🌱", "\n   🌱 PLANTED PLOTS:")
+			_verbose.debug("quantum", "🌱", "\n   🌱 PLANTED PLOTS:")
 			for p in planted_plots:
-				VerboseConfig.debug("quantum", "🌱", "      Grid %s: emoji='%s' opacity=%.2f is_planted=%s" % [
+				_verbose.debug("quantum", "🌱", "      Grid %s: emoji='%s' opacity=%.2f is_planted=%s" % [
 					p["grid_pos"],
 					p["emoji"],
 					p["opacity"],
@@ -2638,9 +2604,9 @@ func get_node_at_position(pos: Vector2) -> QuantumNode:
 	for node in quantum_nodes:
 		var distance = node.position.distance_to(pos)
 		if distance <= node.radius:
-			VerboseConfig.debug("input", "🖱️", "Node found at %s (distance: %.1f, radius: %.1f)" % [node.grid_position, distance, node.radius])
+			_verbose.debug("input", "🖱️", "Node found at %s (distance: %.1f, radius: %.1f)" % [node.grid_position, distance, node.radius])
 			return node
-	VerboseConfig.debug("input", "🖱️", "No node found at pos %s (checked %d nodes)" % [pos, quantum_nodes.size()])
+	_verbose.debug("input", "🖱️", "No node found at pos %s (checked %d nodes)" % [pos, quantum_nodes.size()])
 	return null
 
 
@@ -2692,16 +2658,16 @@ func print_snapshot(reason: String = ""):
 		return
 
 	var stats = get_stats()
-	VerboseConfig.info("quantum", "⚛️", "\n⚛️ ===== QUANTUM GRAPH SNAPSHOT =====")
+	_verbose.info("quantum", "⚛️", "\n⚛️ ===== QUANTUM GRAPH SNAPSHOT =====")
 	if reason != "":
-		VerboseConfig.info("quantum", "⚛️", "Reason: %s" % reason)
-	VerboseConfig.info("quantum", "⚛️", "Total nodes: %d" % stats.total_nodes)
-	VerboseConfig.info("quantum", "⚛️", "Active (planted): %d" % stats.active_nodes)
-	VerboseConfig.info("quantum", "⚛️", "Entanglements: %d" % stats.total_entanglements)
+		_verbose.info("quantum", "⚛️", "Reason: %s" % reason)
+	_verbose.info("quantum", "⚛️", "Total nodes: %d" % stats.total_nodes)
+	_verbose.info("quantum", "⚛️", "Active (planted): %d" % stats.active_nodes)
+	_verbose.info("quantum", "⚛️", "Entanglements: %d" % stats.total_entanglements)
 
 	# Show entangled pairs
 	if stats.total_entanglements > 0:
-		VerboseConfig.info("quantum", "⚛️", "Entangled pairs:")
+		_verbose.info("quantum", "⚛️", "Entangled pairs:")
 		var printed_pairs = {}
 		for node in quantum_nodes:
 			if not node.plot:
@@ -2714,7 +2680,7 @@ func print_snapshot(reason: String = ""):
 					ids.sort()
 					var pair_key = "%s_%s" % [ids[0], ids[1]]
 					if not printed_pairs.has(pair_key):
-						VerboseConfig.info("quantum", "⚛️", "  %s ↔ %s" % [node.grid_position, partner_node.grid_position])
+						_verbose.info("quantum", "⚛️", "  %s ↔ %s" % [node.grid_position, partner_node.grid_position])
 						printed_pairs[pair_key] = true
 
-	VerboseConfig.info("quantum", "⚛️", "===================================\n")
+	_verbose.info("quantum", "⚛️", "===================================\n")

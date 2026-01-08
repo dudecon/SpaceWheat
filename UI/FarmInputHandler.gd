@@ -25,6 +25,9 @@ const QuantumAlgorithms = preload("res://Core/QuantumSubstrate/QuantumAlgorithms
 # Tool actions from shared config (single source of truth)
 const TOOL_ACTIONS = ToolConfig.TOOL_ACTIONS
 
+# Access autoload safely (avoids compile-time errors)
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 var farm  # Will be injected with Farm instance (Farm.gd)
 var plot_grid_display: Node = null  # Will be injected with PlotGridDisplay instance
 var current_selection: Vector2i = Vector2i.ZERO
@@ -173,14 +176,14 @@ signal submenu_changed(submenu_name: String, submenu_info: Dictionary)  # Emitte
 signal help_requested
 
 func _ready():
-	VerboseConfig.info("input", "⌨️", "FarmInputHandler initialized (Tool Mode System)")
+	_verbose.info("input", "⌨️", "FarmInputHandler initialized (Tool Mode System)")
 	if VERBOSE:
-		VerboseConfig.debug("input", "📍", "Starting position: %s" % current_selection)
-		VerboseConfig.debug("input", "🛠️", "Current tool: %s" % TOOL_ACTIONS[current_tool]["name"])
+		_verbose.debug("input", "📍", "Starting position: %s" % current_selection)
+		_verbose.debug("input", "🛠️", "Current tool: %s" % TOOL_ACTIONS[current_tool]["name"])
 	# Input is ready immediately - PlotGridDisplay is initialized before this
 	# No deferred calls needed
 	set_process_input(true)
-	VerboseConfig.info("input", "✅", "Input processing enabled (no deferred delays)")
+	_verbose.info("input", "✅", "Input processing enabled (no deferred delays)")
 	_print_help()
 
 
@@ -199,10 +202,10 @@ func _process(_delta: float) -> void:
 		if input_enable_frame_count <= 0:
 			set_process(false)  # Stop processing frames
 			set_process_input(true)  # Enable input
-			VerboseConfig.info("input", "✅", "Input processing enabled (UI ready)")
+			_verbose.info("input", "✅", "Input processing enabled (UI ready)")
 			# Verify tiles exist
 			if plot_grid_display and plot_grid_display.tiles:
-				VerboseConfig.debug("input", "📊", "PlotGridDisplay has %d tiles ready" % plot_grid_display.tiles.size())
+				_verbose.debug("input", "📊", "PlotGridDisplay has %d tiles ready" % plot_grid_display.tiles.size())
 
 
 func inject_grid_config(config: GridConfig) -> void:
@@ -215,7 +218,7 @@ func inject_grid_config(config: GridConfig) -> void:
 	# Update dimensions from config
 	grid_width = config.grid_width
 	grid_height = config.grid_height
-	VerboseConfig.info("input", "💉", "GridConfig injected into FarmInputHandler (%dx%d grid)" % [grid_width, grid_height])
+	_verbose.info("input", "💉", "GridConfig injected into FarmInputHandler (%dx%d grid)" % [grid_width, grid_height])
 
 
 func _unhandled_input(event: InputEvent):
@@ -226,13 +229,13 @@ func _unhandled_input(event: InputEvent):
 	via Godot's InputMap system.
 	"""
 	if VERBOSE and event is InputEventKey and event.pressed:
-		VerboseConfig.debug("input", "🔑", "FarmInputHandler._input() received KEY: %s" % event.keycode)
+		_verbose.debug("input", "🔑", "FarmInputHandler._input() received KEY: %s" % event.keycode)
 
 	# Tool selection (1-6) - Phase 7: Use InputMap actions
 	for i in range(1, 7):
 		if event.is_action_pressed("tool_" + str(i)):
 			if VERBOSE:
-				VerboseConfig.debug("input", "🛠️", "Tool key pressed: %d" % i)
+				_verbose.debug("input", "🛠️", "Tool key pressed: %d" % i)
 			_select_tool(i)
 			get_viewport().set_input_as_handled()
 			return
@@ -242,14 +245,14 @@ func _unhandled_input(event: InputEvent):
 		for action in grid_config.keyboard_layout.get_all_actions():
 			if event.is_action_pressed(action):
 				if VERBOSE:
-					VerboseConfig.debug("input", "📍", "GridConfig action detected: %s" % action)
+					_verbose.debug("input", "📍", "GridConfig action detected: %s" % action)
 				var pos = grid_config.keyboard_layout.get_position_for_action(action)
 				if pos != Vector2i(-1, -1) and grid_config.is_position_valid(pos):
 					_toggle_plot_selection(pos)
 					get_viewport().set_input_as_handled()
 					return
 	else:
-		VerboseConfig.warn("input", "⚠️", "grid_config is NULL at input time - falling back to hardcoded actions")
+		_verbose.warn("input", "⚠️", "grid_config is NULL at input time - falling back to hardcoded actions")
 		# Fallback: default 6x2 keyboard layout
 		# Row 0: TYUIOP left-to-right
 		# Row 1: 7890 left-to-right
@@ -268,7 +271,7 @@ func _unhandled_input(event: InputEvent):
 		for action in default_keys.keys():
 			if event.is_action_pressed(action):
 				if VERBOSE:
-					VerboseConfig.debug("input", "📍", "Fallback action detected: %s → %s" % [action, default_keys[action]])
+					_verbose.debug("input", "📍", "Fallback action detected: %s → %s" % [action, default_keys[action]])
 				_toggle_plot_selection(default_keys[action])
 				get_viewport().set_input_as_handled()
 				return
@@ -308,29 +311,29 @@ func _unhandled_input(event: InputEvent):
 	if VERBOSE and event is InputEventKey and event.pressed:
 		var key = event.keycode
 		if key == KEY_Q or key == KEY_E or key == KEY_R:
-			VerboseConfig.debug("input", "🐛", "DEBUG: Pressed key: %s" % event.keycode)
-			VerboseConfig.debug("input", "🐛", "is_action_pressed('action_q'): %s" % event.is_action_pressed("action_q"))
-			VerboseConfig.debug("input", "🐛", "is_action_pressed('action_e'): %s" % event.is_action_pressed("action_e"))
-			VerboseConfig.debug("input", "🐛", "is_action_pressed('action_r'): %s" % event.is_action_pressed("action_r"))
+			_verbose.debug("input", "🐛", "DEBUG: Pressed key: %s" % event.keycode)
+			_verbose.debug("input", "🐛", "is_action_pressed('action_q'): %s" % event.is_action_pressed("action_q"))
+			_verbose.debug("input", "🐛", "is_action_pressed('action_e'): %s" % event.is_action_pressed("action_e"))
+			_verbose.debug("input", "🐛", "is_action_pressed('action_r'): %s" % event.is_action_pressed("action_r"))
 
 	# NOTE: Q/E/R actions are now primarily routed through InputController
 	# Only process if input hasn't already been handled (by menu system)
 	if not get_tree().root.is_input_handled():
 		if event.is_action_pressed("action_q"):
 			if VERBOSE:
-				VerboseConfig.debug("input", "⚡", "action_q detected")
+				_verbose.debug("input", "⚡", "action_q detected")
 			_execute_tool_action("Q")
 			get_viewport().set_input_as_handled()
 			return
 		elif event.is_action_pressed("action_e"):
 			if VERBOSE:
-				VerboseConfig.debug("input", "⚡", "action_e detected")
+				_verbose.debug("input", "⚡", "action_e detected")
 			_execute_tool_action("E")
 			get_viewport().set_input_as_handled()
 			return
 		elif event.is_action_pressed("action_r"):
 			if VERBOSE:
-				VerboseConfig.debug("input", "⚡", "action_r detected")
+				_verbose.debug("input", "⚡", "action_r detected")
 			_execute_tool_action("R")
 			get_viewport().set_input_as_handled()
 			return
@@ -350,7 +353,7 @@ func _unhandled_input(event: InputEvent):
 func _select_tool(tool_num: int):
 	"""Select active tool (1-6)"""
 	if not TOOL_ACTIONS.has(tool_num):
-		VerboseConfig.warn("input", "⚠️", "Tool %d not available" % tool_num)
+		_verbose.warn("input", "⚠️", "Tool %d not available" % tool_num)
 		return
 
 	# Exit any active submenu when switching tools
@@ -359,11 +362,11 @@ func _select_tool(tool_num: int):
 
 	current_tool = tool_num
 	var tool_info = TOOL_ACTIONS[tool_num]
-	VerboseConfig.info("input", "🛠️", "Tool switched to: %s" % tool_info["name"])
+	_verbose.info("input", "🛠️", "Tool switched to: %s" % tool_info["name"])
 	if VERBOSE:
-		VerboseConfig.debug("input", "🛠️", "Q = %s" % tool_info["Q"]["label"])
-		VerboseConfig.debug("input", "🛠️", "E = %s" % tool_info["E"]["label"])
-		VerboseConfig.debug("input", "🛠️", "R = %s" % tool_info["R"]["label"])
+		_verbose.debug("input", "🛠️", "Q = %s" % tool_info["Q"]["label"])
+		_verbose.debug("input", "🛠️", "E = %s" % tool_info["E"]["label"])
+		_verbose.debug("input", "🛠️", "R = %s" % tool_info["R"]["label"])
 
 	tool_changed.emit(tool_num, tool_info)
 
@@ -454,18 +457,18 @@ func _execute_submenu_action(action_key: String):
 	var submenu = _cached_submenu if not _cached_submenu.is_empty() else ToolConfig.get_submenu(current_submenu)
 
 	if submenu.is_empty():
-		VerboseConfig.warn("input", "⚠️", "Current submenu '%s' not found" % current_submenu)
+		_verbose.warn("input", "⚠️", "Current submenu '%s' not found" % current_submenu)
 		_exit_submenu()
 		return
 
 	# Check if entire submenu is disabled (e.g., no vocabulary discovered)
 	if submenu.get("_disabled", false):
-		VerboseConfig.warn("input", "⚠️", "Submenu disabled - grow crops to discover vocabulary")
+		_verbose.warn("input", "⚠️", "Submenu disabled - grow crops to discover vocabulary")
 		action_performed.emit("disabled", false, "⚠️  Discover vocabulary by growing crops")
 		return
 
 	if not submenu.has(action_key):
-		VerboseConfig.warn("input", "⚠️", "Action %s not available in submenu %s" % [action_key, current_submenu])
+		_verbose.warn("input", "⚠️", "Action %s not available in submenu %s" % [action_key, current_submenu])
 		return
 
 	var action_info = submenu[action_key]
@@ -474,7 +477,7 @@ func _execute_submenu_action(action_key: String):
 
 	# Check if action is empty (locked button)
 	if action == "":
-		VerboseConfig.warn("input", "⚠️", "Action locked - discover more vocabulary")
+		_verbose.warn("input", "⚠️", "Action locked - discover more vocabulary")
 		action_performed.emit("locked", false, "⚠️  Unlock by discovering vocabulary")
 		return
 
@@ -487,11 +490,11 @@ func _execute_submenu_action(action_key: String):
 		if _is_valid_position(current_selection):
 			selected_plots = [current_selection]
 		else:
-			VerboseConfig.warn("input", "⚠️", "No plots selected!")
+			_verbose.warn("input", "⚠️", "No plots selected!")
 			action_performed.emit(action, false, "⚠️  No plots selected")
 			return
 
-	VerboseConfig.info("input", "📂", "Submenu %s | Key %s | Action: %s | Plots: %d" % [current_submenu, action_key, label, selected_plots.size()])
+	_verbose.info("input", "📂", "Submenu %s | Key %s | Action: %s | Plots: %d" % [current_submenu, action_key, label, selected_plots.size()])
 
 	# Execute submenu-specific actions
 	match action:
@@ -571,16 +574,16 @@ func _execute_submenu_action(action_key: String):
 				if emoji != "":
 					_action_place_energy_tap_for(selected_plots, emoji)
 				else:
-					VerboseConfig.warn("input", "⚠️", "Unknown tap action: %s" % action)
+					_verbose.warn("input", "⚠️", "Unknown tap action: %s" % action)
 			elif action.begins_with("assign_to_"):
 				# Dynamic biome assignment
 				var biome_name = action.replace("assign_to_", "")
 				if farm.grid.biomes.has(biome_name):
 					_action_assign_plots_to_biome(selected_plots, biome_name)
 				else:
-					VerboseConfig.warn("input", "⚠️", "Biome '%s' not found in registry!" % biome_name)
+					_verbose.warn("input", "⚠️", "Biome '%s' not found in registry!" % biome_name)
 			else:
-				VerboseConfig.warn("input", "⚠️", "Unknown submenu action: %s" % action)
+				_verbose.warn("input", "⚠️", "Unknown submenu action: %s" % action)
 
 	# Auto-exit submenu after executing action
 	_exit_submenu()
@@ -636,12 +639,12 @@ func _execute_tool_action(action_key: String):
 		return
 
 	if not TOOL_ACTIONS.has(current_tool):
-		VerboseConfig.warn("input", "⚠️", "Current tool not found")
+		_verbose.warn("input", "⚠️", "Current tool not found")
 		return
 
 	var tool = TOOL_ACTIONS[current_tool]
 	if not tool.has(action_key):
-		VerboseConfig.warn("input", "⚠️", "Action %s not available for tool %d (%s)" % [action_key, current_tool, tool.get("name", "unknown")])
+		_verbose.warn("input", "⚠️", "Action %s not available for tool %d (%s)" % [action_key, current_tool, tool.get("name", "unknown")])
 		return
 
 	var action_info = tool[action_key]
@@ -664,13 +667,13 @@ func _execute_tool_action(action_key: String):
 		if _is_valid_position(current_selection):
 			selected_plots = [current_selection]
 			if VERBOSE:
-				VerboseConfig.debug("input", "📍", "No multi-select; using current selection: %s" % current_selection)
+				_verbose.debug("input", "📍", "No multi-select; using current selection: %s" % current_selection)
 		else:
-			VerboseConfig.warn("input", "⚠️", "No plots selected! Use T/Y/U/I/O/P to toggle selections.")
+			_verbose.warn("input", "⚠️", "No plots selected! Use T/Y/U/I/O/P to toggle selections.")
 			action_performed.emit(action, false, "⚠️  No plots selected")
 			return
 
-	VerboseConfig.info("input", "⚡", "Tool %d (%s) | Key %s | Action: %s | Plots: %d selected" % [current_tool, tool.get("name", "?"), action_key, label, selected_plots.size()])
+	_verbose.info("input", "⚡", "Tool %d (%s) | Key %s | Action: %s | Plots: %d selected" % [current_tool, tool.get("name", "?"), action_key, label, selected_plots.size()])
 
 	# Execute the action based on type (now with multi-select support)
 	match action:
@@ -719,7 +722,7 @@ func _execute_tool_action(action_key: String):
 			_action_batch_measure(selected_plots)
 
 		_:
-			VerboseConfig.warn("input", "⚠️", "Unknown action: %s" % action)
+			_verbose.warn("input", "⚠️", "Unknown action: %s" % action)
 
 
 ## Selection Management
@@ -735,10 +738,10 @@ func _set_selection(pos: Vector2i):
 		_refresh_dynamic_submenu()
 
 		if VERBOSE:
-			VerboseConfig.debug("input", "📍", "Selected: %s (Location %d)" % [current_selection, current_selection.x + 1])
+			_verbose.debug("input", "📍", "Selected: %s (Location %d)" % [current_selection, current_selection.x + 1])
 	else:
 		if VERBOSE:
-			VerboseConfig.debug("input", "⚠️", "Invalid position: %s" % pos)
+			_verbose.debug("input", "⚠️", "Invalid position: %s" % pos)
 
 
 func _move_selection(direction: Vector2i):
@@ -752,10 +755,10 @@ func _move_selection(direction: Vector2i):
 		_refresh_dynamic_submenu()
 
 		if VERBOSE:
-			VerboseConfig.debug("input", "📍", "Moved to: %s" % current_selection)
+			_verbose.debug("input", "📍", "Moved to: %s" % current_selection)
 	else:
 		if VERBOSE:
-			VerboseConfig.debug("input", "⚠️", "Cannot move to: %s (out of bounds)" % new_pos)
+			_verbose.debug("input", "⚠️", "Cannot move to: %s (out of bounds)" % new_pos)
 
 
 func _is_valid_position(pos: Vector2i) -> bool:
@@ -772,22 +775,22 @@ func _is_valid_position(pos: Vector2i) -> bool:
 func _toggle_plot_selection(pos: Vector2i):
 	"""Toggle a plot's selection state (for T/Y/U/I/O/P keys)"""
 	if not plot_grid_display:
-		VerboseConfig.error("input", "❌", "ERROR: PlotGridDisplay not wired to FarmInputHandler!")
-		VerboseConfig.error("input", "❌", "Refactor incomplete or wiring failed")
+		_verbose.error("input", "❌", "ERROR: PlotGridDisplay not wired to FarmInputHandler!")
+		_verbose.error("input", "❌", "Refactor incomplete or wiring failed")
 		return
 
 	if not _is_valid_position(pos):
-		VerboseConfig.warn("input", "⚠️", "Invalid position: %s" % pos)
+		_verbose.warn("input", "⚠️", "Invalid position: %s" % pos)
 		return
 
-	VerboseConfig.debug("input", "⌨️", "Toggle plot %s" % pos)
+	_verbose.debug("input", "⌨️", "Toggle plot %s" % pos)
 	plot_grid_display.toggle_plot_selection(pos)
 
 
 func _clear_all_selection():
 	"""Clear all selected plots ([ key)"""
 	if not plot_grid_display:
-		VerboseConfig.error("input", "❌", "ERROR: PlotGridDisplay not wired to FarmInputHandler!")
+		_verbose.error("input", "❌", "ERROR: PlotGridDisplay not wired to FarmInputHandler!")
 		return
 
 	plot_grid_display.clear_all_selection()
@@ -796,7 +799,7 @@ func _clear_all_selection():
 func _restore_previous_selection():
 	"""Restore previous selection state (] key)"""
 	if not plot_grid_display:
-		VerboseConfig.error("input", "❌", "ERROR: PlotGridDisplay not wired to FarmInputHandler!")
+		_verbose.error("input", "❌", "ERROR: PlotGridDisplay not wired to FarmInputHandler!")
 		return
 
 	plot_grid_display.restore_previous_selection()
@@ -808,7 +811,7 @@ func _action_batch_plant(plant_type: String, positions: Array[Vector2i]):
 	"""Plant multiple plots with the given plant type"""
 	if not farm:
 		action_performed.emit("plant_%s" % plant_type, false, "⚠️  Farm not loaded yet")
-		VerboseConfig.error("farm", "❌", "PLANT FAILED: Farm not loaded")
+		_verbose.error("farm", "❌", "PLANT FAILED: Farm not loaded")
 		return
 
 	# Map plant types to their emojis for display
@@ -825,7 +828,7 @@ func _action_batch_plant(plant_type: String, positions: Array[Vector2i]):
 		"bread": "🍞"
 	}
 	var emoji = emoji_map.get(plant_type, "❓")
-	VerboseConfig.info("farm", "🌱", "Batch planting %s %s at %d plots: %s" % [emoji, plant_type, positions.size(), positions])
+	_verbose.info("farm", "🌱", "Batch planting %s %s at %d plots: %s" % [emoji, plant_type, positions.size(), positions])
 
 	# Check if farm has batch method, otherwise execute individually
 	if farm.has_method("batch_plant"):
@@ -860,7 +863,7 @@ func _action_batch_measure(positions: Array[Vector2i]):
 		action_performed.emit("measure", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("farm", "📊", "Measuring %d plots..." % positions.size())
+	_verbose.info("farm", "📊", "Measuring %d plots..." % positions.size())
 
 	var success_count = 0
 	var outcomes = {}
@@ -869,7 +872,7 @@ func _action_batch_measure(positions: Array[Vector2i]):
 		if outcome_emoji and outcome_emoji != "":
 			success_count += 1
 			outcomes[outcome_emoji] = outcomes.get(outcome_emoji, 0) + 1
-			VerboseConfig.debug("farm", "📍", "%s → %s" % [pos, outcome_emoji])
+			_verbose.debug("farm", "📍", "%s → %s" % [pos, outcome_emoji])
 
 	var summary = ""
 	for emoji in outcomes.keys():
@@ -885,7 +888,7 @@ func _action_batch_harvest(positions: Array[Vector2i]):
 		action_performed.emit("harvest", false, "⚠️  Farm not loaded yet")
 		return
 
-	VerboseConfig.info("farm", "✂️", "Batch harvesting %d plots: %s" % [positions.size(), positions])
+	_verbose.info("farm", "✂️", "Batch harvesting %d plots: %s" % [positions.size(), positions])
 
 	# Check if farm has batch method
 	if farm.has_method("batch_harvest"):
@@ -915,10 +918,10 @@ func _action_batch_build(build_type: String, positions: Array[Vector2i]):
 	"""Build structures (mill, market) on multiple plots"""
 	if not farm:
 		action_performed.emit("build_%s" % build_type, false, "⚠️  Farm not loaded yet")
-		VerboseConfig.error("farm", "❌", "BUILD FAILED: Farm not loaded")
+		_verbose.error("farm", "❌", "BUILD FAILED: Farm not loaded")
 		return
 
-	VerboseConfig.info("farm", "🏗️", "Batch building %s at %d plots: %s" % [build_type, positions.size(), positions])
+	_verbose.info("farm", "🏗️", "Batch building %s at %d plots: %s" % [build_type, positions.size(), positions])
 
 	# Check if farm has batch method
 	if farm.has_method("batch_build"):
@@ -944,12 +947,12 @@ func _action_place_kitchen(positions: Array[Vector2i]):
 		action_performed.emit("place_kitchen", false, "⚠️  Farm not loaded yet")
 		return
 
-	VerboseConfig.info("farm", "🍳", "Placing kitchen with %d selected plots..." % positions.size())
+	_verbose.info("farm", "🍳", "Placing kitchen with %d selected plots..." % positions.size())
 
 	# Kitchen requires exactly 3 plots for triplet entanglement
 	if positions.size() != 3:
 		action_performed.emit("place_kitchen", false, "⚠️  Kitchen requires exactly 3 plots selected (got %d)" % positions.size())
-		VerboseConfig.warn("farm", "❌", "Kitchen needs exactly 3 plots for triplet entanglement")
+		_verbose.warn("farm", "❌", "Kitchen needs exactly 3 plots for triplet entanglement")
 		return
 
 	# Create triplet entanglement (determines Bell state by spatial pattern)
@@ -960,10 +963,10 @@ func _action_place_kitchen(positions: Array[Vector2i]):
 	var success = farm.grid.create_triplet_entanglement(pos_a, pos_b, pos_c)
 
 	if success:
-		VerboseConfig.info("farm", "🍳", "Kitchen triplet created: %s ↔ %s ↔ %s" % [pos_a, pos_b, pos_c])
+		_verbose.info("farm", "🍳", "Kitchen triplet created: %s ↔ %s ↔ %s" % [pos_a, pos_b, pos_c])
 		action_performed.emit("place_kitchen", true, "✅ Kitchen created with triplet entanglement")
 	else:
-		VerboseConfig.error("farm", "❌", "Failed to create kitchen triplet")
+		_verbose.error("farm", "❌", "Failed to create kitchen triplet")
 		action_performed.emit("place_kitchen", false, "❌ Failed to create kitchen (plots may need to be planted first)")
 
 
@@ -994,7 +997,7 @@ func _action_batch_measure_and_harvest(positions: Array[Vector2i]):
 		action_performed.emit("harvest", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("farm", "📊", "Measure-Harvest %d plots..." % positions.size())
+	_verbose.info("farm", "📊", "Measure-Harvest %d plots..." % positions.size())
 
 	var success_count = 0
 	var total_yield = 0
@@ -1017,14 +1020,14 @@ func _action_batch_measure_and_harvest(positions: Array[Vector2i]):
 			total_yield += int(yield_amount)
 
 			var state_emoji = harvest_result.get("state", "")
-			VerboseConfig.debug("farm", "✂️", "%s → %s × %.1f yield" % [pos, state_emoji, yield_amount])
+			_verbose.debug("farm", "✂️", "%s → %s × %.1f yield" % [pos, state_emoji, yield_amount])
 
 	# BREAD DETECTION: Check if all 3 Kitchen plots measured to |000⟩ state
 	# Physics: |000⟩ = 🔥💧💨 (hot, wet, flour) = Bread Ready
 	# From QuantumKitchen_Biome.gd: "🍞 is NOT a basis state. It's the outcome when measurement finds |000⟩."
 	var bread_created = _check_kitchen_bread_state(positions, position_outcomes)
 	if bread_created:
-		VerboseConfig.info("farm", "🍞", "BREAD CREATED from quantum baking! (|000⟩ state measured)")
+		_verbose.info("farm", "🍞", "BREAD CREATED from quantum baking! (|000⟩ state measured)")
 		# Award bread to economy
 		var bread_amount = 50  # 50 credits = 5 bread units
 		farm.economy.add_resource("🍞", bread_amount, "kitchen_quantum_baking")
@@ -1088,11 +1091,11 @@ func _check_kitchen_bread_state(positions: Array[Vector2i], outcomes: Dictionary
 		# Check if this plot measured to its north/|0⟩ state
 		if outcome != north_state:
 			all_north = false
-			VerboseConfig.debug("quantum", "📊", "Plot %s: measured %s, need %s for |0⟩" % [pos, outcome, north_state])
+			_verbose.debug("quantum", "📊", "Plot %s: measured %s, need %s for |0⟩" % [pos, outcome, north_state])
 			break
 
 	if all_north:
-		VerboseConfig.info("quantum", "🎯", "QUANTUM DETECTION: All 3 plots in |0⟩ state → |000⟩ = 🔥💧💨 = BREAD!")
+		_verbose.info("quantum", "🎯", "QUANTUM DETECTION: All 3 plots in |0⟩ state → |000⟩ = 🔥💧💨 = BREAD!")
 		return true
 
 	return false
@@ -1100,7 +1103,7 @@ func _check_kitchen_bread_state(positions: Array[Vector2i], outcomes: Dictionary
 
 func _action_entangle():
 	"""Start entanglement at current selection (requires second selection)"""
-	VerboseConfig.info("quantum", "🔗", "Entangle mode: Select second location or press R again")
+	_verbose.info("quantum", "🔗", "Entangle mode: Select second location or press R again")
 	action_performed.emit("entangle_start", true, "Select target plot to entangle with")
 
 
@@ -1168,7 +1171,7 @@ func _action_plant_batch(positions: Array[Vector2i]):
 		_:
 			plant_type = "wheat"  # Default fallback
 
-	VerboseConfig.info("farm", "🌱", "Context-aware plant: %s biome → planting %s" % [biome_name, plant_type])
+	_verbose.info("farm", "🌱", "Context-aware plant: %s biome → planting %s" % [biome_name, plant_type])
 	_action_batch_plant(plant_type, positions)
 
 
@@ -1186,7 +1189,7 @@ func _action_entangle_batch(positions: Array[Vector2i]):
 		action_performed.emit("entangle_batch", false, "⚠️  Need at least 2 plots to entangle")
 		return
 
-	VerboseConfig.info("quantum", "🔗", "Batch entangling %d plots..." % positions.size())
+	_verbose.info("quantum", "🔗", "Batch entangling %d plots..." % positions.size())
 
 	# Get biome from first plot
 	var biome = farm.grid.get_biome_for_plot(positions[0])
@@ -1219,7 +1222,7 @@ func _action_cluster(positions: Array[Vector2i]):
 		action_performed.emit("cluster", false, "⚠️  Need at least 2 plots for cluster")
 		return
 
-	VerboseConfig.info("quantum", "🌐", "Creating cluster state with %d plots..." % positions.size())
+	_verbose.info("quantum", "🌐", "Creating cluster state with %d plots..." % positions.size())
 
 	# Get biome from first plot
 	var biome = farm.grid.get_biome_for_plot(positions[0])
@@ -1250,7 +1253,7 @@ func _action_measure_trigger(positions: Array[Vector2i]):
 		action_performed.emit("measure_trigger", false, "⚠️  Need trigger + at least 1 target plot")
 		return
 
-	VerboseConfig.info("quantum", "🎯", "Setting up measure trigger with %d plots..." % positions.size())
+	_verbose.info("quantum", "🎯", "Setting up measure trigger with %d plots..." % positions.size())
 
 	# Get biome from first plot
 	var biome = farm.grid.get_biome_for_plot(positions[0])
@@ -1284,7 +1287,7 @@ func _action_remove_gates(positions: Array[Vector2i]):
 		action_performed.emit("remove_gates", false, "⚠️  Need at least 2 plots to decouple")
 		return
 
-	VerboseConfig.info("quantum", "🔓", "Removing entanglement for %d plots..." % positions.size())
+	_verbose.info("quantum", "🔓", "Removing entanglement for %d plots..." % positions.size())
 
 	# Get biome from first plot
 	var biome = farm.grid.get_biome_for_plot(positions[0])
@@ -1303,7 +1306,7 @@ func _action_remove_gates(positions: Array[Vector2i]):
 		if biome.remove_entanglement(pos_a, pos_b):
 			success_count += 1
 			removed_pairs.append("%s↔%s" % [pos_a, pos_b])
-			VerboseConfig.debug("quantum", "🔓", "Decoupled %s ↔ %s" % [pos_a, pos_b])
+			_verbose.debug("quantum", "🔓", "Decoupled %s ↔ %s" % [pos_a, pos_b])
 
 	action_performed.emit("remove_gates", success_count > 0,
 		"%s Removed %d entanglements | %s" % ["✅" if success_count > 0 else "❌", success_count, ", ".join(removed_pairs) if removed_pairs else "no changes"])
@@ -1325,7 +1328,7 @@ func _action_boost_coupling(positions: Array[Vector2i]):
 		action_performed.emit("boost_coupling", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("quantum", "⚡", "Boosting coupling for %d plots..." % positions.size())
+	_verbose.info("quantum", "⚡", "Boosting coupling for %d plots..." % positions.size())
 
 	var success_count = 0
 	var boosted_pairs = []
@@ -1346,7 +1349,7 @@ func _action_boost_coupling(positions: Array[Vector2i]):
 		if biome and biome.boost_coupling(emoji, target, 1.5):
 			success_count += 1
 			boosted_pairs.append("%s→%s" % [emoji, target])
-			VerboseConfig.debug("quantum", "⚡", "Boosted %s coupling at %s" % [emoji, pos])
+			_verbose.debug("quantum", "⚡", "Boosted %s coupling at %s" % [emoji, pos])
 
 	action_performed.emit("boost_coupling", success_count > 0,
 		"%s Boosted coupling on %d/%d plots | %s" % ["✅" if success_count > 0 else "❌", success_count, positions.size(), ", ".join(boosted_pairs) if boosted_pairs else "no changes"])
@@ -1366,7 +1369,7 @@ func _action_tune_decoherence(positions: Array[Vector2i]):
 		action_performed.emit("tune_decoherence", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("quantum", "🔧", "Tuning decoherence for %d plots..." % positions.size())
+	_verbose.info("quantum", "🔧", "Tuning decoherence for %d plots..." % positions.size())
 
 	var success_count = 0
 	var tuned_emojis = {}
@@ -1384,7 +1387,7 @@ func _action_tune_decoherence(positions: Array[Vector2i]):
 		if biome and biome.tune_decoherence(emoji, 1.5):
 			success_count += 1
 			tuned_emojis[emoji] = tuned_emojis.get(emoji, 0) + 1
-			VerboseConfig.debug("quantum", "🔧", "Tuned decoherence for %s at %s" % [emoji, pos])
+			_verbose.debug("quantum", "🔧", "Tuned decoherence for %s at %s" % [emoji, pos])
 
 	var summary = ""
 	for emoji in tuned_emojis.keys():
@@ -1408,7 +1411,7 @@ func _action_add_driver(positions: Array[Vector2i]):
 		action_performed.emit("add_driver", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("quantum", "🌊", "Adding time-dependent drivers for %d plots..." % positions.size())
+	_verbose.info("quantum", "🌊", "Adding time-dependent drivers for %d plots..." % positions.size())
 
 	var success_count = 0
 	var driver_emojis = {}
@@ -1426,7 +1429,7 @@ func _action_add_driver(positions: Array[Vector2i]):
 		if biome and biome.add_time_dependent_driver(emoji, "cosine", 1.0, 1.0):
 			success_count += 1
 			driver_emojis[emoji] = driver_emojis.get(emoji, 0) + 1
-			VerboseConfig.debug("quantum", "🌊", "Added cosine driver to %s at %s" % [emoji, pos])
+			_verbose.debug("quantum", "🌊", "Added cosine driver to %s at %s" % [emoji, pos])
 
 	var summary = ""
 	for emoji in driver_emojis.keys():
@@ -1473,7 +1476,7 @@ func _action_place_energy_tap(positions: Array[Vector2i]):
 		action_performed.emit("place_energy_tap", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("quantum", "💧", "Placing energy taps on %d plots..." % positions.size())
+	_verbose.info("quantum", "💧", "Placing energy taps on %d plots..." % positions.size())
 
 	var success_count = 0
 	var tapped_emojis = {}
@@ -1491,7 +1494,7 @@ func _action_place_energy_tap(positions: Array[Vector2i]):
 		if biome and biome.place_energy_tap(emoji, 0.05):
 			success_count += 1
 			tapped_emojis[emoji] = tapped_emojis.get(emoji, 0) + 1
-			VerboseConfig.debug("quantum", "💧", "Tap placed on %s at %s" % [emoji, pos])
+			_verbose.debug("quantum", "💧", "Tap placed on %s at %s" % [emoji, pos])
 
 	var summary = ""
 	for emoji in tapped_emojis.keys():
@@ -1517,7 +1520,7 @@ func _action_apply_pauli_x(positions: Array[Vector2i]):
 	for pos in positions:
 		if _apply_single_qubit_gate(pos, "X"):
 			success_count += 1
-			VerboseConfig.debug("quantum", "↔️", "Applied Pauli-X at %s" % pos)
+			_verbose.debug("quantum", "↔️", "Applied Pauli-X at %s" % pos)
 
 	action_performed.emit("apply_pauli_x", success_count > 0,
 		"✅ Applied Pauli-X to %d qubits" % success_count if success_count > 0 else "❌ No gates applied")
@@ -1538,7 +1541,7 @@ func _action_apply_hadamard(positions: Array[Vector2i]):
 	for pos in positions:
 		if _apply_single_qubit_gate(pos, "H"):
 			success_count += 1
-			VerboseConfig.debug("quantum", "🌀", "Applied Hadamard at %s" % pos)
+			_verbose.debug("quantum", "🌀", "Applied Hadamard at %s" % pos)
 
 	action_performed.emit("apply_hadamard", success_count > 0,
 		"✅ Applied Hadamard to %d qubits" % success_count if success_count > 0 else "❌ No gates applied")
@@ -1559,7 +1562,7 @@ func _action_apply_pauli_z(positions: Array[Vector2i]):
 	for pos in positions:
 		if _apply_single_qubit_gate(pos, "Z"):
 			success_count += 1
-			VerboseConfig.debug("quantum", "⚡", "Applied Pauli-Z at %s" % pos)
+			_verbose.debug("quantum", "⚡", "Applied Pauli-Z at %s" % pos)
 
 	action_performed.emit("apply_pauli_z", success_count > 0,
 		"✅ Applied Pauli-Z to %d qubits" % success_count if success_count > 0 else "❌ No gates applied")
@@ -1584,7 +1587,7 @@ func _action_place_energy_tap_for(positions: Array[Vector2i], target_emoji: Stri
 		action_performed.emit("place_energy_tap", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("quantum", "💧", "Placing energy taps targeting %s on %d plots..." % [target_emoji, positions.size()])
+	_verbose.info("quantum", "💧", "Placing energy taps targeting %s on %d plots..." % [target_emoji, positions.size()])
 
 	var success_count = 0
 
@@ -1603,12 +1606,12 @@ func _action_place_energy_tap_for(positions: Array[Vector2i], target_emoji: Stri
 		# Check if emoji has a register in this biome
 		# (For BioticFlux: wheat, flour. For Kitchen: fire, water, flour)
 		if biome.has_method("can_tap_emoji") and not biome.can_tap_emoji(target_emoji):
-			VerboseConfig.warn("quantum", "⚠️", "Cannot tap %s in %s" % [target_emoji, biome.get_biome_type()])
+			_verbose.warn("quantum", "⚠️", "Cannot tap %s in %s" % [target_emoji, biome.get_biome_type()])
 			continue
 
 		if biome.place_energy_tap(target_emoji, 0.05):
 			success_count += 1
-			VerboseConfig.debug("quantum", "💧", "Tap on %s placed at %s" % [target_emoji, pos])
+			_verbose.debug("quantum", "💧", "Tap on %s placed at %s" % [target_emoji, pos])
 
 	action_performed.emit("place_energy_tap", success_count > 0,
 		"%s Placed %d energy taps targeting %s" % ["✅" if success_count > 0 else "❌", success_count, target_emoji])
@@ -1723,37 +1726,37 @@ func _print_help():
 	for i in range(60):
 		line += "="
 
-	VerboseConfig.info("input", "⌨️", "\n" + line)
-	VerboseConfig.info("input", "⌨️", "FARM KEYBOARD CONTROLS (Tool Mode System)")
-	VerboseConfig.info("input", "⌨️", line)
+	_verbose.info("input", "⌨️", "\n" + line)
+	_verbose.info("input", "⌨️", "FARM KEYBOARD CONTROLS (Tool Mode System)")
+	_verbose.info("input", "⌨️", line)
 
-	VerboseConfig.info("input", "🛠️", "\nTOOL SELECTION (Numbers 1-4):")
+	_verbose.info("input", "🛠️", "\nTOOL SELECTION (Numbers 1-4):")
 	for tool_num in range(1, 5):
 		if TOOL_ACTIONS.has(tool_num):
 			var tool = TOOL_ACTIONS[tool_num]
-			VerboseConfig.info("input", "🛠️", "  %d = %s" % [tool_num, tool["name"]])
+			_verbose.info("input", "🛠️", "  %d = %s" % [tool_num, tool["name"]])
 
-	VerboseConfig.info("input", "⚡", "\nACTIONS (Q/E/R - Context-sensitive):")
+	_verbose.info("input", "⚡", "\nACTIONS (Q/E/R - Context-sensitive):")
 	var tool = TOOL_ACTIONS[current_tool]
-	VerboseConfig.info("input", "⚡", "  Current Tool: %s" % tool["name"])
-	VerboseConfig.info("input", "⚡", "  Q = %s" % tool["Q"]["label"])
-	VerboseConfig.info("input", "⚡", "  E = %s" % tool["E"]["label"])
-	VerboseConfig.info("input", "⚡", "  R = %s" % tool["R"]["label"])
+	_verbose.info("input", "⚡", "  Current Tool: %s" % tool["name"])
+	_verbose.info("input", "⚡", "  Q = %s" % tool["Q"]["label"])
+	_verbose.info("input", "⚡", "  E = %s" % tool["E"]["label"])
+	_verbose.info("input", "⚡", "  R = %s" % tool["R"]["label"])
 
-	VerboseConfig.info("input", "📍", "\nMULTI-SELECT PLOTS (NEW):")
-	VerboseConfig.info("input", "📍", "  T/Y/U/I/O/P = Toggle checkbox on plots 1-6")
-	VerboseConfig.info("input", "📍", "  [ = Deselect all plots")
-	VerboseConfig.info("input", "📍", "  ] = Restore previous selection state")
-	VerboseConfig.info("input", "📍", "  Q/E/R = Apply current tool action to ALL selected plots")
+	_verbose.info("input", "📍", "\nMULTI-SELECT PLOTS (NEW):")
+	_verbose.info("input", "📍", "  T/Y/U/I/O/P = Toggle checkbox on plots 1-6")
+	_verbose.info("input", "📍", "  [ = Deselect all plots")
+	_verbose.info("input", "📍", "  ] = Restore previous selection state")
+	_verbose.info("input", "📍", "  Q/E/R = Apply current tool action to ALL selected plots")
 
-	VerboseConfig.info("input", "🎮", "\nMOVEMENT (Legacy - for focus/cursor):")
-	VerboseConfig.info("input", "🎮", "  WASD = Move cursor (up/left/down/right)")
+	_verbose.info("input", "🎮", "\nMOVEMENT (Legacy - for focus/cursor):")
+	_verbose.info("input", "🎮", "  WASD = Move cursor (up/left/down/right)")
 
-	VerboseConfig.info("input", "📋", "\nDEBUG:")
-	VerboseConfig.info("input", "📋", "  ? = Show this help")
-	VerboseConfig.info("input", "📋", "  I = Toggle info panel")
+	_verbose.info("input", "📋", "\nDEBUG:")
+	_verbose.info("input", "📋", "  ? = Show this help")
+	_verbose.info("input", "📋", "  I = Toggle info panel")
 
-	VerboseConfig.info("input", "⌨️", line + "\n")
+	_verbose.info("input", "⌨️", line + "\n")
 
 
 ## Helper Methods
@@ -1778,17 +1781,17 @@ func _action_assign_plots_to_biome(plots: Array[Vector2i], biome_name: String):
 	The plot keeps its quantum state but future operations use new biome's bath.
 	"""
 	if plots.is_empty():
-		VerboseConfig.warn("farm", "⚠️", "No plots selected for biome assignment")
+		_verbose.warn("farm", "⚠️", "No plots selected for biome assignment")
 		action_performed.emit("assign_plots_to_biome", false, "No plots")
 		return
 
 	# Verify biome exists
 	if not farm.grid.biomes.has(biome_name):
-		VerboseConfig.error("farm", "❌", "Biome '%s' not registered!" % biome_name)
+		_verbose.error("farm", "❌", "Biome '%s' not registered!" % biome_name)
 		action_performed.emit("assign_plots_to_biome", false, "Biome not found")
 		return
 
-	VerboseConfig.info("farm", "🌍", "Reassigning %d plot(s) to %s biome..." % [plots.size(), biome_name])
+	_verbose.info("farm", "🌍", "Reassigning %d plot(s) to %s biome..." % [plots.size(), biome_name])
 
 	var success_count = 0
 	for pos in plots:
@@ -1798,10 +1801,10 @@ func _action_assign_plots_to_biome(plots: Array[Vector2i], biome_name: String):
 		# Reassign to new biome
 		farm.grid.assign_plot_to_biome(pos, biome_name)
 
-		VerboseConfig.debug("farm", "🌍", "Plot %s: %s → %s" % [pos, old_biome, biome_name])
+		_verbose.debug("farm", "🌍", "Plot %s: %s → %s" % [pos, old_biome, biome_name])
 		success_count += 1
 
-	VerboseConfig.info("farm", "✅", "Reassigned %d plot(s) to %s" % [success_count, biome_name])
+	_verbose.info("farm", "✅", "Reassigned %d plot(s) to %s" % [success_count, biome_name])
 	action_performed.emit("assign_plots_to_biome", true,
 		"%d plots → %s" % [success_count, biome_name])
 
@@ -1813,11 +1816,11 @@ func _action_clear_biome_assignment(plots: Array[Vector2i]):
 	unless plot is reassigned to a biome first.
 	"""
 	if plots.is_empty():
-		VerboseConfig.warn("farm", "⚠️", "No plots selected to clear")
+		_verbose.warn("farm", "⚠️", "No plots selected to clear")
 		action_performed.emit("clear_biome_assignment", false, "No plots")
 		return
 
-	VerboseConfig.info("farm", "🌍", "Clearing biome assignment for %d plot(s)..." % plots.size())
+	_verbose.info("farm", "🌍", "Clearing biome assignment for %d plot(s)..." % plots.size())
 
 	var success_count = 0
 	for pos in plots:
@@ -1826,10 +1829,10 @@ func _action_clear_biome_assignment(plots: Array[Vector2i]):
 		# Remove from assignments dict
 		farm.grid.plot_biome_assignments.erase(pos)
 
-		VerboseConfig.debug("farm", "🌍", "Plot %s: %s → (unassigned)" % [pos, old_biome])
+		_verbose.debug("farm", "🌍", "Plot %s: %s → (unassigned)" % [pos, old_biome])
 		success_count += 1
 
-	VerboseConfig.info("farm", "✅", "Cleared %d plot(s)" % success_count)
+	_verbose.info("farm", "✅", "Cleared %d plot(s)" % success_count)
 	action_performed.emit("clear_biome_assignment", true,
 		"Cleared %d plots" % success_count)
 
@@ -1846,22 +1849,22 @@ func _action_inspect_plot(plots: Array[Vector2i]):
 	Also opens the biome inspector overlay for the first selected plot
 	"""
 	if plots.is_empty():
-		VerboseConfig.warn("farm", "⚠️", "No plots selected to inspect")
+		_verbose.warn("farm", "⚠️", "No plots selected to inspect")
 		action_performed.emit("inspect_plot", false, "No plots")
 		return
 
-	VerboseConfig.info("farm", "🔍", "PLOT INSPECTION")
-	VerboseConfig.info("farm", "🔍", "──────────────────────────────────────────────────────────────────────")
+	_verbose.info("farm", "🔍", "PLOT INSPECTION")
+	_verbose.info("farm", "🔍", "──────────────────────────────────────────────────────────────────────")
 
 	var inspected_count = 0
 	var first_biome_name = ""
 
 	for pos in plots:
-		VerboseConfig.info("farm", "📍", "\nPlot %s:" % pos)
+		_verbose.info("farm", "📍", "\nPlot %s:" % pos)
 
 		# Biome assignment
 		var biome_name = farm.grid.plot_biome_assignments.get(pos, "(unassigned)")
-		VerboseConfig.info("farm", "🌍", "   Biome: %s" % biome_name)
+		_verbose.info("farm", "🌍", "   Biome: %s" % biome_name)
 
 		if inspected_count == 0:
 			first_biome_name = biome_name
@@ -1869,7 +1872,7 @@ func _action_inspect_plot(plots: Array[Vector2i]):
 		# Get plot instance
 		var plot = farm.grid.get_plot(pos)
 		if not plot:
-			VerboseConfig.error("farm", "❌", "   Plot not found in grid!")
+			_verbose.error("farm", "❌", "   Plot not found in grid!")
 			continue
 
 		# Plant status
@@ -1877,8 +1880,8 @@ func _action_inspect_plot(plots: Array[Vector2i]):
 			# Get planted crop emojis
 			var emojis = plot.get_plot_emojis()
 			var planted_emoji = "%s↔%s" % [emojis.get("north", "?"), emojis.get("south", "?")]
-			VerboseConfig.info("farm", "🌱", "   Planted: %s" % planted_emoji)
-			VerboseConfig.debug("farm", "🌱", "      Has been measured: %s" % ("YES" if plot.has_been_measured else "NO"))
+			_verbose.info("farm", "🌱", "   Planted: %s" % planted_emoji)
+			_verbose.debug("farm", "🌱", "      Has been measured: %s" % ("YES" if plot.has_been_measured else "NO"))
 
 			# Quantum state info (Model C)
 			if plot.parent_biome and plot.bath_subplot_id >= 0:
@@ -1889,9 +1892,9 @@ func _action_inspect_plot(plots: Array[Vector2i]):
 				var purity = 0.5
 				if biome.bath:
 					purity = biome.bath.get_purity()
-				VerboseConfig.debug("quantum", "⚛️", "      State: %s ↔ %s | Purity: %.3f" % [north, south, purity])
+				_verbose.debug("quantum", "⚛️", "      State: %s ↔ %s | Purity: %.3f" % [north, south, purity])
 		else:
-			VerboseConfig.info("farm", "🌱", "   Planted: NO")
+			_verbose.info("farm", "🌱", "   Planted: NO")
 
 		# Entanglement links
 		if biome_name != "(unassigned)":
@@ -1901,25 +1904,25 @@ func _action_inspect_plot(plots: Array[Vector2i]):
 				for gate in biome.bell_gates:
 					if pos in gate:
 						is_entangled = true
-						VerboseConfig.debug("quantum", "🔗", "   Entangled with: %s" % gate)
+						_verbose.debug("quantum", "🔗", "   Entangled with: %s" % gate)
 						break
 
 				if not is_entangled:
-					VerboseConfig.debug("quantum", "🔗", "   Entangled: NO")
+					_verbose.debug("quantum", "🔗", "   Entangled: NO")
 
 		# Bath projection (if plot is in a biome)
 		if biome_name != "(unassigned)":
 			var biome = farm.grid.biomes.get(biome_name)
 			if biome and biome.active_projections.has(pos):
 				var projection = biome.active_projections[pos]
-				VerboseConfig.debug("quantum", "🛁", "   Bath Projection: Active")
+				_verbose.debug("quantum", "🛁", "   Bath Projection: Active")
 				if projection.has("north") and projection.has("south"):
-					VerboseConfig.debug("quantum", "🛁", "      North: %s | South: %s" % [projection.north, projection.south])
+					_verbose.debug("quantum", "🛁", "      North: %s | South: %s" % [projection.north, projection.south])
 
 		inspected_count += 1
 
-	VerboseConfig.info("farm", "🔍", "\n──────────────────────────────────────────────────────────────────────")
-	VerboseConfig.info("farm", "✅", "Inspected %d plot(s)" % inspected_count)
+	_verbose.info("farm", "🔍", "\n──────────────────────────────────────────────────────────────────────")
+	_verbose.info("farm", "✅", "Inspected %d plot(s)" % inspected_count)
 
 	# Open biome inspector overlay for first plot's biome
 	if first_biome_name != "" and first_biome_name != "(unassigned)":
@@ -1927,7 +1930,7 @@ func _action_inspect_plot(plots: Array[Vector2i]):
 		var overlay_manager = _get_overlay_manager()
 		if overlay_manager and overlay_manager.biome_inspector:
 			overlay_manager.biome_inspector.inspect_plot_biome(plots[0], farm)
-			VerboseConfig.info("farm", "🌍", "Opened biome inspector for plot %s's biome: %s" % [plots[0], first_biome_name])
+			_verbose.info("farm", "🌍", "Opened biome inspector for plot %s's biome: %s" % [plots[0], first_biome_name])
 
 	action_performed.emit("inspect_plot", true,
 		"Inspected %d plots" % inspected_count)
@@ -1978,7 +1981,7 @@ func _action_pump_to_wheat(plots: Array[Vector2i]):
 		action_performed.emit("pump_to_wheat", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("quantum", "⛩️", "Pumping to wheat for %d plots..." % plots.size())
+	_verbose.info("quantum", "⛩️", "Pumping to wheat for %d plots..." % plots.size())
 
 	var success_count = 0
 	var pumped = {}
@@ -1993,7 +1996,7 @@ func _action_pump_to_wheat(plots: Array[Vector2i]):
 		if biome and biome.pump_to_emoji("🍂", "🌾", 0.05):
 			success_count += 1
 			pumped["🍂→🌾"] = pumped.get("🍂→🌾", 0) + 1
-			VerboseConfig.debug("quantum", "⛩️", "Pump established at %s" % pos)
+			_verbose.debug("quantum", "⛩️", "Pump established at %s" % pos)
 
 	var summary = ""
 	for pair in pumped.keys():
@@ -2018,7 +2021,7 @@ func _action_reset_to_pure(plots: Array[Vector2i]):
 		action_performed.emit("reset_to_pure", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("quantum", "🔄", "Resetting to pure state for %d plots..." % plots.size())
+	_verbose.info("quantum", "🔄", "Resetting to pure state for %d plots..." % plots.size())
 
 	var success_count = 0
 	var reset_emojis = {}
@@ -2033,7 +2036,7 @@ func _action_reset_to_pure(plots: Array[Vector2i]):
 		if biome and biome.reset_to_pure_state(emoji, 0.1):
 			success_count += 1
 			reset_emojis[emoji] = reset_emojis.get(emoji, 0) + 1
-			VerboseConfig.debug("quantum", "🔄", "Pure reset for %s at %s" % [emoji, pos])
+			_verbose.debug("quantum", "🔄", "Pure reset for %s at %s" % [emoji, pos])
 
 	var summary = ""
 	for emoji in reset_emojis.keys():
@@ -2058,7 +2061,7 @@ func _action_reset_to_mixed(plots: Array[Vector2i]):
 		action_performed.emit("reset_to_mixed", false, "⚠️  No plots selected")
 		return
 
-	VerboseConfig.info("quantum", "🔀", "Resetting to mixed state for %d plots..." % plots.size())
+	_verbose.info("quantum", "🔀", "Resetting to mixed state for %d plots..." % plots.size())
 
 	var success_count = 0
 	var reset_emojis = {}
@@ -2073,7 +2076,7 @@ func _action_reset_to_mixed(plots: Array[Vector2i]):
 		if biome and biome.reset_to_mixed_state(emoji, 0.1):
 			success_count += 1
 			reset_emojis[emoji] = reset_emojis.get(emoji, 0) + 1
-			VerboseConfig.debug("quantum", "🔀", "Mixed reset for %s at %s" % [emoji, pos])
+			_verbose.debug("quantum", "🔀", "Mixed reset for %s at %s" % [emoji, pos])
 
 	var summary = ""
 	for emoji in reset_emojis.keys():
