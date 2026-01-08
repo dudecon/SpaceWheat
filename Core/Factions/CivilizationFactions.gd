@@ -241,12 +241,13 @@ static func create_scavenged_psithurism() -> Faction:
 		"🧤": {"rate": 0.03, "target": "💀"},  # Base starvation
 	}
 	
-	# MEASUREMENT BEHAVIOR: 🧤 cannot be counted
-	# When measured, they collapse to waste (statistics, numbers, nothing)
+	# MEASUREMENT BEHAVIOR: 🧤 inverts to opposite pole when measured
+	# This is a quantum mask - measuring reveals the opposite basis state
+	# On axis (🧤, 🗑): measuring 🧤 → collapses to 🗑
+	# Use this to "sneak mass" into a basis state - refugees appear as waste/death
 	f.measurement_behavior = {
 		"🧤": {
-			"inverts": true,
-			"invert_target": "🗑",  # Measuring refugees turns them into statistics
+			"inverts": true,  # Collapse to opposite pole of axis
 		},
 	}
 	

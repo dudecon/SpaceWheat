@@ -255,13 +255,14 @@ func get_all_categories() -> Array[String]:
 
 static func safe_is_verbose(subsystem: String = "") -> bool:
 	"""Safe check that works even if VerboseConfig isn't initialized"""
-	if not is_instance_valid(VerboseConfig):
+	var config = Engine.get_main_loop().root.get_node_or_null("/root/VerboseConfig") if Engine.get_main_loop() else null
+	if not is_instance_valid(config):
 		return false
 
-	if not VerboseConfig.is_node_ready():
+	if not config.is_node_ready():
 		return false
 
-	return VerboseConfig.is_verbose(subsystem)
+	return config.is_verbose(subsystem)
 
 
 func is_verbose(subsystem: String = "") -> bool:

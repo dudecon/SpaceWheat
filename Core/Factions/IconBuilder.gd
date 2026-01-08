@@ -463,7 +463,7 @@ static func debug_print_icon(icon: Icon) -> void:
 	if icon.has_meta("measurement_behavior"):
 		var mb = icon.get_meta("measurement_behavior")
 		if mb.get("inverts", false):
-			print("  🔮 MEASUREMENT INVERTS → %s" % mb.get("invert_target", "?"))
+			print("  🔮 MEASUREMENT INVERTS → opposite pole of axis (quantum mask)")
 	
 	if icon.energy_couplings.size() > 0:
 		print("  Alignment (energy) couplings:")

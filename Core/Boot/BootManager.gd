@@ -18,7 +18,7 @@ func _ready() -> void:
 	print("🔧 BootManager autoload ready")
 
 ## Main boot sequence entry point - call after farm and shell are created
-func boot(farm: Farm, shell: Node, quantum_viz: Node) -> void:
+func boot(farm: Node, shell: Node, quantum_viz: Node) -> void:
 	if _booted:
 		push_warning("Boot already completed!")
 		return
@@ -49,7 +49,7 @@ func boot(farm: Farm, shell: Node, quantum_viz: Node) -> void:
 	game_ready.emit()
 
 ## Stage 3A: Initialize core systems
-func _stage_core_systems(farm: Farm) -> void:
+func _stage_core_systems(farm: Node) -> void:
 	_current_stage = "CORE_SYSTEMS"
 	print("📍 Stage 3A: Core Systems")
 
@@ -115,7 +115,7 @@ func _stage_core_systems(farm: Farm) -> void:
 	core_systems_ready.emit()
 
 ## Stage 3B: Initialize visualization
-func _stage_visualization(farm: Farm, quantum_viz: BathQuantumVisualizationController) -> void:
+func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 	_current_stage = "VISUALIZATION"
 	print("📍 Stage 3B: Visualization")
 
@@ -135,7 +135,7 @@ func _stage_visualization(farm: Farm, quantum_viz: BathQuantumVisualizationContr
 	visualization_ready.emit()
 
 ## Stage 3C: Initialize UI
-func _stage_ui(farm: Farm, shell: PlayerShell, quantum_viz: BathQuantumVisualizationController) -> void:
+func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 	_current_stage = "UI"
 	print("📍 Stage 3C: UI Initialization")
 
@@ -178,7 +178,7 @@ func _stage_ui(farm: Farm, shell: PlayerShell, quantum_viz: BathQuantumVisualiza
 	ui_ready.emit()
 
 ## Stage 3D: Start simulation
-func _stage_start_simulation(farm: Farm) -> void:
+func _stage_start_simulation(farm: Node) -> void:
 	_current_stage = "START_SIMULATION"
 	print("📍 Stage 3D: Start Simulation")
 

@@ -25,19 +25,19 @@ func arg() -> float:
 
 ## Complex conjugate: z* = re - i·im
 func conjugate():
-	return Complex.new(re, -im)
+	return get_script().new(re, -im)
 
 ## Addition: z1 + z2
 func add(other: Complex):
-	return Complex.new(re + other.re, im + other.im)
+	return get_script().new(re + other.re, im + other.im)
 
 ## Subtraction: z1 - z2
 func sub(other: Complex):
-	return Complex.new(re - other.re, im - other.im)
+	return get_script().new(re - other.re, im - other.im)
 
 ## Multiplication: z1 × z2 = (a+bi)(c+di) = (ac-bd) + (ad+bc)i
 func mul(other: Complex):
-	return Complex.new(
+	return get_script().new(
 		re * other.re - im * other.im,
 		re * other.im + im * other.re
 	)
@@ -47,14 +47,14 @@ func div(other: Complex):
 	var denom = other.abs_sq()
 	if denom < 1e-20:
 		push_error("Complex division by zero")
-		return Complex.new(0.0, 0.0)
+		return get_script().new(0.0, 0.0)
 	var conj = other.conjugate()
 	var num = mul(conj)
-	return Complex.new(num.re / denom, num.im / denom)
+	return get_script().new(num.re / denom, num.im / denom)
 
 ## Scalar multiplication: s × z
 func scale(s: float):
-	return Complex.new(re * s, im * s)
+	return get_script().new(re * s, im * s)
 
 ## Create from polar coordinates: r × e^(iθ) = r(cos θ + i sin θ)
 static func from_polar(r: float, theta: float):

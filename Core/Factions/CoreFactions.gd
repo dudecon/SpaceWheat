@@ -64,10 +64,11 @@ static func create_celestial_archons() -> Faction:
 		"🌬": 0.1,   # Air is ephemeral
 	}
 	
-	# Drivers: Sun and Moon oscillate in opposition (the cosmic clock)
+	# Drivers: Sun and Moon are inverted sine waves (the cosmic clock)
+	# Same mechanic as 🔌 AC power, but at celestial frequency (0.05 Hz = 20 sec period)
 	f.drivers = {
-		"☀": {"type": "cosine", "freq": 0.05, "phase": 0.0, "amp": 1.0},
-		"🌙": {"type": "sine", "freq": 0.05, "phase": PI / 2.0, "amp": 1.0},
+		"☀": {"type": "sine", "freq": 0.05, "phase": 0.0, "amp": 1.0},      # Day
+		"🌙": {"type": "sine", "freq": 0.05, "phase": PI, "amp": 1.0},      # Night (inverted)
 	}
 	
 	# Hamiltonian: elemental couplings (the classical element wheel)
@@ -456,10 +457,12 @@ static func create_market_spirits() -> Faction:
 		"🏚️": -0.1,  # Chaos - slight negative
 	}
 	
-	# Drivers: Bull/Bear oscillate (PLACEHOLDER - eventually reactive)
+	# Drivers: Bull/Bear are inverted sine waves (market cycle)
+	# Same mechanic as ☀🌙 and 🔌, at market frequency (0.033 Hz = 30 sec period)
+	# Note: Eventually these should be reactive (driven by player actions)
 	f.drivers = {
-		"🐂": {"type": "cosine", "freq": 1.0/30.0, "phase": 0.0, "amp": 0.8},
-		"🐻": {"type": "sine", "freq": 1.0/30.0, "phase": PI, "amp": 0.8},
+		"🐂": {"type": "sine", "freq": 1.0/30.0, "phase": 0.0, "amp": 0.8},    # Bull
+		"🐻": {"type": "sine", "freq": 1.0/30.0, "phase": PI, "amp": 0.8},     # Bear (inverted)
 	}
 	
 	# Hamiltonian: market dynamics
@@ -547,10 +550,11 @@ static func create_hearth_keepers() -> Faction:
 		"🍞": 0.0,   # Bread - product state
 	}
 	
-	# Drivers: Fire/Cold oscillate (PLACEHOLDER)
+	# Drivers: Fire/Cold are inverted sine waves (kitchen cycle)
+	# Same mechanic as ☀🌙 and 🔌, at kitchen frequency (0.067 Hz = 15 sec period)
 	f.drivers = {
-		"🔥": {"type": "cosine", "freq": 1.0/15.0, "phase": 0.0, "amp": 1.0},
-		"❄️": {"type": "sine", "freq": 1.0/15.0, "phase": PI, "amp": 0.8},
+		"🔥": {"type": "sine", "freq": 1.0/15.0, "phase": 0.0, "amp": 1.0},   # Heat
+		"❄️": {"type": "sine", "freq": 1.0/15.0, "phase": PI, "amp": 1.0},   # Cold (inverted)
 	}
 	
 	# Hamiltonian: production couplings

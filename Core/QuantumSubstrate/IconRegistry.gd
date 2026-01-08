@@ -19,7 +19,7 @@ func _ready():
 	print("📜 IconRegistry ready: %d icons registered" % icons.size())
 
 ## Register an Icon
-func register_icon(icon: Icon) -> void:
+func register_icon(icon) -> void:
 	if icon == null or icon.emoji == "":
 		push_error("IconRegistry: Attempted to register null or empty Icon")
 		return
@@ -31,7 +31,7 @@ func register_icon(icon: Icon) -> void:
 	# print("  ✓ Registered Icon: %s (%s)" % [icon.emoji, icon.display_name])
 
 ## Get an Icon by emoji
-func get_icon(emoji: String) -> Icon:
+func get_icon(emoji: String) :
 	return icons.get(emoji, null)
 
 ## Check if an Icon exists
@@ -56,7 +56,7 @@ func get_all_icons() -> Array:
 func get_icons_by_tag(tag: String) -> Array:
 	var result: Array = []
 	for icon_variant in icons.values():
-		var icon: Icon = icon_variant as Icon
+		var icon = icon_variant as Icon
 		if icon and tag in icon.tags:
 			result.append(icon)
 	return result
@@ -65,7 +65,7 @@ func get_icons_by_tag(tag: String) -> Array:
 func get_icons_by_trophic_level(level: int) -> Array:
 	var result: Array = []
 	for icon_variant in icons.values():
-		var icon: Icon = icon_variant as Icon
+		var icon = icon_variant as Icon
 		if icon and icon.trophic_level == level:
 			result.append(icon)
 	return result
@@ -125,7 +125,7 @@ func derive_from_markov(markov: Dictionary, h_scale: float = 0.5, l_scale: float
 func debug_print_all() -> void:
 	print("\n=== IconRegistry: %d Icons ===" % icons.size())
 	for emoji in icons.keys():
-		var icon: Icon = icons[emoji]
+		var icon = icons[emoji]
 		print("  %s - %s" % [emoji, icon.display_name])
 		if not icon.hamiltonian_couplings.is_empty():
 			print("    H couplings: %s" % str(icon.hamiltonian_couplings.keys()))
