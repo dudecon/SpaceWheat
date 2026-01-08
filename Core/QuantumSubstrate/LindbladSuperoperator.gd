@@ -133,7 +133,7 @@ func build_from_icons(icons: Array, emojis: Array) -> void:
 ## Create jump operator |j⟩⟨i| that transfers from i to j
 func _create_jump_operator(j: int, i: int) -> ComplexMatrix:
 	var L = ComplexMatrix.new(_dimension)
-	L.set_element(j, i, Complex.new(1.0, 0.0))
+	L.set_element(j, i, Complex.one())
 	return L
 
 ## Add a custom Lindblad term
@@ -150,7 +150,7 @@ func add_term(L: ComplexMatrix, rate: float, description: String = "") -> void:
 ## Add a dephasing term on state i (pure decoherence without population change)
 func add_dephasing(i: int, rate: float) -> void:
 	var L = ComplexMatrix.new(_dimension)
-	L.set_element(i, i, Complex.new(1.0, 0.0))
+	L.set_element(i, i, Complex.one())
 	_terms.append({
 		"L": L,
 		"rate": rate,

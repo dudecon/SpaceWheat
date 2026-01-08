@@ -1205,7 +1205,7 @@ func hot_drop_emoji(emoji: String, initial_amplitude: Complex = null) -> bool:
 
 	Args:
 		emoji: The emoji to inject
-		initial_amplitude: Starting amplitude (default: Complex.new(0.0, 0.0))
+		initial_amplitude: Starting amplitude (default: Complex.zero())
 
 	Returns:
 		true if successful, false if failed
@@ -1236,7 +1236,7 @@ func hot_drop_emoji(emoji: String, initial_amplitude: Complex = null) -> bool:
 
 	# Default amplitude
 	if initial_amplitude == null:
-		initial_amplitude = Complex.new(0.0, 0.0)
+		initial_amplitude = Complex.zero()
 
 	# Inject into bath
 	bath.inject_emoji(emoji, icon, initial_amplitude)
@@ -1466,7 +1466,7 @@ func create_projection(position: Vector2i, north: String, south: String) -> Reso
 			var north_icon = icon_registry.get_icon(north)
 			if north_icon:
 				# Start with zero amplitude (will adjust after south check)
-				bath.inject_emoji(north, north_icon, Complex.new(0.0, 0.0))
+				bath.inject_emoji(north, north_icon, Complex.zero())
 				injected = true
 				_verbose_log("debug","biome", "💉", "Injected %s into %s bath" % [north, get_biome_type()])
 			else:
@@ -2285,9 +2285,9 @@ func apply_reset(alpha: float, ref_state: String = "pure") -> void:
 		"pure":
 			# Pure state in first emoji (north pole of each qubit)
 			var amps: Array = []
-			amps.append(Complex.new(1.0, 0.0))
+			amps.append(Complex.one())
 			for i in range(1, dim):
-				amps.append(Complex.new(0.0, 0.0))
+				amps.append(Complex.zero())
 			var pure_rho = DensityMatrix.new()
 			pure_rho.initialize_with_emojis(bath._density_matrix.emoji_list)
 			pure_rho.set_pure_state(amps)
@@ -2303,7 +2303,7 @@ func apply_reset(alpha: float, ref_state: String = "pure") -> void:
 			# Specific emoji: pure state |emoji⟩⟨emoji|
 			var emoji_idx = bath._density_matrix.emoji_to_index.get(ref_state, -1)
 			if emoji_idx >= 0:
-				rho_ref.set_element(emoji_idx, emoji_idx, Complex.new(1.0, 0.0))
+				rho_ref.set_element(emoji_idx, emoji_idx, Complex.one())
 			else:
 				push_warning("apply_reset(): Unknown reference state '%s'" % ref_state)
 				return

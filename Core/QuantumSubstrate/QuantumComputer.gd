@@ -83,7 +83,7 @@ func allocate_register(north_emoji: String = "🌾", south_emoji: String = "🌽
 	# Create 1-qubit component with |0⟩ state
 	var comp = QuantumComponent.new(_next_component_id)
 	comp.register_ids.append(reg_id)  # Model B: append instead of assign
-	comp.state_vector = [Complex.new(1.0, 0.0), Complex.new(0.0, 0.0)]  # |0⟩
+	comp.state_vector = [Complex.one(), Complex.zero()]  # |0⟩
 	comp.is_pure = true
 
 	add_component(comp)
@@ -363,7 +363,7 @@ func _project_component_state(comp: QuantumComponent, reg_id: int, outcome_idx: 
 
 	# Create projector |outcome⟩⟨outcome|
 	var projector = ComplexMatrix.new(2)
-	projector.set_element(outcome_idx, outcome_idx, Complex.new(1.0, 0.0))
+	projector.set_element(outcome_idx, outcome_idx, Complex.one())
 
 	# Embed into full component space
 	var embedded_proj = _embed_1q_unitary(projector, reg_index, comp.register_count())
@@ -584,7 +584,7 @@ func initialize_basis(basis_index: int) -> void:
 		return
 
 	density_matrix = ComplexMatrix.zeros(dim)
-	density_matrix.set_element(basis_index, basis_index, Complex.new(1.0, 0.0))
+	density_matrix.set_element(basis_index, basis_index, Complex.one())
 	print("🎯 Initialized to |%d⟩ = %s" % [basis_index, register_map.basis_to_emojis(basis_index)])
 
 
@@ -801,7 +801,7 @@ func _apply_lindblad_1q(qubit_index: int, from_pole: int, to_pole: int,
 	for i in range(dim):
 		for j in range(dim):
 			var rho_ij = density_matrix.get_element(i, j)
-			var accum = Complex.new(0.0, 0.0)
+			var accum = Complex.zero()
 
 			# Term 1: L ρ L†
 			# L|k⟩ = |k'⟩ if k has from_pole at qubit, else 0

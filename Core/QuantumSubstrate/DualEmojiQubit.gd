@@ -94,7 +94,7 @@ var phi: float:
 				return proj.get("phi", 0.0)
 			return 0.0
 
-		var coh = marginal.get("coherence", Complex.new(0.0, 0.0))
+		var coh = marginal.get("coherence", Complex.zero())
 		if coh.abs() < 1e-10:
 			return 0.0
 
@@ -113,7 +113,7 @@ var radius: float:
 
 		var p0 = marginal.get("p_north", 0.0)
 		var p1 = marginal.get("p_south", 0.0)
-		var coh = marginal.get("coherence", Complex.new(0.0, 0.0))
+		var coh = marginal.get("coherence", Complex.zero())
 
 		if p0 + p1 < 1e-10:
 			return 0.0
@@ -137,7 +137,7 @@ var purity: float:
 		# For now, approximate from probabilities
 		var p0 = marginal.get("p_north", 0.0)
 		var p1 = marginal.get("p_south", 0.0)
-		var coh_sq = marginal.get("coherence", Complex.new(0.0, 0.0)).abs_sq()
+		var coh_sq = marginal.get("coherence", Complex.zero()).abs_sq()
 
 		return p0*p0 + p1*p1 + 2.0*coh_sq
 
@@ -176,7 +176,7 @@ var order: float:
 				var coherence = bath.get_coherence(north_emoji, south_emoji)
 				return coherence.abs() / subspace_probability
 			return 0.0
-		var coh = marginal.get("coherence", Complex.new(0.0, 0.0))
+		var coh = marginal.get("coherence", Complex.zero())
 		return coh.abs() / subspace_probability
 
 ## Get reduced 2×2 density matrix ρ_sub

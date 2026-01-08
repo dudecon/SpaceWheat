@@ -104,7 +104,7 @@ func get_marginal_2x2(register_id: int) -> ComplexMatrix:
 	for alpha in range(2):  # Result basis state (north/south for target)
 		for beta in range(2):
 			# Sum over all basis states of other qubits: Tr_other[ρ]_{α,β}
-			var sum = Complex.new(0.0, 0.0)
+			var sum = Complex.zero()
 
 			# Generate all basis states for "other" qubits
 			var other_dim = dim >> 1  # Dimension for other qubits
@@ -150,7 +150,7 @@ func _partial_trace_recursive(
 	This was a stub implementation that didn't work correctly.
 	"""
 	push_warning("_partial_trace_recursive is deprecated, using direct computation")
-	return Complex.new(0.0, 0.0)
+	return Complex.zero()
 
 ## Get probability of measuring basis state (0 or 1)
 func get_probability_outcome(register_id: int, outcome: int) -> float:
@@ -292,7 +292,7 @@ func initialize_to_basis_state(basis_index: int) -> void:
 
 	# Pure state: ρ = |i⟩⟨i|
 	density_matrix = ComplexMatrix.zeros(dim)
-	density_matrix.set_element(basis_index, basis_index, Complex.new(1.0, 0.0))
+	density_matrix.set_element(basis_index, basis_index, Complex.one())
 
 	is_pure = true
 
@@ -368,7 +368,7 @@ func _build_embedded_jump_operator(qubit_idx: int, target: int, source: int,
 ## Renormalize density matrix trace to 1
 func _renormalize_trace() -> void:
 	"""Ensure Tr(ρ) = 1 after numerical operations."""
-	var trace = Complex.new(0.0, 0.0)
+	var trace = Complex.zero()
 	for i in range(density_matrix.n):
 		trace = trace.add(density_matrix.get_element(i, i))
 

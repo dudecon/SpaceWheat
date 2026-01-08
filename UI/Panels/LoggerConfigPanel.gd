@@ -237,7 +237,7 @@ func _on_category_enabled_changed(category: String, enabled: bool):
 
 
 func _on_category_level_changed(category: String, level_idx: int):
-	_verbose.set_category_level(category, level_idx as _verbose.LogLevel)
+	_verbose.set_category_level(category, level_idx)  # level_idx already matches LogLevel enum values
 
 
 func _on_reset_pressed():

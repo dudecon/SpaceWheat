@@ -21,7 +21,7 @@ func _init(dimension: int = 0):
 	n = dimension
 	_data = []
 	for i in range(n * n):
-		_data.append(Complex.new(0.0, 0.0))
+		_data.append(Complex.zero())
 
 ## Create zero matrix of given dimension
 static func zeros(dimension: int):
@@ -31,7 +31,7 @@ static func zeros(dimension: int):
 static func identity(dimension: int):
 	var m = load("res://Core/QuantumSubstrate/ComplexMatrix.gd").new(dimension)
 	for i in range(dimension):
-		m.set_element(i, i, Complex.new(1.0, 0.0))
+		m.set_element(i, i, Complex.one())
 	return m
 
 ## Create from 2D array of Complex numbers
@@ -64,7 +64,7 @@ func duplicate():
 func get_element(i: int, j: int):
 	if i < 0 or i >= n or j < 0 or j >= n:
 		push_error("ComplexMatrix index out of bounds: (%d, %d) for %dx%d matrix" % [i, j, n, n])
-		return Complex.new(0.0, 0.0)
+		return Complex.zero()
 	return _data[i * n + j]
 
 func set_element(i: int, j: int, value):
@@ -102,7 +102,7 @@ func mul(other):
 	var result = load("res://Core/QuantumSubstrate/ComplexMatrix.gd").new(n)
 	for i in range(n):
 		for j in range(n):
-			var sum = Complex.new(0.0, 0.0)
+			var sum = Complex.zero()
 			for k in range(n):
 				sum = sum.add(get_element(i, k).mul(other.get_element(k, j)))
 			result.set_element(i, j, sum)
@@ -132,7 +132,7 @@ func dagger():
 	return result
 
 func trace():
-	var sum = Complex.new(0.0, 0.0)
+	var sum = Complex.zero()
 	for i in range(n):
 		sum = sum.add(get_element(i, i))
 	return sum
@@ -223,7 +223,7 @@ func inverse():
 		for j in range(n):
 			row.append(get_element(i, j))
 		for j in range(n):
-			row.append(Complex.new(1.0, 0.0) if i == j else Complex.new(0.0, 0.0))
+			row.append(Complex.one() if i == j else Complex.zero())
 		aug.append(row)
 
 	# Gauss-Jordan elimination
@@ -348,8 +348,8 @@ func _apply_jacobi_rotation(A, V, p: int, q: int, c: float, s: float) -> void:
 
 	A.set_element(p, p, Complex.new(c*c*app - 2*c*s*apq.re + s*s*aqq, 0.0))
 	A.set_element(q, q, Complex.new(s*s*app + 2*c*s*apq.re + c*c*aqq, 0.0))
-	A.set_element(p, q, Complex.new(0.0, 0.0))
-	A.set_element(q, p, Complex.new(0.0, 0.0))
+	A.set_element(p, q, Complex.zero())
+	A.set_element(q, p, Complex.zero())
 
 #endregion
 

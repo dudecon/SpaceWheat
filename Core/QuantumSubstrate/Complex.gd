@@ -56,25 +56,41 @@ func div(other: Complex):
 func scale(s: float):
 	return get_script().new(re * s, im * s)
 
-## NOTE: Static factory methods temporarily disabled due to GDScript class_name circular dependency
-## See: https://github.com/godotengine/godot/issues/52035
-## Workaround: Use Complex.new(re, im) directly or preload the script in tests
+## ========================================
+## Static Factory Methods (Lazy Singleton Pattern)
+## ========================================
+## These use lazy loading to avoid circular dependency issues
+## Instances are cached for performance
 
-## Create from polar coordinates: r × e^(iθ) = r(cos θ + i sin θ)
-#static func from_polar(r: float, theta: float):
-#	return Complex.new(r * cos(theta), r * sin(theta))
-
-## Imaginary unit: i
-#static func i():
-#	return Complex.new(0.0, 1.0)
+static var _zero_instance = null
+static var _one_instance = null
+static var _i_instance = null
 
 ## Zero
-#static func zero():
-#	return Complex.new(0.0, 0.0)
+static func zero():
+	if _zero_instance == null:
+		var script = load("res://Core/QuantumSubstrate/Complex.gd")
+		_zero_instance = script.new(0.0, 0.0)
+	return _zero_instance
 
 ## One
-#static func one():
-#	return Complex.new(1.0, 0.0)
+static func one():
+	if _one_instance == null:
+		var script = load("res://Core/QuantumSubstrate/Complex.gd")
+		_one_instance = script.new(1.0, 0.0)
+	return _one_instance
+
+## Imaginary unit: i
+static func i():
+	if _i_instance == null:
+		var script = load("res://Core/QuantumSubstrate/Complex.gd")
+		_i_instance = script.new(0.0, 1.0)
+	return _i_instance
+
+## Create from polar coordinates: r × e^(iθ) = r(cos θ + i sin θ)
+static func from_polar(r: float, theta: float):
+	var script = load("res://Core/QuantumSubstrate/Complex.gd")
+	return script.new(r * cos(theta), r * sin(theta))
 
 ## String representation for debugging
 func _to_string() -> String:

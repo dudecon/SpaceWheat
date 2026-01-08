@@ -5,6 +5,8 @@
 class_name CivilizationFactions
 extends RefCounted
 
+# Preload Faction class
+const Faction = preload("res://Core/Factions/Faction.gd")
 
 ## ========================================
 ## Granary Guilds (center ring)

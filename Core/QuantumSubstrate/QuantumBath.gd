@@ -192,7 +192,7 @@ func reset_sink_flux() -> void:
 ## Dynamically inject emoji into running bath
 ## MANIFEST COMPLIANT: Uses block-embedding to preserve existing probabilities
 ## (Manifest Section 3.5: "expanding N must not redistribute existing probability")
-func inject_emoji(emoji: String, icon: Icon, initial_amplitude: Complex = Complex.new(0.0, 0.0)) -> bool:
+func inject_emoji(emoji: String, icon: Icon, initial_amplitude: Complex = Complex.zero()) -> bool:
 	if _density_matrix.emoji_to_index.has(emoji):
 		return true
 
@@ -257,7 +257,7 @@ func inject_emoji(emoji: String, icon: Icon, initial_amplitude: Complex = Comple
 func get_amplitude(emoji: String) -> Complex:
 	var idx = _density_matrix.emoji_to_index.get(emoji, -1)
 	if idx < 0:
-		return Complex.new(0.0, 0.0)
+		return Complex.zero()
 	var prob = _density_matrix.get_probability_by_index(idx)
 	return Complex.new(sqrt(max(0.0, prob)), 0.0)
 
@@ -524,10 +524,10 @@ func partial_collapse(emoji: String, strength: float) -> void:
 		# Set all elements to zero, then set measured state to 1.0
 		for i in range(dim):
 			for j in range(dim):
-				mat.set_element(i, j, Complex.new(0.0, 0.0))
+				mat.set_element(i, j, Complex.zero())
 
 		# Set outcome to pure state: ρ[idx,idx] = 1.0
-		mat.set_element(idx, idx, Complex.new(1.0, 0.0))
+		mat.set_element(idx, idx, Complex.one())
 
 	else:
 		# Partial collapse for KID_LIGHT mode (strength < 1.0)
@@ -627,9 +627,9 @@ func collapse_to_emoji(emoji: String) -> void:
 	var amps: Array = []
 	for i in range(_density_matrix.dimension()):
 		if i == idx:
-			amps.append(Complex.new(1.0, 0.0))
+			amps.append(Complex.one())
 		else:
-			amps.append(Complex.new(0.0, 0.0))
+			amps.append(Complex.zero())
 	_density_matrix.set_pure_state(amps)
 
 ## Collapse in 2D subspace
@@ -649,11 +649,11 @@ func collapse_in_subspace(emoji_a: String, emoji_b: String, outcome: String) -> 
 	var mat = _density_matrix.get_matrix()
 	var zero_idx = idx_b if outcome == emoji_a else idx_a
 
-	mat.set_element(zero_idx, zero_idx, Complex.new(0.0, 0.0))
+	mat.set_element(zero_idx, zero_idx, Complex.zero())
 	# Also zero off-diagonals involving this index
 	for i in range(_density_matrix.dimension()):
-		mat.set_element(zero_idx, i, Complex.new(0.0, 0.0))
-		mat.set_element(i, zero_idx, Complex.new(0.0, 0.0))
+		mat.set_element(zero_idx, i, Complex.zero())
+		mat.set_element(i, zero_idx, Complex.zero())
 
 	_density_matrix.set_matrix(mat)
 	_density_matrix._enforce_trace_one()
@@ -899,10 +899,10 @@ func _pauli_x():
 	var Complex = load("res://Core/QuantumSubstrate/Complex.gd")
 	var ComplexMatrix = load("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 	var X = ComplexMatrix.new(2)
-	X.set_element(0, 0, Complex.new(0.0, 0.0))
-	X.set_element(0, 1, Complex.new(1.0, 0.0))
-	X.set_element(1, 0, Complex.new(1.0, 0.0))
-	X.set_element(1, 1, Complex.new(0.0, 0.0))
+	X.set_element(0, 0, Complex.zero())
+	X.set_element(0, 1, Complex.one())
+	X.set_element(1, 0, Complex.one())
+	X.set_element(1, 1, Complex.zero())
 	return X
 
 ## Pauli-Y gate: Y = [[0, -i], [i, 0]]
@@ -910,10 +910,10 @@ func _pauli_y():
 	var Complex = load("res://Core/QuantumSubstrate/Complex.gd")
 	var ComplexMatrix = load("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 	var Y = ComplexMatrix.new(2)
-	Y.set_element(0, 0, Complex.new(0.0, 0.0))
+	Y.set_element(0, 0, Complex.zero())
 	Y.set_element(0, 1, Complex.new(0.0, -1.0))
-	Y.set_element(1, 0, Complex.new(0.0, 1.0))
-	Y.set_element(1, 1, Complex.new(0.0, 0.0))
+	Y.set_element(1, 0, Complex.i())
+	Y.set_element(1, 1, Complex.zero())
 	return Y
 
 ## Pauli-Z gate: Z = [[1, 0], [0, -1]] (phase flip)
@@ -921,9 +921,9 @@ func _pauli_z():
 	var Complex = load("res://Core/QuantumSubstrate/Complex.gd")
 	var ComplexMatrix = load("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 	var Z = ComplexMatrix.new(2)
-	Z.set_element(0, 0, Complex.new(1.0, 0.0))
-	Z.set_element(0, 1, Complex.new(0.0, 0.0))
-	Z.set_element(1, 0, Complex.new(0.0, 0.0))
+	Z.set_element(0, 0, Complex.one())
+	Z.set_element(0, 1, Complex.zero())
+	Z.set_element(1, 0, Complex.zero())
 	Z.set_element(1, 1, Complex.new(-1.0, 0.0))
 	return Z
 
@@ -947,11 +947,11 @@ func _cnot():
 	var ComplexMatrix = load("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 	var CNOT = ComplexMatrix.new(4)
 	# Identity on first two basis states
-	CNOT.set_element(0, 0, Complex.new(1.0, 0.0))  # |00⟩ → |00⟩
-	CNOT.set_element(1, 1, Complex.new(1.0, 0.0))  # |01⟩ → |01⟩
+	CNOT.set_element(0, 0, Complex.one())  # |00⟩ → |00⟩
+	CNOT.set_element(1, 1, Complex.one())  # |01⟩ → |01⟩
 	# Swap last two basis states
-	CNOT.set_element(2, 3, Complex.new(1.0, 0.0))  # |10⟩ → |11⟩
-	CNOT.set_element(3, 2, Complex.new(1.0, 0.0))  # |11⟩ → |10⟩
+	CNOT.set_element(2, 3, Complex.one())  # |10⟩ → |11⟩
+	CNOT.set_element(3, 2, Complex.one())  # |11⟩ → |10⟩
 	return CNOT
 
 ## CZ gate: 4×4 controlled-Z
@@ -960,9 +960,9 @@ func _cz():
 	var Complex = load("res://Core/QuantumSubstrate/Complex.gd")
 	var ComplexMatrix = load("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 	var CZ = ComplexMatrix.new(4)
-	CZ.set_element(0, 0, Complex.new(1.0, 0.0))
-	CZ.set_element(1, 1, Complex.new(1.0, 0.0))
-	CZ.set_element(2, 2, Complex.new(1.0, 0.0))
+	CZ.set_element(0, 0, Complex.one())
+	CZ.set_element(1, 1, Complex.one())
+	CZ.set_element(2, 2, Complex.one())
 	CZ.set_element(3, 3, Complex.new(-1.0, 0.0))
 	return CZ
 
@@ -972,10 +972,10 @@ func _swap():
 	var Complex = load("res://Core/QuantumSubstrate/Complex.gd")
 	var ComplexMatrix = load("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 	var SWAP = ComplexMatrix.new(4)
-	SWAP.set_element(0, 0, Complex.new(1.0, 0.0))  # |00⟩ → |00⟩
-	SWAP.set_element(1, 2, Complex.new(1.0, 0.0))  # |01⟩ → |10⟩
-	SWAP.set_element(2, 1, Complex.new(1.0, 0.0))  # |10⟩ → |01⟩
-	SWAP.set_element(3, 3, Complex.new(1.0, 0.0))  # |11⟩ → |11⟩
+	SWAP.set_element(0, 0, Complex.one())  # |00⟩ → |00⟩
+	SWAP.set_element(1, 2, Complex.one())  # |01⟩ → |10⟩
+	SWAP.set_element(2, 1, Complex.one())  # |10⟩ → |01⟩
+	SWAP.set_element(3, 3, Complex.one())  # |11⟩ → |11⟩
 	return SWAP
 
 ## ========================================

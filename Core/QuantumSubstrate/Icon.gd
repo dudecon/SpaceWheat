@@ -145,8 +145,9 @@ func get_coupled_emojis() -> Array:
 	return result
 
 ## Create a simple icon with just couplings (utility constructor)
-static func create_simple(emoji_str: String, couplings: Dictionary = {}, transfers: Dictionary = {}) -> Icon:
-	var icon = Icon.new()
+static func create_simple(emoji_str: String, couplings: Dictionary = {}, transfers: Dictionary = {}):
+	var icon_class = load("res://Core/QuantumSubstrate/Icon.gd")
+	var icon = icon_class.new()
 	icon.emoji = emoji_str
 	icon.display_name = emoji_str
 	icon.hamiltonian_couplings = couplings

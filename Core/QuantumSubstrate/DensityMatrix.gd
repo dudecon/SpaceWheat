@@ -72,7 +72,7 @@ func set_maximally_mixed() -> void:
 			if i == j:
 				_matrix.set_element(i, j, Complex.new(prob, 0.0))
 			else:
-				_matrix.set_element(i, j, Complex.new(0.0, 0.0))
+				_matrix.set_element(i, j, Complex.zero())
 
 ## Create classical mixture from probabilities (diagonal density matrix)
 func set_classical_mixture(probabilities: Array) -> void:
@@ -85,7 +85,7 @@ func set_classical_mixture(probabilities: Array) -> void:
 			if i == j:
 				_matrix.set_element(i, j, Complex.new(probabilities[i], 0.0))
 			else:
-				_matrix.set_element(i, j, Complex.new(0.0, 0.0))
+				_matrix.set_element(i, j, Complex.zero())
 
 	_ensure_normalized()
 
@@ -136,7 +136,7 @@ func get_probability(emoji: String) -> float:
 ## Get coherence between states i and j: ρᵢⱼ
 func get_coherence_by_index(i: int, j: int):
 	if i < 0 or i >= dimension() or j < 0 or j >= dimension():
-		return Complex.new(0.0, 0.0)
+		return Complex.zero()
 	return _matrix.get_element(i, j)
 
 ## Get coherence between emoji states
@@ -144,7 +144,7 @@ func get_coherence(emoji_a: String, emoji_b: String):
 	var i = emoji_to_index.get(emoji_a, -1)
 	var j = emoji_to_index.get(emoji_b, -1)
 	if i < 0 or j < 0:
-		return Complex.new(0.0, 0.0)
+		return Complex.zero()
 	return get_coherence_by_index(i, j)
 
 ## Purity: Tr(ρ²) - 1 for pure, 1/N for maximally mixed
@@ -165,7 +165,7 @@ func get_entropy() -> float:
 func get_expected_value(observable):
 	if observable.n != dimension():
 		push_error("Observable dimension mismatch")
-		return Complex.new(0.0, 0.0)
+		return Complex.zero()
 	return _matrix.mul(observable).trace()
 
 ## Trace (should always be 1)

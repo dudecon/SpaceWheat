@@ -22,7 +22,7 @@ var description: String = ""
 var ring: String = "center"  # "center", "second", "third", "outer"
 
 ## The ONLY emojis this faction speaks (3-7 ideal)
-var signature: Array[String] = []
+var signature: Array = []
 
 ## ========================================
 ## Hamiltonian Terms (Unitary Evolution)
@@ -95,7 +95,7 @@ var alignment_couplings: Dictionary = {}
 ## ========================================
 
 ## Tags for organization
-var tags: Array[String] = []
+var tags: Array = []
 
 ## ========================================
 ## Methods
@@ -106,8 +106,8 @@ func speaks(emoji: String) -> bool:
 	return emoji in signature
 
 ## Get all emojis this faction contributes to (including decay targets)
-func get_all_emojis() -> Array[String]:
-	var result: Array[String] = signature.duplicate()
+func get_all_emojis() -> Array:
+	var result: Array = signature.duplicate()
 	for emoji in decay:
 		var target = decay[emoji].get("target", "")
 		if target != "" and target not in result:

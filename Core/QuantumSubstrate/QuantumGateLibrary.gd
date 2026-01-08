@@ -148,8 +148,8 @@ static func list_2q_gates() -> Array:
 static func _pauli_x() -> ComplexMatrix:
 	"""Pauli-X: [[0, 1], [1, 0]]"""
 	var m = ComplexMatrix.new(2)
-	m.set_element(0, 1, Complex.new(1.0, 0.0))
-	m.set_element(1, 0, Complex.new(1.0, 0.0))
+	m.set_element(0, 1, Complex.one())
+	m.set_element(1, 0, Complex.one())
 	return m
 
 static func _pauli_y() -> ComplexMatrix:
@@ -162,7 +162,7 @@ static func _pauli_y() -> ComplexMatrix:
 static func _pauli_z() -> ComplexMatrix:
 	"""Pauli-Z: [[1, 0], [0, -1]]"""
 	var m = ComplexMatrix.new(2)
-	m.set_element(0, 0, Complex.new(1.0, 0.0))
+	m.set_element(0, 0, Complex.one())
 	m.set_element(1, 1, Complex.new(-1, 0))
 	return m
 
@@ -179,14 +179,14 @@ static func _hadamard() -> ComplexMatrix:
 static func _s_gate() -> ComplexMatrix:
 	"""S gate (phase): [[1, 0], [0, i]]"""
 	var m = ComplexMatrix.new(2)
-	m.set_element(0, 0, Complex.new(1.0, 0.0))
+	m.set_element(0, 0, Complex.one())
 	m.set_element(1, 1, Complex.new(0, 1))
 	return m
 
 static func _t_gate() -> ComplexMatrix:
 	"""T gate: [[1, 0], [0, e^(iπ/4)]]"""
 	var m = ComplexMatrix.new(2)
-	m.set_element(0, 0, Complex.new(1.0, 0.0))
+	m.set_element(0, 0, Complex.one())
 	# e^(iπ/4) = cos(π/4) + i*sin(π/4) = 1/√2 + i/√2
 	var phase = Complex.new(1.0 / SQRT2, 1.0 / SQRT2)
 	m.set_element(1, 1, phase)
@@ -202,11 +202,11 @@ static func _cnot() -> ComplexMatrix:
 	"""
 	var m = ComplexMatrix.new(4)
 	# Diagonal (|00⟩, |01⟩ → unchanged)
-	m.set_element(0, 0, Complex.new(1.0, 0.0))
-	m.set_element(1, 1, Complex.new(1.0, 0.0))
+	m.set_element(0, 0, Complex.one())
+	m.set_element(1, 1, Complex.one())
 	# Off-diagonal (|10⟩ ↔ |11⟩ when control is 1)
-	m.set_element(2, 3, Complex.new(1.0, 0.0))
-	m.set_element(3, 2, Complex.new(1.0, 0.0))
+	m.set_element(2, 3, Complex.one())
+	m.set_element(3, 2, Complex.one())
 	return m
 
 static func _cz() -> ComplexMatrix:
@@ -217,9 +217,9 @@ static func _cz() -> ComplexMatrix:
 	Diagonal matrix: identity except |11⟩ → -|11⟩
 	"""
 	var m = ComplexMatrix.new(4)
-	m.set_element(0, 0, Complex.new(1.0, 0.0))
-	m.set_element(1, 1, Complex.new(1.0, 0.0))
-	m.set_element(2, 2, Complex.new(1.0, 0.0))
+	m.set_element(0, 0, Complex.one())
+	m.set_element(1, 1, Complex.one())
+	m.set_element(2, 2, Complex.one())
 	m.set_element(3, 3, Complex.new(-1, 0))
 	return m
 
@@ -230,8 +230,8 @@ static func _swap() -> ComplexMatrix:
 	Exchanges the two qubits.
 	"""
 	var m = ComplexMatrix.new(4)
-	m.set_element(0, 0, Complex.new(1.0, 0.0))
-	m.set_element(1, 2, Complex.new(1.0, 0.0))
-	m.set_element(2, 1, Complex.new(1.0, 0.0))
-	m.set_element(3, 3, Complex.new(1.0, 0.0))
+	m.set_element(0, 0, Complex.one())
+	m.set_element(1, 2, Complex.one())
+	m.set_element(2, 1, Complex.one())
+	m.set_element(3, 3, Complex.one())
 	return m

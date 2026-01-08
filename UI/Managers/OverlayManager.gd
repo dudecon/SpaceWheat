@@ -625,7 +625,7 @@ func _on_icon_detail_panel_closed() -> void:
 	pass
 
 
-func _on_emoji_clicked(emoji: String, icon: Icon) -> void:
+func _on_emoji_clicked(emoji: String, icon) -> void:
 	"""Handle emoji button click - show Icon detail panel"""
 	if icon_detail_panel:
 		icon_detail_panel.show_icon(icon)

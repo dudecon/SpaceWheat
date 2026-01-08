@@ -5,6 +5,8 @@
 class_name Tier2Factions
 extends RefCounted
 
+# Preload Faction class
+const Faction = preload("res://Core/Factions/Faction.gd")
 
 ## ========================================
 ## TIER 2A: COMMERCE BRANCH (from 💰)
