@@ -7,7 +7,7 @@ extends PanelContainer
 
 signal panel_closed
 
-var current_icon: Icon
+var current_icon  # Icon type
 var layout_manager: Node
 
 # UI elements
@@ -96,7 +96,7 @@ func _create_ui() -> void:
 	detail_scroll.add_child(detail_vbox)
 
 
-func show_icon(icon: Icon) -> void:
+func show_icon(icon) -> void:  # icon: Icon type
 	"""Show detail panel for a specific Icon"""
 	current_icon = icon
 	_populate_content()

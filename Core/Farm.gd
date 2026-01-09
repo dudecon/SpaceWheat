@@ -32,7 +32,7 @@ const ImperiumIcon = preload("res://Core/Icons/ImperiumIcon.gd")
 
 # Core simulation systems
 var grid: FarmGrid
-var economy: FarmEconomy
+var economy  # FarmEconomy type
 var goals: GoalsSystem
 var biotic_flux_biome: BioticFluxBiome
 var market_biome: MarketBiome

@@ -50,6 +50,9 @@ func _init():
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	hide()  # Hidden by default
 
+
+func _ready():
+	"""Build UI after _verbose is available"""
 	# Background - semi-transparent black
 	background = ColorRect.new()
 	background.color = Color(0.0, 0.0, 0.0, 0.8)
