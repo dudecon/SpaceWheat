@@ -14,6 +14,7 @@ extends Node
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 const QuantumRegister = preload("res://Core/QuantumSubstrate/QuantumRegister.gd")
 const QuantumComputer = preload("res://Core/QuantumSubstrate/QuantumComputer.gd")
+const QuantumBath = preload("res://Core/QuantumSubstrate/QuantumBath.gd")
 const QuantumGateLibrary = preload("res://Core/QuantumSubstrate/QuantumGateLibrary.gd")
 const BiomeUtilities = preload("res://Core/Environment/BiomeUtilities.gd")
 const BiomeTimeTracker = preload("res://Core/Environment/BiomeTimeTracker.gd")
@@ -33,7 +34,7 @@ var grid = null  # Injected FarmGrid reference
 # ============================================================================
 
 ## Central quantum state manager for this biome (ONLY source of truth)
-var quantum_computer: QuantumComputer = null
+var quantum_computer = null  # QuantumComputer type
 
 ## Plot register mapping: Vector2i → QuantumRegister
 var plot_registers: Dictionary = {}  # Vector2i → QuantumRegister (metadata only)

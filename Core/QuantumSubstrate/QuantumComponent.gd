@@ -60,7 +60,7 @@ func merge_with(other: QuantumComponent) -> QuantumComponent:
 	Merge two components into tensor product.
 	Returns new component with merged state and register list.
 	"""
-	var merged = QuantumComponent.new(component_id)
+	var merged = get_script().new(component_id)  # Use get_script() to avoid circular reference
 	merged.register_ids = register_ids + other.register_ids
 
 	# Tensor product of states: ρ_merged = ρ_self ⊗ ρ_other

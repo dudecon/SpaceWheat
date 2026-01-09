@@ -13,7 +13,8 @@ const QuestPanel = preload("res://UI/Panels/QuestPanel.gd")
 const FactionQuestOffersPanel = preload("res://UI/Panels/FactionQuestOffersPanel.gd")
 const QuestBoard = preload("res://UI/Panels/QuestBoard.gd")  # New modal quest board
 const NetworkInfoPanel = preload("res://UI/NetworkInfoPanel.gd")
-const ConspiracyNetworkOverlay = preload("res://UI/ConspiracyNetworkOverlay.gd")
+# DEPRECATED: ConspiracyNetworkOverlay - tomato conspiracy system removed
+# const ConspiracyNetworkOverlay = preload("res://UI/ConspiracyNetworkOverlay.gd")
 const SaveLoadMenu = preload("res://UI/Panels/SaveLoadMenu.gd")
 const EscapeMenu = preload("res://UI/Panels/EscapeMenu.gd")
 const BiomeInspectorOverlay = preload("res://UI/Panels/BiomeInspectorOverlay.gd")
@@ -26,7 +27,8 @@ var quest_panel: QuestPanel
 var faction_quest_offers_panel: FactionQuestOffersPanel  # Legacy browse-all panel
 var quest_board: QuestBoard  # New modal 4-slot quest board (primary interface)
 var vocabulary_overlay: Control
-var network_overlay: ConspiracyNetworkOverlay
+# DEPRECATED: network_overlay - tomato conspiracy system removed
+var network_overlay = null  # Explicitly null - feature removed
 var network_info_panel: NetworkInfoPanel
 var escape_menu: EscapeMenu
 var save_load_menu

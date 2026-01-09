@@ -9,6 +9,8 @@ extends Resource
 
 const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
+const QuantumComponent = preload("res://Core/QuantumSubstrate/QuantumComponent.gd")
+const QuantumGateLibrary = preload("res://Core/QuantumSubstrate/QuantumGateLibrary.gd")
 const RegisterMap = preload("res://Core/QuantumSubstrate/RegisterMap.gd")
 
 @export var biome_name: String = ""
