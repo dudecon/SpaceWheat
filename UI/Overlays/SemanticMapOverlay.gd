@@ -474,7 +474,11 @@ func _populate_vocabulary_grid() -> void:
 				# Stability indicator
 				var stability = vocab_item.get("stability", 0.5)
 				var stability_label = Label.new()
-				stability_label.text = "★" * int(stability * 5)
+				var star_count = int(stability * 5)
+				var stars = ""
+				for i in range(star_count):
+					stars += "★"
+				stability_label.text = stars if stars else "☆"
 				stability_label.add_theme_color_override("font_color", Color.YELLOW)
 				hbox.add_child(stability_label)
 
