@@ -10,14 +10,21 @@ var test_results = []
 var total_tests = 0
 var passed_tests = 0
 
+# Helper function for string repetition (GDScript doesn't support string * int)
+func _repeat_string(s: String, count: int) -> String:
+	var result = ""
+	for i in range(count):
+		result += s
+	return result
+
 func _ready():
 	await get_tree().process_frame
 	_run_all_tests()
 
 func _run_all_tests():
-	print("\n" + "="*120)
+	print("\n" + _repeat_string("=", 120))
 	print("🎮 COMPREHENSIVE INTERACTIVE TEST SUITE - PHASE 6 v2 OVERLAYS & TOOLS")
-	print("="*120)
+	print(_repeat_string("=", 120))
 
 	# Get required game objects
 	var farm_view = get_tree().get_first_node_in_group("farm_view")
@@ -46,9 +53,9 @@ func _run_all_tests():
 		var test_name = test_group[0]
 		var test_func = test_group[1]
 
-		print("\n" + "─"*120)
+		print("\n" + _repeat_string("─", 120))
 		print("🔬 %s" % test_name)
-		print("─"*120)
+		print(_repeat_string("─", 120))
 
 		test_func.call()
 		await get_tree().process_frame
@@ -302,9 +309,9 @@ func _test_data_flow(shell: Node):
 		_add_test("Farm data accessible", false)
 
 func _print_summary():
-	print("\n" + "="*120)
+	print("\n" + _repeat_string("=", 120))
 	print("📊 TEST SUMMARY")
-	print("="*120)
+	print(_repeat_string("=", 120))
 
 	print("\n%d / %d tests passed (%.1f%%)" % [
 		passed_tests,
@@ -325,6 +332,6 @@ func _print_summary():
 				if result.details:
 					print("      └─ %s" % result.details)
 
-	print("\n" + "="*120)
+	print("\n" + _repeat_string("=", 120))
 
 	all_tests_completed.emit(total_tests, passed_tests, total_tests - passed_tests)
