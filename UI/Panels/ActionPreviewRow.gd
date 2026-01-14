@@ -7,6 +7,7 @@ extends HBoxContainer
 
 # Tool actions from shared config (single source of truth)
 const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
+const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
 const TOOL_ACTIONS = ToolConfig.TOOL_ACTIONS
 
 # Action buttons
@@ -98,6 +99,10 @@ func update_for_tool(tool_num: int) -> void:
 
 		# Update button text
 		button.text = "[%s] %s %s" % [action_key, emoji, label]
+
+	# For Tool 1 (Probe), enhance with preview info
+	if tool_num == 1:
+		_update_probe_preview()
 
 	# Update action availability based on selected plots
 	update_action_availability()
@@ -271,6 +276,10 @@ func update_action_availability() -> void:
 		"R": input_handler.can_execute_action("R"),
 	}
 
+	# Update probe preview for Tool 1 (shows quantum state in button text)
+	if current_tool == 1:
+		_update_probe_preview()
+
 	update_button_highlights(availability)
 
 
@@ -314,6 +323,57 @@ func set_layout_manager(mgr) -> void:
 func _on_action_button_pressed(action_key: String) -> void:
 	"""Handle action button press"""
 	action_pressed.emit(action_key)
+
+
+func _update_probe_preview() -> void:
+	"""Update Tool 1 (Probe) buttons with preview info from ProbeActions.
+
+	Shows what registers are available for EXPLORE, what terminals can be
+	measured, etc. Makes the quantum state visible before action.
+	"""
+	if not farm or not farm.plot_pool:
+		return
+
+	# Get current biome from selection
+	var biome = null
+	if plot_grid_display and plot_grid_display.has_method("get_selected_plots"):
+		var selected = plot_grid_display.get_selected_plots()
+		if not selected.is_empty() and farm.grid:
+			biome = farm.grid.get_biome_for_plot(selected[0])
+
+	if not biome:
+		return
+
+	# Get EXPLORE preview
+	var explore_preview = ProbeActions.get_explore_preview(farm.plot_pool, biome)
+	if explore_preview.can_explore and not explore_preview.top_probabilities.is_empty():
+		# Show top probability in button text
+		var top = explore_preview.top_probabilities[0]
+		var emoji = top.get("emoji", "?")
+		var prob = top.get("probability", 0.0) * 100
+		action_buttons["Q"].text = "[Q] 🔍 Explore (%s %.0f%%)" % [emoji, prob]
+
+	# Get MEASURE preview - find active terminal
+	var active_terminals = []
+	for terminal in farm.plot_pool.get_active_terminals():
+		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome.get_biome_type():
+			active_terminals.append(terminal)
+
+	if not active_terminals.is_empty():
+		var terminal = active_terminals[0]
+		var emoji = terminal.north_emoji if terminal.north_emoji else "?"
+		action_buttons["E"].text = "[E] 👁️ Measure (%s)" % emoji
+
+	# Get POP preview - find measured terminal
+	var measured_terminals = []
+	for terminal in farm.plot_pool.get_measured_terminals():
+		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome.get_biome_type():
+			measured_terminals.append(terminal)
+
+	if not measured_terminals.is_empty():
+		var terminal = measured_terminals[0]
+		var outcome = terminal.measured_outcome if terminal.measured_outcome else "?"
+		action_buttons["R"].text = "[R] ✂️ Pop (%s)" % outcome
 
 
 func debug_layout() -> String:
