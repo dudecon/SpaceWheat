@@ -18,15 +18,16 @@ extends RefCounted
 ##   pool.bind_terminal(terminal, register_id, biome)  # Bind to register
 ##   pool.unbind_terminal(terminal)  # Release binding
 
-signal terminal_bound(terminal: Terminal, register_id: int)
-signal terminal_unbound(terminal: Terminal)
+signal terminal_bound(terminal: RefCounted, register_id: int)
+signal terminal_measured(terminal: RefCounted, outcome: String)
+signal terminal_unbound(terminal: RefCounted)
 signal pool_exhausted()  # Emitted when all terminals are bound
 signal pool_available()  # Emitted when at least one terminal becomes available
 
 const TerminalClass = preload("res://Core/GameMechanics/Terminal.gd")
 
-## Pool of all terminals
-var terminals: Array[Terminal] = []
+## Pool of all terminals (Array of Terminal instances)
+var terminals: Array = []
 
 ## Binding tables
 var binding_table: Dictionary = {}  # terminal_id → {register_id, biome_name}
@@ -49,11 +50,12 @@ func _initialize_pool() -> void:
 	for i in range(pool_size):
 		var terminal = TerminalClass.new("T_%02d" % i)
 		terminal.state_changed.connect(_on_terminal_state_changed)
+		terminal.measured.connect(_on_terminal_measured.bind(terminal))
 		terminals.append(terminal)
 
 
 ## Get the first unbound terminal, or null if all are bound
-func get_unbound_terminal() -> Terminal:
+func get_unbound_terminal() -> RefCounted:
 	for terminal in terminals:
 		if not terminal.is_bound:
 			return terminal
@@ -61,8 +63,8 @@ func get_unbound_terminal() -> Terminal:
 
 
 ## Get all unbound terminals
-func get_unbound_terminals() -> Array[Terminal]:
-	var result: Array[Terminal] = []
+func get_unbound_terminals() -> Array:
+	var result: Array = []
 	for terminal in terminals:
 		if not terminal.is_bound:
 			result.append(terminal)
@@ -70,8 +72,8 @@ func get_unbound_terminals() -> Array[Terminal]:
 
 
 ## Get all bound terminals
-func get_bound_terminals() -> Array[Terminal]:
-	var result: Array[Terminal] = []
+func get_bound_terminals() -> Array:
+	var result: Array = []
 	for terminal in terminals:
 		if terminal.is_bound:
 			result.append(terminal)
@@ -79,7 +81,7 @@ func get_bound_terminals() -> Array[Terminal]:
 
 
 ## Get terminal by ID
-func get_terminal(terminal_id: String) -> Terminal:
+func get_terminal(terminal_id: String) -> RefCounted:
 	for terminal in terminals:
 		if terminal.terminal_id == terminal_id:
 			return terminal
@@ -87,7 +89,7 @@ func get_terminal(terminal_id: String) -> Terminal:
 
 
 ## Get terminal bound to a specific register
-func get_terminal_for_register(register_id: int, biome_name: String) -> Terminal:
+func get_terminal_for_register(register_id: int, biome_name: String) -> RefCounted:
 	var key = "%s:%d" % [biome_name, register_id]
 	if reverse_binding.has(key):
 		return get_terminal(reverse_binding[key])
@@ -96,7 +98,7 @@ func get_terminal_for_register(register_id: int, biome_name: String) -> Terminal
 
 ## Bind a terminal to a register in a biome
 ## Returns true if binding succeeded, false if constraint violated
-func bind_terminal(terminal: Terminal, register_id: int, biome: RefCounted, emoji_pair: Dictionary = {}) -> bool:
+func bind_terminal(terminal: RefCounted, register_id: int, biome: RefCounted, emoji_pair: Dictionary = {}) -> bool:
 	if terminal.is_bound:
 		push_warning("Terminal %s already bound" % terminal.terminal_id)
 		return false
@@ -131,7 +133,7 @@ func bind_terminal(terminal: Terminal, register_id: int, biome: RefCounted, emoj
 
 
 ## Unbind a terminal from its register
-func unbind_terminal(terminal: Terminal) -> void:
+func unbind_terminal(terminal: RefCounted) -> void:
 	if not terminal.is_bound:
 		return
 
@@ -164,7 +166,7 @@ func is_register_bound(register_id: int, biome_name: String) -> bool:
 
 
 ## Check if a terminal is currently bound
-func is_terminal_bound(terminal: Terminal) -> bool:
+func is_terminal_bound(terminal: RefCounted) -> bool:
 	return terminal.is_bound
 
 
@@ -179,13 +181,13 @@ func get_unbound_count() -> int:
 
 
 ## Get all terminals (bound and unbound)
-func get_all_terminals() -> Array[Terminal]:
+func get_all_terminals() -> Array:
 	return terminals
 
 
 ## Get terminals that are measured but not yet popped
-func get_measured_terminals() -> Array[Terminal]:
-	var result: Array[Terminal] = []
+func get_measured_terminals() -> Array:
+	var result: Array = []
 	for terminal in terminals:
 		if terminal.is_measured:
 			result.append(terminal)
@@ -193,8 +195,8 @@ func get_measured_terminals() -> Array[Terminal]:
 
 
 ## Get terminals that are bound but not yet measured
-func get_active_terminals() -> Array[Terminal]:
-	var result: Array[Terminal] = []
+func get_active_terminals() -> Array:
+	var result: Array = []
 	for terminal in terminals:
 		if terminal.is_bound and not terminal.is_measured:
 			result.append(terminal)
@@ -250,9 +252,14 @@ func get_state() -> Dictionary:
 
 
 ## Callback when terminal state changes
-func _on_terminal_state_changed(terminal: Terminal) -> void:
+func _on_terminal_state_changed(_terminal: RefCounted) -> void:
 	# Could be used for pool-level state tracking
 	pass
+
+
+## Callback when terminal is measured
+func _on_terminal_measured(outcome: String, terminal: RefCounted) -> void:
+	terminal_measured.emit(terminal, outcome)
 
 
 ## String representation for debugging
