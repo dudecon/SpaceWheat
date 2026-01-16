@@ -356,15 +356,13 @@ func _create_help_row(key: String, action: String, description: String) -> Contr
 
 func _update_section_display() -> void:
 	"""Update which section is visible."""
-	# Clear content
-	for child in content_container.get_children():
-		child.queue_free()
-
-	# Add current section
-	if current_section >= 0 and current_section < section_panels.size():
-		# Need to duplicate since we're re-adding
-		var panel = section_panels[current_section]
-		content_container.add_child(panel)
+	# Show/hide panels based on current section (don't delete them!)
+	# First, ensure all panels are added to content_container if not already
+	for i in range(section_panels.size()):
+		var panel = section_panels[i]
+		if panel.get_parent() != content_container:
+			content_container.add_child(panel)
+		panel.visible = (i == current_section)
 
 	# Update tab states
 	for i in range(section_tabs.get_child_count()):

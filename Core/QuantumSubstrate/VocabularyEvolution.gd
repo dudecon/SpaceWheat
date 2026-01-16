@@ -324,7 +324,7 @@ func serialize() -> Dictionary:
 			"theta": qb.theta,
 			"phi": qb.phi,
 			"radius": qb.radius,
-			"energy": qb.energy,
+			# energy removed - now derived from theta: sin²(θ/2)
 			"berry_phase": qb.berry_phase,
 			"entanglement_graph": qb.entanglement_graph.duplicate()
 		})

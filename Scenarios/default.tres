@@ -19,6 +19,7 @@ detritus_inventory = 0
 imperium_resource = 0
 tributes_paid = 0
 tributes_failed = 0
+known_emojis = ["🌾", "👥"]
 plots = [{ "position": Vector2i(0, 0), "type": 0, "is_planted": false, "has_been_measured": false, "theta_frozen": false, "entangled_with": [] }, { "position": Vector2i(1, 0), "type": 0, "is_planted": false, "has_been_measured": false, "theta_frozen": false, "entangled_with": [] }, { "position": Vector2i(2, 0), "type": 0, "is_planted": false, "has_been_measured": false, "theta_frozen": false, "entangled_with": [] }, { "position": Vector2i(3, 0), "type": 0, "is_planted": false, "has_been_measured": false, "theta_frozen": false, "entangled_with": [] }, { "position": Vector2i(4, 0), "type": 0, "is_planted": false, "has_been_measured": false, "theta_frozen": false, "entangled_with": [] }, { "position": Vector2i(5, 0), "type": 0, "is_planted": false, "has_been_measured": false, "theta_frozen": false, "entangled_with": [] }]
 current_goal_index = 0
 completed_goals = []

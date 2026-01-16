@@ -165,28 +165,54 @@ func _create_title_bar() -> HBoxContainer:
 
 func _update_title_bar() -> void:
 	"""Update biome name and emoji"""
+	if not biome_name_label:
+		return
 	var emoji = biome_data.get("emoji", "🌍")
-	var name = biome_data.get("name", "Unknown")
-	biome_name_label.text = "%s %s" % [emoji, name]
+	var bname = biome_data.get("name", "Unknown")
+	biome_name_label.text = "%s %s" % [emoji, bname]
 
 
 func _update_stats() -> void:
-	"""Update stats summary line"""
-	var temp = biome_data.get("temperature", 0.0)
-	var energy = biome_data.get("total_energy", 0.0)
-	var plots = biome_data.get("active_plots", 0)
+	"""Update stats summary line with purity and harvest prediction"""
+	if not stats_label:
+		return
 
-	stats_label.text = "%dK  │  %.2f⚡  │  %d plots" % [int(temp), energy, plots]
+	var purity = biome_data.get("purity", 0.5)
+	var plots = biome_data.get("active_plots", 0)
+	var prediction = biome_data.get("harvest_prediction", {})
+
+	# Build compact stats line: Purity % | Harvest prediction | Active plots
+	var purity_str = "%.0f%% pure" % (purity * 100)
+	var harvest_str = ""
+
+	if prediction.has("top_emoji") and prediction.top_percent > 0:
+		harvest_str = "%s %d%%" % [prediction.top_emoji, prediction.top_percent]
+		if prediction.has("second_emoji") and prediction.second_percent > 10:
+			harvest_str += " / %s %d%%" % [prediction.second_emoji, prediction.second_percent]
+
+	if harvest_str != "":
+		stats_label.text = "%s  │  %s  │  %d plots" % [purity_str, harvest_str, plots]
+	else:
+		stats_label.text = "%s  │  %d plots" % [purity_str, plots]
 
 
 func _update_emoji_grid() -> void:
 	"""Update emoji grid display"""
-	var emoji_states = biome_data.get("emoji_states", [])
+	if not emoji_grid:
+		return
+	var raw_states = biome_data.get("emoji_states", [])
+	# Convert to typed array for EmojiGridDisplay
+	var emoji_states: Array[Dictionary] = []
+	for state in raw_states:
+		if state is Dictionary:
+			emoji_states.append(state)
 	emoji_grid.set_emoji_data(emoji_states)
 
 
 func _update_projection_list() -> void:
 	"""Update list of active projections"""
+	if not projection_list:
+		return
 
 	# Clear existing
 	for child in projection_list.get_children():

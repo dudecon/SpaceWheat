@@ -335,9 +335,10 @@ func _create_tiles() -> void:
 	_verbose.info("ui", "✅", "Created %d plot tiles: %d positioned parametrically, %d without positions" % [tiles.size(), positioned_count, fallback_count])
 
 	# Connect to TouchInputManager for touch selection (do it here after tiles are created)
+	# CONNECT_DEFERRED ensures bubbles process tap first (they connect without DEFERRED)
 	if TouchInputManager and not TouchInputManager.tap_detected.is_connected(_on_touch_tap):
-		TouchInputManager.tap_detected.connect(_on_touch_tap)
-		_verbose.info("ui", "✅", "Touch: Tap-to-select connected (PlotGridDisplay → TouchInputManager.tap_detected)")
+		TouchInputManager.tap_detected.connect(_on_touch_tap, CONNECT_DEFERRED)
+		_verbose.info("ui", "✅", "Touch: Tap-to-select connected with DEFERRED (bubbles have priority)")
 
 
 func inject_farm(farm_ref: Node) -> void:
@@ -777,20 +778,26 @@ func _input(event: InputEvent) -> void:
 func _on_touch_tap(position: Vector2) -> void:
 	"""Handle touch tap for plot selection - toggles checkbox for multi-select
 
-	PHASE 2 FIX: Implements spatial hierarchy by consuming taps on plots.
-	If tap is on a plot, consume it so bubbles don't also process it.
+	PHASE 2 FIX: Implements spatial hierarchy by checking if bubble already consumed tap.
+	Bubbles have priority over plots - if bubble consumed tap, skip plot processing.
 	"""
 	_verbose.debug("ui", "🎯", "PlotGridDisplay._on_touch_tap received! Position: %s" % position)
+
+	# PRIORITY CHECK: If bubble already consumed this tap, skip plot processing
+	if TouchInputManager.is_current_tap_consumed():
+		_verbose.debug("ui", "⏩", "Tap already consumed by bubble, skipping plot selection")
+		return
+
 	var plot_pos = _get_plot_at_screen_position(position)
 	_verbose.debug("ui", "", "Converted to plot grid position: %s" % plot_pos)
 	if plot_pos != Vector2i(-1, -1):
-		# FOUND PLOT: Toggle checkbox and consume tap (don't let bubbles process it)
+		# FOUND PLOT: Toggle checkbox and consume tap
 		toggle_plot_selection(plot_pos)
 		TouchInputManager.consume_current_tap()
 		_verbose.debug("ui", "✅", "Plot checkbox toggled via touch tap: %s (tap CONSUMED)" % plot_pos)
 	else:
-		# NO PLOT: Let tap pass through to bubble detection
-		_verbose.debug("ui", "⏩", "Touch tap at %s - no plot found, passing to bubble detection" % position)
+		# NO PLOT: Let tap pass through
+		_verbose.debug("ui", "⏩", "Touch tap at %s - no plot found" % position)
 
 
 func _start_drag(pos: Vector2i) -> void:

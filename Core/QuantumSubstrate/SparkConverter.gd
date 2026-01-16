@@ -253,7 +253,15 @@ static func _renormalize_density_matrix(density_matrix) -> void:
 		trace += density_matrix.get_element(i, i).re
 
 	if abs(trace) < 1e-10:
-		push_error("❌ SparkConverter: Trace collapsed to zero!")
+		# Trace collapsed - recover by reinitializing to maximally mixed state
+		push_warning("⚠️ SparkConverter: Trace collapsed, reinitializing to mixed state")
+		var diag_val = 1.0 / float(dim)
+		for i in range(dim):
+			for j in range(dim):
+				if i == j:
+					density_matrix.set_element(i, j, Complex.new(diag_val, 0.0))
+				else:
+					density_matrix.set_element(i, j, Complex.zero())
 		return
 
 	if abs(trace - 1.0) > 1e-6:

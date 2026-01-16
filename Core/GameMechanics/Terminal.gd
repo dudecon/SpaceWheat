@@ -41,10 +41,16 @@ var south_emoji: String = ""
 var is_bound: bool = false
 var is_measured: bool = false
 
+## Grid position where this terminal's bubble is displayed
+## Set when EXPLORE places the bubble, cleared when POP removes it
+var grid_position: Vector2i = Vector2i(-1, -1)
+
 ## Result of measurement (emoji outcome)
 var measured_outcome: String = ""
 
-## Probability at time of measurement (for display/scoring)
+## Recorded probability at MEASURE time - the "claim"
+## This is what POP will convert to credits, regardless of how ρ evolves
+## Ensemble model: this represents the snapshot we took from the ensemble
 var measured_probability: float = 0.0
 
 
@@ -93,6 +99,7 @@ func unbind() -> void:
 	current_emoji = ""
 	north_emoji = ""
 	south_emoji = ""
+	grid_position = Vector2i(-1, -1)
 
 	unbound.emit()
 	state_changed.emit(self)

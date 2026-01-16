@@ -38,18 +38,21 @@ var network_overlay = null  # Explicitly null - feature removed
 var network_info_panel: NetworkInfoPanel
 var escape_menu: EscapeMenu
 var save_load_menu
-var keyboard_hint_button: Control  # Keyboard help display
+# keyboard_hint_button REMOVED - K key now opens ControlsOverlay
 var biome_inspector: BiomeInspectorOverlay  # Biome inspection overlay
 var quantum_config_ui: QuantumRigorConfigUI  # Quantum rigor mode settings panel
-var touch_button_bar: Control  # Touch-friendly panel buttons on right side
+var touch_button_bar: Control  # Touch-friendly panel buttons on LEFT side (C/V/B/N/K)
 var icon_detail_panel  # Icon information detail panel
 
 # v2 Overlay System
 var v2_overlays: Dictionary = {}  # name → V2OverlayBase instance
-var active_v2_overlay = null  # Currently open v2 overlay (V2OverlayBase)
+# active_v2_overlay REMOVED - now tracked by OverlayStackManager
 var inspector_overlay = null  # Density matrix inspector
 var controls_overlay = null  # Keyboard controls reference
 var semantic_map_overlay = null  # Semantic octant visualization
+
+# Reference to unified overlay stack (set by PlayerShell)
+var overlay_stack = null  # OverlayStackManager
 
 # Dependencies
 var layout_manager
@@ -97,6 +100,12 @@ func setup(layout_mgr, vocab_sys, faction_mgr, conspiracy_net, quest_mgr = null)
 	conspiracy_network = conspiracy_net
 	quest_manager = quest_mgr
 	_verbose.info("ui", "📋", "OverlayManager initialized")
+
+
+func set_overlay_stack(stack) -> void:
+	"""Set reference to unified OverlayStackManager for v2 overlay management."""
+	overlay_stack = stack
+	_verbose.info("ui", "📋", "OverlayManager connected to OverlayStackManager")
 
 
 func create_overlays(parent: Control) -> void:
@@ -201,8 +210,7 @@ func create_overlays(parent: Control) -> void:
 	# Note: EscapeMenu doesn't have debug_environment_selected - removed this connection
 	_verbose.info("ui", "🎮", "Escape menu created (ESC to toggle)")
 
-	# Create Keyboard Hint Button (K key help) - positioned top-right
-	_create_keyboard_hint_button(parent)
+	# KeyboardHintButton REMOVED - K key now opens ControlsOverlay via v2 overlay system
 
 	# Create Save/Load Menu
 	_verbose.debug("save", "💾", "Creating Save/Load menu...")
@@ -221,9 +229,9 @@ func create_overlays(parent: Control) -> void:
 	save_load_menu.menu_closed.connect(_on_save_load_menu_closed)
 	_verbose.debug("save", "💾", "Save/Load menu signals connected")
 
-	# Create Biome Inspector Overlay
+	# Create Biome Inspector Overlay (now extends Control with internal CanvasLayer)
 	biome_inspector = BiomeInspectorOverlay.new()
-	biome_inspector.layer = 100  # Same layer as other overlays
+	# z_index managed by OverlayStackManager via overlay_tier property
 	parent.add_child(biome_inspector)
 	biome_inspector.overlay_closed.connect(_on_biome_inspector_closed)
 	_verbose.info("ui", "🌍", "Biome inspector overlay created (B to toggle)")
@@ -238,7 +246,7 @@ func create_overlays(parent: Control) -> void:
 	# Create Touch Button Bar (for touch devices)
 	touch_button_bar = _create_touch_button_bar()
 	parent.add_child(touch_button_bar)
-	_verbose.info("ui", "📱", "Touch button bar created (📖=V, 📋=C, ☰=ESC)")
+	# Note: Function logs "C/V/B/N/K on LEFT side" - no need for duplicate log
 	_verbose.debug("ui", "📏", "Parent (OverlayLayer) size: %s" % parent.size)
 	_verbose.debug("ui", "📏", "Parent (OverlayLayer) position: (%s, %s)" % [parent.position.x, parent.position.y])
 	_verbose.debug("ui", "📏", "TouchButtonBar position: (%s, %s)" % [touch_button_bar.position.x, touch_button_bar.position.y])
@@ -589,15 +597,11 @@ func toggle_escape_menu() -> void:
 
 
 func toggle_keyboard_help() -> void:
-	"""Toggle keyboard help panel visibility (K key)"""
-	if keyboard_hint_button:
-		if keyboard_hint_button.has_method("toggle_hints"):
-			keyboard_hint_button.toggle_hints()
-			_verbose.info("ui", "⌨️", "Keyboard help toggled via K key")
-		else:
-			_verbose.warn("ui", "⚠️", "keyboard_hint_button missing toggle_hints() method")
-	else:
-		_verbose.warn("ui", "⚠️", "Keyboard help not initialized")
+	"""Toggle keyboard help panel visibility (K key)
+	DEPRECATED: Use toggle_v2_overlay("controls") instead.
+	"""
+	toggle_v2_overlay("controls")
+	_verbose.info("ui", "⌨️", "Controls overlay toggled via K key")
 
 
 func toggle_biome_inspector() -> void:
@@ -804,34 +808,16 @@ func _create_vocabulary_overlay() -> Control:
 	return panel
 
 
-func _create_keyboard_hint_button(parent: Control) -> void:
-	"""Create keyboard hint button in top-right corner"""
-	const KeyboardHintButton = preload("res://UI/Panels/KeyboardHintButton.gd")
-
-	keyboard_hint_button = KeyboardHintButton.new()
-	keyboard_hint_button.name = "KeyboardHintButton"
-	parent.add_child(keyboard_hint_button)
-
-	# Position in top-right
-	keyboard_hint_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	keyboard_hint_button.offset_left = -170   # Button width + padding
-	keyboard_hint_button.offset_right = -10   # 10px from right edge
-	keyboard_hint_button.offset_top = 10      # 10px from top
-	keyboard_hint_button.offset_bottom = 50   # 40px height
-
-	# Ensure clickable
-	keyboard_hint_button.mouse_filter = Control.MOUSE_FILTER_STOP
-	keyboard_hint_button.z_index = 300  # OverlayLayer(100) + 300 = 400 total, same as touch buttons
-
-	# Set layout manager if available
-	if layout_manager and keyboard_hint_button.has_method("set_layout_manager"):
-		keyboard_hint_button.set_layout_manager(layout_manager)
-
-	_verbose.info("ui", "⌨️", "Keyboard hint button created (top-right)")
+# _create_keyboard_hint_button REMOVED
+# K key now opens ControlsOverlay via v2 overlay system (toggle_v2_overlay("controls"))
 
 
 func _create_touch_button_bar() -> Control:
-	"""Create touch-friendly button bar for RIGHT CENTER of screen"""
+	"""Create touch-friendly button bar for LEFT CENTER of screen
+
+	Buttons: C (Quests), V (Vocabulary), B (Biome), N (Inspector), K (Controls)
+	All use v2 overlay system for consistency.
+	"""
 	const PanelTouchButton = preload("res://UI/Components/PanelTouchButton.gd")
 
 	var scale = layout_manager.scale_factor if layout_manager else 1.0
@@ -839,61 +825,64 @@ func _create_touch_button_bar() -> Control:
 	# VBoxContainer for buttons stacked vertically
 	var button_bar = VBoxContainer.new()
 	button_bar.name = "TouchButtonBar"
-	button_bar.add_theme_constant_override("separation", int(10 * scale))
+	button_bar.add_theme_constant_override("separation", int(8 * scale))
 
-	# Position on RIGHT CENTER of screen (aligned center vertically)
+	# Position on LEFT CENTER of screen (aligned center vertically)
 	button_bar.layout_mode = 1  # Required for anchors in Godot 4
-	button_bar.anchor_left = 1.0  # Anchor to right
-	button_bar.anchor_right = 1.0
+	button_bar.anchor_left = 0.0  # Anchor to LEFT
+	button_bar.anchor_right = 0.0
 	button_bar.anchor_top = 0.5  # Center vertically
 	button_bar.anchor_bottom = 0.5
-	button_bar.offset_left = -80 * scale  # 70px wide, positioned from right
-	button_bar.offset_right = -10 * scale  # 10px from right edge
-	button_bar.offset_top = -120 * scale  # Center around middle (240px total height / 2)
-	button_bar.offset_bottom = 120 * scale
-	button_bar.grow_horizontal = Control.GROW_DIRECTION_BEGIN  # Grow leftward from right anchor
+	button_bar.offset_left = 10 * scale   # 10px from left edge
+	button_bar.offset_right = 80 * scale  # 70px wide
+	button_bar.offset_top = -150 * scale  # Center around middle (5 buttons)
+	button_bar.offset_bottom = 150 * scale
+	button_bar.grow_horizontal = Control.GROW_DIRECTION_END  # Grow rightward from left anchor
 	button_bar.grow_vertical = Control.GROW_DIRECTION_BOTH
 	button_bar.z_index = 4090  # Near Godot max (4096), above all UI elements
 	button_bar.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow clicks through to children
 
-	# Quest button (C key) - Quest Board
+	# C - Quest Board
 	var quest_button = PanelTouchButton.new()
 	quest_button.set_layout_manager(layout_manager)
 	quest_button.button_emoji = "📋"
 	quest_button.keyboard_hint = "[C]"
-	quest_button.button_activated.connect(func():
-		# Use PlayerShell's quest board toggle instead
-		var player_shell = get_tree().get_first_node_in_group("player_shell")
-		if player_shell and player_shell.has_method("_toggle_quest_board"):
-			player_shell._toggle_quest_board()
-	)
+	quest_button.button_activated.connect(func(): toggle_v2_overlay("quests"))
 	button_bar.add_child(quest_button)
 
-	# Vocabulary button (V key)
+	# V - Vocabulary/Semantic Map
 	var vocab_button = PanelTouchButton.new()
 	vocab_button.set_layout_manager(layout_manager)
 	vocab_button.button_emoji = "📖"
 	vocab_button.keyboard_hint = "[V]"
-	vocab_button.button_activated.connect(toggle_vocabulary_overlay)
+	vocab_button.button_activated.connect(func(): toggle_v2_overlay("semantic_map"))
 	button_bar.add_child(vocab_button)
 
-	# Biome Inspector button (B key)
+	# B - Biome Detail
 	var biome_button = PanelTouchButton.new()
 	biome_button.set_layout_manager(layout_manager)
 	biome_button.button_emoji = "🌍"
 	biome_button.keyboard_hint = "[B]"
-	biome_button.button_activated.connect(toggle_biome_inspector)
+	biome_button.button_activated.connect(func(): toggle_v2_overlay("biome_detail"))
 	button_bar.add_child(biome_button)
 
-	# Network button (N key) - Currently disabled
-	# Uncomment when network overlay is ready
-	# var network_button = PanelTouchButton.new()
-	# network_button.set_layout_manager(layout_manager)
-	# network_button.button_emoji = "🕸️"
-	# network_button.keyboard_hint = "[N]"
-	# network_button.button_activated.connect(toggle_network_overlay)
-	# button_bar.add_child(network_button)
+	# N - Inspector (density matrix + quantum state)
+	var inspector_button = PanelTouchButton.new()
+	inspector_button.set_layout_manager(layout_manager)
+	inspector_button.button_emoji = "🔬"
+	inspector_button.keyboard_hint = "[N]"
+	inspector_button.button_activated.connect(func(): toggle_v2_overlay("inspector"))
+	button_bar.add_child(inspector_button)
 
+	# K - Controls/Keyboard reference
+	var controls_button = PanelTouchButton.new()
+	controls_button.set_layout_manager(layout_manager)
+	controls_button.button_emoji = "⌨️"
+	controls_button.keyboard_hint = "[K]"
+	controls_button.button_activated.connect(func(): toggle_v2_overlay("controls"))
+	button_bar.add_child(controls_button)
+
+	_verbose.info("ui", "📱", "Touch button bar created: C/V/B/N/K on LEFT side")
 	return button_bar
 
 
@@ -1097,18 +1086,21 @@ func _create_v2_overlays(parent: Control) -> void:
 	# Create Inspector Overlay (density matrix visualization)
 	inspector_overlay = InspectorOverlay.new()
 	inspector_overlay.z_index = 2000  # Above regular overlays
+	_center_overlay(inspector_overlay)
 	parent.add_child(inspector_overlay)
 	register_v2_overlay("inspector", inspector_overlay)
 
 	# Create Controls Overlay (keyboard reference)
 	controls_overlay = ControlsOverlay.new()
 	controls_overlay.z_index = 2000
+	_center_overlay(controls_overlay)
 	parent.add_child(controls_overlay)
 	register_v2_overlay("controls", controls_overlay)
 
 	# Create Semantic Map Overlay (vocabulary + octants)
 	semantic_map_overlay = SemanticMapOverlay.new()
 	semantic_map_overlay.z_index = 2000
+	_center_overlay(semantic_map_overlay)
 	parent.add_child(semantic_map_overlay)
 	register_v2_overlay("semantic_map", semantic_map_overlay)
 
@@ -1122,6 +1114,33 @@ func _create_v2_overlays(parent: Control) -> void:
 		register_v2_overlay("biome_detail", biome_inspector)
 
 	_verbose.info("ui", "📊", "v2 overlay system created with %d overlays" % v2_overlays.size())
+
+
+func _center_overlay(overlay: Control) -> void:
+	"""Center an overlay in the middle of the screen.
+
+	Sets anchors to center and adjusts position based on the overlay's minimum size.
+	"""
+	# Set anchors to center
+	overlay.anchor_left = 0.5
+	overlay.anchor_right = 0.5
+	overlay.anchor_top = 0.5
+	overlay.anchor_bottom = 0.5
+
+	# Get the minimum size (set by custom_minimum_size in overlay)
+	var min_size = overlay.custom_minimum_size
+	if min_size == Vector2.ZERO:
+		min_size = Vector2(600, 400)  # Default fallback
+
+	# Center the overlay around the anchor point
+	overlay.offset_left = -min_size.x / 2
+	overlay.offset_right = min_size.x / 2
+	overlay.offset_top = -min_size.y / 2
+	overlay.offset_bottom = min_size.y / 2
+
+	# Ensure it grows from center
+	overlay.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	overlay.grow_vertical = Control.GROW_DIRECTION_BOTH
 
 
 func register_v2_overlay(name: String, overlay) -> void:
@@ -1148,28 +1167,61 @@ func unregister_v2_overlay(name: String) -> void:
 func open_v2_overlay(name: String) -> bool:
 	"""Open a v2 overlay by name.
 
-	Closes any currently open v2 overlay first.
+	Uses OverlayStackManager for unified overlay management.
 	Returns true if overlay was opened successfully.
 	"""
 	if not v2_overlays.has(name):
 		_verbose.warn("ui", "❌", "v2 overlay '%s' not registered" % name)
 		return false
 
-	# Close current overlay first
-	if active_v2_overlay:
-		close_v2_overlay()
-
-	active_v2_overlay = v2_overlays[name]
+	var overlay = v2_overlays[name]
 
 	# Bind data to overlays that need it
-	if name == "inspector" and active_v2_overlay.has_method("set_biome"):
-		var farm = get_tree().root.get_node_or_null("/root/FarmView/Farm")
-		if farm and farm.has_method("get_current_biome"):
-			var biome = farm.get_current_biome()
-			if biome:
-				active_v2_overlay.set_biome(biome)
+	# Try multiple paths to find Farm node (scene structure varies)
+	var farm_ref = get_tree().root.get_node_or_null("/root/FarmView/Farm")
+	if not farm_ref:
+		farm_ref = get_tree().root.get_node_or_null("/root/Farm")
+	if not farm_ref:
+		# Search in parent hierarchy (FarmView might not be at root)
+		var parent = get_parent()
+		while parent and not farm_ref:
+			if parent.has_method("get_node_or_null"):
+				farm_ref = parent.get_node_or_null("Farm")
+			parent = parent.get_parent() if parent.has_method("get_parent") else null
+	if not farm_ref:
+		farm_ref = farm  # Fallback to stored reference
+	if not farm_ref:
+		# Final fallback: try GameStateManager
+		var gsm = get_tree().root.get_node_or_null("/root/GameStateManager")
+		if gsm and "active_farm" in gsm:
+			farm_ref = gsm.active_farm
 
-	active_v2_overlay.activate()
+	if name == "inspector" and overlay.has_method("set_biome"):
+		if farm_ref and farm_ref.has_method("get_current_biome"):
+			var biome = farm_ref.get_current_biome()
+			if biome:
+				overlay.set_biome(biome)
+
+	# QuestBoard needs quest_manager and current_biome
+	if name == "quests":
+		if overlay.has_method("set_quest_manager") and quest_manager:
+			overlay.set_quest_manager(quest_manager)
+		if overlay.has_method("set_biome") and farm_ref:
+			var biome = farm_ref.biotic_flux_biome if "biotic_flux_biome" in farm_ref else null
+			if biome:
+				overlay.set_biome(biome)
+
+	# BiomeInspectorOverlay needs farm reference
+	if name == "biome_detail":
+		if overlay.has_method("show_all_biomes") and farm_ref:
+			overlay.farm = farm_ref
+
+	# Use OverlayStackManager for unified management
+	if overlay_stack:
+		overlay_stack.push(overlay)
+	else:
+		# Fallback: activate directly (legacy path)
+		overlay.activate()
 
 	_verbose.info("ui", "📖", "Opened v2 overlay: %s" % name)
 	v2_overlay_changed.emit(name, true)
@@ -1177,13 +1229,16 @@ func open_v2_overlay(name: String) -> bool:
 
 
 func close_v2_overlay() -> void:
-	"""Close the currently open v2 overlay."""
-	if not active_v2_overlay:
+	"""Close the top v2 overlay on the stack."""
+	if not overlay_stack:
 		return
 
-	var overlay_name = active_v2_overlay.overlay_name
-	active_v2_overlay.deactivate()
-	active_v2_overlay = null
+	var top = overlay_stack.get_top()
+	if not top:
+		return
+
+	var overlay_name = top.overlay_name if top.get("overlay_name") else top.name
+	overlay_stack.pop()
 
 	_verbose.info("ui", "📕", "Closed v2 overlay: %s" % overlay_name)
 	v2_overlay_changed.emit(overlay_name, false)
@@ -1191,20 +1246,34 @@ func close_v2_overlay() -> void:
 
 func toggle_v2_overlay(name: String) -> void:
 	"""Toggle a v2 overlay open/closed."""
-	if active_v2_overlay and active_v2_overlay.overlay_name == name:
-		close_v2_overlay()
+	if not v2_overlays.has(name):
+		_verbose.warn("ui", "❌", "v2 overlay '%s' not registered" % name)
+		return
+
+	var overlay = v2_overlays[name]
+
+	# Check if this specific overlay is on the stack
+	if overlay_stack and overlay_stack.has_overlay(overlay):
+		# Close it
+		overlay_stack.pop_overlay(overlay)
+		v2_overlay_changed.emit(name, false)
 	else:
+		# Open it
 		open_v2_overlay(name)
 
 
 func is_v2_overlay_active() -> bool:
-	"""Check if any v2 overlay is currently open."""
-	return active_v2_overlay != null
+	"""Check if any overlay is currently on the stack."""
+	if overlay_stack:
+		return not overlay_stack.is_empty()
+	return false
 
 
 func get_active_v2_overlay():
-	"""Get the currently active v2 overlay, or null."""
-	return active_v2_overlay
+	"""Get the top overlay from the stack, or null."""
+	if overlay_stack:
+		return overlay_stack.get_top()
+	return null
 
 
 func get_active_overlay_actions() -> Dictionary:
@@ -1212,8 +1281,9 @@ func get_active_overlay_actions() -> Dictionary:
 
 	Returns empty dict if no overlay active.
 	"""
-	if active_v2_overlay and active_v2_overlay.has_method("get_action_labels"):
-		return active_v2_overlay.get_action_labels()
+	var top = get_active_v2_overlay()
+	if top and top.has_method("get_action_labels"):
+		return top.get_action_labels()
 	return {}
 
 

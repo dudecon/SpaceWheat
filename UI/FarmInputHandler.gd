@@ -34,7 +34,7 @@ const TOOL_ACTIONS = ToolConfig.TOOL_ACTIONS
 var farm  # Will be injected with Farm instance (Farm.gd)
 var plot_grid_display: Node = null  # Will be injected with PlotGridDisplay instance
 var current_selection: Vector2i = Vector2i.ZERO
-var current_tool: int = 1  # Active tool (1-6)
+var current_tool: int = 1  # Active tool (1-4, v2 architecture)
 var current_submenu: String = ""  # Active submenu name (empty = no submenu)
 var _cached_submenu: Dictionary = {}  # Cached dynamic submenu during session
 var grid_config: GridConfig = null  # Grid configuration (Phase 7)
@@ -48,7 +48,7 @@ var grid_width: int = 6
 var grid_height: int = 2
 
 # Debug: Set to true to enable verbose logging (keystroke-by-keystroke, location info, etc)
-const VERBOSE = false
+const VERBOSE = true  # Enabled for debugging keyboard issues
 
 # ═══════════════════════════════════════════════════════════════
 # Plot Emoji Accessors (Model C)
@@ -186,8 +186,9 @@ func _ready():
 		_verbose.debug("input", "🛠️", "Current tool: %s" % TOOL_ACTIONS[current_tool]["name"])
 	# Input is ready immediately - PlotGridDisplay is initialized before this
 	# No deferred calls needed
-	set_process_input(true)
-	_verbose.info("input", "✅", "Input processing enabled (no deferred delays)")
+	# CRITICAL: Enable _unhandled_input() processing (not _input()!)
+	set_process_unhandled_input(true)
+	_verbose.info("input", "✅", "Unhandled input processing enabled (no deferred delays)")
 	_print_help()
 
 
@@ -205,8 +206,8 @@ func _process(_delta: float) -> void:
 		input_enable_frame_count -= 1
 		if input_enable_frame_count <= 0:
 			set_process(false)  # Stop processing frames
-			set_process_input(true)  # Enable input
-			_verbose.info("input", "✅", "Input processing enabled (UI ready)")
+			set_process_unhandled_input(true)  # Enable _unhandled_input() callback
+			_verbose.info("input", "✅", "Unhandled input processing enabled (UI ready)")
 			# Verify tiles exist
 			if plot_grid_display and plot_grid_display.tiles:
 				_verbose.debug("input", "📊", "PlotGridDisplay has %d tiles ready" % plot_grid_display.tiles.size())
@@ -245,6 +246,12 @@ func _unhandled_input(event: InputEvent):
 		get_viewport().set_input_as_handled()
 		return
 
+	# H: HARVEST - Global collapse, end level
+	if event is InputEventKey and event.pressed and event.keycode == KEY_H:
+		_action_harvest_global()
+		get_viewport().set_input_as_handled()
+		return
+
 	# Tab: Toggle BUILD/PLAY mode
 	if event.is_action_pressed("toggle_mode"):
 		_toggle_build_play_mode()
@@ -252,34 +259,15 @@ func _unhandled_input(event: InputEvent):
 		return
 
 	# F: Cycle tool mode (for tools with F-cycling like GATES, ENTANGLE)
-	# Only process if no v2 overlay is active (overlay gets F key)
+	# Note: If overlay is active, PlayerShell routes F to overlay first.
+	# This only runs if no overlay consumed the input.
 	if event.is_action_pressed("action_f"):
-		var overlay_mgr = _get_overlay_manager()
-		if not overlay_mgr or not overlay_mgr.is_v2_overlay_active():
-			_cycle_current_tool_mode()
-			get_viewport().set_input_as_handled()
-			return
+		_cycle_current_tool_mode()
+		get_viewport().set_input_as_handled()
+		return
 
-	# ═══════════════════════════════════════════════════════════════
-	# v2 OVERLAY INPUT ROUTING
-	# ═══════════════════════════════════════════════════════════════
-	# When a v2 overlay is active, route QER+F and WASD to the overlay
-
-	var overlay_manager = _get_overlay_manager()
-	if overlay_manager and overlay_manager.is_v2_overlay_active():
-		var active_overlay = overlay_manager.get_active_v2_overlay()
-		if active_overlay and active_overlay.has_method("handle_input"):
-			if active_overlay.handle_input(event):
-				get_viewport().set_input_as_handled()
-				return
-
-		# ESC closes v2 overlay (before escape menu)
-		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-			overlay_manager.close_v2_overlay()
-			get_viewport().set_input_as_handled()
-			return
-
-	# ═══════════════════════════════════════════════════════════════
+	# NOTE: v2 overlay input routing moved to PlayerShell.OverlayStackManager
+	# PlayerShell._input() routes to overlays BEFORE reaching FarmInputHandler
 
 	# Tool selection (1-6) - Phase 7: Use InputMap actions
 	for i in range(1, 7):
@@ -367,37 +355,47 @@ func _unhandled_input(event: InputEvent):
 		get_viewport().set_input_as_handled()
 		return
 
-	# Action keys (Q/E/R or gamepad buttons A/B/X) - Phase 7: Use InputMap actions
-	# Debug: Check if actions are detected
-	if VERBOSE and event is InputEventKey and event.pressed:
+	# Action keys (Q/E/R or gamepad buttons A/B/X)
+	# Use both InputMap actions (for gamepad) AND raw keycodes (for keyboard reliability)
+	if event is InputEventKey and event.pressed:
 		var key = event.keycode
-		if key == KEY_Q or key == KEY_E or key == KEY_R:
-			_verbose.debug("input", "🐛", "DEBUG: Pressed key: %s" % event.keycode)
-			_verbose.debug("input", "🐛", "is_action_pressed('action_q'): %s" % event.is_action_pressed("action_q"))
-			_verbose.debug("input", "🐛", "is_action_pressed('action_e'): %s" % event.is_action_pressed("action_e"))
-			_verbose.debug("input", "🐛", "is_action_pressed('action_r'): %s" % event.is_action_pressed("action_r"))
+		var action_key: String = ""
 
-	# NOTE: Q/E/R actions are now primarily routed through InputController
-	# Only process if input hasn't already been handled (by menu system)
-	if not get_tree().root.is_input_handled():
-		if event.is_action_pressed("action_q"):
+		# Map keycode to action
+		match key:
+			KEY_Q:
+				action_key = "Q"
+			KEY_E:
+				action_key = "E"
+			KEY_R:
+				action_key = "R"
+
+		if action_key != "":
 			if VERBOSE:
-				_verbose.debug("input", "⚡", "action_q detected")
-			_execute_tool_action("Q")
+				_verbose.debug("input", "⚡", "QER keycode detected: %s → %s" % [key, action_key])
+			_execute_tool_action(action_key)
 			get_viewport().set_input_as_handled()
 			return
-		elif event.is_action_pressed("action_e"):
-			if VERBOSE:
-				_verbose.debug("input", "⚡", "action_e detected")
-			_execute_tool_action("E")
-			get_viewport().set_input_as_handled()
-			return
-		elif event.is_action_pressed("action_r"):
-			if VERBOSE:
-				_verbose.debug("input", "⚡", "action_r detected")
-			_execute_tool_action("R")
-			get_viewport().set_input_as_handled()
-			return
+
+	# Also check InputMap actions for gamepad support
+	if event.is_action_pressed("action_q"):
+		if VERBOSE:
+			_verbose.debug("input", "⚡", "action_q (InputMap) detected")
+		_execute_tool_action("Q")
+		get_viewport().set_input_as_handled()
+		return
+	elif event.is_action_pressed("action_e"):
+		if VERBOSE:
+			_verbose.debug("input", "⚡", "action_e (InputMap) detected")
+		_execute_tool_action("E")
+		get_viewport().set_input_as_handled()
+		return
+	elif event.is_action_pressed("action_r"):
+		if VERBOSE:
+			_verbose.debug("input", "⚡", "action_r (InputMap) detected")
+		_execute_tool_action("R")
+		get_viewport().set_input_as_handled()
+		return
 
 	# Debug/Help - Phase 7: Use InputMap action
 	if event.is_action_pressed("toggle_help"):
@@ -412,7 +410,7 @@ func _unhandled_input(event: InputEvent):
 ## Tool System
 
 func _select_tool(tool_num: int):
-	"""Select active tool (1-6)"""
+	"""Select active tool (1-4, v2 architecture)"""
 	if not TOOL_ACTIONS.has(tool_num):
 		_verbose.warn("input", "⚠️", "Tool %d not available" % tool_num)
 		return
@@ -424,10 +422,12 @@ func _select_tool(tool_num: int):
 	current_tool = tool_num
 	var tool_info = TOOL_ACTIONS[tool_num]
 	_verbose.info("input", "🛠️", "Tool switched to: %s" % tool_info["name"])
+	# v2 structure: actions are nested under "actions" key
 	if VERBOSE:
-		_verbose.debug("input", "🛠️", "Q = %s" % tool_info["Q"]["label"])
-		_verbose.debug("input", "🛠️", "E = %s" % tool_info["E"]["label"])
-		_verbose.debug("input", "🛠️", "R = %s" % tool_info["R"]["label"])
+		var actions = tool_info.get("actions", {})
+		_verbose.debug("input", "🛠️", "Q = %s" % actions.get("Q", {}).get("label", "?"))
+		_verbose.debug("input", "🛠️", "E = %s" % actions.get("E", {}).get("label", "?"))
+		_verbose.debug("input", "🛠️", "R = %s" % actions.get("R", {}).get("label", "?"))
 
 	tool_changed.emit(tool_num, tool_info)
 
@@ -610,6 +610,16 @@ func _execute_submenu_action(action_key: String):
 			_action_apply_s_gate(selected_plots)
 		"apply_t_gate":
 			_action_apply_t_gate(selected_plots)
+		"apply_sdg_gate":
+			_action_apply_sdg_gate(selected_plots)
+
+		# Rotation gate submenu (BUILD Tool 4 Mode 2)
+		"apply_rx_gate":
+			_action_apply_rx_gate(selected_plots)
+		"apply_ry_gate":
+			_action_apply_ry_gate(selected_plots)
+		"apply_rz_gate":
+			_action_apply_rz_gate(selected_plots)
 
 		# Two-qubit gate submenu
 		"apply_cnot":
@@ -648,6 +658,23 @@ func _execute_submenu_action(action_key: String):
 		# Non-destructive state inspection
 		"peek_state":
 			_action_peek_state(selected_plots)
+
+		# Tool 2 (Icon) - BUILD mode
+		"icon_swap":
+			_action_icon_swap(selected_plots)
+
+		"icon_clear":
+			_action_icon_clear(selected_plots)
+
+		# Tool 4 (System) - BUILD mode
+		"system_reset":
+			_action_system_reset(selected_plots)
+
+		"system_snapshot":
+			_action_system_snapshot(selected_plots)
+
+		"system_debug":
+			_action_system_debug(selected_plots)
 
 		_:
 			# Handle dynamic actions
@@ -812,6 +839,54 @@ func _execute_tool_action(action_key: String):
 		# Tool 5: Measure (R action)
 		"measure_batch":
 			_action_batch_measure(selected_plots)
+
+		# ═══════════════════════════════════════════════════════════════
+		# BUILD MODE ACTIONS (Tab to switch)
+		# ═══════════════════════════════════════════════════════════════
+
+		# BUILD Tool 1: BIOME - Assign/Clear biome, Inspect
+		"clear_biome_assignment":
+			_action_clear_biome_assignment(selected_plots)
+		"inspect_plot":
+			_action_inspect_plot(selected_plots)
+
+		# BUILD Tool 2: ICON - Swap/Clear icons
+		"icon_swap":
+			_action_icon_swap(selected_plots)
+		"icon_clear":
+			_action_icon_clear(selected_plots)
+
+		# BUILD Tool 3: LINDBLAD - Dissipation control
+		"lindblad_drive":
+			_action_lindblad_drive(selected_plots)
+		"lindblad_decay":
+			_action_lindblad_decay(selected_plots)
+		"lindblad_transfer":
+			_action_lindblad_transfer(selected_plots)
+
+		# BUILD Tool 4: QUANTUM (system mode) - System control
+		"system_reset":
+			_action_system_reset(selected_plots)
+		"system_snapshot":
+			_action_system_snapshot(selected_plots)
+		"system_debug":
+			_action_system_debug(selected_plots)
+
+		# BUILD Tool 4: QUANTUM (phase mode) - Phase gates
+		"apply_s_gate":
+			_action_apply_s_gate(selected_plots)
+		"apply_t_gate":
+			_action_apply_t_gate(selected_plots)
+		"apply_sdg_gate":
+			_action_apply_sdg_gate(selected_plots)
+
+		# BUILD Tool 4: QUANTUM (rotation mode) - Rotation gates
+		"apply_rx_gate":
+			_action_apply_rx_gate(selected_plots)
+		"apply_ry_gate":
+			_action_apply_ry_gate(selected_plots)
+		"apply_rz_gate":
+			_action_apply_rz_gate(selected_plots)
 
 		_:
 			_verbose.warn("input", "⚠️", "Unknown action: %s" % action)
@@ -1316,39 +1391,55 @@ func _action_process_flour():
 ## V2 Tool 1 (PROBE) Actions - Quantum Tomography Paradigm
 
 func _action_explore():
-	"""EXPLORE: Probe the quantum soup to discover a register.
+	"""EXPLORE: Probe the quantum soup to discover registers.
 
 	Uses probability-weighted selection from the density matrix.
-	Binds an unbound terminal to the selected register.
+	Binds terminals to registers for ALL selected plots.
+	Creates a bubble at each selected plot position.
 	"""
 	if not farm or not farm.plot_pool:
 		action_performed.emit("explore", false, "⚠️  Farm not ready")
 		return
 
-	# Get biome for current selection
-	var biome = farm.grid.get_biome_for_plot(current_selection)
-	if not biome:
-		action_performed.emit("explore", false, "⚠️  No biome at current selection")
-		return
+	# Get selected plots (checkbox system) or fall back to current_selection
+	var selected_plots: Array[Vector2i] = []
+	if plot_grid_display and plot_grid_display.has_method("get_selected_plots"):
+		selected_plots = plot_grid_display.get_selected_plots()
+	if selected_plots.is_empty():
+		selected_plots.append(current_selection)
 
-	# Execute EXPLORE via ProbeActions
-	var result = ProbeActions.action_explore(farm.plot_pool, biome)
+	var success_count = 0
+	var last_emoji = ""
 
-	if result.success:
-		var terminal = result.terminal
-		var emoji = result.emoji_pair.get("north", "?")
-		var prob = result.probability
+	# EXPLORE for each selected plot
+	for plot_pos in selected_plots:
+		var biome = farm.grid.get_biome_for_plot(plot_pos)
+		if not biome:
+			continue
 
-		# Emit signal for visualization (bubble spawn)
-		farm.plot_planted.emit(current_selection, emoji)
+		# Execute EXPLORE via ProbeActions
+		var result = ProbeActions.action_explore(farm.plot_pool, biome)
 
-		action_performed.emit("explore", true, "🔍 Discovered %s (p=%.0f%%)" % [emoji, prob * 100])
-		_verbose.info("action", "🔍", "EXPLORE: Bound terminal %s to register %d (%s)" % [
-			terminal.terminal_id, result.register_id, emoji
-		])
+		if result.success:
+			var terminal = result.terminal
+			var emoji = result.emoji_pair.get("north", "?")
+			last_emoji = emoji
+
+			# Link terminal to grid position for bubble tap lookup
+			terminal.grid_position = plot_pos
+
+			# Emit signal for visualization (bubble spawn) at THIS plot position
+			farm.plot_planted.emit(plot_pos, emoji)
+
+			_verbose.info("action", "🔍", "EXPLORE: Bound terminal %s to register %d (%s) at %s" % [
+				terminal.terminal_id, result.register_id, emoji, plot_pos
+			])
+			success_count += 1
+
+	if success_count > 0:
+		action_performed.emit("explore", true, "🔍 Discovered %d registers" % success_count)
 	else:
-		var msg = result.get("message", "Explore failed")
-		action_performed.emit("explore", false, "⚠️  %s" % msg)
+		action_performed.emit("explore", false, "⚠️  No terminals available or all registers bound")
 
 
 func _action_measure(positions: Array[Vector2i]):
@@ -1378,7 +1469,7 @@ func _action_measure(positions: Array[Vector2i]):
 
 	if result.success:
 		var outcome = result.outcome
-		var prob = result.probability
+		var prob = result.recorded_probability  # Fixed: was 'probability', should be 'recorded_probability'
 
 		# Emit signal for visualization (bubble freeze/collapse)
 		farm.plot_measured.emit(current_selection, outcome)
@@ -1430,6 +1521,41 @@ func _action_pop(positions: Array[Vector2i]):
 	else:
 		var msg = result.get("message", "Pop failed")
 		action_performed.emit("pop", false, "⚠️  %s" % msg)
+
+
+func _action_harvest_global():
+	"""HARVEST: Global collapse of biome, end level.
+
+	Ensemble Model: True projective measurement that collapses the
+	entire quantum system and converts all probability to credits.
+	This is the "end of turn" action.
+	"""
+	if not farm or not farm.plot_pool:
+		action_performed.emit("harvest_global", false, "⚠️  Farm not ready")
+		return
+
+	# Get biome for current selection
+	var biome = farm.grid.get_biome_for_plot(current_selection) if farm.grid else null
+	if not biome:
+		action_performed.emit("harvest_global", false, "⚠️  No biome at current selection")
+		return
+
+	# Execute HARVEST via ProbeActions
+	var result = ProbeActions.action_harvest_global(biome, farm.plot_pool, farm.economy)
+
+	if result.success:
+		var total = result.total_credits
+		var count = result.harvested.size()
+
+		action_performed.emit("harvest_global", true, "🌾 HARVESTED: %.0f credits from %d registers!" % [total, count])
+		_verbose.info("action", "🌾", "GLOBAL HARVEST: %.1f credits from %d registers" % [total, count])
+
+		# Signal level complete
+		if farm.has_signal("level_complete"):
+			farm.level_complete.emit(result)
+	else:
+		var msg = result.get("message", "Harvest failed")
+		action_performed.emit("harvest_global", false, "⚠️  %s" % msg)
 
 
 func _find_active_terminal_in_biome(biome) -> RefCounted:
@@ -1548,13 +1674,13 @@ func _action_entangle_batch(positions: Array[Vector2i]):
 ## NEW Tool 2 (QUANTUM) Actions - PERSISTENT INFRASTRUCTURE
 
 func _action_cluster(positions: Array[Vector2i]):
-	"""Build entanglement gate infrastructure (Model B - Gate Infrastructure)
+	"""Build entanglement between terminals at selected positions.
 
 	Creates multi-qubit cluster state topology via quantum_computer entanglement.
 	Linear chain: plot[0]↔plot[1]↔plot[2]↔...
-	Uses BiomeBase.create_cluster_state() for coordinated entanglement.
+	Uses Terminal system to find bound registers, then entangles them.
 	"""
-	if not farm or not farm.grid:
+	if not farm or not farm.grid or not farm.plot_pool:
 		action_performed.emit("cluster", false, "⚠️  Farm not loaded yet")
 		return
 
@@ -1566,16 +1692,38 @@ func _action_cluster(positions: Array[Vector2i]):
 
 	# Get biome from first plot
 	var biome = farm.grid.get_biome_for_plot(positions[0])
-	if not biome:
-		action_performed.emit("cluster", false, "⚠️  Could not access biome")
+	if not biome or not biome.quantum_computer:
+		action_performed.emit("cluster", false, "⚠️  Could not access biome quantum computer")
 		return
 
-	# Create cluster state
-	var success = biome.create_cluster_state(positions)
-	var entanglement_count = positions.size() - 1
+	# Collect terminals at these positions
+	var terminals: Array = []
+	for pos in positions:
+		var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		if terminal and terminal.is_bound and not terminal.is_measured:
+			terminals.append(terminal)
+		else:
+			_verbose.warn("quantum", "⚠️", "No active terminal at %s" % pos)
 
+	if terminals.size() < 2:
+		action_performed.emit("cluster", false, "⚠️  Need at least 2 active terminals. EXPLORE first.")
+		return
+
+	# Create entanglements between adjacent terminals
+	var success_count = 0
+	for i in range(terminals.size() - 1):
+		var reg_a = terminals[i].bound_register_id
+		var reg_b = terminals[i + 1].bound_register_id
+
+		if biome.quantum_computer.entangle_plots(reg_a, reg_b):
+			success_count += 1
+			_verbose.info("quantum", "🔗", "Entangled register %d ↔ %d" % [reg_a, reg_b])
+
+	var success = success_count > 0
 	action_performed.emit("cluster", success,
-		"%s Built cluster with %d entanglements (%d plots)" % ["✅" if success else "❌", entanglement_count, positions.size()])
+		"%s Built cluster with %d entanglements (%d terminals)" % [
+			"✅" if success else "❌", success_count, terminals.size()
+		])
 
 
 func _action_measure_trigger(positions: Array[Vector2i]):
@@ -1969,6 +2117,86 @@ func _action_apply_t_gate(positions: Array[Vector2i]):
 
 	action_performed.emit("apply_t_gate", success_count > 0,
 		"✅ Applied T-gate to %d qubits" % success_count if success_count > 0 else "❌ No gates applied")
+
+
+func _action_apply_sdg_gate(positions: Array[Vector2i]):
+	"""Apply S-dagger gate (-π/2 phase) to selected plots - INSTANTANEOUS.
+
+	S† = [[1, 0], [0, -i]] (inverse of S gate)
+	Applies phase shift: |0⟩ → |0⟩, |1⟩ → -i|1⟩
+	"""
+	if positions.is_empty():
+		action_performed.emit("apply_sdg_gate", false, "⚠️  No plots selected")
+		return
+
+	var success_count = 0
+	for pos in positions:
+		if _apply_single_qubit_gate(pos, "Sdg"):
+			success_count += 1
+			_verbose.debug("quantum", "🌑", "Applied S†-gate at %s" % pos)
+
+	action_performed.emit("apply_sdg_gate", success_count > 0,
+		"✅ Applied S†-gate to %d qubits" % success_count if success_count > 0 else "❌ No gates applied")
+
+
+func _action_apply_rx_gate(positions: Array[Vector2i]):
+	"""Apply Rx rotation gate to selected plots.
+
+	Rx(θ) = [[cos(θ/2), -i·sin(θ/2)], [-i·sin(θ/2), cos(θ/2)]]
+	Default θ = π/4 for now (configurable later via parameter)
+	"""
+	if positions.is_empty():
+		action_performed.emit("apply_rx_gate", false, "⚠️  No plots selected")
+		return
+
+	var success_count = 0
+	for pos in positions:
+		if _apply_single_qubit_gate(pos, "Rx"):
+			success_count += 1
+			_verbose.debug("quantum", "↔️", "Applied Rx-gate at %s" % pos)
+
+	action_performed.emit("apply_rx_gate", success_count > 0,
+		"✅ Applied Rx-gate to %d qubits" % success_count if success_count > 0 else "❌ No gates applied")
+
+
+func _action_apply_ry_gate(positions: Array[Vector2i]):
+	"""Apply Ry rotation gate to selected plots.
+
+	Ry(θ) = [[cos(θ/2), -sin(θ/2)], [sin(θ/2), cos(θ/2)]]
+	Default θ = π/4 for now (configurable later via parameter)
+	"""
+	if positions.is_empty():
+		action_performed.emit("apply_ry_gate", false, "⚠️  No plots selected")
+		return
+
+	var success_count = 0
+	for pos in positions:
+		if _apply_single_qubit_gate(pos, "Ry"):
+			success_count += 1
+			_verbose.debug("quantum", "↕️", "Applied Ry-gate at %s" % pos)
+
+	action_performed.emit("apply_ry_gate", success_count > 0,
+		"✅ Applied Ry-gate to %d qubits" % success_count if success_count > 0 else "❌ No gates applied")
+
+
+func _action_apply_rz_gate(positions: Array[Vector2i]):
+	"""Apply Rz rotation gate to selected plots.
+
+	Rz(θ) = [[e^(-iθ/2), 0], [0, e^(iθ/2)]]
+	Default θ = π/4 for now (configurable later via parameter)
+	"""
+	if positions.is_empty():
+		action_performed.emit("apply_rz_gate", false, "⚠️  No plots selected")
+		return
+
+	var success_count = 0
+	for pos in positions:
+		if _apply_single_qubit_gate(pos, "Rz"):
+			success_count += 1
+			_verbose.debug("quantum", "🔄", "Applied Rz-gate at %s" % pos)
+
+	action_performed.emit("apply_rz_gate", success_count > 0,
+		"✅ Applied Rz-gate to %d qubits" % success_count if success_count > 0 else "❌ No gates applied")
 
 
 ## NEW Tool 4 (ENERGY) - Energy Tap with specific emoji target
@@ -2715,11 +2943,85 @@ func _can_execute_tool_action(action_key: String) -> bool:
 	if selected_plots.is_empty():
 		return false
 
-	var tool = ToolConfig.TOOL_ACTIONS.get(current_tool, {})
-	var action = tool.get(action_key, {}).get("action", "")
+	# Use ToolConfig API to properly resolve action name
+	var action = ToolConfig.get_action_name(current_tool, action_key)
 
 	# Route to specific validation based on action type
 	match action:
+		# ═══════════════════════════════════════════════════════════════
+		# v2 PROBE Tool (Tool 1) - Core gameplay loop
+		# ═══════════════════════════════════════════════════════════════
+		"explore":
+			return _can_execute_explore()
+		"measure":
+			return _can_execute_measure()
+		"pop":
+			return _can_execute_pop()
+
+		# ═══════════════════════════════════════════════════════════════
+		# v2 ENTANGLE Tool (Tool 2)
+		# ═══════════════════════════════════════════════════════════════
+		"cluster", "measure_trigger", "remove_gates":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# v2 INDUSTRY Tool (Tool 3)
+		# ═══════════════════════════════════════════════════════════════
+		"place_mill", "place_market", "place_kitchen":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# v2 UNITARY Tool (Tool 4)
+		# ═══════════════════════════════════════════════════════════════
+		"apply_pauli_x", "apply_hadamard", "apply_pauli_z":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# BUILD MODE - Tool 1 (BIOME)
+		# ═══════════════════════════════════════════════════════════════
+		"submenu_biome_assign":
+			return true  # Opens submenu
+		"clear_biome_assignment", "inspect_plot":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# BUILD MODE - Tool 2 (ICON)
+		# ═══════════════════════════════════════════════════════════════
+		"submenu_icon_assign":
+			return true  # Opens submenu
+		"icon_swap", "icon_clear":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# BUILD MODE - Tool 3 (LINDBLAD)
+		# ═══════════════════════════════════════════════════════════════
+		"lindblad_drive", "lindblad_decay", "lindblad_transfer":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# BUILD MODE - Tool 4 (QUANTUM) with F-cycling
+		# System mode (F=0)
+		# ═══════════════════════════════════════════════════════════════
+		"system_reset", "system_snapshot", "system_debug":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# BUILD MODE - Tool 4 (QUANTUM) with F-cycling
+		# Phase mode (F=1)
+		# ═══════════════════════════════════════════════════════════════
+		"apply_s_gate", "apply_t_gate", "apply_sdg_gate":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# BUILD MODE - Tool 4 (QUANTUM) with F-cycling
+		# Rotation mode (F=2)
+		# ═══════════════════════════════════════════════════════════════
+		"apply_rx_gate", "apply_ry_gate", "apply_rz_gate":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# Legacy v1 actions (backward compatibility)
+		# ═══════════════════════════════════════════════════════════════
 		"plant_batch":
 			return _can_plant_any(selected_plots)
 		"entangle_batch":
@@ -2728,6 +3030,76 @@ func _can_execute_tool_action(action_key: String) -> bool:
 			return _can_harvest_any(selected_plots)
 		_:
 			return false
+
+
+func _can_execute_explore() -> bool:
+	"""Check if EXPLORE action is available (v2 PROBE Tool 1)
+
+	EXPLORE binds an unbound terminal to a register in the current biome.
+	Available when: unbound terminals exist AND biome has unbound registers.
+	"""
+	if not farm or not farm.plot_pool:
+		return false
+
+	# Need unbound terminals
+	if farm.plot_pool.get_unbound_count() == 0:
+		return false
+
+	# Get biome from current selection
+	var biome = _get_current_biome()
+	if not biome:
+		return false
+
+	# Must have unbound registers
+	var probabilities = biome.get_register_probabilities()
+	return not probabilities.is_empty()
+
+
+func _can_execute_measure() -> bool:
+	"""Check if MEASURE action is available (v2 PROBE Tool 1)
+
+	MEASURE collapses an active terminal (bound but not measured).
+	Available when: active terminal exists in current biome.
+	"""
+	if not farm or not farm.plot_pool:
+		return false
+
+	var biome = _get_current_biome()
+	if not biome:
+		return false
+
+	# Must have active terminal (bound but not measured) in this biome
+	for terminal in farm.plot_pool.get_active_terminals():
+		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome.get_biome_type():
+			return true
+	return false
+
+
+func _can_execute_pop() -> bool:
+	"""Check if POP action is available (v2 PROBE Tool 1)
+
+	POP harvests a measured terminal and unbinds it.
+	Available when: measured terminal exists in current biome.
+	"""
+	if not farm or not farm.plot_pool:
+		return false
+
+	var biome = _get_current_biome()
+	if not biome:
+		return false
+
+	# Must have measured terminal in this biome
+	for terminal in farm.plot_pool.get_measured_terminals():
+		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome.get_biome_type():
+			return true
+	return false
+
+
+func _get_current_biome():
+	"""Get biome for current selection (helper for availability checks)"""
+	if not farm or not farm.grid:
+		return null
+	return farm.grid.get_biome_for_plot(current_selection)
 
 
 func _can_execute_submenu_action(action_key: String) -> bool:
@@ -2934,6 +3306,11 @@ func _toggle_build_play_mode() -> void:
 	current_submenu = ""
 	_cached_submenu = {}
 
+	# BUILD MODE PAUSE: Pause quantum evolution when entering BUILD mode
+	# This allows safe modification of biome structure (adding qubits, etc.)
+	var is_build_mode = (new_mode == "build")
+	_set_all_biomes_paused(is_build_mode)
+
 	_verbose.info("input", "🔧" if new_mode == "build" else "🎮",
 		"Switched to %s MODE (Tab to toggle)" % new_mode.to_upper())
 
@@ -2985,4 +3362,201 @@ func is_evolution_paused() -> bool:
 func get_current_game_mode() -> String:
 	"""Get current game mode (play or build)"""
 	return ToolConfig.get_mode()
+
+
+func _set_all_biomes_paused(paused: bool) -> void:
+	"""Pause or resume quantum evolution on all biomes.
+
+	Called when switching between PLAY and BUILD modes.
+	BUILD mode pauses evolution to allow safe biome modification.
+	"""
+	if not farm or not farm.grid or not farm.grid.biomes:
+		return
+
+	for biome_name in farm.grid.biomes:
+		var biome = farm.grid.biomes[biome_name]
+		if biome and biome.has_method("set_evolution_paused"):
+			biome.set_evolution_paused(paused)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BUILD MODE: Tool 2 (Icon) - Icon Management Actions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _action_icon_swap(plots: Array[Vector2i]):
+	"""Swap north/south emojis on selected plot(s).
+
+	Exchanges the north_emoji and south_emoji for each selected plot.
+	This changes which outcome is considered "success" vs "failure".
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("icon_swap", false, "Farm not loaded")
+		return
+
+	if plots.is_empty():
+		action_performed.emit("icon_swap", false, "No plots selected")
+		return
+
+	var swap_count := 0
+
+	for pos in plots:
+		var plot = farm.grid.get_plot(pos)
+		if not plot or not plot.is_planted:
+			continue
+
+		# Swap north and south emojis
+		var temp = plot.north_emoji
+		plot.north_emoji = plot.south_emoji
+		plot.south_emoji = temp
+		swap_count += 1
+
+		_verbose.debug("icon", "🔃", "Swapped %s ↔ %s at %s" % [plot.south_emoji, plot.north_emoji, pos])
+
+	if swap_count > 0:
+		action_performed.emit("icon_swap", true, "🔃 Swapped icons on %d plots" % swap_count)
+	else:
+		action_performed.emit("icon_swap", false, "No planted plots to swap")
+
+
+func _action_icon_clear(plots: Array[Vector2i]):
+	"""Clear icon assignment from selected plot(s).
+
+	Resets plots to their default biome icons (unassigned state).
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("icon_clear", false, "Farm not loaded")
+		return
+
+	if plots.is_empty():
+		action_performed.emit("icon_clear", false, "No plots selected")
+		return
+
+	var clear_count := 0
+
+	for pos in plots:
+		var plot = farm.grid.get_plot(pos)
+		if not plot:
+			continue
+
+		# Get default icons from biome
+		var biome = farm.grid.get_biome_for_plot(pos)
+		if biome and biome.producible_emojis.size() >= 2:
+			plot.north_emoji = biome.producible_emojis[0]
+			plot.south_emoji = biome.producible_emojis[1]
+		else:
+			plot.north_emoji = ""
+			plot.south_emoji = ""
+
+		clear_count += 1
+		_verbose.debug("icon", "⬜", "Cleared icons at %s" % pos)
+
+	action_performed.emit("icon_clear", true, "⬜ Cleared icons on %d plots" % clear_count)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# BUILD MODE: Tool 4 (System) - System Control Actions
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func _action_system_reset(plots: Array[Vector2i]):
+	"""Reset quantum bath to initial/thermal state.
+
+	Reinitializes the density matrix for the biome containing selected plots.
+	This is a "hard reset" - all quantum coherence is lost.
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("system_reset", false, "Farm not loaded")
+		return
+
+	# Get the biome for the first selected plot (or current selection)
+	var target_pos = plots[0] if not plots.is_empty() else current_selection
+	var biome = farm.grid.get_biome_for_plot(target_pos)
+
+	if not biome or not biome.quantum_computer:
+		action_performed.emit("system_reset", false, "No quantum computer at selection")
+		return
+
+	var biome_name = biome.get_biome_type()
+
+	# Reset to initial basis state |0...0⟩
+	biome.quantum_computer.initialize_basis(0)
+
+	_verbose.info("system", "🔄", "Reset %s quantum bath to |0⟩" % biome_name)
+	action_performed.emit("system_reset", true, "🔄 Reset %s to ground state" % biome_name)
+
+
+func _action_system_snapshot(plots: Array[Vector2i]):
+	"""Save current quantum state snapshot.
+
+	Captures the current density matrix state for later comparison or rollback.
+	Snapshots are stored in GameStateManager.
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("system_snapshot", false, "Farm not loaded")
+		return
+
+	# Get the biome for the first selected plot
+	var target_pos = plots[0] if not plots.is_empty() else current_selection
+	var biome = farm.grid.get_biome_for_plot(target_pos)
+
+	if not biome or not biome.quantum_computer:
+		action_performed.emit("system_snapshot", false, "No quantum computer at selection")
+		return
+
+	var biome_name = biome.get_biome_type()
+
+	# Get density matrix and create snapshot
+	var rho = biome.quantum_computer.get_density_matrix()
+	if not rho:
+		action_performed.emit("system_snapshot", false, "No density matrix to snapshot")
+		return
+
+	# Store snapshot in GameStateManager (if available)
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm:
+		if not gsm.has("quantum_snapshots"):
+			gsm.quantum_snapshots = []
+
+		var snapshot = {
+			"biome": biome_name,
+			"timestamp": Time.get_unix_time_from_system(),
+			"dimension": rho.n,
+			"trace": rho.trace().re if rho.has_method("trace") else 1.0
+		}
+		gsm.quantum_snapshots.append(snapshot)
+
+		_verbose.info("system", "📸", "Snapshot saved for %s (dim=%d)" % [biome_name, rho.n])
+		action_performed.emit("system_snapshot", true, "📸 Snapshot saved for %s" % biome_name)
+	else:
+		# Fallback: just log it
+		_verbose.info("system", "📸", "Snapshot (no GSM): %s dim=%d" % [biome_name, rho.n])
+		action_performed.emit("system_snapshot", true, "📸 Snapshot logged for %s" % biome_name)
+
+
+func _action_system_debug(plots: Array[Vector2i]):
+	"""Toggle debug visualization mode.
+
+	Enables/disables verbose quantum state logging and debug overlays.
+	"""
+	# Toggle verbose debug mode
+	var new_state := false
+
+	if _verbose:
+		# Toggle between info and debug levels
+		var current_level = _verbose.get_level() if _verbose.has_method("get_level") else 1
+		if current_level >= 2:  # Already debug
+			_verbose.set_level(1)  # Back to info
+			new_state = false
+		else:
+			_verbose.set_level(2)  # Enable debug
+			new_state = true
+
+		_verbose.info("system", "🐛", "Debug mode: %s" % ("ON" if new_state else "OFF"))
+
+	# Also toggle any debug overlays
+	var overlay_manager = _get_overlay_manager()
+	if overlay_manager and overlay_manager.has_method("toggle_debug_mode"):
+		overlay_manager.toggle_debug_mode()
+
+	action_performed.emit("system_debug", true,
+		"🐛 Debug mode: %s" % ("ON" if new_state else "OFF"))
 

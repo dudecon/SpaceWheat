@@ -42,7 +42,8 @@ extends Resource
 
 ## Player Vocabulary - Emojis the player has discovered
 ## This determines which factions are accessible and what quests they can receive
-@export var known_emojis: Array[String] = []
+## Default: wheat and people - the starter emojis that seed faction access
+@export var known_emojis: Array = ["🌾", "👥"]
 
 ## Quest Slots - 4 persistent quest slots (UIOP)
 ## Each slot can be empty (null) or contain quest data
@@ -171,11 +172,9 @@ func _init():
 	completed_goals.clear()
 	active_contracts.clear()
 
-	# Initialize player vocabulary with starter emojis
-	# 🍞 (Bread) and 👥 (People) are the starter emojis
-	# These match faction signatures, not axial vocabulary
-	# Provides access to community/production-themed factions
-	known_emojis = ["🍞", "👥"]
+	# Player vocabulary is initialized in the @export default above
+	# 🌾 (Wheat) and 👥 (People) are the starter emojis
+	# These match faction signatures and seed initial faction conversations
 
 
 ## Convenience method to create state for a specific grid size

@@ -138,6 +138,11 @@ func connect_to_farm(farm) -> void:
 	# Store farm reference for plot-to-biome lookups
 	farm_ref = farm
 
+	# CRITICAL: Pass plot_pool to graph for v2 terminal measurement state lookup
+	if graph and "plot_pool" in farm and farm.plot_pool:
+		graph.plot_pool = farm.plot_pool
+		print("   📡 Passed plot_pool to QuantumForceGraph for measured state detection")
+
 	if farm.has_signal("plot_planted"):
 		farm.plot_planted.connect(_on_plot_planted)
 		print("   📡 Connected to farm.plot_planted for auto-requesting bubbles")
@@ -150,25 +155,11 @@ func connect_to_farm(farm) -> void:
 	else:
 		push_warning("BathQuantumViz: farm has no plot_harvested signal")
 
-	# NOTE: Rejection visual feedback is now handled by PlotGridDisplay (UI layer)
-	# Not using QuantumForceGraph for this anymore to avoid duplicate systems
-	# (see FarmUI.gd setup_farm() for the PlotGridDisplay connection)
-
-
-# REMOVED: Rejection visual feedback now handled by PlotGridDisplay (UI layer)
-# This was creating duplicate rejection effects - PlotGridDisplay is the correct layer
-# func _on_action_rejected(action: String, position: Vector2i, reason: String) -> void:
-#	"""Handle action rejected event - show red pulsing circle at plot"""
-#	print("🚫 Action rejected at %s: %s" % [position, reason])
-#	if graph:
-#		graph.show_rejection_effect(position, reason)
-
-
 func _on_plot_planted(position: Vector2i, plant_type: String) -> void:
 	"""Handle plot planted event - request bubble for the planted plot
 
-	This automatically spawns bubbles when the player plants crops.
-	Uses plot-driven interface: ONE bubble per plot showing dual-emoji superposition.
+	v2 Architecture: Uses terminals via PlotPool, not plot properties.
+	plant_type is the north emoji from the terminal's emoji_pair.
 	"""
 	print("🔔 BathQuantumViz: Received plot_planted signal for %s at %s" % [plant_type, position])
 
@@ -184,14 +175,23 @@ func _on_plot_planted(position: Vector2i, plant_type: String) -> void:
 
 	print("   📍 Plot at %s assigned to biome: %s" % [position, biome_name])
 
-	# Get the actual plot instance
+	# Get the actual plot (needed for entanglement visualization)
 	var plot = farm_ref.grid.get_plot(position)
-	if not plot:
-		print("   ⚠️  No plot found at position %s" % position)
-		return
 
-	# Request ONE bubble for this plot (shows both emojis in superposition)
-	request_plot_bubble(biome_name, position, plot)
+	# v2: Try to get terminal from PlotPool for full emoji data
+	var north_emoji = plant_type
+	var south_emoji = "?"  # Default fallback
+
+	if farm_ref.plot_pool:
+		# Find terminal bound in this biome that matches the emoji
+		for terminal in farm_ref.plot_pool.get_active_terminals():
+			if terminal.north_emoji == plant_type:
+				south_emoji = terminal.south_emoji if terminal.south_emoji else "?"
+				print("   🔗 Found terminal with emojis: %s/%s" % [north_emoji, south_emoji])
+				break
+
+	# Create bubble with plot reference (enables entanglement visualization)
+	_create_bubble_for_terminal(biome_name, position, north_emoji, south_emoji, plot)
 
 
 func _on_plot_harvested(position: Vector2i, yield_data: Dictionary) -> void:
@@ -248,14 +248,28 @@ func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
 	if not biome or (not biome.bath and not biome.quantum_computer):
 		return
 
-	# Get emojis from plot (Model C: emojis are plot metadata, not quantum state)
-	if not plot.is_planted or not plot.parent_biome or plot.bath_subplot_id < 0:
-		print("   ⚠️  Plot at %s not properly initialized!" % grid_pos)
+	# Get emojis from plot (Model C: uses terminal system now)
+	# v2 Architecture: Terminals store emojis, not plots. Check both paths:
+	var north_emoji = ""
+	var south_emoji = ""
+
+	# Try new terminal path first (v2)
+	if plot.has_method("get_terminal") and plot.get_terminal():
+		var terminal = plot.get_terminal()
+		north_emoji = terminal.north_emoji if terminal.north_emoji else ""
+		south_emoji = terminal.south_emoji if terminal.south_emoji else ""
+	# Fall back to old plot path (v1 compatibility)
+	elif plot.is_planted and plot.parent_biome and plot.bath_subplot_id >= 0:
+		north_emoji = plot.north_emoji
+		south_emoji = plot.south_emoji
+	else:
+		# Neither path works - skip this bubble
+		print("   ⚠️  Plot at %s has no terminal or valid plot data" % grid_pos)
 		return
 
-	# Model B: Emojis are measurement basis labels stored on plot
-	var north_emoji = plot.north_emoji
-	var south_emoji = plot.south_emoji
+	if north_emoji.is_empty():
+		print("   ⚠️  No emoji data for plot at %s" % grid_pos)
+		return
 
 	print("   🌱 Requesting plot bubble at %s: %s/%s" % [grid_pos, north_emoji, south_emoji])
 
@@ -377,6 +391,82 @@ func _create_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> Quantu
 	return bubble
 
 
+func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_emoji: String, south_emoji: String, plot = null) -> void:
+	"""Create a bubble for a terminal (v2 architecture)
+
+	Args:
+		biome_name: Which biome this terminal belongs to
+		grid_pos: Grid position for tethering
+		north_emoji: North pole emoji
+		south_emoji: South pole emoji
+		plot: Optional FarmPlot reference (enables entanglement visualization)
+	"""
+	if not biomes.has(biome_name):
+		print("   ⚠️  Unknown biome: %s" % biome_name)
+		return
+
+	var biome = biomes.get(biome_name)
+	if not biome or (not biome.bath and not biome.quantum_computer):
+		print("   ⚠️  Biome %s has no quantum backend" % biome_name)
+		return
+
+	# Determine initial position (scatter around biome oval)
+	var initial_pos = stored_center
+	var oval = graph.layout_calculator.get_biome_oval(biome_name)
+	if not oval.is_empty():
+		var center = oval.get("center", stored_center)
+		var semi_a = oval.get("semi_a", 100.0)
+		var semi_b = oval.get("semi_b", 60.0)
+		var angle = randf() * TAU
+		initial_pos = center + Vector2(
+			semi_a * cos(angle) * 0.7,
+			semi_b * sin(angle) * 0.7
+		)
+
+	# Remove old bubble at this position if exists
+	if graph.quantum_nodes_by_grid_pos.has(grid_pos):
+		var old_bubble = graph.quantum_nodes_by_grid_pos[grid_pos]
+		if old_bubble:
+			var idx = graph.quantum_nodes.find(old_bubble)
+			if idx >= 0:
+				graph.quantum_nodes.remove_at(idx)
+			# Also remove from node_by_plot_id if it had a plot
+			if old_bubble.plot_id and graph.node_by_plot_id.has(old_bubble.plot_id):
+				graph.node_by_plot_id.erase(old_bubble.plot_id)
+			if basis_bubbles.has(biome_name):
+				var bidx = basis_bubbles[biome_name].find(old_bubble)
+				if bidx >= 0:
+					basis_bubbles[biome_name].remove_at(bidx)
+
+	# Create bubble with plot reference (enables entanglement line drawing)
+	var bubble = QuantumNode.new(plot, initial_pos, grid_pos, stored_center)
+	bubble.biome_name = biome_name
+	bubble.emoji_north = north_emoji
+	bubble.emoji_south = south_emoji
+	bubble.emoji_north_opacity = 0.7  # Show both in superposition
+	bubble.emoji_south_opacity = 0.3
+	bubble.radius = 40.0
+	bubble.color = Color(0.8, 0.8, 0.8, 0.8)
+	bubble.has_farm_tether = true  # Show tether to grid position
+
+	# Add to tracking
+	if not basis_bubbles.has(biome_name):
+		basis_bubbles[biome_name] = []
+	basis_bubbles[biome_name].append(bubble)
+	graph.quantum_nodes.append(bubble)
+	graph.quantum_nodes_by_grid_pos[grid_pos] = bubble
+
+	# Register by plot_id for entanglement lookup (only if plot provided)
+	if plot and bubble.plot_id:
+		graph.node_by_plot_id[bubble.plot_id] = bubble
+
+	print("   🔵 Created terminal bubble (%s/%s) at grid %s%s" % [
+		north_emoji, south_emoji, grid_pos,
+		" [with plot for entanglement]" if plot else ""
+	])
+	graph.queue_redraw()
+
+
 func _create_single_bubble(biome_name: String, emoji: String, grid_pos: Vector2i = Vector2i.ZERO) -> QuantumNode:
 	"""Create a single bubble for one emoji
 
@@ -492,9 +582,11 @@ func _update_bubble_visuals_from_bath() -> void:
 func _apply_skating_rink_forces(delta: float) -> void:
 	"""Apply forces to position bubbles on biome ovals
 
-	Bath-first change: We don't use probability/radius for radial positioning.
-	All bubbles orbit around a fixed ring (70% of oval), with phi determining
-	angular position.
+	RADIAL ENCODING: ring_distance ← purity Tr(ρ²)
+	- Pure states (purity=1.0) → center of oval (ring=0.3)
+	- Mixed states (purity=1/N) → edge of oval (ring=0.85)
+
+	ANGULAR ENCODING: phi ← grid position hash (spread bubbles evenly)
 	"""
 	if not graph or not graph.layout_calculator:
 		return
@@ -509,15 +601,32 @@ func _apply_skating_rink_forces(delta: float) -> void:
 		var semi_a = oval.get("semi_a", 100.0)
 		var semi_b = oval.get("semi_b", 60.0)
 
+		# Get biome's purity for radial positioning
+		var biome = biomes.get(biome_name)
+		var biome_purity = 0.5  # Default mid-purity
+		if biome and biome.quantum_computer:
+			biome_purity = biome.quantum_computer.get_purity()
+
 		for bubble in bubbles:
-			if not bubble.plot:
+			# Skip bubbles without plot OR farm_tether (neither v1 nor v2 style)
+			if not bubble.plot and not bubble.has_farm_tether:
 				continue
 
-			# Model B: quantum_state no longer exists - use default phi from position
+			# ANGULAR POSITION: spread bubbles around oval
 			var phi = 0.0
+			if bubble.has_farm_tether and not bubble.plot:
+				# Terminal bubbles: spread around oval based on grid position hash
+				phi = (bubble.grid_position.x * 1.618 + bubble.grid_position.y * 2.718) * TAU
+			elif bubble.plot:
+				# Plot bubbles: use grid position for spread
+				phi = (bubble.grid_position.x * 2.236 + bubble.grid_position.y * 1.414) * TAU
 
-			# Fixed ring at 70% radius (not probability-based!)
-			var ring_distance = 0.7
+			# RADIAL POSITION: ring_distance ← purity
+			# Pure (1.0) → 0.3 (center), Mixed (0.125 for 8-dim) → 0.85 (edge)
+			# Interpolate: ring = 0.85 - (purity - min_purity) * 0.55 / (1 - min_purity)
+			var min_purity = 0.125  # 1/8 for 3-qubit system
+			var purity_normalized = clampf((biome_purity - min_purity) / (1.0 - min_purity), 0.0, 1.0)
+			var ring_distance = 0.85 - purity_normalized * 0.55  # 0.85 (mixed) to 0.30 (pure)
 
 			var target_pos = center + Vector2(
 				semi_a * cos(phi) * ring_distance,

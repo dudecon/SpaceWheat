@@ -98,8 +98,9 @@ const ICON_PARTICLE_SIZE = 3.0
 const MAX_ICON_PARTICLES = 150  # Limit total particles
 var icon_particle_spawn_accumulator: float = 0.0
 
-# Reference to farm grid and biomes
+# Reference to farm grid, pool, and biomes
 var farm_grid: FarmGrid = null
+var plot_pool = null  # v2: PlotPool for terminal-based measurement state lookup
 var biome = null  # Legacy: Reference to Biome for backward compatibility
 
 # Generic biome registry (name -> BiomeBase instance)
@@ -495,8 +496,9 @@ func wire_to_farm(farm: Node) -> void:
 	var center = play_rect.get_center()
 	var radius = play_rect.size.length() * 0.3
 
-	# Store the grid first (needed for biome registration)
+	# Store references (needed for biome registration and terminal lookup)
 	farm_grid = farm.grid
+	plot_pool = farm.plot_pool if "plot_pool" in farm else null  # v2: Terminal-based measurement
 
 	# IMPORTANT: Register biomes BEFORE initialize() so plots can find their biomes
 	# Generic biome registration from FarmGrid
@@ -526,25 +528,6 @@ func wire_to_farm(farm: Node) -> void:
 	# Nodes will be updated during _draw() by checking current Farm state
 
 	_verbose.info("quantum", "⚛️", "QuantumForceGraph wired to farm with multi-biome support (no signals - direct state reading)")
-
-
-# REFACTOR: Signal handlers removed - no longer needed
-# Nodes are updated directly during _draw() by reading current Farm state
-# This removes the signal coupling that caused the "haunted" behavior
-
-#func _on_plot_planted(grid_pos: Vector2i) -> void:
-#	"""DISABLED: Signal handler - nodes now update during _draw()"""
-#	if grid_pos in quantum_nodes_by_grid_pos:
-#		var node = quantum_nodes_by_grid_pos[grid_pos]
-#		if node:
-#			node.update_from_quantum_state()
-#
-#func _on_plot_harvested(grid_pos: Vector2i) -> void:
-#	"""DISABLED: Signal handler - nodes now update during _draw()"""
-#	if grid_pos in quantum_nodes_by_grid_pos:
-#		var node = quantum_nodes_by_grid_pos[grid_pos]
-#		if node:
-#			node.update_from_quantum_state()
 
 
 func set_plot_tether_colors(colors: Dictionary):
@@ -753,9 +736,14 @@ func _update_node_visuals():
 
 	# Update regular quantum nodes with batched queries
 	for node in quantum_nodes:
-		# Trigger spawn animation if plot just became planted
-		if node.plot and node.plot.is_planted and node.plot.parent_biome and node.plot.bath_subplot_id >= 0 and not node.is_spawning and node.visual_scale == 0.0:
-			node.start_spawn_animation(time_accumulator)
+		# Trigger spawn animation for new nodes
+		if not node.is_spawning and node.visual_scale == 0.0:
+			# v2 terminal bubbles: has_farm_tether with valid emoji (may or may not have plot)
+			if node.has_farm_tether and not node.emoji_north.is_empty():
+				node.start_spawn_animation(time_accumulator)
+			# v1 plot-based bubbles: plot is planted (fallback for legacy)
+			elif node.plot and node.plot.is_planted and node.plot.parent_biome and node.plot.bath_subplot_id >= 0:
+				node.start_spawn_animation(time_accumulator)
 
 		# Use batched update with cached purity
 		_update_node_visual_batched(node, purity_cache)
@@ -797,8 +785,16 @@ func _update_node_visual_batched(node: QuantumNode, purity_cache: Dictionary) ->
 	cached purity values to avoid redundant Tr(ρ²) calculations.
 
 	Supports both Model B (bath) and Model C (quantum_computer) biomes.
+	Also supports v2 terminal bubbles (has_farm_tether but no plot).
 	"""
-	# Guard: unplanted → invisible
+	# v2 terminal bubbles: has_farm_tether but no plot
+	# These get their emojis from _create_bubble_for_terminal(), preserve their state
+	if node.has_farm_tether and not node.plot:
+		# Terminal bubble - just ensure it stays visible after spawn animation
+		# Emojis are already set, don't modify visual state
+		return
+
+	# Guard: unplanted plot → invisible
 	if not node.plot or not node.plot.is_planted:
 		node.energy = 0.0
 		node.coherence = 1.0
@@ -1085,11 +1081,23 @@ func _update_forces(delta: float):
 		if not node.plot or not node.plot.is_planted:
 			continue
 
-		# MEASURED NODES: Pull strongly to classical position
-		if node.plot.has_been_measured:
-			total_force += _calculate_tether_force(node, true)
-			node.apply_force(total_force, delta)
-			node.apply_damping(MEASURED_DAMPING)
+		# LIFELESS NODES: No quantum data - freeze at anchor (no wiggle)
+		if node.is_lifeless:
+			node.position = node.classical_anchor
+			node.velocity = Vector2.ZERO
+			continue
+
+		# Check if node is measured (legacy plot-based OR v2 terminal-based)
+		var is_measured = node.plot.has_been_measured
+		if not is_measured and plot_pool and node.grid_position != Vector2i(-1, -1):
+			var terminal = plot_pool.get_terminal_at_grid_pos(node.grid_position)
+			if terminal and terminal.is_measured:
+				is_measured = true
+
+		# MEASURED NODES: FREEZE completely - snap to anchor, zero velocity
+		if is_measured:
+			node.position = node.classical_anchor
+			node.velocity = Vector2.ZERO
 			continue
 
 		# UNMEASURED FLOATING NODES: Full quantum dynamics
@@ -1217,14 +1225,32 @@ func _draw():
 
 	# Draw in layers (back to front)
 
+	# 0a. Temperature heatmap (decoherence zones - very back)
+	_draw_temperature_heatmap()
+
 	# 1. Tether lines (background)
 	_draw_tether_lines()
+
+	# 1b. Orbit trails (evolution history paths)
+	_draw_orbit_trails()
 
 	# 2. Persistent gate infrastructure (at plot positions, architectural)
 	_draw_persistent_gate_infrastructure()
 
+	# 2b. Bell gate ghosts (historical entanglement)
+	_draw_bell_gate_ghosts()
+
 	# 3. Energy transfer forces (Lindbladian evolution visualization)
 	_draw_energy_transfer_forces()
+
+	# 3b. Lindblad flow arrows (energy transfer network)
+	_draw_lindblad_flow_arrows()
+
+	# 3c. Hamiltonian coupling web (unitary interactions)
+	_draw_hamiltonian_coupling_web()
+
+	# 3d. Coherence web (full quantum correlations)
+	_draw_coherence_web()
 
 	# 4. Qubit entanglement lines (at quantum node positions, particle-like)
 	_draw_entanglement_lines()
@@ -1232,19 +1258,19 @@ func _draw():
 	# 4b. Food web edges (predation/escape relationships in Forest biome)
 	_draw_food_web_edges()
 
-	# 3. Entanglement particles (above lines, below nodes)
+	# 4c. Entanglement clusters (multi-body groups)
+	_draw_entanglement_clusters()
+
+	# 5. Entanglement particles (above lines, below nodes)
 	_draw_particles()
 
-	# 4. Icon particle field (environmental overlay) - DISABLED: causes visual artifacts
-	# _draw_icon_particles()
-
-	# 5. Quantum nodes (foreground)
+	# 6. Quantum nodes (foreground) - includes individual purity rings
 	_draw_quantum_nodes()
 
-	# 6. Sun qubit node (always on top, celestial)
+	# 7. Sun qubit node (always on top, celestial)
 	_draw_sun_qubit_node()
 
-	# 7. Life cycle effects (spawns, deaths, coherence strikes)
+	# 8. Life cycle effects (spawns, deaths, coherence strikes)
 	_draw_life_cycle_effects()
 
 	# NOTE: Rejection effects removed - now handled by PlotGridDisplay (UI layer)
@@ -2193,8 +2219,16 @@ func _draw_quantum_bubble(node: QuantumNode, is_celestial: bool = false) -> void
 	if anim_scale <= 0.0:
 		return  # Don't draw if not visible
 
-	# Determine if node has been measured (quantum collapse)
-	var is_measured = node.plot != null and node.plot.has_been_measured
+	# Determine if node has been measured (ensemble model: frozen state)
+	# Check both plot-based (legacy) and terminal-based (v2) systems
+	var is_measured = false
+	if node.plot != null and node.plot.has_been_measured:
+		is_measured = true
+	elif plot_pool and node.grid_position != Vector2i(-1, -1):
+		# v2: Look up terminal by grid position
+		var terminal = plot_pool.get_terminal_at_grid_pos(node.grid_position)
+		if terminal and terminal.is_measured:
+			is_measured = true
 
 	# ====================================================================
 	# SIZE ENCODING: Node size ∝ qubit.radius (quantum coherence)
@@ -2217,72 +2251,88 @@ func _draw_quantum_bubble(node: QuantumNode, is_celestial: bool = false) -> void
 	var glow_tint: Color
 	var is_celestial_render = is_celestial
 
-	# COLOR BRIGHTNESS ENCODING: brightness ∝ qubit.radius (coherence)
-	var brightness_factor = 0.3
-	# Model B: quantum_state no longer exists - use default brightness
+	# PULSE ANIMATION: Berry phase controls pulse rate (more evolved = faster pulse)
+	var pulse_rate = node.get_pulse_rate()  # 0.2 (stable) to 2.0 (chaotic)
+	var pulse_phase = sin(time_accumulator * pulse_rate * TAU) * 0.5 + 0.5  # 0-1 oscillation
+	var pulse_scale = 1.0 + pulse_phase * 0.08  # Subtle 8% size pulse
 
 	if is_celestial_render:
 		# Celestial: Golden/amber glow
 		base_color = Color(1.0, 0.8, 0.2)  # Golden
 		glow_tint = base_color
 	else:
-		# Standard: Use node's quantum-derived color with brightness encoding
-		base_color = node.color * Color(brightness_factor, brightness_factor, brightness_factor, 1.0)
+		# Standard: Use node's quantum-derived color directly (no brightness duplicate)
+		base_color = node.color
 		# Complementary color for outer glow (true contrasting hue)
 		glow_tint = Color.from_hsv(
 			fmod(node.color.h + 0.5, 1.0),  # Opposite hue
 			min(node.color.s * 1.3, 1.0),    # Boost saturation
-			max(node.color.v * 0.8 * brightness_factor, 0.3)     # Darker for halo, scaled by coherence
+			max(node.color.v * 0.6, 0.3)     # Darker for halo
 		)
 
 	# ====================================================================
 	# LAYER 1 & 2: OUTER GLOWS (complementary/golden)
 	# ====================================================================
-	var glow_alpha = (node.get_glow_alpha() + 0.4) * anim_alpha
+	# Glow based on PURITY only (energy), not berry phase (moved to pulse)
+	var glow_alpha = (node.energy * 0.5 + 0.3) * anim_alpha
+
+	# Apply pulse to effective radius for this frame
+	var effective_radius = node.radius * anim_scale * pulse_scale
 
 	if is_measured and not is_celestial_render:
-		# Measured nodes: Bright static cyan glow (ready to harvest!)
-		var measured_glow = Color(0.2, 0.95, 1.0)
-		measured_glow.a = 0.7 * anim_alpha
-		draw_circle(node.position, node.radius * 1.8 * anim_scale, measured_glow)
+		# MEASURED NODES: Very pronounced "READY TO HARVEST" effect
+		# Pulsing cyan/white glow that stands out dramatically
+		var measured_pulse = 0.5 + 0.5 * sin(time_accumulator * 4.0)  # Faster pulse
 
-		measured_glow.a = 0.9 * anim_alpha
-		draw_circle(node.position, node.radius * 1.4 * anim_scale, measured_glow)
+		# Outer pulsing ring (very visible)
+		var outer_ring = Color(0.0, 1.0, 1.0)  # Bright cyan
+		outer_ring.a = (0.4 + 0.3 * measured_pulse) * anim_alpha
+		draw_circle(node.position, node.radius * (2.2 + 0.3 * measured_pulse) * anim_scale, outer_ring)
+
+		# Middle glow layer
+		var measured_glow = Color(0.2, 0.95, 1.0)
+		measured_glow.a = 0.8 * anim_alpha
+		draw_circle(node.position, node.radius * 1.6 * anim_scale, measured_glow)
+
+		# Inner bright core
+		var inner_glow = Color(0.8, 1.0, 1.0)
+		inner_glow.a = 0.95 * anim_alpha
+		draw_circle(node.position, node.radius * 1.3 * anim_scale, inner_glow)
 	else:
-		# Unmeasured or celestial: Complementary/golden glow layers
+		# Unmeasured or celestial: Complementary/golden glow layers WITH pulse
 		var outer_glow = glow_tint
 		outer_glow.a = glow_alpha * 0.4
 
 		# Outer layer: larger radius for celestial
-		var outer_radius = 2.2 if is_celestial_render else 1.6
-		draw_circle(node.position, node.radius * outer_radius * anim_scale, outer_glow)
+		var outer_mult = 2.2 if is_celestial_render else 1.6
+		draw_circle(node.position, effective_radius * outer_mult, outer_glow)
 
 		# Middle glow layer
 		var mid_glow = glow_tint
 		mid_glow.a = glow_alpha * 0.6
-		var mid_radius = 1.8 if is_celestial_render else 1.3
-		draw_circle(node.position, node.radius * mid_radius * anim_scale, mid_glow)
+		var mid_mult = 1.8 if is_celestial_render else 1.3
+		draw_circle(node.position, effective_radius * mid_mult, mid_glow)
 
 	# Inner glow (celestial only - adds warmth)
 	if is_celestial_render and glow_alpha > 0:
 		var inner_glow = glow_tint.lightened(0.2)
 		inner_glow.a = glow_alpha * 0.8
-		draw_circle(node.position, node.radius * 1.4 * anim_scale, inner_glow)
+		draw_circle(node.position, effective_radius * 1.4, inner_glow)
 
 	# ====================================================================
 	# LAYER 3: Dark background circle (emoji contrast)
 	# ====================================================================
 	var dark_bg = Color(0.1, 0.1, 0.15, 0.85)
-	var bg_radius = 1.12 if is_celestial_render else 1.08
-	draw_circle(node.position, node.radius * bg_radius * anim_scale, dark_bg)
+	var bg_mult = 1.12 if is_celestial_render else 1.08
+	draw_circle(node.position, effective_radius * bg_mult, dark_bg)
 
 	# ====================================================================
-	# LAYER 4: Main quantum bubble circle
+	# LAYER 4: Main quantum bubble circle (with pulse)
 	# ====================================================================
 	var main_color = base_color.lightened(0.15 if not is_celestial_render else 0.1)
 	main_color.s = min(main_color.s * 1.2, 1.0)  # More saturated
 	main_color.a = 0.75 * anim_alpha
-	draw_circle(node.position, node.radius * anim_scale, main_color)
+	draw_circle(node.position, effective_radius, main_color)
 
 	# ====================================================================
 	# LAYER 5: Bright glossy center spot
@@ -2291,26 +2341,34 @@ func _draw_quantum_bubble(node: QuantumNode, is_celestial: bool = false) -> void
 	bright_center.a = 0.8 * anim_alpha
 	var spot_size = 0.4 if is_celestial_render else 0.5
 	draw_circle(
-		node.position + Vector2(-node.radius * 0.25, -node.radius * 0.25) * anim_scale,
-		node.radius * spot_size * anim_scale,
+		node.position + Vector2(-effective_radius * 0.25, -effective_radius * 0.25),
+		effective_radius * spot_size,
 		bright_center
 	)
 
 	# ====================================================================
-	# LAYER 6: Outline (state-aware)
+	# LAYER 6: Outline (state-aware) - uses effective_radius for pulse
 	# ====================================================================
 	if is_measured and not is_celestial_render:
-		# Measured unmeasured plot: Thick bright cyan outline (collapsed state)
-		var measured_outline = Color(0.4, 1.0, 1.0)
-		measured_outline.a = 0.98 * anim_alpha
-		draw_arc(node.position, node.radius * 1.05 * anim_scale, 0, TAU, 64, measured_outline, 4.0, true)
+		# MEASURED: Very thick pulsing cyan/white double outline
+		var measured_pulse = 0.5 + 0.5 * sin(time_accumulator * 4.0)
 
-		# Inner outline for emphasis
+		# Outer thick cyan outline
+		var measured_outline = Color(0.0, 1.0, 1.0)
+		measured_outline.a = (0.85 + 0.15 * measured_pulse) * anim_alpha
+		draw_arc(node.position, node.radius * 1.08 * anim_scale, 0, TAU, 64, measured_outline, 5.0, true)
+
+		# Inner bright white outline
 		var inner_outline = Color.WHITE
-		inner_outline.a = 0.8 * anim_alpha
-		draw_arc(node.position, node.radius * 0.98 * anim_scale, 0, TAU, 64, inner_outline, 2.0, true)
+		inner_outline.a = 0.95 * anim_alpha
+		draw_arc(node.position, node.radius * 1.0 * anim_scale, 0, TAU, 64, inner_outline, 3.0, true)
+
+		# Checkmark indicator at top-right
+		var check_pos = node.position + Vector2(node.radius * 0.7, -node.radius * 0.7) * anim_scale
+		var check_color = Color(0.2, 1.0, 0.4, 0.95 * anim_alpha)  # Bright green
+		draw_circle(check_pos, 6.0 * anim_scale, check_color)
 	else:
-		# Unmeasured or celestial: Subtle outline
+		# Unmeasured or celestial: Subtle outline with pulse
 		var outline_color: Color
 		var outline_width: float
 
@@ -2322,7 +2380,7 @@ func _draw_quantum_bubble(node: QuantumNode, is_celestial: bool = false) -> void
 			outline_width = 2.5
 
 		outline_color.a = 0.95 * anim_alpha
-		draw_arc(node.position, node.radius * 1.02 * anim_scale, 0, TAU, 64, outline_color, outline_width, true)
+		draw_arc(node.position, effective_radius * 1.02, 0, TAU, 64, outline_color, outline_width, true)
 
 	# ====================================================================
 	# LAYER 6b: THETA ORIENTATION INDICATOR (behavioral direction)
@@ -2374,6 +2432,140 @@ func _draw_quantum_bubble(node: QuantumNode, is_celestial: bool = false) -> void
 		draw_colored_polygon(arrow_points, indicator_color)
 
 	# ====================================================================
+	# LAYER 6b.5: INDIVIDUAL PURITY RING (per-bubble quantum purity)
+	# Inner ring showing this bubble's purity vs biome average
+	# Full ring = pure state (Tr(ρ²)=1), thin arc = mixed state
+	# Color: cyan if above average, magenta if below
+	# ====================================================================
+	if not is_celestial_render and node.biome_name != "":
+		var biome = biomes.get(node.biome_name)
+		if biome and biome.quantum_computer:
+			var qc = biome.quantum_computer
+
+			# Get biome-wide purity
+			var biome_purity = qc.get_purity() if qc.has_method("get_purity") else 0.5
+
+			# Get individual bubble's purity (from its 2x2 reduced density matrix)
+			var individual_purity = 0.5  # Default
+			if node.plot and node.plot.parent_biome and node.plot.parent_biome.bath:
+				var bath = node.plot.parent_biome.bath
+				# For a 2-state subsystem: Tr(ρ²) = p_n² + p_s² + 2|ρ_ns|²
+				var p_n = bath.get_probability(node.emoji_north) if node.emoji_north != "" else 0.0
+				var p_s = bath.get_probability(node.emoji_south) if node.emoji_south != "" else 0.0
+				var coh = bath.get_coherence(node.emoji_north, node.emoji_south)
+				var coh_mag_sq = coh.abs() * coh.abs() if coh else 0.0
+				var mass = p_n + p_s
+				if mass > 0.001:
+					# Normalize to subsystem
+					var p_n_norm = p_n / mass
+					var p_s_norm = p_s / mass
+					var coh_norm_sq = coh_mag_sq / (mass * mass)
+					individual_purity = p_n_norm * p_n_norm + p_s_norm * p_s_norm + 2.0 * coh_norm_sq
+			elif node.has_farm_tether:
+				# Terminal bubble: use node's stored energy as purity proxy
+				individual_purity = node.energy
+
+			# Draw purity ring
+			var purity_ring_radius = effective_radius * 0.6
+			var purity_extent = individual_purity * TAU  # Pure = full circle
+
+			# Color based on comparison to biome average
+			var purity_color: Color
+			if individual_purity > biome_purity + 0.05:
+				purity_color = Color(0.4, 0.9, 1.0, 0.6)  # Cyan: above average (purer)
+			elif individual_purity < biome_purity - 0.05:
+				purity_color = Color(1.0, 0.4, 0.8, 0.6)  # Magenta: below average (more mixed)
+			else:
+				purity_color = Color(0.9, 0.9, 0.9, 0.4)  # White: near average
+
+			purity_color.a *= anim_alpha
+
+			# Draw the purity arc (starts from top)
+			if individual_purity > 0.01:
+				draw_arc(node.position, purity_ring_radius, -PI/2, -PI/2 + purity_extent, 24, purity_color, 2.0, true)
+
+	# ====================================================================
+	# LAYER 6c: GLOBAL PROBABILITY OUTER RING
+	# Shows the bubble's probability relative to the entire biome (not just normalized)
+	# Thin outer arc that fills proportionally to P(north) + P(south) globally
+	# ====================================================================
+	if not is_celestial_render and node.biome_name != "":
+		# Get global probability from biome's quantum computer
+		var global_prob = 0.0
+		var biome = biomes.get(node.biome_name)
+		if biome and biome.quantum_computer:
+			var qc = biome.quantum_computer
+			var p_north = qc.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
+			var p_south = qc.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
+			global_prob = p_north + p_south
+
+		# Draw partial arc representing global probability (0 to 100%)
+		if global_prob > 0.01:
+			var arc_color = Color(1.0, 1.0, 1.0, 0.4 * anim_alpha)
+			var arc_radius = effective_radius * 1.25
+			var arc_extent = global_prob * TAU  # Full circle = 100% probability
+			# Start from top (-PI/2) and go clockwise
+			draw_arc(node.position, arc_radius, -PI/2, -PI/2 + arc_extent, 32, arc_color, 2.0, true)
+
+			# Small probability text (only if significant)
+			if global_prob > 0.05:
+				var prob_font = ThemeDB.fallback_font
+				var prob_text = "%d%%" % int(global_prob * 100)
+				var prob_pos = node.position + Vector2(effective_radius * 0.9, -effective_radius * 0.9)
+				draw_string(prob_font, prob_pos, prob_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.5 * anim_alpha))
+
+	# ====================================================================
+	# LAYER 6d: SINK FLUX PARTICLES (decoherence visualization)
+	# Small dots drifting away from bubble when decoherence is active
+	# ====================================================================
+	if not is_celestial_render and node.biome_name != "":
+		var biome = biomes.get(node.biome_name)
+		if biome and biome.quantum_computer:
+			var qc = biome.quantum_computer
+			# Check sink flux for this emoji (decoherence rate)
+			var sink_flux = qc.get_sink_flux(node.emoji_north) if node.emoji_north != "" else 0.0
+
+			# Draw particles if there's significant decoherence
+			if sink_flux > 0.001:
+				var particle_count = int(clampf(sink_flux * 20, 1, 6))
+				for i in range(particle_count):
+					# Animated position based on time + index
+					var particle_time = time_accumulator * 0.5 + float(i) * 0.3
+					var particle_phase = fmod(particle_time, 1.0)  # 0 to 1 cycle
+
+					# Spiral outward from bubble edge
+					var angle = (float(i) / float(particle_count)) * TAU + particle_time * 2.0
+					var dist = effective_radius * (1.2 + particle_phase * 0.8)
+
+					var particle_pos = node.position + Vector2(cos(angle), sin(angle)) * dist
+
+					# Fade out as particle moves away
+					var particle_alpha = (1.0 - particle_phase) * 0.6 * anim_alpha
+					var particle_color = Color(0.8, 0.4, 0.2, particle_alpha)  # Orange-red for decoherence
+
+					# Size shrinks as it fades
+					var particle_size = 3.0 * (1.0 - particle_phase * 0.5)
+					draw_circle(particle_pos, particle_size, particle_color)
+
+	# ====================================================================
+	# LAYER 6e: REGISTER ID BADGE (debugging)
+	# Small number showing which register in the biome's quantum computer
+	# ====================================================================
+	if not is_celestial_render and DEBUG_MODE:
+		var reg_id_text = "?"
+		# Try to get register ID from terminal or plot
+		if node.has_farm_tether:
+			reg_id_text = "T%s" % str(node.grid_position)  # Terminal with grid pos
+		elif node.plot and node.plot.bath_subplot_id >= 0:
+			reg_id_text = "R%d" % node.plot.bath_subplot_id
+
+		var badge_font = ThemeDB.fallback_font
+		var badge_pos = node.position + Vector2(-effective_radius * 0.8, effective_radius * 0.6)
+		var badge_bg = Color(0, 0, 0, 0.6 * anim_alpha)
+		draw_circle(badge_pos + Vector2(6, -4), 10, badge_bg)
+		draw_string(badge_font, badge_pos, reg_id_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1, 1, 1, 0.8 * anim_alpha))
+
+	# ====================================================================
 	# LAYER 7: DUAL EMOJI SYSTEM (quantum superposition visualization)
 	# ====================================================================
 	var font = ThemeDB.fallback_font
@@ -2407,17 +2599,18 @@ func _draw_quantum_nodes():
 	var planted_plots = []
 
 	for node in quantum_nodes:
-		# Draw all nodes regardless of quantum state
-		# (they'll show as question marks if no quantum state exists)
-		if not node.plot:
+		# v2: Terminal-based bubbles have null plot but valid emoji data
+		# Only skip if BOTH plot is null AND no emoji data
+		if not node.plot and node.emoji_north.is_empty():
 			continue
 
 		# REFACTOR: Update node from current Farm state before drawing
-		# This replaces the signal-based update system
-		node.update_from_quantum_state()
+		# (Only for plot-based nodes - terminal nodes already have emoji data)
+		if node.plot:
+			node.update_from_quantum_state()
 
 		# Track planted plots for debugging
-		if node.plot.is_planted:
+		if node.plot and node.plot.is_planted:
 			planted_plots.append({
 				"grid_pos": node.grid_position,
 				"emoji": node.emoji_north,
@@ -2427,13 +2620,14 @@ func _draw_quantum_nodes():
 
 		# Collect debug info for first 3 nodes
 		if debug_first_3.size() < 3:
+			var is_planted = (node.plot and node.plot.is_planted) or (not node.plot and not node.emoji_north.is_empty())
 			debug_first_3.append({
 				"grid_pos": node.grid_position,
 				"pos": node.position,
 				"radius": node.radius,
 				"opacity": node.emoji_north_opacity,
 				"scale": node.visual_scale,
-				"planted": node.plot.is_planted if node.plot else false
+				"planted": is_planted
 			})
 
 		# Use unified bubble rendering (is_celestial=false for plot nodes)
@@ -2471,22 +2665,16 @@ func _draw_emoji_with_opacity(font, text_pos: Vector2, emoji: String, font_size:
 
 	Used for quantum superposition visualization - both emojis are drawn overlaid
 	with opacity matching their measurement probabilities.
-	"""
-	# Strong dark shadow/background for contrast (multiple layers)
-	var shadow_color = Color(0, 0, 0, 0.8 * opacity)
-	for offset_x in [-2, -1, 0, 1, 2]:
-		for offset_y in [-2, -1, 0, 1, 2]:
-			if offset_x != 0 or offset_y != 0:
-				var shadow_pos = text_pos + Vector2(offset_x, offset_y)
-				draw_string(font, shadow_pos, emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, shadow_color)
 
-	# Bright white outline for emoji (makes it pop)
-	var outline_color = Color(1, 1, 1, 0.6 * opacity)
-	for offset_x in [-1, 0, 1]:
-		for offset_y in [-1, 0, 1]:
-			if abs(offset_x) + abs(offset_y) == 1:  # Only cardinal directions
-				var outline_pos = text_pos + Vector2(offset_x * 0.5, offset_y * 0.5)
-				draw_string(font, outline_pos, emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, outline_color)
+	OPTIMIZED: Reduced from 29 draw calls to 3 for better performance.
+	"""
+	# Simple shadow (1 call instead of 24)
+	var shadow_color = Color(0, 0, 0, 0.7 * opacity)
+	draw_string(font, text_pos + Vector2(2, 2), emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, shadow_color)
+
+	# Outline (1 call instead of 4)
+	var outline_color = Color(0, 0, 0, 0.5 * opacity)
+	draw_string(font, text_pos + Vector2(1, 1), emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, outline_color)
 
 	# Emoji (main) with opacity
 	var main_color = Color(1, 1, 1, opacity)
@@ -2793,3 +2981,465 @@ func print_snapshot(reason: String = ""):
 						printed_pairs[pair_key] = true
 
 	_verbose.info("quantum", "⚛️", "===================================\n")
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# NEW RELATIONSHIP & POSITION VISUALIZATIONS
+# ════════════════════════════════════════════════════════════════════════════════
+
+func _draw_temperature_heatmap():
+	"""Draw temperature/decoherence heatmap as background gradient in biome ovals.
+
+	Hot zones (high decoherence) appear red/orange.
+	Cold zones (low decoherence) appear blue/cyan.
+	Shows where quantum states are most vulnerable.
+	"""
+	if not layout_calculator:
+		return
+
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if not biome:
+			continue
+
+		var oval = layout_calculator.get_biome_oval(biome_name)
+		if oval.is_empty():
+			continue
+
+		var center = oval.get("center", Vector2.ZERO)
+		var semi_a = oval.get("semi_a", 100.0)
+		var semi_b = oval.get("semi_b", 60.0)
+
+		# Get average decoherence rate from sink fluxes
+		var total_flux = 0.0
+		var flux_count = 0
+		if biome.quantum_computer:
+			var fluxes = biome.quantum_computer.get_all_sink_fluxes()
+			for emoji in fluxes:
+				total_flux += fluxes[emoji]
+				flux_count += 1
+
+		var avg_flux = total_flux / max(flux_count, 1)
+
+		# Map flux to color (0 = blue/cold, high = red/hot)
+		var heat_intensity = clampf(avg_flux * 50.0, 0.0, 1.0)  # Scale flux to 0-1
+		var heat_color: Color
+		if heat_intensity < 0.5:
+			# Cold (blue) to neutral (purple)
+			heat_color = Color(0.2 + heat_intensity * 0.4, 0.2, 0.6 - heat_intensity * 0.2, 0.15)
+		else:
+			# Neutral (purple) to hot (red/orange)
+			var t = (heat_intensity - 0.5) * 2.0
+			heat_color = Color(0.4 + t * 0.5, 0.2 - t * 0.15, 0.4 - t * 0.3, 0.15)
+
+		# Draw radial gradient (hotter at edges where decoherence happens)
+		var segments = 32
+		for ring in range(3):  # 3 concentric rings
+			var ring_t = float(ring) / 3.0
+			var ring_radius_a = semi_a * (0.4 + ring_t * 0.5)
+			var ring_radius_b = semi_b * (0.4 + ring_t * 0.5)
+
+			var ring_color = heat_color
+			ring_color.a = heat_color.a * (0.5 + ring_t * 0.5)  # Stronger at edges
+
+			var points: PackedVector2Array = []
+			for i in range(segments):
+				var angle = float(i) / float(segments) * TAU
+				points.append(center + Vector2(cos(angle) * ring_radius_a, sin(angle) * ring_radius_b))
+
+			if ring > 0:
+				# Draw as ring (outline)
+				draw_arc(center, (ring_radius_a + ring_radius_b) / 2.0, 0, TAU, segments, ring_color, 3.0, true)
+
+
+func _draw_orbit_trails():
+	"""Draw fading trails showing bubble evolution history.
+
+	Each bubble leaves a trail of its recent positions.
+	Older positions fade out. Shows quantum evolution path.
+	"""
+	for node in quantum_nodes:
+		if node.position_history.size() < 2:
+			continue
+
+		# Only draw trails for visible bubbles
+		if node.visual_scale <= 0.0:
+			continue
+
+		var trail_color = node.color
+		var history_size = node.position_history.size()
+
+		for i in range(history_size - 1):
+			var t = float(i) / float(history_size)  # 0 = oldest, 1 = newest
+			var alpha = t * 0.4 * node.visual_alpha  # Fade older positions
+
+			var line_color = trail_color
+			line_color.a = alpha
+
+			var width = 1.0 + t * 2.0  # Thicker near current position
+
+			draw_line(node.position_history[i], node.position_history[i + 1], line_color, width, true)
+
+		# Connect last history point to current position
+		if history_size > 0:
+			var line_color = trail_color
+			line_color.a = 0.4 * node.visual_alpha
+			draw_line(node.position_history[history_size - 1], node.position, line_color, 3.0, true)
+
+
+func _draw_bell_gate_ghosts():
+	"""Draw fading ghost lines for historical Bell gate entanglements.
+
+	Shows where entanglements were created in the past.
+	Ghosts fade over time but persist as visual memory.
+	"""
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if not biome or not biome.has_method("get") or not "bell_gates" in biome:
+			continue
+
+		var bell_gates = biome.bell_gates if "bell_gates" in biome else []
+		if bell_gates.is_empty():
+			continue
+
+		var ghost_color = Color(1.0, 0.8, 0.3, 0.15)  # Faded golden
+
+		for gate in bell_gates:
+			if gate.size() < 2:
+				continue
+
+			# Get positions for the gate nodes
+			var positions: Array[Vector2] = []
+			for pos in gate:
+				if all_plot_positions.has(pos):
+					positions.append(all_plot_positions[pos])
+				elif quantum_nodes_by_grid_pos.has(pos):
+					positions.append(quantum_nodes_by_grid_pos[pos].position)
+
+			if positions.size() < 2:
+				continue
+
+			# Draw ghost line (dashed, faded)
+			var start = positions[0]
+			var end = positions[1]
+			var direction = (end - start).normalized()
+			var distance = start.distance_to(end)
+
+			var dash_length = 12.0
+			var gap_length = 8.0
+			var current = 0.0
+
+			while current < distance:
+				var dash_start = start + direction * current
+				var dash_end = start + direction * min(current + dash_length, distance)
+				draw_line(dash_start, dash_end, ghost_color, 1.5, true)
+				current += dash_length + gap_length
+
+
+func _draw_lindblad_flow_arrows():
+	"""Draw curved arrows showing Lindblad energy transfer network.
+
+	Shows population flow between emojis based on lindblad_outgoing/incoming.
+	Arrow width scales with transfer rate.
+	"""
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		return
+
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if not biome or not biome.quantum_computer:
+			continue
+
+		var oval = layout_calculator.get_biome_oval(biome_name) if layout_calculator else {}
+		if oval.is_empty():
+			continue
+
+		var biome_center = oval.get("center", Vector2.ZERO)
+
+		# Get emoji positions within this biome
+		var emoji_positions: Dictionary = {}  # emoji -> Vector2
+		for node in quantum_nodes:
+			if node.biome_name == biome_name and node.emoji_north != "":
+				emoji_positions[node.emoji_north] = node.position
+
+		# Get icons registered for this biome
+		var qc = biome.quantum_computer
+		if not qc.register_map:
+			continue
+
+		# Iterate registered emojis and draw flow arrows
+		for emoji in qc.register_map.coordinates.keys():
+			var icon = icon_registry.get_icon(emoji)
+			if not icon:
+				continue
+
+			var source_pos = emoji_positions.get(emoji, Vector2.ZERO)
+			if source_pos == Vector2.ZERO:
+				# Use biome center as fallback
+				source_pos = biome_center
+
+			# Draw outgoing flows
+			for target_emoji in icon.lindblad_outgoing:
+				var rate = icon.lindblad_outgoing[target_emoji]
+				if rate < 0.001:
+					continue
+
+				var target_pos = emoji_positions.get(target_emoji, Vector2.ZERO)
+				if target_pos == Vector2.ZERO:
+					continue
+
+				_draw_flow_arrow(source_pos, target_pos, rate, Color(1.0, 0.5, 0.2, 0.5))  # Orange for outgoing
+
+
+func _draw_flow_arrow(from_pos: Vector2, to_pos: Vector2, rate: float, color: Color):
+	"""Draw a curved flow arrow between two positions.
+
+	Rate scales arrow width. Animation shows flow direction.
+	"""
+	var direction = (to_pos - from_pos).normalized()
+	var distance = from_pos.distance_to(to_pos)
+
+	if distance < 30.0:
+		return
+
+	# Curve control point (perpendicular offset)
+	var perp = direction.rotated(PI / 2.0)
+	var curve_offset = perp * distance * 0.2
+	var control = from_pos.lerp(to_pos, 0.5) + curve_offset
+
+	# Arrow width based on rate
+	var arrow_width = clampf(rate * 3.0 + 1.0, 1.0, 4.0)
+
+	# Animated flow (particles moving along arrow)
+	var flow_phase = fmod(time_accumulator * 2.0, 1.0)
+
+	# Draw curve as segments
+	var segments = 12
+	var prev_point = from_pos
+	for i in range(1, segments + 1):
+		var t = float(i) / float(segments)
+		# Quadratic bezier
+		var p = (1 - t) * (1 - t) * from_pos + 2 * (1 - t) * t * control + t * t * to_pos
+
+		var segment_alpha = color.a
+		# Animate: brighter segment moves along arrow
+		var flow_t = fmod(flow_phase + float(i) / float(segments), 1.0)
+		if flow_t > 0.7:
+			segment_alpha *= 1.5
+
+		var seg_color = color
+		seg_color.a = segment_alpha
+		draw_line(prev_point, p, seg_color, arrow_width, true)
+		prev_point = p
+
+	# Draw arrowhead at end
+	var arrow_size = 8.0
+	var arrow_tip = to_pos - direction * 15.0  # Offset from target
+	var arrow_left = arrow_tip - direction * arrow_size + perp * arrow_size * 0.5
+	var arrow_right = arrow_tip - direction * arrow_size - perp * arrow_size * 0.5
+
+	var arrow_color = color
+	arrow_color.a = color.a * 1.2
+	var arrow_points = PackedVector2Array([arrow_tip, arrow_left, arrow_right])
+	draw_colored_polygon(arrow_points, arrow_color)
+
+
+func _draw_hamiltonian_coupling_web():
+	"""Draw green dashed lines showing Hamiltonian (unitary) couplings.
+
+	Different from Lindblad (dissipative) - these are coherent interactions.
+	Width scales with coupling strength.
+	"""
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		return
+
+	var drawn_pairs: Dictionary = {}  # Avoid duplicate lines
+
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if not biome or not biome.quantum_computer:
+			continue
+
+		# Get emoji positions
+		var emoji_positions: Dictionary = {}
+		for node in quantum_nodes:
+			if node.biome_name == biome_name and node.emoji_north != "":
+				emoji_positions[node.emoji_north] = node.position
+
+		var qc = biome.quantum_computer
+		if not qc.register_map:
+			continue
+
+		for emoji in qc.register_map.coordinates.keys():
+			var icon = icon_registry.get_icon(emoji)
+			if not icon:
+				continue
+
+			var source_pos = emoji_positions.get(emoji, Vector2.ZERO)
+			if source_pos == Vector2.ZERO:
+				continue
+
+			for target_emoji in icon.hamiltonian_couplings:
+				var strength = icon.hamiltonian_couplings[target_emoji]
+				if abs(strength) < 0.001:
+					continue
+
+				var target_pos = emoji_positions.get(target_emoji, Vector2.ZERO)
+				if target_pos == Vector2.ZERO:
+					continue
+
+				# Avoid duplicate (symmetric coupling)
+				var pair_key = [emoji, target_emoji]
+				pair_key.sort()
+				var key_str = "%s_%s" % [pair_key[0], pair_key[1]]
+				if drawn_pairs.has(key_str):
+					continue
+				drawn_pairs[key_str] = true
+
+				# Draw dashed green line
+				var color = Color(0.3, 0.9, 0.4, 0.4)  # Green for unitary
+				var line_width = clampf(abs(strength) * 2.0 + 1.0, 1.0, 3.0)
+
+				var direction = (target_pos - source_pos).normalized()
+				var distance = source_pos.distance_to(target_pos)
+
+				var dash_length = 10.0
+				var gap_length = 6.0
+				var current = 0.0
+
+				while current < distance:
+					var dash_start = source_pos + direction * current
+					var dash_end = source_pos + direction * min(current + dash_length, distance)
+					draw_line(dash_start, dash_end, color, line_width, true)
+					current += dash_length + gap_length
+
+
+func _draw_coherence_web():
+	"""Draw thin lines showing all quantum correlations (off-diagonal ρ[i,j]).
+
+	Connects all emoji pairs with non-zero coherence.
+	Alpha scales with coherence magnitude |ρ[i,j]|.
+	Shows the full quantum correlation structure.
+	"""
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if not biome or not biome.quantum_computer:
+			continue
+
+		var qc = biome.quantum_computer
+		if not qc.density_matrix or not qc.register_map:
+			continue
+
+		# Get emoji positions
+		var emoji_positions: Dictionary = {}
+		for node in quantum_nodes:
+			if node.biome_name == biome_name and node.emoji_north != "":
+				emoji_positions[node.emoji_north] = node.position
+
+		# Get all registered emojis
+		var emojis = qc.register_map.coordinates.keys()
+
+		# Draw coherence lines between all pairs
+		for i in range(emojis.size()):
+			for j in range(i + 1, emojis.size()):
+				var emoji_a = emojis[i]
+				var emoji_b = emojis[j]
+
+				var pos_a = emoji_positions.get(emoji_a, Vector2.ZERO)
+				var pos_b = emoji_positions.get(emoji_b, Vector2.ZERO)
+
+				if pos_a == Vector2.ZERO or pos_b == Vector2.ZERO:
+					continue
+
+				# Get coherence magnitude (would need density matrix access)
+				# For now, use a placeholder based on distance
+				var distance = pos_a.distance_to(pos_b)
+				var coherence_approx = 0.3 / (1.0 + distance / 100.0)  # Placeholder
+
+				if coherence_approx < 0.05:
+					continue
+
+				# Draw thin coherence line
+				var color = Color(0.8, 0.8, 1.0, coherence_approx * 0.5)
+				draw_line(pos_a, pos_b, color, 1.0, true)
+
+
+func _draw_entanglement_clusters():
+	"""Draw convex hull or shared glow around multi-body entangled groups.
+
+	Groups of entangled bubbles get a shared visual boundary.
+	Shows entanglement topology at a glance.
+	"""
+	if not quantum_nodes or quantum_nodes.is_empty():
+		return
+
+	# Build adjacency map from entanglement data
+	var adjacency: Dictionary = {}  # plot_id -> Array[plot_id]
+	for node in quantum_nodes:
+		if not node.plot:
+			continue
+		adjacency[node.plot_id] = node.plot.entangled_plots.keys()
+
+	# Find connected components (clusters)
+	var visited: Dictionary = {}
+	var clusters: Array = []  # Array of Array[plot_id]
+
+	for node in quantum_nodes:
+		if not node.plot or visited.has(node.plot_id):
+			continue
+
+		# BFS to find cluster
+		var cluster: Array = []
+		var queue: Array = [node.plot_id]
+
+		while not queue.is_empty():
+			var current = queue.pop_front()
+			if visited.has(current):
+				continue
+			visited[current] = true
+			cluster.append(current)
+
+			for neighbor in adjacency.get(current, []):
+				if not visited.has(neighbor):
+					queue.append(neighbor)
+
+		if cluster.size() > 1:  # Only multi-node clusters
+			clusters.append(cluster)
+
+	# Draw each cluster
+	for cluster in clusters:
+		if cluster.size() < 2:
+			continue
+
+		# Collect positions
+		var positions: Array[Vector2] = []
+		for plot_id in cluster:
+			var node = node_by_plot_id.get(plot_id)
+			if node:
+				positions.append(node.position)
+
+		if positions.size() < 2:
+			continue
+
+		# Draw shared glow (convex hull approximation - just connect all points for now)
+		var cluster_color = Color(0.2, 0.9, 1.0, 0.1)  # Faint cyan
+
+		# Calculate centroid
+		var centroid = Vector2.ZERO
+		for pos in positions:
+			centroid += pos
+		centroid /= positions.size()
+
+		# Draw radial glow from centroid
+		var max_dist = 0.0
+		for pos in positions:
+			max_dist = max(max_dist, centroid.distance_to(pos))
+
+		# Draw concentric glows
+		for ring in range(3):
+			var ring_radius = max_dist * (0.8 + float(ring) * 0.3)
+			var ring_color = cluster_color
+			ring_color.a = cluster_color.a * (1.0 - float(ring) * 0.3)
+			draw_arc(centroid, ring_radius, 0, TAU, 32, ring_color, 2.0, true)

@@ -3,6 +3,10 @@ extends Control
 
 ## Escape Menu
 ## Shows when ESC is pressed, provides restart and quit options
+##
+## OverlayStackManager Integration:
+##   System-tier overlay (Z_TIER_SYSTEM = 4000)
+##   Implements: handle_input(), activate(), deactivate(), get_overlay_tier()
 
 signal restart_pressed()
 signal resume_pressed()
@@ -11,6 +15,10 @@ signal save_pressed()
 signal load_pressed()
 signal reload_last_save_pressed()
 signal quantum_settings_pressed()
+
+# Overlay interface
+var overlay_name: String = "escape_menu"
+var overlay_tier: int = 4000  # Z_TIER_SYSTEM - highest priority
 
 var background: ColorRect
 var menu_vbox: VBoxContainer
@@ -36,19 +44,20 @@ func _init():
 	background.layout_mode = 1
 	add_child(background)
 
-	# Menu box - Fixed size, manually centered using anchors
+	# Menu box - Fixed size, positioned near top (reduced top margin)
+	# Sized to fit 960x540 screen with minimal top margin
 	var menu_panel = PanelContainer.new()
-	menu_panel.custom_minimum_size = Vector2(450, 500)
-	# Anchor to center point
+	menu_panel.custom_minimum_size = Vector2(400, 440)
+	# Anchor to horizontal center, but higher up vertically
 	menu_panel.anchor_left = 0.5
 	menu_panel.anchor_right = 0.5
-	menu_panel.anchor_top = 0.5
-	menu_panel.anchor_bottom = 0.5
-	# Offset by half the size to center (450x500)
-	menu_panel.offset_left = -225
-	menu_panel.offset_right = 225
-	menu_panel.offset_top = -250
-	menu_panel.offset_bottom = 250
+	menu_panel.anchor_top = 0.0
+	menu_panel.anchor_bottom = 0.0
+	# Position: 16px from top (was 50px - reduced to 1/3)
+	menu_panel.offset_left = -200
+	menu_panel.offset_right = 200
+	menu_panel.offset_top = 16
+	menu_panel.offset_bottom = 456  # 16 + 440 height
 	menu_panel.layout_mode = 1
 	add_child(menu_panel)
 
@@ -117,8 +126,8 @@ func _init():
 func _create_menu_button(text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	# Fixed size for 960×540 base resolution
-	btn.custom_minimum_size = Vector2(380, 55)
+	# Fixed size for 960×540 base resolution (compact for 7 buttons)
+	btn.custom_minimum_size = Vector2(340, 45)
 	btn.add_theme_font_size_override("font_size", 20)
 
 	# FLASH GAME STYLE - Chunky borders matching quest board
@@ -306,4 +315,23 @@ func _on_reload_last_save_pressed():
 func _on_quantum_settings_pressed():
 	print("🔬 Quantum settings pressed")
 	quantum_settings_pressed.emit()
+	hide_menu()
+
+
+# ============================================================================
+# OVERLAY STACK INTERFACE
+# ============================================================================
+
+func get_overlay_tier() -> int:
+	"""Get z-index tier for OverlayStackManager."""
+	return overlay_tier
+
+
+func activate() -> void:
+	"""Overlay lifecycle: Called when pushed onto stack."""
+	show_menu()
+
+
+func deactivate() -> void:
+	"""Overlay lifecycle: Called when popped from stack."""
 	hide_menu()

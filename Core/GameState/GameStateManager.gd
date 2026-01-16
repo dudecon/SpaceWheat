@@ -84,7 +84,8 @@ func discover_emoji(emoji: String) -> void:
 		emit_signal("factions_unlocked", newly_accessible)
 		_verbose.info("quest", "🔓", "Unlocked %d new faction(s)!" % newly_accessible.size())
 		for faction in newly_accessible:
-			_verbose.info("quest", "-", "%s %s" % ["".join(faction.signature.slice(0, 3)), faction.name])
+			var sig = faction.get("sig", [])
+			_verbose.info("quest", "-", "%s %s" % ["".join(sig.slice(0, 3)), faction.get("name", "?")])
 
 
 func _check_newly_accessible_factions(new_emoji: String) -> Array:
@@ -365,10 +366,11 @@ func capture_state_from_game() -> GameState:
 		if goals.goals_completed[i]:
 			state.completed_goals.append(goals.goals[i]["id"])
 
-	# Icons (Phase 1: Now from Farm simulation layer)
-	state.biotic_activation = farm.biotic_icon.active_strength if farm.biotic_icon else 0.0
-	state.chaos_activation = farm.chaos_icon.active_strength if farm.chaos_icon else 0.0
-	state.imperium_activation = farm.imperium_icon.active_strength if farm.imperium_icon else 0.0
+	# Icons (DEPRECATED: Icons now managed by IconRegistry autoload)
+	# Set to 0.0 - icon state no longer persisted per-farm
+	state.biotic_activation = 0.0
+	state.chaos_activation = 0.0
+	state.imperium_activation = 0.0
 
 	# Phase 2: Multi-Biome Capture
 	# Capture quantum states from all registered biomes

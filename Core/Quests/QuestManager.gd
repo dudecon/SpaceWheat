@@ -10,6 +10,7 @@ const QuestGenerator = preload("res://Core/Quests/QuestGenerator.gd")
 const QuestTheming = preload("res://Core/Quests/QuestTheming.gd")
 const QuestTypes = preload("res://Core/Quests/QuestTypes.gd")
 const QuestRewards = preload("res://Core/Quests/QuestRewards.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 const FactionStateMatcher = preload("res://Core/QuantumSubstrate/FactionStateMatcher.gd")
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
@@ -78,6 +79,17 @@ func _physics_process(delta: float) -> void:
 				_update_evolution_quest(quest, delta)
 			QuestTypes.Type.ENTANGLEMENT:
 				_update_entanglement_quest(quest, delta)
+			# Quantum mechanics quest types
+			QuestTypes.Type.ACHIEVE_EIGENSTATE:
+				_update_achieve_eigenstate_quest(quest, delta)
+			QuestTypes.Type.MAINTAIN_COHERENCE:
+				_update_maintain_coherence_quest(quest, delta)
+			QuestTypes.Type.INDUCE_BELL_STATE:
+				_update_induce_bell_state_quest(quest, delta)
+			QuestTypes.Type.PREVENT_DECOHERENCE:
+				_update_prevent_decoherence_quest(quest, delta)
+			QuestTypes.Type.COLLAPSE_DELIBERATELY:
+				_update_collapse_deliberately_quest(quest, delta)
 
 func connect_to_economy(econ: Node) -> void:
 	"""Inject economy dependency"""
@@ -309,7 +321,7 @@ func check_quest_completion(quest_id: int) -> bool:
 
 	# Check if player has enough resources
 	var player_amount = economy.get_resource(required_emoji)
-	return player_amount >= required_qty * economy.QUANTUM_TO_CREDITS
+	return player_amount >= required_qty * EconomyConstants.QUANTUM_TO_CREDITS
 
 func complete_quest(quest_id: int) -> bool:
 	"""Complete an active quest
@@ -333,7 +345,7 @@ func complete_quest(quest_id: int) -> bool:
 	# Deduct resources
 	var required_emoji = quest["resource"]
 	var required_qty = quest["quantity"]
-	var cost_credits = required_qty * economy.QUANTUM_TO_CREDITS
+	var cost_credits = required_qty * EconomyConstants.QUANTUM_TO_CREDITS
 
 	if not economy.remove_resource(required_emoji, cost_credits, "quest_completion"):
 		push_error("Failed to deduct resources for quest %d" % quest_id)
@@ -344,9 +356,9 @@ func complete_quest(quest_id: int) -> bool:
 	var player_vocab = GameStateManager.current_state.known_emojis if GameStateManager.current_state else []
 	var reward = QuestRewards.generate_reward(quest, bath, player_vocab)
 
-	# Grant gold rewards
-	if reward.gold > 0 and economy:
-		economy.add_resource("💰", reward.gold, "quest_reward")
+	# Grant 💰-credits rewards
+	if reward.money_amount > 0 and economy:
+		economy.add_resource("💰", reward.money_amount, "quest_reward")
 
 	# Grant vocabulary rewards
 	for emoji in reward.learned_vocabulary:
@@ -367,7 +379,7 @@ func complete_quest(quest_id: int) -> bool:
 	_stop_quest_timer(quest_id)
 
 	# Emit with legacy format for compatibility
-	var legacy_rewards = {"💰": reward.gold}
+	var legacy_rewards = {"💰": reward.money_amount}
 	quest_completed.emit(quest_id, legacy_rewards)
 	active_quests_changed.emit()
 	return true
@@ -474,7 +486,7 @@ func _calculate_rewards(quest: Dictionary) -> Dictionary:
 		difficulty_multiplier = _calculate_difficulty_multiplier(quest)
 
 	# Base cost in credits (what player spent)
-	var cost_credits = quantity * economy.QUANTUM_TO_CREDITS
+	var cost_credits = quantity * EconomyConstants.QUANTUM_TO_CREDITS
 
 	# Reward = cost * difficulty_multiplier
 	var reward_credits = int(cost_credits * difficulty_multiplier)
@@ -721,6 +733,180 @@ func _update_entanglement_quest(quest: Dictionary, delta: float) -> void:
 			_complete_non_delivery_quest(quest_id, "entanglement_created")
 
 
+func _update_achieve_eigenstate_quest(quest: Dictionary, delta: float) -> void:
+	"""Track ACHIEVE_EIGENSTATE quest: reach dominant eigenstate (high purity)
+
+	Quest format:
+	  target_purity: float (0.85-0.98, prophecy-derived)
+	  prophecy_text: String (display text from ProphecyEngine)
+	  target_emojis: Array (emojis that should dominate)
+	  reward_multiplier: float (2.0-5.0 based on stability)
+	"""
+	var target_purity = quest.get("target_purity", 0.95)
+
+	# Get current biome observables
+	var obs = get_biome_observables(current_biome)
+	var current_purity = obs.get("purity", 0.0)
+
+	# Check if eigenstate achieved (high purity = system in eigenstate)
+	if current_purity >= target_purity:
+		var quest_id = quest.get("id", -1)
+		if quest_id >= 0:
+			_complete_non_delivery_quest(quest_id, "eigenstate_achieved")
+
+
+func _update_maintain_coherence_quest(quest: Dictionary, delta: float) -> void:
+	"""Track MAINTAIN_COHERENCE quest: keep coherence above threshold for duration
+
+	Quest format:
+	  target_coherence: float (0.3-0.7)
+	  duration: float (seconds to maintain)
+	  elapsed: float (time maintained so far, auto-managed)
+	  reward_multiplier: float
+	"""
+	var target_coherence = quest.get("target_coherence", 0.5)
+	var required_duration = quest.get("duration", 30.0)
+
+	# Get current biome observables
+	var obs = get_biome_observables(current_biome)
+	var current_coherence = obs.get("coherence", 0.0)
+
+	if current_coherence >= target_coherence:
+		# Increment elapsed time
+		quest["elapsed"] = quest.get("elapsed", 0.0) + delta
+
+		# Check if maintained long enough
+		if quest["elapsed"] >= required_duration:
+			var quest_id = quest.get("id", -1)
+			if quest_id >= 0:
+				_complete_non_delivery_quest(quest_id, "coherence_maintained")
+	else:
+		# Reset timer if coherence drops
+		quest["elapsed"] = 0.0
+
+
+func _update_induce_bell_state_quest(quest: Dictionary, delta: float) -> void:
+	"""Track INDUCE_BELL_STATE quest: create entanglement between specific pair
+
+	Quest format:
+	  target_pair: Array[String, String] (two emojis to entangle)
+	  threshold: float (0.5-0.9 coherence magnitude)
+	  reward_multiplier: float
+	"""
+	var target_pair = quest.get("target_pair", [])
+	var threshold = quest.get("threshold", 0.7)
+
+	if target_pair.size() < 2:
+		return  # Invalid quest
+
+	# Get bath from biome to check specific coherence
+	var bath = null
+	if current_biome and current_biome.get("bath"):
+		bath = current_biome.bath
+
+	if bath == null:
+		return
+
+	# Check coherence between the specific pair
+	var emoji_a = target_pair[0]
+	var emoji_b = target_pair[1]
+
+	# Try to get coherence via density matrix
+	var coherence = 0.0
+	if bath.get("_density_matrix"):
+		var dm = bath._density_matrix
+		var emoji_list = dm.emoji_list
+		var idx_a = emoji_list.find(emoji_a)
+		var idx_b = emoji_list.find(emoji_b)
+
+		if idx_a >= 0 and idx_b >= 0:
+			# Get off-diagonal element magnitude
+			var rho_ab = dm.get_element(idx_a, idx_b)
+			coherence = rho_ab.length() if rho_ab else 0.0
+
+	if coherence >= threshold:
+		var quest_id = quest.get("id", -1)
+		if quest_id >= 0:
+			_complete_non_delivery_quest(quest_id, "bell_state_achieved")
+
+
+func _update_prevent_decoherence_quest(quest: Dictionary, delta: float) -> void:
+	"""Track PREVENT_DECOHERENCE quest: don't let purity drop below threshold
+
+	Quest format:
+	  min_purity: float (0.4-0.7)
+	  duration: float (seconds to survive)
+	  elapsed: float (time survived so far)
+	  reward_multiplier: float
+	"""
+	var min_purity = quest.get("min_purity", 0.5)
+	var required_duration = quest.get("duration", 60.0)
+
+	# Get current biome observables
+	var obs = get_biome_observables(current_biome)
+	var current_purity = obs.get("purity", 0.0)
+
+	if current_purity >= min_purity:
+		# Still above threshold, increment elapsed time
+		quest["elapsed"] = quest.get("elapsed", 0.0) + delta
+
+		# Check if survived long enough
+		if quest["elapsed"] >= required_duration:
+			var quest_id = quest.get("id", -1)
+			if quest_id >= 0:
+				_complete_non_delivery_quest(quest_id, "decoherence_prevented")
+	else:
+		# Purity dropped too low - fail the quest!
+		var quest_id = quest.get("id", -1)
+		if quest_id >= 0:
+			fail_quest(quest_id, "decoherence_occurred")
+
+
+func _update_collapse_deliberately_quest(quest: Dictionary, delta: float) -> void:
+	"""Track COLLAPSE_DELIBERATELY quest: measure to lock in specific state
+
+	Quest format:
+	  target_emoji: String (emoji to collapse into)
+	  target_probability: float (required probability after collapse)
+	  has_collapsed: bool (tracks if player triggered measurement)
+	  reward_multiplier: float
+
+	Note: Player must use measurement/observation tool on target emoji.
+	This function checks if the state has been collapsed to target.
+	"""
+	var target_emoji = quest.get("target_emoji", "")
+	var target_probability = quest.get("target_probability", 0.8)
+
+	if target_emoji.is_empty():
+		return
+
+	# Get bath from biome
+	var bath = null
+	if current_biome and current_biome.get("bath"):
+		bath = current_biome.bath
+
+	if bath == null:
+		return
+
+	# Check probability of target emoji
+	var probability = 0.0
+	if bath.get("_density_matrix"):
+		var dm = bath._density_matrix
+		var emoji_list = dm.emoji_list
+		var idx = emoji_list.find(target_emoji)
+		if idx >= 0:
+			probability = dm.get_probability_by_index(idx)
+
+	# Also check purity - high purity + high probability = collapsed state
+	var purity = bath._density_matrix.get_purity() if bath.get("_density_matrix") else 0.0
+
+	# Quest completes when: high purity AND target emoji dominates
+	if probability >= target_probability and purity >= 0.8:
+		var quest_id = quest.get("id", -1)
+		if quest_id >= 0:
+			_complete_non_delivery_quest(quest_id, "state_collapsed")
+
+
 func _complete_non_delivery_quest(quest_id: int, completion_reason: String) -> void:
 	"""Complete a non-delivery quest (shape/evolution/entanglement)
 
@@ -737,14 +923,14 @@ func _complete_non_delivery_quest(quest_id: int, completion_reason: String) -> v
 	var player_vocab = GameStateManager.current_state.known_emojis if GameStateManager.current_state else []
 	var reward = QuestRewards.generate_reward(quest, bath, player_vocab)
 
-	# Override gold for quantum state quests (state-shaping is valuable!)
+	# Override 💰-credits for quantum state quests (state-shaping is valuable!)
 	var reward_multiplier = quest.get("reward_multiplier", 2.0)
-	var base_credits = 100  # Base reward for state-shaping
-	reward.gold = int(base_credits * reward_multiplier)
+	var base_money = 100  # Base reward for state-shaping
+	reward.money_amount = int(base_money * reward_multiplier)
 
-	# Grant gold rewards
-	if reward.gold > 0 and economy:
-		economy.add_resource("💰", reward.gold, "quest_reward")
+	# Grant 💰-credits rewards
+	if reward.money_amount > 0 and economy:
+		economy.add_resource("💰", reward.money_amount, "quest_reward")
 
 	# Grant vocabulary rewards
 	for emoji in reward.learned_vocabulary:
@@ -766,7 +952,7 @@ func _complete_non_delivery_quest(quest_id: int, completion_reason: String) -> v
 	_stop_quest_timer(quest_id)
 
 	# Emit with legacy format for compatibility
-	var legacy_rewards = {"💰": reward.gold}
+	var legacy_rewards = {"💰": reward.money_amount}
 	quest_completed.emit(quest_id, legacy_rewards)
 	active_quests_changed.emit()
 

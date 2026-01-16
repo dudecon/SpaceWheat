@@ -1,5 +1,5 @@
 class_name BiomeInspectorOverlay
-extends CanvasLayer
+extends Control
 
 ## Biome Inspector Overlay
 ## Main controller for biome inspection system
@@ -11,6 +11,10 @@ extends CanvasLayer
 ##   R = Show registers
 ##   F = Cycle display mode (single → all → single)
 ##   WASD = Navigate biomes/icons
+##
+## Architecture:
+##   Extends Control for unified overlay stack management.
+##   Uses internal CanvasLayer (render_layer) for rendering above game.
 
 signal overlay_closed
 signal action_performed(action: String, data: Dictionary)  # v2 overlay compatibility
@@ -20,6 +24,7 @@ const BiomeOvalPanel = preload("res://UI/Panels/BiomeOvalPanel.gd")
 # v2 Overlay Interface
 var overlay_name: String = "biome_detail"
 var overlay_icon: String = "🔬"
+var overlay_tier: int = 3000  # Z_TIER_MODAL - renders above INFO overlays
 var action_labels: Dictionary = {
 	"Q": "Select Icon",
 	"E": "Parameters",
@@ -42,6 +47,7 @@ enum DisplayMode {
 var current_mode: DisplayMode = DisplayMode.HIDDEN
 
 # UI References
+var render_layer: CanvasLayer  # Child CanvasLayer for rendering above game
 var dimmer: ColorRect  # Dims background
 var center_container: CenterContainer  # For single biome mode
 var scroll_container: ScrollContainer  # For all biomes mode
@@ -58,7 +64,9 @@ var update_interval: float = 0.5  # Update overlay every 0.5s
 var update_timer: float = 0.0
 
 func _ready():
-	layer = 100  # Above game, below escape menu
+	# Set up as full-rect Control (z_index managed by OverlayStackManager)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let render_layer handle input
 	_build_ui()
 	hide_overlay()
 
@@ -132,6 +140,8 @@ func hide_overlay() -> void:
 	current_mode = DisplayMode.HIDDEN
 	_clear_panels()
 	visible = false
+	if render_layer:
+		render_layer.visible = false
 	overlay_closed.emit()
 
 
@@ -149,14 +159,22 @@ func toggle_all_biomes(farm_node: Node) -> void:
 # ============================================================================
 
 func _build_ui() -> void:
-	"""Build overlay UI structure"""
+	"""Build overlay UI structure
 
-	# Dimmer (tappable background)
+	Creates a CanvasLayer child for rendering above game view.
+	All visual elements are added to the render_layer.
+	"""
+	# Create CanvasLayer for rendering above game (layer 100 = above game, below system menus)
+	render_layer = CanvasLayer.new()
+	render_layer.layer = 100
+	add_child(render_layer)
+
+	# Dimmer (tappable background) - added to render_layer
 	dimmer = ColorRect.new()
 	dimmer.color = dimmer_color
 	dimmer.mouse_filter = Control.MOUSE_FILTER_STOP  # Catch taps
 	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(dimmer)
+	render_layer.add_child(dimmer)
 
 	# Connect tap to close
 	dimmer.gui_input.connect(_on_dimmer_input)
@@ -164,14 +182,14 @@ func _build_ui() -> void:
 	# Center container (for single biome mode)
 	center_container = CenterContainer.new()
 	center_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center_container)
+	render_layer.add_child(center_container)
 
 	# Scroll container (for all biomes mode)
 	scroll_container = ScrollContainer.new()
 	scroll_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	add_child(scroll_container)
+	render_layer.add_child(scroll_container)
 
 	# VBox for multiple biomes
 	biome_list = VBoxContainer.new()
@@ -183,6 +201,7 @@ func _build_ui() -> void:
 func _show_overlay() -> void:
 	"""Show overlay and configure for current mode"""
 	visible = true
+	render_layer.visible = true
 
 	# Show/hide containers based on mode
 	center_container.visible = (current_mode == DisplayMode.SINGLE_BIOME)
@@ -286,8 +305,10 @@ func handle_input(event: InputEvent) -> bool:
 
 	match event.keycode:
 		KEY_ESCAPE:
-			hide_overlay()
-			return true
+			# Don't consume ESC - let PlayerShell._handle_shell_action() call
+			# overlay_stack.handle_escape() which properly pops us from the stack.
+			# If we consume ESC here, we get hidden but stay on the stack!
+			return false
 		# WASD/Arrow navigation
 		KEY_W, KEY_UP:
 			_navigate_up()
@@ -321,7 +342,12 @@ func handle_input(event: InputEvent) -> bool:
 func activate() -> void:
 	"""v2 overlay lifecycle: Called when overlay opens."""
 	is_active = true
-	# Default to showing all biomes
+
+	# Show render layer (ensures visibility even without content)
+	if render_layer:
+		render_layer.visible = true
+
+	# Default to showing all biomes if farm is set
 	if farm:
 		show_all_biomes(farm)
 
@@ -377,12 +403,18 @@ func get_action_labels() -> Dictionary:
 	return action_labels
 
 
+func get_overlay_tier() -> int:
+	"""Get z-index tier for OverlayStackManager."""
+	return overlay_tier
+
+
 func get_overlay_info() -> Dictionary:
 	"""v2 overlay interface: Get overlay metadata for registration."""
 	return {
 		"name": overlay_name,
 		"icon": overlay_icon,
-		"action_labels": get_action_labels()
+		"action_labels": get_action_labels(),
+		"tier": overlay_tier
 	}
 
 

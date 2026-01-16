@@ -9,7 +9,7 @@ extends Resource
 
 const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
-const SparseMatrix = preload("res://Core/QuantumSubstrate/SparseMatrix.gd")
+# SparseMatrix deprecated - sparse optimization now handled by native C++ backend
 const QuantumComponent = preload("res://Core/QuantumSubstrate/QuantumComponent.gd")
 const QuantumGateLibrary = preload("res://Core/QuantumSubstrate/QuantumGateLibrary.gd")
 const RegisterMap = preload("res://Core/QuantumSubstrate/RegisterMap.gd")
@@ -617,6 +617,15 @@ func pole(emoji: String) -> int:
 	return register_map.pole(emoji)
 
 
+func get_density_matrix() -> ComplexMatrix:
+	"""Get the density matrix (ρ) for this quantum computer.
+
+	Returns the full density matrix representing the quantum state.
+	Used by BiomeBase for measurements, coherence checks, and draining.
+	"""
+	return density_matrix
+
+
 func get_marginal(qubit_index: int, pole_value: int) -> float:
 	"""Get marginal probability P(qubit = pole) via partial trace.
 
@@ -658,7 +667,8 @@ func get_population(emoji: String) -> float:
 	    get_population("🔥")  # Returns P(qubit 0 = north)
 	"""
 	if not register_map.has(emoji):
-		push_warning("⚠️ Emoji '%s' not registered" % emoji)
+		# Unregistered emojis have 0 probability - no warning needed
+		# (SemanticDrift queries 🌀 and ✨ which may not be in this biome)
 		return 0.0
 
 	var q = register_map.qubit(emoji)
@@ -874,7 +884,9 @@ func _renormalize() -> void:
 		trace += density_matrix.get_element(i, i).re
 
 	if abs(trace) < 1e-10:
-		push_error("❌ Trace collapsed to zero!")
+		# Trace collapsed - recover by reinitializing to maximally mixed state
+		push_warning("⚠️ Trace collapsed to ~0, reinitializing to mixed state")
+		_reinitialize_mixed_state()
 		return
 
 	# Normalize: ρ → ρ / Tr(ρ)
@@ -882,6 +894,25 @@ func _renormalize() -> void:
 		for j in range(dim):
 			var rho_ij = density_matrix.get_element(i, j)
 			density_matrix.set_element(i, j, rho_ij.scale(1.0 / trace))
+
+
+func _reinitialize_mixed_state() -> void:
+	"""Reinitialize to maximally mixed state (ρ = I/d) when trace collapses."""
+	if density_matrix == null:
+		return
+
+	var dim = register_map.dim()
+	if dim == 0:
+		return
+
+	# Set to ρ = I/d (uniform distribution over all basis states)
+	var diag_val = 1.0 / float(dim)
+	for i in range(dim):
+		for j in range(dim):
+			if i == j:
+				density_matrix.set_element(i, j, Complex.new(diag_val, 0.0))
+			else:
+				density_matrix.set_element(i, j, Complex.zero())
 
 
 # ============================================================================
@@ -919,6 +950,7 @@ func evolve(dt: float) -> void:
 		var rho_packed = density_matrix._to_packed()
 		var result_packed = native_evolution_engine.evolve(rho_packed, dt, MAX_DT)
 		density_matrix._from_packed(result_packed, dim)
+		_renormalize()  # Critical: ensure Tr(ρ) = 1 after native evolution
 		return
 
 	# ==========================================================================
@@ -1230,16 +1262,21 @@ func set_hamiltonian(H: ComplexMatrix) -> void:
 		sparse_hamiltonian = null
 		return
 
-	# Check if sparse representation is beneficial
-	var sparse_H = SparseMatrix.from_dense(H)
-	if sparse_H.get_sparsity() > 0.5:
-		sparse_hamiltonian = sparse_H
-		print("⚡ Hamiltonian converted to sparse: %.1f%% zeros, nnz=%d" % [
-			sparse_H.get_sparsity() * 100, sparse_H.get_nnz()])
+	# Sparsity check (simplified - native engine handles actual sparse ops)
+	var nnz = 0
+	var total = H.n * H.n
+	for i in range(total):
+		var c = H._data[i]
+		if c.re * c.re + c.im * c.im > 1e-24:
+			nnz += 1
+	var sparsity = 1.0 - (float(nnz) / float(total)) if total > 0 else 0.0
+
+	if sparsity > 0.5:
+		sparse_hamiltonian = H  # Keep reference for native engine
+		print("⚡ Hamiltonian converted to sparse: %.1f%% zeros, nnz=%d" % [sparsity * 100, nnz])
 	else:
 		sparse_hamiltonian = null
-		print("📊 Hamiltonian kept dense: %.1f%% zeros (below threshold)" % [
-			sparse_H.get_sparsity() * 100])
+		print("📊 Hamiltonian kept dense: %.1f%% zeros (below threshold)" % [sparsity * 100])
 
 
 func set_lindblad_operators(operators: Array) -> void:
@@ -1264,10 +1301,17 @@ func set_lindblad_operators(operators: Array) -> void:
 		if L == null:
 			continue
 
-		var sparse_L = SparseMatrix.from_dense(L)
-		sparse_lindblad_operators.append(sparse_L)
-		total_nnz += sparse_L.get_nnz()
-		total_dense += L.n * L.n
+		# Inline sparsity check (native engine handles actual sparse ops)
+		var nnz = 0
+		var total = L.n * L.n
+		for i in range(total):
+			var c = L._data[i]
+			if c.re * c.re + c.im * c.im > 1e-24:
+				nnz += 1
+
+		sparse_lindblad_operators.append(L)  # Keep reference
+		total_nnz += nnz
+		total_dense += total
 
 	var avg_sparsity = 1.0 - (float(total_nnz) / float(total_dense)) if total_dense > 0 else 0.0
 	print("⚡ %d Lindblad ops → sparse: avg %.1f%% zeros, total nnz=%d" % [
@@ -1327,13 +1371,38 @@ func setup_native_evolution() -> void:
 		native_evolution_engine.set_hamiltonian(H_packed)
 
 	# Register all Lindblad operators as triplets
-	for L_sparse in sparse_lindblad_operators:
-		if L_sparse == null:
+	# Convert from ComplexMatrix to triplet format: [row, col, re, im, ...]
+	for L in lindblad_operators:
+		if L == null:
 			continue
-		native_evolution_engine.add_lindblad_triplets(L_sparse._triplets)
+		var triplets = _matrix_to_triplets(L)
+		if not triplets.is_empty():
+			native_evolution_engine.add_lindblad_triplets(triplets)
 
 	# Finalize (precompute L†, L†L)
 	native_evolution_engine.finalize()
 
 	print("🚀 QuantumEvolutionEngine: Batched evolution ready (%d dim, %d Lindblad)" % [
-		dim, sparse_lindblad_operators.size()])
+		dim, lindblad_operators.size()])
+
+
+func _matrix_to_triplets(mat: ComplexMatrix) -> PackedFloat64Array:
+	"""Convert a ComplexMatrix to triplet format for native engine.
+
+	Triplet format: [row0, col0, re0, im0, row1, col1, re1, im1, ...]
+	Only includes non-zero elements (abs > 1e-15).
+	"""
+	var triplets = PackedFloat64Array()
+	var n = mat.n
+	var threshold = 1e-15
+
+	for i in range(n):
+		for j in range(n):
+			var c = mat.get_element(i, j)
+			if abs(c.re) > threshold or abs(c.im) > threshold:
+				triplets.append(float(i))  # row
+				triplets.append(float(j))  # col
+				triplets.append(c.re)      # real part
+				triplets.append(c.im)      # imaginary part
+
+	return triplets

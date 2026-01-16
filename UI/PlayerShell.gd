@@ -14,10 +14,11 @@ extends Control
 @onready var _verbose = get_node("/root/VerboseConfig")
 
 const OverlayManager = preload("res://UI/Managers/OverlayManager.gd")
+const OverlayStackManager = preload("res://UI/Managers/OverlayStackManager.gd")
 const QuestManager = preload("res://Core/Quests/QuestManager.gd")
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const LoggerConfigPanel = preload("res://UI/Panels/LoggerConfigPanel.gd")
-const QuantumHUDPanel = preload("res://UI/Panels/QuantumHUDPanel.gd")
+# QuantumHUDPanel REMOVED - content merged into InspectorOverlay (N key)
 const QuantumModeStatusIndicator = preload("res://UI/Panels/QuantumModeStatusIndicator.gd")
 
 var current_farm_ui = null  # FarmUI instance (from scene)
@@ -28,30 +29,30 @@ var farm_ui_container: Control = null
 var action_bar_manager = null  # ActionBarManager - manages bottom toolbars
 var action_preview_row: Control = null  # Cached reference from ActionBarManager
 var logger_config_panel: LoggerConfigPanel = null  # Logger configuration UI
-var quantum_hud_panel: QuantumHUDPanel = null  # Quantum state visualization HUD
+# quantum_hud_panel REMOVED - content merged into InspectorOverlay (N key)
 var quantum_mode_indicator: QuantumModeStatusIndicator = null  # Current quantum mode display
 
-## Modal Management
-var modal_stack: Array[Control] = []
+## Unified Overlay Stack Management (replaces modal_stack)
+var overlay_stack: OverlayStackManager = null
 
 
 func _input(event: InputEvent) -> void:
-	"""Layer 1: High-priority input routing (modals + shell actions)"""
+	"""Layer 1: High-priority input routing (overlays + shell actions)"""
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 
-	_verbose.debug("input", "⌨️", "PlayerShell._input() KEY: %s, modal_stack: %d" % [event.keycode, modal_stack.size()])
+	var stack_size = overlay_stack.size() if overlay_stack else 0
+	_verbose.debug("input", "⌨️", "PlayerShell._input() KEY: %s, overlay_stack: %d" % [event.keycode, stack_size])
 
-	# LAYER 1: Modal input (highest priority)
-	if not modal_stack.is_empty():
-		var active_modal = modal_stack[-1]
-		_verbose.debug("input", "→", "Routing to modal: %s" % active_modal.name)
-		if active_modal.has_method("handle_input"):
-			var consumed = active_modal.handle_input(event)
-			_verbose.debug("input", "→", "Modal consumed: %s" % consumed)
-			if consumed:
-				get_viewport().set_input_as_handled()
-				return
+	# LAYER 1: Overlay input (highest priority) - uses unified OverlayStackManager
+	if overlay_stack and not overlay_stack.is_empty():
+		var top_overlay = overlay_stack.get_top()
+		_verbose.debug("input", "→", "Routing to overlay: %s" % top_overlay.name)
+		var consumed = overlay_stack.route_input(event)
+		_verbose.debug("input", "→", "Overlay consumed: %s" % consumed)
+		if consumed:
+			get_viewport().set_input_as_handled()
+			return
 
 	# LAYER 2: Shell actions
 	if _handle_shell_action(event):
@@ -62,13 +63,41 @@ func _input(event: InputEvent) -> void:
 
 
 func _handle_shell_action(event: InputEvent) -> bool:
-	"""Handle shell-level actions (overlay toggles, menu)"""
-	match event.keycode:
-		KEY_C:
-			_toggle_quest_board()
+	"""Handle shell-level actions (overlay toggles, menu)
+
+	Overlay keys (v2 system): C/V/B/N/K
+
+	IMPORTANT: When an overlay is active, we block shell toggle keys to prevent
+	confusing state. ESC is the only key that works during overlay (closes top overlay).
+	This prevents the bug where pressing C/V/B/N/K while an overlay is open would
+	open a new overlay on top, or where ESC would both close overlay AND open EscapeMenu.
+	"""
+	# When overlay is active, only ESC should work (and it uses the stack's handle_escape)
+	if overlay_stack and not overlay_stack.is_empty():
+		if event.keycode == KEY_ESCAPE:
+			# Use stack's handle_escape which properly pops the top overlay
+			overlay_stack.handle_escape()
 			return true
-		KEY_K:
-			_toggle_keyboard_help()
+		# Block all other shell keys while overlay is active
+		# (The key might still be consumed by the overlay itself via route_input above)
+		return false
+
+	# No overlay active - normal shell key handling
+	match event.keycode:
+		KEY_C:  # Quests
+			_toggle_v2_overlay("quests")
+			return true
+		KEY_V:  # Vocabulary/Semantic Map
+			_toggle_v2_overlay("semantic_map")
+			return true
+		KEY_B:  # Biome Detail
+			_toggle_v2_overlay("biome_detail")
+			return true
+		KEY_N:  # iNspector (density matrix + quantum state)
+			_toggle_v2_overlay("inspector")
+			return true
+		KEY_K:  # Keyboard/Controls reference
+			_toggle_v2_overlay("controls")
 			return true
 		KEY_L:
 			_toggle_logger_config()
@@ -76,7 +105,18 @@ func _handle_shell_action(event: InputEvent) -> bool:
 		KEY_ESCAPE:
 			_toggle_escape_menu()
 			return true
+		KEY_TAB:
+			# TAB must be handled here (in _input) because Godot's focus system
+			# intercepts TAB before _unhandled_input() runs
+			_toggle_build_play_mode()
+			return true
 	return false
+
+
+func _toggle_v2_overlay(overlay_name: String) -> void:
+	"""Toggle a v2 overlay by name"""
+	if overlay_manager:
+		overlay_manager.toggle_v2_overlay(overlay_name)
 
 
 func _toggle_quest_board() -> void:
@@ -109,11 +149,7 @@ func _toggle_quest_board() -> void:
 			_verbose.warn("ui", "❌", "No biome available!")
 
 
-func _toggle_keyboard_help() -> void:
-	"""Toggle keyboard help overlay"""
-	if not overlay_manager:
-		return
-	overlay_manager.toggle_keyboard_help()
+# _toggle_keyboard_help() REMOVED - K key now uses v2 overlay: _toggle_v2_overlay("controls")
 
 
 func _toggle_logger_config() -> void:
@@ -141,19 +177,47 @@ func _toggle_escape_menu() -> void:
 		_push_modal(menu)
 
 
+func _toggle_build_play_mode() -> void:
+	"""Toggle between BUILD and PLAY modes (TAB key)
+
+	This is handled here (in _input) because Godot's focus navigation
+	intercepts TAB before _unhandled_input() runs.
+	"""
+	const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
+
+	var new_mode = ToolConfig.toggle_mode()
+	_verbose.info("input", "🔧" if new_mode == "build" else "🎮",
+		"Switched to %s MODE (Tab to toggle)" % new_mode.to_upper())
+
+	# Update ToolSelectionRow UI
+	if action_bar_manager:
+		var tool_row = action_bar_manager.get_tool_row()
+		if tool_row and tool_row.has_method("refresh_for_mode"):
+			tool_row.refresh_for_mode(new_mode)
+
+	# Notify FarmInputHandler (if available)
+	# Find FarmInputHandler in FarmUIContainer
+	if farm_ui_container:
+		var farm_view = farm_ui_container.get_node_or_null("FarmUI")
+		if farm_view:
+			for child in farm_view.get_children():
+				if child.has_method("on_mode_changed"):
+					child.on_mode_changed(new_mode)
+					break
+
+
 func _push_modal(modal: Control) -> void:
-	"""Add modal to stack"""
-	if modal not in modal_stack:
-		modal_stack.append(modal)
-		_verbose.debug("input", "📚", "Modal stack: %s" % str(modal_stack.map(func(m): return m.name)))
+	"""Add modal/overlay to stack"""
+	if overlay_stack and not overlay_stack.has_overlay(modal):
+		overlay_stack.push(modal)
+		_verbose.debug("input", "📚", "Overlay stack: %s" % overlay_stack.get_stack_info())
 
 
 func _pop_modal(modal: Control) -> void:
-	"""Remove modal from stack"""
-	var idx = modal_stack.find(modal)
-	if idx >= 0:
-		modal_stack.remove_at(idx)
-		_verbose.debug("input", "📚", "Modal stack: %s" % str(modal_stack.map(func(m): return m.name)))
+	"""Remove modal/overlay from stack"""
+	if overlay_stack:
+		overlay_stack.pop_overlay(modal)
+		_verbose.debug("input", "📚", "Overlay stack: %s" % overlay_stack.get_stack_info())
 
 
 func _ready() -> void:
@@ -169,6 +233,11 @@ func _ready() -> void:
 	# Process input even when game is paused (for ESC menu, etc.)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
+	# Create unified overlay stack manager (before any overlays)
+	overlay_stack = OverlayStackManager.new()
+	add_child(overlay_stack)
+	_verbose.info("ui", "✅", "OverlayStackManager created")
+
 	# Get reference to containers from scene
 	farm_ui_container = get_node("FarmUIContainer")
 	var overlay_layer = get_node("OverlayLayer")
@@ -181,9 +250,9 @@ func _ready() -> void:
 	# CRITICAL: ActionBarLayer needs explicit size for ActionBarManager to work
 	# It has full anchors (0,0,1,1) which will maintain this size, but during _ready()
 	# the anchors haven't taken effect yet. Set size to viewport size (what anchors will do).
-	# The layout engine processes anchors AFTER _ready(), so this initial size is necessary.
+	# Use set_deferred to avoid warning about opposite anchors.
 	var viewport_size = get_viewport_rect().size
-	action_bar_layer.size = viewport_size
+	action_bar_layer.set_deferred("size", viewport_size)
 	_verbose.info("ui", "✅", "ActionBarLayer sized for action bar creation: %.0f × %.0f" % [viewport_size.x, viewport_size.y])
 
 	# Create and initialize UILayoutManager
@@ -224,6 +293,11 @@ func _ready() -> void:
 	# Setup overlay manager with proper dependencies
 	overlay_manager.setup(layout_manager, null, null, null, quest_manager)
 
+	# Connect overlay stack and overlay manager bidirectionally
+	if overlay_stack:
+		overlay_stack.set_overlay_manager(overlay_manager)
+		overlay_manager.set_overlay_stack(overlay_stack)
+
 	# Initialize overlays (C/V/N/K/ESC menus)
 	overlay_manager.create_overlays(overlay_layer)
 
@@ -235,14 +309,7 @@ func _ready() -> void:
 	)
 	_verbose.info("ui", "✅", "Logger config panel created (press L to toggle)")
 
-	# Create quantum HUD panel (left side, collapsible)
-	quantum_hud_panel = QuantumHUDPanel.new()
-	quantum_hud_panel.name = "QuantumHUDPanel"
-	overlay_layer.add_child(quantum_hud_panel)
-	# Position on left side of screen
-	quantum_hud_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	quantum_hud_panel.position = Vector2(10, 80)  # Below any top bars
-	_verbose.info("ui", "✅", "Quantum HUD panel created")
+	# QuantumHUDPanel REMOVED - content merged into InspectorOverlay (N key)
 
 	# Create quantum mode status indicator (top-right corner)
 	quantum_mode_indicator = QuantumModeStatusIndicator.new()
@@ -261,7 +328,11 @@ func _ready() -> void:
 
 
 func _connect_overlay_signals() -> void:
-	"""Connect signals from overlays to manage modal stack"""
+	"""Connect signals from overlays to manage unified overlay stack.
+
+	Note: _push_modal() and _pop_modal() delegate to OverlayStackManager.
+	These signal handlers keep overlays synchronized with the stack.
+	"""
 	if overlay_manager.quest_board:
 		overlay_manager.quest_board.board_closed.connect(func():
 			_pop_modal(overlay_manager.quest_board)
@@ -355,16 +426,30 @@ func load_farm_ui(farm_ui: Control) -> void:
 		farm_ui_container.add_child(farm_ui)
 		_verbose.info("ui", "✔", "FarmUI mounted in container")
 
-	# Connect to farm_setup_complete signal to wire input_handler (created later in setup_farm())
+	# Note: farm_setup_complete fires before input_handler is created, so the actual
+	# connection is done by BootManager calling connect_to_farm_input_handler() later.
+	# We still connect here as a fallback in case input_handler is somehow ready early.
 	if farm_ui.has_signal("farm_setup_complete"):
-		farm_ui.farm_setup_complete.connect(_connect_to_farm_input_handler)
+		farm_ui.farm_setup_complete.connect(connect_to_farm_input_handler)
 		_verbose.info("ui", "⏳", "Will connect to input_handler when farm setup completes...")
 	else:
 		push_error("FarmUI missing farm_setup_complete signal!")
 
-func _connect_to_farm_input_handler() -> void:
-	"""Connect to FarmInputHandler after it's created (triggered by farm_setup_complete signal)"""
+func connect_to_farm_input_handler() -> void:
+	"""Connect to FarmInputHandler after it's created.
+
+	Called by BootManager after input_handler is created and injected into farm_ui.
+	Note: farm_setup_complete fires too early (before input_handler exists).
+	"""
 	var farm_ui = current_farm_ui
+	if not farm_ui or not farm_ui.input_handler:
+		push_warning("connect_to_farm_input_handler called but input_handler not ready!")
+		return
+
+	# Already connected? Skip
+	if farm_ui.input_handler.tool_changed.get_connections().size() > 0:
+		return
+
 	if farm_ui and farm_ui.input_handler:
 		# Connect input handler tool changes to action bar
 		if farm_ui.input_handler.has_signal("tool_changed"):
@@ -415,14 +500,7 @@ func _connect_to_farm_input_handler() -> void:
 				)
 				_verbose.info("ui", "✔", "Action buttons will update on resource changes")
 
-		# Connect quantum HUD panel to farm
-		if quantum_hud_panel and farm_ui.farm:
-			quantum_hud_panel.set_farm(farm_ui.farm)
-			# Try to get active biome (BioticFluxBiome is the default/primary biome)
-			if farm_ui.farm.biotic_flux_biome:
-				quantum_hud_panel.set_biome(farm_ui.farm.biotic_flux_biome)
-				_verbose.info("ui", "✔", "Quantum HUD panel connected to BioticFlux biome")
-			_verbose.info("ui", "✔", "Quantum HUD panel connected to farm")
+		# QuantumHUDPanel connection REMOVED - use InspectorOverlay (N key) instead
 
 
 ## OVERLAY SYSTEM INITIALIZATION

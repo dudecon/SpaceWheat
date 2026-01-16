@@ -14,10 +14,10 @@ extends RefCounted
 ## Current game mode ("play" or "build")
 static var current_mode: String = "play"
 
-## F-cycling mode indices per tool (tool_num → current mode index)
+## F-cycling mode indices per tool (mode_tool_num → current mode index)
+## Key format: "play_2" or "build_4" to track modes per mode+tool combo
 static var tool_mode_indices: Dictionary = {
-	2: 0,  # GATES: 0=basic, 1=phase, 2=two_qubit
-	3: 0   # ENTANGLE: 0=bell, 1=cluster, 2=manipulate
+	"build_4": 0  # QUANTUM: 0=system, 1=phase, 2=rotation
 }
 
 # ============================================================================
@@ -31,20 +31,20 @@ const PLAY_TOOLS = {
 		"description": "Explore quantum soup, measure, harvest",
 		"has_f_cycling": false,
 		"actions": {
-			"Q": {"action": "plant_batch", "label": "Explore", "emoji": "🔍"},
-			"E": {"action": "measure_batch", "label": "Measure", "emoji": "👁️"},
-			"R": {"action": "measure_and_harvest", "label": "Pop/Harvest", "emoji": "✂️"}
+			"Q": {"action": "explore", "label": "Explore", "emoji": "🔍"},
+			"E": {"action": "measure", "label": "Measure", "emoji": "👁️"},
+			"R": {"action": "pop", "label": "Pop/Harvest", "emoji": "✂️"}
 		}
 	},
-	2: {  # GATES - Simplified to match implemented actions
-		"name": "Gates",
-		"emoji": "🔄",
-		"description": "Quantum gate operations",
+	2: {  # ENTANGLE - Multi-qubit entanglement operations
+		"name": "Entangle",
+		"emoji": "🔗",
+		"description": "Create and manage entanglement between qubits",
 		"has_f_cycling": false,
 		"actions": {
 			"Q": {"action": "cluster", "label": "Cluster", "emoji": "🕸️"},
-			"E": {"action": "measure_trigger", "label": "Measure", "emoji": "👁️"},
-			"R": {"action": "remove_gates", "label": "Remove", "emoji": "✂️"}
+			"E": {"action": "measure_trigger", "label": "Trigger", "emoji": "⚡"},
+			"R": {"action": "remove_gates", "label": "Disentangle", "emoji": "✂️"}
 		}
 	},
 	3: {  # INDUSTRY - Simplified to match implemented actions
@@ -58,10 +58,10 @@ const PLAY_TOOLS = {
 			"R": {"action": "place_kitchen", "label": "Kitchen", "emoji": "🍳"}
 		}
 	},
-	4: {  # GATES - Single-qubit operations
-		"name": "Gates",
+	4: {  # UNITARY - Single-qubit gate operations
+		"name": "Unitary",
 		"emoji": "⚡",
-		"description": "Quantum gate operations",
+		"description": "Apply single-qubit unitary gates",
 		"has_f_cycling": false,
 		"actions": {
 			"Q": {"action": "apply_pauli_x", "label": "Pauli-X", "emoji": "↔️"},
@@ -109,15 +109,29 @@ const BUILD_TOOLS = {
 			"R": {"action": "lindblad_transfer", "label": "Transfer", "emoji": "↔️"}
 		}
 	},
-	4: {  # SYSTEM - Global system control
-		"name": "System",
-		"emoji": "⚡",
-		"description": "System-level controls and configuration",
-		"has_f_cycling": false,
+	4: {  # QUANTUM - System control + Gate configuration (F-cycles)
+		"name": "Quantum",
+		"emoji": "⚛️",
+		"description": "System control and gate configuration",
+		"has_f_cycling": true,
+		"modes": ["system", "phase", "rotation"],
+		"mode_labels": ["System", "Phase Gates", "Rotation"],
 		"actions": {
-			"Q": {"action": "system_reset", "label": "Reset Bath", "emoji": "🔄"},
-			"E": {"action": "system_snapshot", "label": "Snapshot", "emoji": "📸"},
-			"R": {"action": "system_debug", "label": "Debug View", "emoji": "🐛"}
+			"system": {  # Mode 0: System control
+				"Q": {"action": "system_reset", "label": "Reset Bath", "emoji": "🔄"},
+				"E": {"action": "system_snapshot", "label": "Snapshot", "emoji": "📸"},
+				"R": {"action": "system_debug", "label": "Debug View", "emoji": "🐛"}
+			},
+			"phase": {  # Mode 1: Phase gates (S, T, S†)
+				"Q": {"action": "apply_s_gate", "label": "S (π/2)", "emoji": "🌙"},
+				"E": {"action": "apply_t_gate", "label": "T (π/4)", "emoji": "✨"},
+				"R": {"action": "apply_sdg_gate", "label": "S† (-π/2)", "emoji": "🌑"}
+			},
+			"rotation": {  # Mode 2: Rotation gates
+				"Q": {"action": "apply_rx_gate", "label": "Rx (θ)", "emoji": "↔️"},
+				"E": {"action": "apply_ry_gate", "label": "Ry (θ)", "emoji": "↕️"},
+				"R": {"action": "apply_rz_gate", "label": "Rz (θ)", "emoji": "🔄"}
+			}
 		}
 	}
 }
@@ -175,6 +189,11 @@ static func set_mode(mode: String) -> void:
 # F-CYCLING (MODE EXPANSION WITHIN TOOLS)
 # ============================================================================
 
+static func _get_mode_key(tool_num: int) -> String:
+	"""Get dictionary key for tool mode tracking."""
+	return "%s_%d" % [current_mode, tool_num]
+
+
 static func cycle_tool_mode(tool_num: int) -> int:
 	"""Cycle F-mode for a tool. Returns new mode index, or -1 if no cycling."""
 	var tools = PLAY_TOOLS if current_mode == "play" else BUILD_TOOLS
@@ -187,16 +206,18 @@ static func cycle_tool_mode(tool_num: int) -> int:
 	if modes.is_empty():
 		return -1
 
-	var current_index = tool_mode_indices.get(tool_num, 0)
+	var mode_key = _get_mode_key(tool_num)
+	var current_index = tool_mode_indices.get(mode_key, 0)
 	var new_index = (current_index + 1) % modes.size()
-	tool_mode_indices[tool_num] = new_index
+	tool_mode_indices[mode_key] = new_index
 
 	return new_index
 
 
 static func get_tool_mode_index(tool_num: int) -> int:
 	"""Get current F-mode index for a tool."""
-	return tool_mode_indices.get(tool_num, 0)
+	var mode_key = _get_mode_key(tool_num)
+	return tool_mode_indices.get(mode_key, 0)
 
 
 static func get_tool_mode_name(tool_num: int) -> String:
@@ -208,7 +229,8 @@ static func get_tool_mode_name(tool_num: int) -> String:
 		return ""
 
 	var modes = tool_def.get("modes", [])
-	var index = tool_mode_indices.get(tool_num, 0)
+	var mode_key = _get_mode_key(tool_num)
+	var index = tool_mode_indices.get(mode_key, 0)
 
 	if index < modes.size():
 		return modes[index]
@@ -224,7 +246,8 @@ static func get_tool_mode_label(tool_num: int) -> String:
 		return ""
 
 	var mode_labels = tool_def.get("mode_labels", [])
-	var index = tool_mode_indices.get(tool_num, 0)
+	var mode_key = _get_mode_key(tool_num)
+	var index = tool_mode_indices.get(mode_key, 0)
 
 	if index < mode_labels.size():
 		return mode_labels[index]
@@ -396,35 +419,43 @@ static func _generate_biome_assign_submenu(base: Dictionary, farm) -> Dictionary
 
 
 static func _generate_icon_assign_submenu(base: Dictionary, farm, current_selection: Vector2i) -> Dictionary:
-	"""Generate icon assignment submenu from available icons."""
+	"""Generate icon assignment submenu from player vocabulary.
+
+	Only shows emojis the player has learned (vocabulary system).
+	This restricts planting to known vocabulary.
+	"""
 	var generated = base.duplicate(true)
 
-	# Get available icons from biome
-	var biome = null
-	if farm and farm.grid:
-		biome = farm.grid.get_biome_for_plot(current_selection)
+	# Get player vocabulary from GameStateManager
+	var player_vocab: Array = []
+	var gsm = Engine.get_main_loop().root.get_node_or_null("/root/GameStateManager")
+	if gsm and gsm.current_state:
+		player_vocab = gsm.current_state.known_emojis
 
-	if not biome:
-		generated["Q"] = {"action": "", "label": "No Biome", "emoji": "❌"}
-		generated["E"] = {"action": "", "label": "Assign First", "emoji": "🔄"}
+	if player_vocab.is_empty():
+		generated["Q"] = {"action": "", "label": "No Vocab!", "emoji": "📖"}
+		generated["E"] = {"action": "", "label": "Complete Quests", "emoji": "📜"}
 		generated["R"] = {"action": "", "label": "", "emoji": ""}
 		generated["_disabled"] = true
 		return generated
 
-	# Use biome's producible emojis
-	var emojis = biome.producible_emojis if biome.producible_emojis else []
+	# Use player vocabulary (what they've learned from quests)
 	var keys = ["Q", "E", "R"]
 
-	for i in range(min(3, emojis.size())):
-		var emoji = emojis[i]
+	for i in range(min(3, player_vocab.size())):
+		var emoji = player_vocab[i]
 		generated[keys[i]] = {
 			"action": "icon_assign_%s" % emoji.hash(),
 			"label": emoji,
 			"emoji": emoji
 		}
 
-	for i in range(emojis.size(), 3):
+	for i in range(player_vocab.size(), 3):
 		generated[keys[i]] = {"action": "", "label": "Empty", "emoji": "⬜"}
+
+	# Store full vocab for F-cycling if more than 3
+	if player_vocab.size() > 3:
+		generated["_extra_vocab"] = player_vocab.slice(3)
 
 	return generated
 

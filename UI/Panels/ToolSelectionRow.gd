@@ -1,12 +1,15 @@
 class_name ToolSelectionRow
 extends HBoxContainer
 
-## Physical keyboard layout UI - Bottom row with tool selection buttons [1-6]
+## Physical keyboard layout UI - Bottom row with tool selection buttons [1-4]
 ## Each button shows the keyboard shortcut and highlights when selected
+## v2 Architecture: 4 tools per mode (PLAY/BUILD), Tab toggles mode
 
 # Tool definitions from shared config (single source of truth)
 const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
-const TOOL_ACTIONS = ToolConfig.TOOL_ACTIONS
+
+# Current mode ("play" or "build")
+var current_mode: String = "play"
 
 # Button array
 var tool_buttons: Array[Button] = []
@@ -32,12 +35,12 @@ func _ready():
 
 	# Container setup
 	# Note: Don't use anchors in container children - let parent handle layout
-	# Increased separation and padding for touch-friendly appearance
-	add_theme_constant_override("separation", 12)  # More space between buttons
-	add_theme_constant_override("margin_left", 15)  # Left padding
-	add_theme_constant_override("margin_right", 15)  # Right padding
-	add_theme_constant_override("margin_top", 8)  # Top padding
-	add_theme_constant_override("margin_bottom", 8)  # Bottom padding
+	# Reduced spacing to give more room to buttons themselves
+	add_theme_constant_override("separation", 8)  # Tighter spacing between buttons
+	add_theme_constant_override("margin_left", 8)  # Left padding
+	add_theme_constant_override("margin_right", 8)  # Right padding
+	add_theme_constant_override("margin_top", 4)  # Top padding
+	add_theme_constant_override("margin_bottom", 4)  # Bottom padding
 	# CRITICAL: Don't set alignment here - let buttons' size_flags_horizontal handle distribution
 
 	# Allow keyboard input to pass through, but buttons can still receive clicks
@@ -45,10 +48,11 @@ func _ready():
 	# Toolbar stretches to fill full width
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	# Create buttons for tools 1-6
-	for tool_num in range(1, 7):
+	# Create buttons for tools 1-4 (v2 architecture)
+	for tool_num in range(1, 5):
 		var button = Button.new()
-		var tool_info = TOOL_ACTIONS.get(tool_num, {})
+		var tools = ToolConfig.get_current_tools()
+		var tool_info = tools.get(tool_num, {})
 		var tool_name = tool_info.get("name", "Unknown")
 
 		# Button label with keyboard shortcut
@@ -102,7 +106,7 @@ func _ready():
 	# Select first tool by default
 	select_tool(1)
 
-	print("🛠️  ToolSelectionRow initialized with 6 tools - beveled touch-friendly buttons")
+	print("🛠️  ToolSelectionRow initialized with 4 tools (v2 architecture)")
 
 
 func select_tool(tool_num: int) -> void:
@@ -112,7 +116,7 @@ func select_tool(tool_num: int) -> void:
 
 func _update_tool_visual(tool_num: int) -> void:
 	"""Internal: Update visual state without emitting signal (called by button handler)"""
-	if tool_num < 1 or tool_num > 6:
+	if tool_num < 1 or tool_num > 4:
 		return
 
 	current_tool = tool_num
@@ -160,7 +164,7 @@ func _update_tool_visual(tool_num: int) -> void:
 
 func set_tool_enabled(tool_num: int, enabled: bool) -> void:
 	"""Enable or disable a specific tool button"""
-	if tool_num < 1 or tool_num > 6:
+	if tool_num < 1 or tool_num > 4:
 		return
 
 	var button = tool_buttons[tool_num - 1]
@@ -186,6 +190,30 @@ func set_layout_manager(mgr) -> void:
 		scale_factor = layout_manager.scale_factor
 
 
+func refresh_for_mode(new_mode: String) -> void:
+	"""Update button labels when mode changes between PLAY and BUILD
+
+	Called by PlayerShell when Tab is pressed.
+	"""
+	if new_mode not in ["play", "build"]:
+		return
+
+	current_mode = new_mode
+	var tools = ToolConfig.get_current_tools()
+
+	# Update button labels
+	for i in range(tool_buttons.size()):
+		var tool_num = i + 1
+		var tool_info = tools.get(tool_num, {})
+		var tool_name = tool_info.get("name", "Unknown")
+		tool_buttons[i].text = "[%d] %s" % [tool_num, tool_name]
+
+	# Reset to tool 1 on mode change
+	select_tool(1)
+
+	print("🛠️  ToolSelectionRow refreshed for %s mode" % new_mode.to_upper())
+
+
 # ============================================================================
 # PRIVATE METHODS
 # ============================================================================
@@ -194,7 +222,9 @@ func _on_tool_button_pressed(tool_num: int) -> void:
 	"""Handle tool button press"""
 	_update_tool_visual(tool_num)
 	tool_selected.emit(tool_num)  # Explicitly emit signal after visual update
-	print("⌨️  Tool %d selected [%s button]" % [tool_num, TOOL_ACTIONS[tool_num]["name"]])
+	var tools = ToolConfig.get_current_tools()
+	var tool_info = tools.get(tool_num, {})
+	print("⌨️  Tool %d selected [%s button]" % [tool_num, tool_info.get("name", "Unknown")])
 
 
 func _print_corners() -> void:
@@ -217,13 +247,13 @@ func _print_corners() -> void:
 func debug_layout() -> String:
 	"""Return detailed layout debug information for F3 display"""
 	var debug_text = ""
-	debug_text += "ToolSelectionRow (1-6 toolbar):\n"
+	debug_text += "ToolSelectionRow (1-4 toolbar):\n"
 	debug_text += "  Position: (%.0f, %.0f)\n" % [position.x, position.y]
 	debug_text += "  Actual size: %.0f × %.0f\n" % [size.x, size.y]
 	debug_text += "  Custom min size: %s\n" % custom_minimum_size
 	debug_text += "  Size flags H: %d (3=EXPAND_FILL)\n" % size_flags_horizontal
 	debug_text += "  Size flags V: %d\n" % size_flags_vertical
-	debug_text += "  Buttons: %d total (1-6)\n" % tool_buttons.size()
+	debug_text += "  Buttons: %d total (1-4)\n" % tool_buttons.size()
 
 	var button_widths = []
 	for i in range(tool_buttons.size()):
@@ -232,15 +262,3 @@ func debug_layout() -> String:
 	debug_text += "  Button widths: [%s] (should be equal for stretch)\n" % ", ".join(button_widths)
 
 	return debug_text
-
-
-
-	# DEBUG OUTPUT
-	print("═══════════════════════════════════════════════════════════════")
-	print("DEBUG: ToolSelectionRow (1-6 toolbar)")
-	print("═══════════════════════════════════════════════════════════════")
-	print("  Name: ToolSelectionRow")
-	print("  Parent: %s" % get_parent().name)
-	print("  Size flags H: %d (3=SIZE_EXPAND_FILL)" % size_flags_horizontal)
-	print("  Custom minimum size: %s" % custom_minimum_size)
-	print("═══════════════════════════════════════════════════════════════")

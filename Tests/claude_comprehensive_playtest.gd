@@ -1,6 +1,11 @@
 #!/usr/bin/env -S godot --headless -s
 extends SceneTree
 
+## ⚠️ OUT OF SYNC WITH V2 ARCHITECTURE ⚠️
+## This test uses the OLD Plot-based API (farm.build, farm.measure_plot, farm.harvest_plot)
+## The v2 architecture uses Terminals via ProbeActions (action_explore, action_measure, action_pop)
+## DO NOT RUN - needs rewrite to use ProbeActions + Terminal system
+##
 ## CLAUDE'S COMPREHENSIVE SPACEWHEAT PLAYTEST
 ## Testing: Full kitchen production chain + save/load + profit strategies + bug hunting
 ## Looking for: Quantum<->classical bridging issues, unusual profit mechanics, edge cases

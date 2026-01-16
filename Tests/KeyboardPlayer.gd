@@ -1,5 +1,10 @@
 extends Node
 
+## ⚠️ OUT OF SYNC WITH V2 ARCHITECTURE ⚠️
+## This uses the OLD Plot-based API (farm.build, farm.measure_plot, farm.harvest_plot)
+## The v2 architecture uses Terminals via ProbeActions (action_explore, action_measure, action_pop)
+## DO NOT USE - needs rewrite to use ProbeActions + Terminal system
+##
 # KeyboardPlayer - AI that plays SpaceWheat using keyboard controls
 # Simulates real player input to test the game
 

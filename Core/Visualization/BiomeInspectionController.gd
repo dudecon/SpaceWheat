@@ -21,25 +21,59 @@ static func get_biome_data(biome: BiomeBase, farm_grid) -> Dictionary:
 			"emoji_states": Array[Dictionary],  # Detailed per-emoji data
 			"energy_flow_rate": float,
 			"entanglement_count": int,
-			"bath_mode": String
+			"bath_mode": String,
+			"purity": float,  # 0-1 quantum purity (Tr(ρ²))
+			"harvest_prediction": Dictionary  # Expected harvest outcomes
 		}
 	"""
 	if not biome:
 		return _empty_biome_data()
 
+	var emoji_states = get_emoji_energy_distribution(biome)
+
 	var data = {
 		"name": _get_biome_name(biome),
 		"emoji": _get_biome_representative_emoji(biome),
-		"temperature": biome.temperature if biome.has("temperature") else 300.0,
+		"temperature": biome.temperature if "temperature" in biome else 300.0,
 		"total_energy": _calculate_total_bath_energy(biome),
 		"active_plots": _count_active_projections(biome),
-		"emoji_states": get_emoji_energy_distribution(biome),
+		"emoji_states": emoji_states,
 		"energy_flow_rate": _calculate_energy_flow_rate(biome),
 		"entanglement_count": _count_entanglements(biome),
-		"bath_mode": _get_bath_mode(biome)
+		"bath_mode": _get_bath_mode(biome),
+		"purity": _get_biome_purity(biome),
+		"harvest_prediction": _get_harvest_prediction(emoji_states)
 	}
 
 	return data
+
+
+## Get biome quantum purity (Tr(ρ²))
+static func _get_biome_purity(biome: BiomeBase) -> float:
+	if biome and biome.has_method("get_purity"):
+		return biome.get_purity()
+	if biome and "quantum_computer" in biome and biome.quantum_computer:
+		if biome.quantum_computer.has_method("get_purity"):
+			return biome.quantum_computer.get_purity()
+	return 0.5
+
+
+## Get harvest prediction (most likely outcomes)
+static func _get_harvest_prediction(emoji_states: Array) -> Dictionary:
+	"""Predict what player will likely get from harvest based on emoji probabilities"""
+	if emoji_states.is_empty():
+		return {"top_emoji": "?", "top_percent": 0, "second_emoji": "?", "second_percent": 0}
+
+	# emoji_states is already sorted by percentage (highest first)
+	var top = emoji_states[0] if emoji_states.size() > 0 else {}
+	var second = emoji_states[1] if emoji_states.size() > 1 else {}
+
+	return {
+		"top_emoji": top.get("emoji", "?"),
+		"top_percent": int(top.get("percentage", 0)),
+		"second_emoji": second.get("emoji", "?"),
+		"second_percent": int(second.get("percentage", 0))
+	}
 
 
 ## Get per-emoji energy distribution
@@ -60,7 +94,7 @@ static func get_emoji_energy_distribution(biome: BiomeBase) -> Array[Dictionary]
 		return emoji_data
 
 	# Get bath energy distribution
-	var bath = biome.bath if biome.has("bath") else null
+	var bath = biome.bath if "bath" in biome else null
 	if not bath:
 		# No bath - show equal distribution as placeholder
 		var count = biome.producible_emojis.size()
@@ -163,13 +197,13 @@ static func get_lindblad_transfers(biome: BiomeBase) -> Array[Dictionary]:
 	"""
 	var transfers: Array[Dictionary] = []
 
-	if not biome or not biome.has("bath") or not biome.bath:
+	if not biome or not "bath" in biome or not biome.bath:
 		return transfers
 
 	var bath = biome.bath
 
 	# Get Lindblad operators from bath
-	if bath.has("lindblad_ops"):
+	if "lindblad_ops" in bath:
 		# Extract transfer information from Lindblad operators
 		# This depends on bath implementation details
 		pass
@@ -204,16 +238,16 @@ static func _get_biome_representative_emoji(biome: BiomeBase) -> String:
 
 static func _calculate_total_bath_energy(biome: BiomeBase) -> float:
 	"""Sum total energy in bath quantum state"""
-	var bath = biome.bath if biome.has("bath") else null
+	var bath = biome.bath if "bath" in biome else null
 	if not bath:
 		return 0.0
 
 	# Sum energy from all active projections
 	var total = 0.0
-	if biome.has("active_projections"):
+	if "active_projections" in biome:
 		for pos in biome.active_projections.keys():
 			var projection = biome.active_projections[pos]
-			if projection and projection.has("get_quantum_energy"):
+			if projection and projection.has_method("get_quantum_energy"):
 				total += projection.get_quantum_energy()
 
 	return total
@@ -221,7 +255,7 @@ static func _calculate_total_bath_energy(biome: BiomeBase) -> float:
 
 static func _count_active_projections(biome: BiomeBase) -> int:
 	"""Count number of plots projected into this bath"""
-	if biome.has("active_projections"):
+	if "active_projections" in biome:
 		return biome.active_projections.size()
 	return 0
 
@@ -233,7 +267,7 @@ static func _get_emoji_basis_energy(biome: BiomeBase, emoji: String) -> float:
 	"""
 	var energy = 0.0
 
-	if not biome.has("active_projections"):
+	if not "active_projections" in biome:
 		return energy
 
 	for pos in biome.active_projections.keys():
@@ -245,7 +279,7 @@ static func _get_emoji_basis_energy(biome: BiomeBase, emoji: String) -> float:
 
 			# If this emoji is in the projection, add its energy
 			if emoji == north or emoji == south:
-				if projection.has("get_quantum_energy"):
+				if projection.has_method("get_quantum_energy"):
 					energy += projection.get_quantum_energy()
 
 	return energy
@@ -277,20 +311,20 @@ static func _calculate_energy_flow_rate(biome: BiomeBase) -> float:
 
 static func _count_entanglements(biome: BiomeBase) -> int:
 	"""Count number of entangled pairs in this biome"""
-	if biome.has("bell_gates"):
+	if "bell_gates" in biome:
 		return biome.bell_gates.size()
 	return 0
 
 
 static func _get_bath_mode(biome: BiomeBase) -> String:
 	"""Determine bath evolution mode"""
-	var bath = biome.bath if biome.has("bath") else null
+	var bath = biome.bath if "bath" in biome else null
 	if not bath:
 		return "None"
 
 	# Check for Hamiltonian and Lindblad
-	var has_hamiltonian = bath.has("hamiltonian") and bath.hamiltonian != null
-	var has_lindblad = bath.has("lindblad_ops") and bath.lindblad_ops.size() > 0
+	var has_hamiltonian = "hamiltonian" in bath and bath.hamiltonian != null
+	var has_lindblad = "lindblad_ops" in bath and bath.lindblad_ops.size() > 0
 
 	if has_hamiltonian and has_lindblad:
 		return "Hybrid"

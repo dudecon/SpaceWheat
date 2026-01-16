@@ -91,6 +91,36 @@ var decay: Dictionary = {}
 var alignment_couplings: Dictionary = {}
 
 ## ========================================
+## Bell State Conditional Features
+## ========================================
+
+## Bell-activated features: icon mechanics that only work during entanglement
+## {emoji: {latent_lindblad: {}, latent_hamiltonian: {}, description: ""}}
+##
+## These features are "dormant" until a Bell state (entanglement) is detected
+## between the emoji and another. When entangled:
+## - latent_lindblad transfers activate
+## - latent_hamiltonian couplings strengthen
+##
+## Example: Knot-Shriners' oaths only bind when entangled
+## {"🪢": {"latent_lindblad": {"🪢": {"📿": 0.1}}, "description": "Oaths bind when entangled"}}
+var bell_activated_features: Dictionary = {}
+
+## ========================================
+## Decoherence Coupling
+## ========================================
+
+## Decoherence coupling: how emoji affects bath coherence (T2 time)
+## {emoji: float}
+## Positive = increases decoherence (observation, heat, noise → lower T2)
+## Negative = decreases decoherence (cold, silence, stability → higher T2)
+##
+## Example: 🔬 (microscope) causes decoherence through observation
+## Example: 🧊 (ice) preserves coherence by cooling
+## Example: 🔇 (mute) destroys coherence through silence
+var decoherence_coupling: Dictionary = {}
+
+## ========================================
 ## Metadata
 ## ========================================
 
@@ -157,7 +187,7 @@ func validate() -> bool:
 func get_icon_contribution(emoji: String) -> Dictionary:
 	if not speaks(emoji):
 		return {}
-	
+
 	var contribution = {
 		"faction": name,
 		"self_energy": self_energies.get(emoji, 0.0),
@@ -169,8 +199,11 @@ func get_icon_contribution(emoji: String) -> Dictionary:
 		"driver": drivers.get(emoji, {}),
 		"alignment_couplings": alignment_couplings.get(emoji, {}),
 		"measurement_behavior": measurement_behavior.get(emoji, {}),
+		# New quantum mechanics features
+		"bell_activated_features": bell_activated_features.get(emoji, {}),
+		"decoherence_coupling": decoherence_coupling.get(emoji, 0.0),
 	}
-	
+
 	return contribution
 
 ## Debug representation

@@ -104,6 +104,12 @@ static func _build_icon_from_factions(emoji: String, faction_list: Array) :
 	# Gated lindblad needs special handling - collect all gates
 	var all_gated: Array = []
 
+	# Bell-activated features: collect from all factions
+	var all_bell_features: Array = []
+
+	# Decoherence coupling: additive across factions
+	var total_decoherence: float = 0.0
+
 	# Iterate only factions that speak this emoji (already filtered by index)
 	for faction in faction_list:
 		contributing_factions.append(faction.name)
@@ -113,10 +119,12 @@ static func _build_icon_from_factions(emoji: String, faction_list: Array) :
 		icon.self_energy += contribution.get("self_energy", 0.0)
 		
 		# Merge hamiltonian_couplings (additive per target)
+		# Note: Values can be float (real) or Vector2 (complex: x=real, y=imag)
 		var h_couplings = contribution.get("hamiltonian_couplings", {})
 		for target in h_couplings:
-			var current = icon.hamiltonian_couplings.get(target, 0.0)
-			icon.hamiltonian_couplings[target] = current + h_couplings[target]
+			var current = icon.hamiltonian_couplings.get(target, null)
+			var incoming = h_couplings[target]
+			icon.hamiltonian_couplings[target] = _add_hamiltonian_values(current, incoming)
 		
 		# Merge lindblad_outgoing (additive per target)
 		var l_out = contribution.get("lindblad_outgoing", {})
@@ -137,7 +145,19 @@ static func _build_icon_from_factions(emoji: String, faction_list: Array) :
 			var config_copy = gate_config.duplicate()
 			config_copy["faction"] = faction.name
 			all_gated.append(config_copy)
-		
+
+		# Collect bell_activated_features
+		var bell = contribution.get("bell_activated_features", {})
+		if bell.size() > 0:
+			all_bell_features.append({
+				"faction": faction.name,
+				"features": bell.duplicate(true)  # Deep copy
+			})
+
+		# Merge decoherence_coupling (additive)
+		var decoh = contribution.get("decoherence_coupling", 0.0)
+		total_decoherence += decoh
+
 		# Merge alignment_couplings → energy_couplings (additive per observable)
 		var align = contribution.get("alignment_couplings", {})
 		for observable in align:
@@ -163,7 +183,17 @@ static func _build_icon_from_factions(emoji: String, faction_list: Array) :
 	# Format: Array of {source, rate, gate, power, inverse, faction}
 	if all_gated.size() > 0:
 		icon.set_meta("gated_lindblad", all_gated)
-	
+
+	# Store bell_activated_features as metadata
+	# Format: Array of {faction: String, features: {latent_lindblad, latent_hamiltonian, description}}
+	if all_bell_features.size() > 0:
+		icon.set_meta("bell_activated_features", all_bell_features)
+
+	# Store decoherence_coupling as metadata (affects T2 time)
+	# Value: float (positive = increases decoherence, negative = decreases)
+	if abs(total_decoherence) > 0.001:
+		icon.set_meta("decoherence_coupling", total_decoherence)
+
 	# Store measurement behavior (first faction wins)
 	var measurement = {}
 	for faction in faction_list:
@@ -198,6 +228,26 @@ static func _make_tags(faction_names: Array[String]) -> Array[String]:
 		tags.append(name.to_lower().replace(" ", "_"))
 	return tags
 
+## Helper to add hamiltonian values that may be float or Vector2 (complex)
+## float + float → float, Vector2 + Vector2 → Vector2, mixed → Vector2
+static func _add_hamiltonian_values(current, incoming):
+	if current == null:
+		return incoming
+	# Both floats
+	if current is float and incoming is float:
+		return current + incoming
+	# Both Vector2
+	if current is Vector2 and incoming is Vector2:
+		return current + incoming
+	# Mixed: convert float to Vector2(float, 0) and add
+	if current is float:
+		return Vector2(current, 0.0) + incoming
+	if incoming is float:
+		return current + Vector2(incoming, 0.0)
+	# Fallback (shouldn't happen)
+	push_warning("IconBuilder: unexpected hamiltonian types: %s, %s" % [typeof(current), typeof(incoming)])
+	return incoming
+
 ## ========================================
 ## Cross-Faction Coupling Injection
 ## ========================================
@@ -221,8 +271,8 @@ static func inject_cross_faction_couplings(icons: Dictionary, couplings: Array) 
 		
 		match coupling_type:
 			"hamiltonian":
-				var current = icon.hamiltonian_couplings.get(target_emoji, 0.0)
-				icon.hamiltonian_couplings[target_emoji] = current + value
+				var current = icon.hamiltonian_couplings.get(target_emoji, null)
+				icon.hamiltonian_couplings[target_emoji] = _add_hamiltonian_values(current, value)
 			"lindblad_out":
 				var current = icon.lindblad_outgoing.get(target_emoji, 0.0)
 				icon.lindblad_outgoing[target_emoji] = current + value
@@ -481,7 +531,11 @@ static func debug_print_icon(icon) -> void:
 	if icon.hamiltonian_couplings.size() > 0:
 		print("  Hamiltonian couplings:")
 		for target in icon.hamiltonian_couplings:
-			print("    → %s: %.3f" % [target, icon.hamiltonian_couplings[target]])
+			var val = icon.hamiltonian_couplings[target]
+			if val is Vector2:
+				print("    → %s: %.3f + %.3fi (complex)" % [target, val.x, val.y])
+			else:
+				print("    → %s: %.3f" % [target, val])
 	
 	if icon.lindblad_incoming.size() > 0:
 		print("  Lindblad incoming:")
@@ -515,7 +569,25 @@ static func debug_print_icon(icon) -> void:
 		var mb = icon.get_meta("measurement_behavior")
 		if mb.get("inverts", false):
 			print("  🔮 MEASUREMENT INVERTS → opposite pole of axis (quantum mask)")
-	
+
+	# Show bell-activated features
+	if icon.has_meta("bell_activated_features"):
+		var bell = icon.get_meta("bell_activated_features")
+		print("  🔔 BELL-ACTIVATED (dormant until entangled):")
+		for entry in bell:
+			var desc = entry.features.get("description", "no description")
+			print("    [%s]: %s" % [entry.faction, desc])
+			if entry.features.has("latent_lindblad"):
+				print("      latent_lindblad: %s" % str(entry.features.latent_lindblad))
+			if entry.features.has("latent_hamiltonian"):
+				print("      latent_hamiltonian: %s" % str(entry.features.latent_hamiltonian))
+
+	# Show decoherence coupling
+	if icon.has_meta("decoherence_coupling"):
+		var decoh = icon.get_meta("decoherence_coupling")
+		var effect = "INCREASES decoherence (lower T2)" if decoh > 0 else "DECREASES decoherence (higher T2)"
+		print("  🌡️ Decoherence coupling: %.3f (%s)" % [decoh, effect])
+
 	if icon.energy_couplings.size() > 0:
 		print("  Alignment (energy) couplings:")
 		for observable in icon.energy_couplings:

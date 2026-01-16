@@ -72,6 +72,38 @@ static func _init_gates() -> void:
 		"requires_unmeasured": true
 	}
 
+	# S-dagger gate: [[1, 0], [0, -i]] (inverse of S)
+	GATES["Sdg"] = {
+		"arity": 1,
+		"matrix": _sdg_gate(),
+		"description": "S-dagger gate (inverse of S)",
+		"requires_unmeasured": true
+	}
+
+	# Rx rotation gate: default θ = π/4
+	GATES["Rx"] = {
+		"arity": 1,
+		"matrix": _rx_gate(PI / 4),
+		"description": "Rx rotation (π/4)",
+		"requires_unmeasured": true
+	}
+
+	# Ry rotation gate: default θ = π/4
+	GATES["Ry"] = {
+		"arity": 1,
+		"matrix": _ry_gate(PI / 4),
+		"description": "Ry rotation (π/4)",
+		"requires_unmeasured": true
+	}
+
+	# Rz rotation gate: default θ = π/4
+	GATES["Rz"] = {
+		"arity": 1,
+		"matrix": _rz_gate(PI / 4),
+		"description": "Rz rotation (π/4)",
+		"requires_unmeasured": true
+	}
+
 	# ========== 2-QUBIT GATES ==========
 
 	# CNOT (CX): control-qubit X gate [[1,0,0,0], [0,1,0,0], [0,0,0,1], [0,0,1,0]]
@@ -234,4 +266,47 @@ static func _swap() -> ComplexMatrix:
 	m.set_element(1, 2, Complex.one())
 	m.set_element(2, 1, Complex.one())
 	m.set_element(3, 3, Complex.one())
+	return m
+
+
+static func _sdg_gate() -> ComplexMatrix:
+	"""S-dagger gate (inverse of S): [[1, 0], [0, -i]]"""
+	var m = ComplexMatrix.new(2)
+	m.set_element(0, 0, Complex.one())
+	m.set_element(1, 1, Complex.new(0, -1))
+	return m
+
+
+static func _rx_gate(theta: float) -> ComplexMatrix:
+	"""Rx rotation gate: [[cos(θ/2), -i·sin(θ/2)], [-i·sin(θ/2), cos(θ/2)]]"""
+	var m = ComplexMatrix.new(2)
+	var c = cos(theta / 2)
+	var s = sin(theta / 2)
+	m.set_element(0, 0, Complex.new(c, 0))
+	m.set_element(0, 1, Complex.new(0, -s))
+	m.set_element(1, 0, Complex.new(0, -s))
+	m.set_element(1, 1, Complex.new(c, 0))
+	return m
+
+
+static func _ry_gate(theta: float) -> ComplexMatrix:
+	"""Ry rotation gate: [[cos(θ/2), -sin(θ/2)], [sin(θ/2), cos(θ/2)]]"""
+	var m = ComplexMatrix.new(2)
+	var c = cos(theta / 2)
+	var s = sin(theta / 2)
+	m.set_element(0, 0, Complex.new(c, 0))
+	m.set_element(0, 1, Complex.new(-s, 0))
+	m.set_element(1, 0, Complex.new(s, 0))
+	m.set_element(1, 1, Complex.new(c, 0))
+	return m
+
+
+static func _rz_gate(theta: float) -> ComplexMatrix:
+	"""Rz rotation gate: [[e^(-iθ/2), 0], [0, e^(iθ/2)]]"""
+	var m = ComplexMatrix.new(2)
+	var half = theta / 2
+	# e^(-iθ/2) = cos(-θ/2) + i·sin(-θ/2) = cos(θ/2) - i·sin(θ/2)
+	m.set_element(0, 0, Complex.new(cos(half), -sin(half)))
+	# e^(iθ/2) = cos(θ/2) + i·sin(θ/2)
+	m.set_element(1, 1, Complex.new(cos(half), sin(half)))
 	return m

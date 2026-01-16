@@ -17,6 +17,7 @@ const KeyboardLayoutConfig = preload("res://Core/GameState/KeyboardLayoutConfig.
 const FarmGrid = preload("res://Core/GameMechanics/FarmGrid.gd")
 const FarmPlot = preload("res://Core/GameMechanics/FarmPlot.gd")
 const FarmEconomy = preload("res://Core/GameMechanics/FarmEconomy.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 const PlotPoolClass = preload("res://Core/GameMechanics/PlotPool.gd")
 const GoalsSystem = preload("res://Core/GameMechanics/GoalsSystem.gd")
 const BioticFluxBiome = preload("res://Core/Environment/BioticFluxBiome.gd")
@@ -1123,7 +1124,7 @@ func _get_missing_resources(cost: Dictionary) -> String:
 		var need = cost[emoji]
 		var have = economy.get_resource(emoji)
 		if have < need:
-			var shortfall = (need - have) / FarmEconomy.QUANTUM_TO_CREDITS
+			var shortfall = (need - have) / EconomyConstants.QUANTUM_TO_CREDITS
 			missing.append("%d more %s" % [shortfall, emoji])
 	return ", ".join(missing)
 
@@ -1147,7 +1148,7 @@ func _process_harvest_outcome(harvest_data: Dictionary) -> void:
 	# Fallback: if energy not provided, use yield * 0.1 (inverse of QUANTUM_TO_CREDITS)
 	if quantum_energy == 0.0:
 		var yield_amount = harvest_data.get("yield", 1)
-		quantum_energy = float(yield_amount) / float(FarmEconomy.QUANTUM_TO_CREDITS)
+		quantum_energy = float(yield_amount) / float(EconomyConstants.QUANTUM_TO_CREDITS)
 
 	if outcome_emoji.is_empty():
 		return

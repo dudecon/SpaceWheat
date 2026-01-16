@@ -8,6 +8,7 @@ const Farm = preload("res://Core/Farm.gd")
 const QuestManager = preload("res://Core/Quests/QuestManager.gd")
 const QuestGenerator = preload("res://Core/Quests/QuestGenerator.gd")
 const GameStateManager = preload("res://Core/GameState/GameStateManager.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 var farm: Farm = null
 var quest_manager: QuestManager = null
@@ -126,7 +127,7 @@ func run_quest_cycle(faction: Dictionary):
 	# Check if we can complete it immediately
 	var required_emoji = quest.get("resource", "")
 	var required_qty = quest.get("quantity", 0)
-	var required_credits = required_qty * farm.economy.QUANTUM_TO_CREDITS
+	var required_credits = required_qty * EconomyConstants.QUANTUM_TO_CREDITS
 
 	var current_amount = farm.economy.get_resource(required_emoji)
 	print("    Current %s: %d credits (need: %d)" % [required_emoji, current_amount, required_credits])

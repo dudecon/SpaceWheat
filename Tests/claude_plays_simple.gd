@@ -1,5 +1,10 @@
 extends SceneTree
 
+## ⚠️ OUT OF SYNC WITH V2 ARCHITECTURE ⚠️
+## This test uses the OLD Plot-based API (farm.build, farm.measure_plot, farm.harvest_plot)
+## The v2 architecture uses Terminals via ProbeActions (action_explore, action_measure, action_pop)
+## DO NOT RUN - needs rewrite to use ProbeActions + Terminal system
+##
 ## Claude plays - simple non-recursive version
 
 const Farm = preload("res://Core/Farm.gd")

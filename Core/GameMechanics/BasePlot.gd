@@ -23,11 +23,11 @@ signal state_collapsed(final_state: String)
 @export var plot_id: String = ""
 @export var grid_position: Vector2i = Vector2i.ZERO
 
-# Model C: Measurement axis reference (which subspace of bath to measure)
-# OLD (Model B): @export var register_id: int = -1  # QuantumComputer register
-# NEW (Model C): Plot is identified by north/south emojis - bath measures this axis
-@export var bath_subplot_id: int = -1  # Which subplot in bath's composite state (-1 = not planted)
-var parent_biome: Node = null  # Reference to BiomeBase that owns quantum bath
+# Model C: Quantum register reference (which register in biome's quantum computer)
+# NEW: register_id identifies which qubit in biome's QuantumComputer holds this plot's state
+@export var register_id: int = -1  # QuantumComputer register ID (-1 = not planted)
+@export var bath_subplot_id: int = -1  # Which subplot in bath's composite state (deprecated, kept for backward compat)
+var parent_biome: Node = null  # Reference to BiomeBase that owns quantum computer
 
 # Measurement basis labels (defines which bath axis to measure)
 @export var north_emoji: String = "🌾"
@@ -206,22 +206,17 @@ func plant(biome_or_labor = null, wheat_cost: float = 0.0, optional_biome = null
 	north_emoji = emojis.get("north", "🌾")
 	south_emoji = emojis.get("south", "🌽")
 
-	# OLD (Model B): Allocate register in quantum_computer
-	# register_id = biome.allocate_register_for_plot(grid_position, north_emoji, south_emoji)
-	# if register_id < 0:
-	# 	push_error("Failed to allocate register for plot %s!" % grid_position)
-	# 	return false
-
-	# NEW (Model C): Register subplot in bath
-	if biome.has_method("allocate_subplot_for_plot"):
-		bath_subplot_id = biome.allocate_subplot_for_plot(grid_position, north_emoji, south_emoji)
-		if bath_subplot_id < 0:
-			push_error("Failed to allocate subplot for plot %s!" % grid_position)
+	# Allocate register in biome's quantum computer
+	if "quantum_computer" in biome and biome.quantum_computer:
+		register_id = biome.quantum_computer.allocate_register(north_emoji, south_emoji)
+		if register_id < 0:
+			push_error("Failed to allocate quantum register for plot %s!" % grid_position)
 			return false
+		# Bath is deprecated - density matrix now in quantum_computer
+		bath_subplot_id = register_id  # For backward compatibility tracking
 	else:
-		# Simplified: Just mark as planted if biome has bath
-		# Subplot ID not strictly needed for single-qubit measurement
-		bath_subplot_id = 0  # Placeholder - bath manages full state
+		push_error("Biome has no quantum_computer for plot %s!" % grid_position)
+		return false
 
 	# Mark as planted
 	is_planted = true

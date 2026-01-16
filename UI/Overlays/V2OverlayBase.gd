@@ -42,6 +42,11 @@ var action_labels: Dictionary = {
 	"F": "Cycle"
 }
 
+## Z-index tier for OverlayStackManager
+## Default: Z_TIER_INFO (2000) - subclasses can override
+## Options: Z_TIER_INFO (2000), Z_TIER_MODAL (3000), Z_TIER_SYSTEM (4000)
+var overlay_tier: int = 2000  # Z_TIER_INFO
+
 # ============================================================================
 # NAVIGATION STATE
 # ============================================================================
@@ -149,9 +154,11 @@ func handle_input(event: InputEvent) -> bool:
 		navigate(Vector2i.RIGHT)
 		return true
 
-	# ESC closes overlay (handled by OverlayManager, but we can signal intent)
+	# ESC is handled by PlayerShell._handle_shell_action() via overlay_stack.handle_escape()
+	# Do NOT consume ESC here - let it fall through so the stack can properly pop this overlay
+	# If we consumed ESC here, the overlay would be hidden but remain on the stack
 	if event.keycode == KEY_ESCAPE:
-		return false  # Let OverlayManager handle ESC
+		return false  # Let OverlayStackManager.handle_escape() pop us from stack
 
 	return false
 
@@ -290,8 +297,14 @@ func get_overlay_info() -> Dictionary:
 	return {
 		"name": overlay_name,
 		"icon": overlay_icon,
-		"action_labels": action_labels
+		"action_labels": action_labels,
+		"tier": overlay_tier
 	}
+
+
+func get_overlay_tier() -> int:
+	"""Get z-index tier for OverlayStackManager."""
+	return overlay_tier
 
 
 func _to_string() -> String:

@@ -31,16 +31,18 @@ const REGIONS = [
 ]
 
 # View modes
-enum ViewMode { OCTANT_GRID, VOCABULARY, ATTRACTOR_MAP }
-const VIEW_MODE_NAMES = ["Octant Grid", "Vocabulary", "Attractor Map"]
+enum ViewMode { VOCAB_LIST, OCTANT_GRID, VOCABULARY, ATTRACTOR_MAP }
+const VIEW_MODE_NAMES = ["My Vocabulary", "Octant Grid", "Octant Detail", "Attractor Map"]
 
-var current_view_mode: int = ViewMode.OCTANT_GRID
+var current_view_mode: int = ViewMode.VOCAB_LIST  # Default to simple list
 var selected_octant: int = 0
 var vocabulary_data: Dictionary = {}  # Loaded from game state
 
 # UI elements
 var title_label: Label
 var view_mode_label: Label
+var vocab_list_container: Control  # Simple vocabulary list (default view)
+var vocab_list_grid: GridContainer  # Grid for vocab list items
 var octant_grid: GridContainer
 var vocab_container: Control
 var attractor_container: Control
@@ -96,12 +98,18 @@ func _build_ui() -> void:
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(content)
 
-	# Octant grid view
+	# Simple vocabulary list (default view - shows all discovered vocab)
+	vocab_list_container = _create_vocab_list_view()
+	vocab_list_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content.add_child(vocab_list_container)
+
+	# Octant grid view (initially hidden)
 	octant_grid = _create_octant_grid()
 	octant_grid.set_anchors_preset(Control.PRESET_FULL_RECT)
+	octant_grid.visible = false
 	content.add_child(octant_grid)
 
-	# Vocabulary view (initially hidden)
+	# Vocabulary per-octant view (initially hidden)
 	vocab_container = _create_vocabulary_view()
 	vocab_container.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vocab_container.visible = false
@@ -205,6 +213,55 @@ func _create_octant_panel(index: int) -> Control:
 	return panel
 
 
+func _create_vocab_list_view() -> Control:
+	"""Create simple vocabulary list view (default view).
+
+	Shows all discovered vocabulary in a flat list format.
+	This is what the player has learned and can use for quests.
+	"""
+	var container = VBoxContainer.new()
+	container.add_theme_constant_override("separation", 10)
+
+	# Header
+	var header = Label.new()
+	header.name = "VocabListHeader"
+	header.text = "📚 My Vocabulary"
+	header.add_theme_font_size_override("font_size", 18)
+	header.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
+	container.add_child(header)
+
+	# Subtitle
+	var subtitle = Label.new()
+	subtitle.name = "VocabListSubtitle"
+	subtitle.text = "Discovered emoji pairs - use these for quests!"
+	subtitle.add_theme_font_size_override("font_size", 12)
+	subtitle.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8))
+	container.add_child(subtitle)
+
+	# Scroll container for vocabulary list
+	var scroll = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	container.add_child(scroll)
+
+	# Grid for vocabulary items
+	vocab_list_grid = GridContainer.new()
+	vocab_list_grid.columns = 3  # 3 columns of emoji pairs
+	vocab_list_grid.add_theme_constant_override("h_separation", 16)
+	vocab_list_grid.add_theme_constant_override("v_separation", 8)
+	scroll.add_child(vocab_list_grid)
+
+	# Mode hint
+	var hint = Label.new()
+	hint.text = "[F] Cycle views: List → Octant Grid → Detail → Attractors"
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+	container.add_child(hint)
+
+	return container
+
+
 func _create_vocabulary_view() -> Control:
 	"""Create vocabulary grid for selected octant."""
 	var container = VBoxContainer.new()
@@ -275,6 +332,7 @@ func activate() -> void:
 	_load_vocabulary_data()
 	_update_octant_counts()
 	_update_selection_visual()
+	_update_view()  # Show correct view mode
 
 
 func _load_vocabulary_data() -> void:
@@ -330,6 +388,89 @@ func _update_octant_counts() -> void:
 			count_label.text = "%d emojis" % count
 
 
+func _populate_vocab_list() -> void:
+	"""Populate the vocabulary list with player's known emojis.
+
+	Shows known_emojis (what determines quest/faction access) not evolved pairs.
+	"""
+	# Clear existing items
+	for child in vocab_list_grid.get_children():
+		child.queue_free()
+
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if not gsm or not gsm.current_state:
+		_add_vocab_placeholder("Game not loaded")
+		return
+
+	# Get player's known emojis (determines faction access)
+	var known_emojis = gsm.current_state.known_emojis
+	var accessible_factions = gsm.get_accessible_factions() if gsm.has_method("get_accessible_factions") else []
+
+	# Update subtitle with count
+	var subtitle = vocab_list_container.find_child("VocabListSubtitle", true, false)
+	if subtitle:
+		subtitle.text = "%d emojis known | %d factions accessible" % [known_emojis.size(), accessible_factions.size()]
+
+	if known_emojis.is_empty():
+		_add_vocab_placeholder("No vocabulary yet!\n\nComplete quests to learn new emojis.")
+		return
+
+	# Add each known emoji with nice styling
+	for emoji in known_emojis:
+		var emoji_label = Label.new()
+		emoji_label.text = emoji
+		emoji_label.add_theme_font_size_override("font_size", 32)
+		emoji_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		emoji_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		emoji_label.custom_minimum_size = Vector2(60, 60)
+		emoji_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.9))
+		vocab_list_grid.add_child(emoji_label)
+
+	# Add separator and faction info
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(vocab_list_grid.size.x, 20)
+	vocab_list_grid.add_child(spacer)
+
+	# Show a few accessible factions as preview
+	if accessible_factions.size() > 0:
+		var factions_label = Label.new()
+		factions_label.text = "Accessible Factions:"
+		factions_label.add_theme_font_size_override("font_size", 14)
+		factions_label.add_theme_color_override("font_color", Color(0.7, 0.8, 0.9))
+		vocab_list_grid.add_child(factions_label)
+
+		var count = 0
+		for faction in accessible_factions:
+			if count >= 6:
+				var more_label = Label.new()
+				more_label.text = "... +%d more" % (accessible_factions.size() - count)
+				more_label.add_theme_font_size_override("font_size", 12)
+				more_label.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+				vocab_list_grid.add_child(more_label)
+				break
+
+			var faction_name = faction.get("name", "Unknown") if faction is Dictionary else str(faction)
+			var faction_emoji = faction.get("sig", ["?"])[0] if faction is Dictionary and faction.has("sig") else "?"
+
+			var faction_label = Label.new()
+			faction_label.text = "%s %s" % [faction_emoji, faction_name]
+			faction_label.add_theme_font_size_override("font_size", 12)
+			faction_label.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8))
+			vocab_list_grid.add_child(faction_label)
+			count += 1
+
+
+func _add_vocab_placeholder(message: String) -> void:
+	"""Add a placeholder message to the vocab list grid."""
+	var placeholder = Label.new()
+	placeholder.text = message
+	placeholder.add_theme_font_size_override("font_size", 14)
+	placeholder.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	placeholder.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vocab_list_grid.add_child(placeholder)
+
+
 func _get_octant_emoji_count(octant_index: int) -> int:
 	"""Get number of discovered emojis in an octant."""
 	if vocabulary_data.has(octant_index):
@@ -363,9 +504,14 @@ func _update_view() -> void:
 	"""Update visibility based on current view mode."""
 	view_mode_label.text = "[F] %s" % VIEW_MODE_NAMES[current_view_mode]
 
+	vocab_list_container.visible = (current_view_mode == ViewMode.VOCAB_LIST)
 	octant_grid.visible = (current_view_mode == ViewMode.OCTANT_GRID)
 	vocab_container.visible = (current_view_mode == ViewMode.VOCABULARY)
 	attractor_container.visible = (current_view_mode == ViewMode.ATTRACTOR_MAP)
+
+	# Populate vocab list when entering that mode
+	if current_view_mode == ViewMode.VOCAB_LIST:
+		_populate_vocab_list()
 
 
 func _update_selection_visual() -> void:

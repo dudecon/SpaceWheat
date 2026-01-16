@@ -3,8 +3,10 @@ extends Node
 
 ## Farm Economy - Unified Emoji-Credits System
 ## ALL resources are "emoji-credits" stored in a single dictionary
-## 1 quantum energy = 10 emoji-credits
+## Conversion rates defined in EconomyConstants.gd
 ## Example: 50 wheat = 500 🌾-credits
+
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 # Universal resource change signal
 signal resource_changed(emoji: String, new_amount: int)
@@ -13,9 +15,6 @@ signal resource_changed(emoji: String, new_amount: int)
 signal purchase_failed(reason: String)
 signal flour_processed(wheat_amount: int, flour_produced: int)
 signal flour_sold(flour_amount: int, credits_received: int)
-
-# Conversion ratio: 1 quantum energy = 10 credits
-const QUANTUM_TO_CREDITS: int = 10
 
 # Initial resources in emoji-credits (10 credits = 1 quantum energy unit)
 const INITIAL_RESOURCES = {
@@ -75,14 +74,14 @@ func _ready():
 		emoji_credits[emoji] = INITIAL_RESOURCES[emoji]
 
 	print("⚛️  Unified Emoji-Credits Economy initialized")
-	print("   1 quantum energy = %d credits" % QUANTUM_TO_CREDITS)
+	print("   1 quantum energy = %d credits" % EconomyConstants.QUANTUM_TO_CREDITS)
 	_print_resources()
 
 
 func _print_resources():
 	var output = "   "
 	for emoji in emoji_credits:
-		var quantum_units = emoji_credits[emoji] / QUANTUM_TO_CREDITS
+		var quantum_units = emoji_credits[emoji] / EconomyConstants.QUANTUM_TO_CREDITS
 		output += "%s: %d  " % [emoji, quantum_units]
 	print(output)
 
@@ -99,7 +98,7 @@ func add_resource(emoji: String, credits_amount: int, reason: String = "") -> vo
 	emoji_credits[emoji] += credits_amount
 	_emit_resource_change(emoji)
 
-	var quantum_units = credits_amount / QUANTUM_TO_CREDITS
+	var quantum_units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	if reason != "":
 		print("+ %d %s-credits (%d units) from %s" % [credits_amount, emoji, quantum_units, reason])
 
@@ -113,7 +112,7 @@ func remove_resource(emoji: String, credits_amount: int, reason: String = "") ->
 	emoji_credits[emoji] -= credits_amount
 	_emit_resource_change(emoji)
 
-	var quantum_units = credits_amount / QUANTUM_TO_CREDITS
+	var quantum_units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	if reason != "":
 		print("- %d %s-credits (%d units) for %s" % [credits_amount, emoji, quantum_units, reason])
 	return true
@@ -126,7 +125,7 @@ func get_resource(emoji: String) -> int:
 
 func get_resource_units(emoji: String) -> int:
 	"""Get resource in quantum units (credits / 10)"""
-	return get_resource(emoji) / QUANTUM_TO_CREDITS
+	return get_resource(emoji) / EconomyConstants.QUANTUM_TO_CREDITS
 
 
 func can_afford_resource(emoji: String, credits_amount: int) -> bool:
@@ -167,7 +166,7 @@ func receive_harvest(emoji: String, quantum_energy: float, reason: String = "har
 	1 quantum energy = 10 credits
 	Returns: number of credits added
 	"""
-	var credits_amount = int(quantum_energy * QUANTUM_TO_CREDITS)
+	var credits_amount = int(quantum_energy * EconomyConstants.QUANTUM_TO_CREDITS)
 	add_resource(emoji, credits_amount, reason)
 	return credits_amount
 
@@ -184,14 +183,14 @@ func _get_missing_resources(cost: Dictionary) -> String:
 		var have = get_resource(emoji)
 		var need = cost[emoji]
 		if have < need:
-			missing.append("%d more %s" % [(need - have) / QUANTUM_TO_CREDITS, emoji])
+			missing.append("%d more %s" % [(need - have) / EconomyConstants.QUANTUM_TO_CREDITS, emoji])
 	return ", ".join(missing)
 
 
 func _format_cost(cost: Dictionary) -> String:
 	var parts = []
 	for emoji in cost.keys():
-		parts.append("%d %s" % [cost[emoji] / QUANTUM_TO_CREDITS, emoji])
+		parts.append("%d %s" % [cost[emoji] / EconomyConstants.QUANTUM_TO_CREDITS, emoji])
 	return ", ".join(parts)
 
 
@@ -205,7 +204,7 @@ func process_wheat_to_flour(wheat_amount: int) -> Dictionary:
 	Mill efficiency: 10 wheat → 8 flour + 40 💰-credits (5 per flour as labor value)
 	Amount is in quantum units (will be converted to credits internally)
 	"""
-	var wheat_credits = wheat_amount * QUANTUM_TO_CREDITS
+	var wheat_credits = wheat_amount * EconomyConstants.QUANTUM_TO_CREDITS
 
 	if not can_afford_resource("🌾", wheat_credits):
 		purchase_failed.emit("Not enough wheat to mill! Need %d, have %d" % [wheat_amount, get_resource_units("🌾")])
@@ -214,13 +213,13 @@ func process_wheat_to_flour(wheat_amount: int) -> Dictionary:
 	# Remove wheat
 	remove_resource("🌾", wheat_credits, "mill_input")
 
-	# Mill economics: 0.8 ratio (10 wheat → 8 flour)
-	var flour_gained = int(wheat_amount * 0.8)
+	# Mill economics: efficiency ratio (10 wheat → 8 flour)
+	var flour_gained = int(wheat_amount * EconomyConstants.MILL_EFFICIENCY)
 	var credit_bonus = flour_gained * 5  # 5 💰-units per flour produced
 
 	# Add flour and 💰 from mill processing
-	add_resource("💨", flour_gained * QUANTUM_TO_CREDITS, "mill_output")
-	add_resource("💰", credit_bonus * QUANTUM_TO_CREDITS, "mill_processing")
+	add_resource("💨", flour_gained * EconomyConstants.QUANTUM_TO_CREDITS, "mill_output")
+	add_resource("💰", credit_bonus * EconomyConstants.QUANTUM_TO_CREDITS, "mill_processing")
 
 	flour_processed.emit(wheat_amount, flour_gained)
 
@@ -241,7 +240,7 @@ func process_flour_to_bread(flour_amount: int) -> Dictionary:
 	Kitchen efficiency: 5 flour → 3 bread (60% yield)
 	Amount is in quantum units (will be converted to credits internally)
 	"""
-	var flour_credits = flour_amount * QUANTUM_TO_CREDITS
+	var flour_credits = flour_amount * EconomyConstants.QUANTUM_TO_CREDITS
 
 	if not can_afford_resource("💨", flour_credits):
 		purchase_failed.emit("Not enough flour to bake! Need %d, have %d" % [flour_amount, get_resource_units("💨")])
@@ -250,11 +249,11 @@ func process_flour_to_bread(flour_amount: int) -> Dictionary:
 	# Remove flour
 	remove_resource("💨", flour_credits, "kitchen_input")
 
-	# Kitchen efficiency: 0.6 ratio (5 flour → 3 bread)
-	var bread_gained = int(flour_amount * 0.6)
+	# Kitchen efficiency (5 flour → 3 bread)
+	var bread_gained = int(flour_amount * EconomyConstants.KITCHEN_EFFICIENCY)
 
 	# Add bread (using 🍞 emoji)
-	add_resource("🍞", bread_gained * QUANTUM_TO_CREDITS, "kitchen_output")
+	add_resource("🍞", bread_gained * EconomyConstants.QUANTUM_TO_CREDITS, "kitchen_output")
 
 	print("🍳 Baked %d flour → %d bread" % [flour_amount, bread_gained])
 
@@ -275,7 +274,7 @@ func can_fulfill_quota(wheat_required: int) -> bool:
 func fulfill_quota(wheat_required: int) -> bool:
 	if not can_fulfill_quota(wheat_required):
 		return false
-	return remove_resource("🌾", wheat_required * QUANTUM_TO_CREDITS, "quota")
+	return remove_resource("🌾", wheat_required * EconomyConstants.QUANTUM_TO_CREDITS, "quota")
 
 
 ## ============================================================================
@@ -303,7 +302,7 @@ func print_stats():
 	print("\n=== FARM ECONOMY (Emoji-Credits) ===")
 	for emoji in emoji_credits:
 		var credits_val = emoji_credits[emoji]
-		var units = credits_val / QUANTUM_TO_CREDITS
+		var units = credits_val / EconomyConstants.QUANTUM_TO_CREDITS
 		print("  %s: %d units (%d credits)" % [emoji, units, credits_val])
 	print("  Total wheat harvested: %d" % total_wheat_harvested)
 	print("=====================================\n")

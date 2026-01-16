@@ -27,7 +27,9 @@ signal visualization_changed()
 # Preload classes
 const FarmPlot = preload("res://Core/GameMechanics/FarmPlot.gd")
 const FarmEconomy = preload("res://Core/GameMechanics/FarmEconomy.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 const WheatPlot = preload("res://Core/GameMechanics/WheatPlot.gd")
+const BiomeBase = preload("res://Core/Environment/BiomeBase.gd")
 const BioticFluxBiome = preload("res://Core/Environment/BioticFluxBiome.gd")
 const QuantumKitchen_Biome = preload("res://Core/Environment/QuantumKitchen_Biome.gd")
 # const Biome = preload("res://Core/Environment/Biome.gd")  # Legacy - REMOVED: file no longer exists
@@ -446,7 +448,7 @@ func _process_energy_taps(delta: float) -> void:
 
 				# Convert accumulated flux to economy credits
 				# Flux is in quantum units, convert to credits (1 quantum = 10 credits)
-				var flux_credits = int(flux * FarmEconomy.QUANTUM_TO_CREDITS)
+				var flux_credits = int(flux * EconomyConstants.QUANTUM_TO_CREDITS)
 				if flux_credits > 0 and farm_economy:
 					farm_economy.add_resource(target_emoji, flux_credits, "energy_tap_drain")
 
@@ -489,7 +491,7 @@ func process_mill_flour(flour_amount: int) -> void:
 
 	# Mill produces flour directly from quantum measurement
 	# No wheat consumption needed - flour is a quantum measurement outcome
-	var flour_credits = flour_amount * FarmEconomy.QUANTUM_TO_CREDITS
+	var flour_credits = flour_amount * EconomyConstants.QUANTUM_TO_CREDITS
 	farm_economy.add_resource("💨", flour_credits, "mill_quantum_measurement")
 
 	_verbose.info("economy", "🏭", "Mill: Produced %d flour → %d credits" % [
@@ -581,7 +583,7 @@ func kitchen_add_resource(emoji: String, credits: int) -> bool:
 	farm_economy.remove_resource(emoji, credits, "kitchen_drive")
 
 	# Convert credits to resource amount (for drive duration)
-	var amount = credits / float(FarmEconomy.QUANTUM_TO_CREDITS)
+	var amount = credits / float(EconomyConstants.QUANTUM_TO_CREDITS)
 
 	# Activate drive in kitchen
 	match emoji:
@@ -624,7 +626,7 @@ func kitchen_harvest() -> Dictionary:
 
 	# Add bread to economy if successful
 	if result["got_bread"]:
-		var bread_credits = result["yield"] * FarmEconomy.QUANTUM_TO_CREDITS
+		var bread_credits = result["yield"] * EconomyConstants.QUANTUM_TO_CREDITS
 		farm_economy.add_resource("🍞", bread_credits, "kitchen_harvest")
 		_verbose.info("farm", "🍳", "Kitchen harvest: %s → %d 🍞 credits" % [
 			result["outcome"], bread_credits])
@@ -728,10 +730,42 @@ func plant(position: Vector2i, plant_type: String, quantum_state: Resource = nul
 			capability = cap
 			break
 
+	# BUILD MODE: Dynamic capability creation if capability doesn't exist
 	if not capability:
-		push_error("⚠️ %s biome does not support planting %s" % [
-			plot_biome.get_biome_type(), plant_type])
-		return false
+		# Check if biome is in BUILD mode
+		if not plot_biome.evolution_paused:
+			push_warning("⚠️ Cannot plant %s in %s - requires BUILD mode (TAB) to add new plant type" % [
+				plant_type, plot_biome.get_biome_type()])
+			return false
+
+		# Get emoji pair from central registry
+		var emoji_pair = EconomyConstants.get_plant_type_emojis(plant_type)
+		if emoji_pair.is_empty():
+			push_error("⚠️ Unknown plant type: %s (not in EconomyConstants.PLANT_TYPE_EMOJIS)" % plant_type)
+			return false
+
+		# Create dynamic capability
+		var PlantingCapability = BiomeBase.PlantingCapability
+		capability = PlantingCapability.new()
+		capability.plant_type = plant_type
+		capability.emoji_pair = emoji_pair
+		capability.cost = {"💰": EconomyConstants.get_planting_cost(emoji_pair.north)}
+		capability.display_name = plant_type.capitalize()
+		capability.requires_biome = false
+
+		# Register capability with biome
+		plot_biome.planting_capabilities.append(capability)
+		_verbose.info("farm", "🔧", "Created dynamic capability for %s in %s" % [
+			plant_type, plot_biome.get_biome_type()])
+
+	# ECONOMY: Enforce planting costs
+	var north_emoji = capability.emoji_pair.get("north", "?")
+	var planting_cost = EconomyConstants.get_planting_cost(north_emoji)
+	if farm_economy and planting_cost > 0:
+		if not farm_economy.can_afford_resource("💰", planting_cost):
+			push_warning("⚠️ Not enough 💰-credits to plant %s (need %d)" % [plant_type, planting_cost])
+			return false
+		farm_economy.remove_resource("💰", planting_cost, "planting_%s" % plant_type)
 
 	# LEGACY: Still set plot_type enum for backward compatibility (Phase 5 will remove)
 	# Map plant_type string to enum for now
@@ -760,12 +794,28 @@ func plant(position: Vector2i, plant_type: String, quantum_state: Resource = nul
 	# PHASE 5 (PARAMETRIC): Set plot_type_name from plant_type string
 	plot.plot_type_name = plant_type
 
-	# VALIDATION: Check if biome quantum system supports this emoji pair
+	# AUTO-EXPANSION: If biome doesn't support this emoji pair, expand its quantum system
 	if plot_biome.has_method("supports_emoji_pair"):
 		if not plot_biome.supports_emoji_pair(plot.north_emoji, plot.south_emoji):
-			push_warning("⚠️ Biome %s quantum system doesn't have %s/%s axis - plant may not function correctly" % [
-				plot_biome.get_biome_type(), plot.north_emoji, plot.south_emoji])
-			# Don't block planting, but warn - allows player experimentation
+			# Axis doesn't exist - try to expand the quantum system
+			if plot_biome.has_method("expand_quantum_system"):
+				var expand_result = plot_biome.expand_quantum_system(plot.north_emoji, plot.south_emoji)
+				if not expand_result.success:
+					# Expansion failed - check if it's because we need BUILD mode
+					if expand_result.error == "build_mode_required":
+						push_warning("⚠️ Cannot plant %s/%s - requires BUILD mode (TAB) to expand quantum system" % [
+							plot.north_emoji, plot.south_emoji])
+						return false
+					else:
+						push_error("❌ Failed to expand quantum system: %s" % expand_result.get("message", expand_result.error))
+						return false
+				# Expansion succeeded - continue with planting
+				_verbose.info("farm", "🔬", "Expanded %s quantum system to include %s/%s axis" % [
+					plot_biome.get_biome_type(), plot.north_emoji, plot.south_emoji])
+			else:
+				# Biome doesn't support expansion - warn but allow (for backward compatibility)
+				push_warning("⚠️ Biome %s doesn't support quantum expansion - plant may not function correctly" % [
+					plot_biome.get_biome_type()])
 
 	# Special handling for tomato: assign conspiracy node
 	if plant_type == "tomato":
@@ -775,23 +825,18 @@ func plant(position: Vector2i, plant_type: String, quantum_state: Resource = nul
 		plot.conspiracy_node_id = node_ids[node_index]
 		_verbose.info("farm", "🍅", "Planted tomato at %s connected to node: %s" % [plot.plot_id, plot.conspiracy_node_id])
 
-	# Plant through biome's quantum computer (Model B/C)
+	# Plant through biome's quantum computer (Model C)
 	# Note: plot_biome already resolved above for validation
-	plot.plant(0.0, 0.1, plot_biome)  # 0.1 quantum wheat, 0 labor
+	plot.plant(plot_biome)  # Biome handles quantum state registration
 
-	# MODEL B/C Hybrid: Track register/subplot allocation
-	# After plot.plant() succeeds, sync FarmGrid's tracking
-	# MODEL C: Check for bath_subplot_id first
-	if "bath_subplot_id" in plot and plot.bath_subplot_id >= 0:
-		# Bath-based plot (Model C) - track subplot
-		plot_register_mapping[position] = plot.bath_subplot_id
-		# Note: No need to track plot_to_biome_quantum_computer for bath plots
-	# MODEL B: Fall back to register_id
-	elif "register_id" in plot and plot.register_id >= 0:
+	# Track register allocation in quantum computer
+	if "register_id" in plot and plot.register_id >= 0:
 		plot_register_mapping[position] = plot.register_id
 		plot_biome = get_biome_for_plot(position)
-		if plot_biome and plot_biome.has_method("quantum_computer"):
+		if plot_biome and plot_biome.quantum_computer:
 			plot_to_biome_quantum_computer[position] = plot_biome.quantum_computer
+	else:
+		push_error("Plot %s planted but register_id not set!" % position)
 
 	total_plots_planted += 1
 	plot_planted.emit(position)

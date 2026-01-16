@@ -203,6 +203,15 @@ func get_active_terminals() -> Array:
 	return result
 
 
+## Get terminal by grid position (bubble location)
+## Returns null if no terminal is bound to that position
+func get_terminal_at_grid_pos(grid_pos: Vector2i) -> RefCounted:
+	for terminal in terminals:
+		if terminal.is_bound and terminal.grid_position == grid_pos:
+			return terminal
+	return null
+
+
 ## Resize the pool (adds or removes terminals)
 func resize(new_size: int) -> void:
 	if new_size < 1:

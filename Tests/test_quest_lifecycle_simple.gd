@@ -8,6 +8,7 @@ const QuestManager = preload("res://Core/Quests/QuestManager.gd")
 const QuestGenerator = preload("res://Core/Quests/QuestGenerator.gd")
 const FarmEconomy = preload("res://Core/GameMechanics/FarmEconomy.gd")
 const GameStateManager = preload("res://Core/GameState/GameStateManager.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 var quest_manager: QuestManager = null
 var economy: FarmEconomy = null
@@ -122,7 +123,7 @@ func run_quest(faction: Dictionary):
 	# Check resources
 	var required_emoji = quest.get("resource", "")
 	var required_qty = quest.get("quantity", 0)
-	var required_credits = required_qty * economy.QUANTUM_TO_CREDITS
+	var required_credits = required_qty * EconomyConstants.QUANTUM_TO_CREDITS
 	var current_amount = economy.get_resource(required_emoji)
 
 	print("  Current %s: %d (need %d)" % [required_emoji, current_amount, required_credits])

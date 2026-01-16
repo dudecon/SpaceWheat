@@ -251,6 +251,9 @@ func _update_quantum_substrate(dt: float) -> void:
 		# SEMANTIC TOPOLOGY: Record phase space trajectory
 		_record_attractor_snapshot()
 
+	# Apply semantic drift game mechanics (🌀 chaos vs ✨ stability)
+	super._update_quantum_substrate(dt)
+
 	# Update legacy weather qubits from quantum state
 	_update_weather_from_quantum()
 

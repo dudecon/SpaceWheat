@@ -43,7 +43,8 @@ func _to_string() -> String:
 ## Ensure component has a density matrix representation (convert if needed)
 func ensure_density_matrix() -> ComplexMatrix:
 	"""Get or create density matrix. Converts from statevector if needed."""
-	if not is_pure or density_matrix == null:
+	# If we don't have a density matrix, create one
+	if density_matrix == null:
 		if state_vector:
 			# Convert |ψ⟩ to ρ = |ψ⟩⟨ψ|
 			density_matrix = ComplexMatrix.from_statevector(state_vector)
@@ -52,6 +53,8 @@ func ensure_density_matrix() -> ComplexMatrix:
 			density_matrix = ComplexMatrix.identity(hilbert_dimension())
 			density_matrix = density_matrix.scale_real(1.0 / hilbert_dimension())
 		is_pure = false
+	# If state_vector still exists and is_pure is true, use state_vector
+	# Otherwise, use the density_matrix (which may have been updated via gates)
 	return density_matrix
 
 ## Merge this component with another (tensor product)
@@ -169,6 +172,16 @@ func get_coherence(register_id: int) -> float:
 	"""
 	var marginal = get_marginal_2x2(register_id)
 	return marginal.get_element(0, 1).abs()
+
+
+## Get complex coherence value (for phase visualization)
+func get_coherence_complex(register_id: int):
+	"""
+	Get off-diagonal element ρ₀₁ as Complex (includes phase).
+	Used by QuantumNode for color hue from quantum phase.
+	"""
+	var marginal = get_marginal_2x2(register_id)
+	return marginal.get_element(0, 1)
 
 ## Get purity of marginal state: Tr(ρ_marginal²)
 func get_purity(register_id: int) -> float:

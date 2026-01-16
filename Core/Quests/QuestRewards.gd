@@ -7,12 +7,36 @@ extends RefCounted
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
 
+## Icon Modification: How quest rewards can modify icon physics
+class IconModification:
+	enum Type {
+		ADD_COUPLING,       # Add new hamiltonian coupling
+		MODIFY_COUPLING,    # Change existing coupling strength
+		REDUCE_DECAY,       # Lower decay rate
+		ADD_LINDBLAD,       # Add transfer channel
+		UNLOCK_BELL_FEATURE,# Enable bell-activated feature
+		ADD_DRIVER,         # Add time-dependent forcing
+		BOOST_SELF_ENERGY,  # Increase self-energy (stability)
+	}
+
+	var type: Type
+	var icon_emoji: String = ""
+	var parameters: Dictionary = {}  # Type-specific params
+
+	func _init():
+		type = Type.MODIFY_COUPLING
+
+	func _to_string() -> String:
+		return "IconMod<%s>[%s]" % [Type.keys()[type], icon_emoji]
+
+
 class QuestReward:
 	"""Rewards for completing a quest"""
-	var gold: int = 0
+	var money_amount: int = 0  # 💰-credits reward (no universal currency!)
 	var learned_vocabulary: Array[String] = []  # Emojis player learned
 	var reputation_gain: int = 0  # Future: faction reputation
 	var bonus_multiplier: float = 1.0  # From alignment
+	var icon_modifications: Array = []  # Array[IconModification] - physics changes
 
 
 static func generate_reward(quest: Dictionary, bath, player_vocab: Array) -> QuestReward:
@@ -24,14 +48,14 @@ static func generate_reward(quest: Dictionary, bath, player_vocab: Array) -> Que
 		player_vocab: Player's known emojis
 
 	Returns:
-		QuestReward with gold and vocabulary
+		QuestReward with 💰-credits and vocabulary
 	"""
 	var reward = QuestReward.new()
 
-	# Base gold from quest quantity and alignment
-	var base_gold = quest.get("quantity", 5) * 10
+	# Base 💰-credits from quest quantity and alignment
+	var base_money = quest.get("quantity", 5) * 10
 	var multiplier = quest.get("reward_multiplier", 1.0)
-	reward.gold = int(base_gold * multiplier)
+	reward.money_amount = int(base_money * multiplier)
 	reward.bonus_multiplier = multiplier
 
 	# Vocabulary reward - teach emoji from faction signature
@@ -42,6 +66,11 @@ static func generate_reward(quest: Dictionary, bath, player_vocab: Array) -> Que
 		var vocab = select_vocabulary_reward(faction_dict, bath, player_vocab)
 		if vocab != "":
 			reward.learned_vocabulary.append(vocab)
+
+		# Icon modification reward (for higher-tier quests)
+		if should_grant_icon_modification(quest):
+			var mod = generate_icon_modification(faction_dict, quest)
+			reward.icon_modifications.append(mod)
 
 	return reward
 
@@ -64,7 +93,8 @@ static func select_vocabulary_reward(faction: Dictionary, bath, player_vocab: Ar
 	Returns:
 		Emoji string to teach, or "" if none available
 	"""
-	var signature = faction.get("signature", [])
+	# Faction data uses "sig" key (short for signature)
+	var signature = faction.get("sig", faction.get("signature", []))
 
 	# Filter to unknown vocabulary
 	var unknown = []
@@ -124,8 +154,8 @@ static func format_reward_text(reward: QuestReward) -> String:
 	"""Generate human-readable reward text for UI"""
 	var lines = []
 
-	# Gold
-	lines.append("💰 +%d gold" % reward.gold)
+	# 💰-credits (no universal currency - 💰 is just the most widely accepted)
+	lines.append("💰 +%d" % reward.money_amount)
 
 	# Vocabulary
 	for emoji in reward.learned_vocabulary:
@@ -134,6 +164,10 @@ static func format_reward_text(reward: QuestReward) -> String:
 	if reward.learned_vocabulary.is_empty():
 		lines.append("📖 (No new vocabulary)")
 
+	# Icon modifications
+	for mod in reward.icon_modifications:
+		lines.append("⚛️ %s" % _format_icon_modification(mod))
+
 	return "\n".join(lines)
 
 
@@ -141,18 +175,19 @@ static func preview_possible_rewards(quest: Dictionary, player_vocab: Array) -> 
 	"""Preview what rewards might be earned (before completion)"""
 	var lines = []
 
-	# Gold preview
-	var base_gold = quest.get("quantity", 5) * 10
+	# 💰-credits preview
+	var base_money = quest.get("quantity", 5) * 10
 	var multiplier = quest.get("reward_multiplier", 1.0)
-	var gold = int(base_gold * multiplier)
-	lines.append("💰 %d gold" % gold)
+	var money = int(base_money * multiplier)
+	lines.append("💰 %d" % money)
 
 	# Vocabulary preview
 	var faction_name = quest.get("faction", "")
 	var faction_dict = _get_faction_by_name(faction_name)
 
 	if faction_dict:
-		var signature = faction_dict.get("signature", [])
+		# Faction data uses "sig" key (short for signature)
+		var signature = faction_dict.get("sig", faction_dict.get("signature", []))
 		var unknown_vocab = []
 
 		for emoji in signature:
@@ -169,3 +204,182 @@ static func preview_possible_rewards(quest: Dictionary, player_vocab: Array) -> 
 			lines.append("📖 (No new vocabulary)")
 
 	return "\n".join(lines)
+
+
+## ========================================
+## Icon Modification Generation
+## ========================================
+
+static func generate_icon_modification(faction: Dictionary, quest: Dictionary) -> IconModification:
+	"""Generate a faction-specific icon modification as quest reward
+
+	Args:
+		faction: Faction dictionary
+		quest: Quest dictionary
+
+	Returns:
+		IconModification with faction-appropriate changes
+	"""
+	var mod = IconModification.new()
+	var faction_name = faction.get("name", "Unknown")
+	var faction_sig = faction.get("sig", faction.get("signature", []))
+
+	# Pick an emoji from faction signature for modification
+	var target_emoji = quest.get("resource", "")
+	if target_emoji.is_empty() and faction_sig.size() > 0:
+		target_emoji = faction_sig[randi() % faction_sig.size()]
+
+	mod.icon_emoji = target_emoji
+
+	# Faction-specific modification types
+	match faction_name:
+		"Loom Priests":
+			# Fate threads are complex! Add imaginary coupling
+			mod.type = IconModification.Type.ADD_COUPLING
+			var fate_targets = ["🕯️", "🧵", "🌀", "📿"]
+			var fate_target = fate_targets[randi() % fate_targets.size()]
+			mod.parameters = {
+				"target": fate_target,
+				"strength": randf_range(0.05, 0.15),
+				"imaginary": randf_range(-0.1, 0.1),  # Complex coupling!
+				"description": "Fate threads weave new connections"
+			}
+
+		"Yeast Prophets":
+			# Enhance fermentation couplings
+			mod.type = IconModification.Type.MODIFY_COUPLING
+			mod.parameters = {
+				"target": "🍞",
+				"boost_factor": randf_range(1.1, 1.3),
+				"description": "Fermentation accelerates"
+			}
+
+		"Sacred Flame Keepers":
+			# Reduce fire decay
+			mod.type = IconModification.Type.REDUCE_DECAY
+			mod.icon_emoji = "🔥"
+			mod.parameters = {
+				"reduction": randf_range(0.005, 0.02),
+				"description": "Sacred flame burns longer"
+			}
+
+		"Knot-Shriners":
+			# Unlock Bell-activated feature
+			mod.type = IconModification.Type.UNLOCK_BELL_FEATURE
+			mod.icon_emoji = "🪢"
+			mod.parameters = {
+				"feature_name": "oath_binding",
+				"description": "Oaths now bind when entangled"
+			}
+
+		"Verdant Pulse", "Granary Guilds":
+			# Boost growth
+			mod.type = IconModification.Type.MODIFY_COUPLING
+			mod.parameters = {
+				"target": "🌾",
+				"boost_factor": randf_range(1.05, 1.15),
+				"description": "Growth flows strengthened"
+			}
+
+		"Kilowatt Collective":
+			# Add driver for power oscillation
+			mod.type = IconModification.Type.ADD_DRIVER
+			mod.icon_emoji = "⚡"
+			mod.parameters = {
+				"driver_type": "cosine",
+				"frequency": randf_range(0.1, 0.3),
+				"amplitude": randf_range(0.1, 0.3),
+				"description": "Power surges rhythmically"
+			}
+
+		"Keepers of Silence":
+			# Boost decoherence effect (silence kills coherence)
+			mod.type = IconModification.Type.BOOST_SELF_ENERGY
+			mod.icon_emoji = "🤫"
+			mod.parameters = {
+				"boost": randf_range(-0.1, -0.05),  # Negative = more unstable
+				"description": "Silence deepens"
+			}
+
+		_:
+			# Default: small coupling boost to a random emoji
+			mod.type = IconModification.Type.MODIFY_COUPLING
+			if faction_sig.size() >= 2:
+				var other = faction_sig[randi() % faction_sig.size()]
+				while other == target_emoji and faction_sig.size() > 1:
+					other = faction_sig[randi() % faction_sig.size()]
+				mod.parameters = {
+					"target": other,
+					"boost_factor": randf_range(1.03, 1.1),
+					"description": "Bonds strengthen"
+				}
+			else:
+				mod.type = IconModification.Type.BOOST_SELF_ENERGY
+				mod.parameters = {
+					"boost": randf_range(0.02, 0.08),
+					"description": "Essence stabilizes"
+				}
+
+	return mod
+
+
+static func _format_icon_modification(mod: IconModification) -> String:
+	"""Format an icon modification for display"""
+	var desc = mod.parameters.get("description", "Modified physics")
+
+	match mod.type:
+		IconModification.Type.ADD_COUPLING:
+			var target = mod.parameters.get("target", "?")
+			return "%s → %s: %s" % [mod.icon_emoji, target, desc]
+
+		IconModification.Type.MODIFY_COUPLING:
+			var target = mod.parameters.get("target", "?")
+			var boost = mod.parameters.get("boost_factor", 1.0)
+			return "%s → %s: +%.0f%% (%s)" % [mod.icon_emoji, target, (boost - 1) * 100, desc]
+
+		IconModification.Type.REDUCE_DECAY:
+			var red = mod.parameters.get("reduction", 0.0)
+			return "%s decay -%.1f%% (%s)" % [mod.icon_emoji, red * 100, desc]
+
+		IconModification.Type.ADD_LINDBLAD:
+			var target = mod.parameters.get("target", "?")
+			return "%s → %s: new transfer (%s)" % [mod.icon_emoji, target, desc]
+
+		IconModification.Type.UNLOCK_BELL_FEATURE:
+			var feature = mod.parameters.get("feature_name", "unknown")
+			return "%s: Bell feature [%s] unlocked" % [mod.icon_emoji, feature]
+
+		IconModification.Type.ADD_DRIVER:
+			var freq = mod.parameters.get("frequency", 0.0)
+			return "%s: oscillation at %.2f Hz (%s)" % [mod.icon_emoji, freq, desc]
+
+		IconModification.Type.BOOST_SELF_ENERGY:
+			var boost = mod.parameters.get("boost", 0.0)
+			var dir = "stabilized" if boost > 0 else "destabilized"
+			return "%s: %s (%s)" % [mod.icon_emoji, dir, desc]
+
+	return "%s: %s" % [mod.icon_emoji, desc]
+
+
+static func should_grant_icon_modification(quest: Dictionary) -> bool:
+	"""Determine if this quest should grant an icon modification reward
+
+	Higher-tier quests (prophecy, coherence, bell state) are more likely
+	to grant icon modifications as rewards.
+	"""
+	var quest_type = quest.get("type", 0)
+
+	# Quantum mechanics quests always grant modifications
+	const QuestTypes = preload("res://Core/Quests/QuestTypes.gd")
+	if quest_type in [
+		QuestTypes.Type.ACHIEVE_EIGENSTATE,
+		QuestTypes.Type.MAINTAIN_COHERENCE,
+		QuestTypes.Type.INDUCE_BELL_STATE,
+	]:
+		return true
+
+	# Other quests have a chance based on reward multiplier
+	var multiplier = quest.get("reward_multiplier", 1.0)
+	var chance = clamp((multiplier - 1.5) * 0.3, 0.0, 0.5)  # 0-50% chance
+
+	return randf() < chance

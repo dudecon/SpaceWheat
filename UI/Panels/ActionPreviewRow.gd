@@ -40,7 +40,12 @@ func _ready():
 
 	# Container setup
 	# Note: Don't use anchors in container children - let parent handle layout
-	add_theme_constant_override("separation", 10)
+	# Reduced spacing to give more room to buttons themselves
+	add_theme_constant_override("separation", 8)
+	add_theme_constant_override("margin_left", 8)
+	add_theme_constant_override("margin_right", 8)
+	add_theme_constant_override("margin_top", 4)
+	add_theme_constant_override("margin_bottom", 4)
 	# CRITICAL: Don't set alignment here - let buttons' size_flags_horizontal handle distribution
 
 	# Allow keyboard input to pass through, but buttons can still receive clicks
@@ -79,13 +84,15 @@ func _ready():
 
 func update_for_tool(tool_num: int) -> void:
 	"""Update action buttons to show actions for the selected tool"""
-	if tool_num < 1 or tool_num > 6:
+	if tool_num < 1 or tool_num > 4:  # v2: 4 tools per mode
 		return
 
 	current_tool = tool_num
 	current_submenu = ""  # Clear submenu when tool changes
 
 	var tool_info = TOOL_ACTIONS.get(tool_num, {})
+	# v2 structure: actions are nested under "actions" key
+	var actions = tool_info.get("actions", {})
 
 	# Update each action button
 	for action_key in ["Q", "E", "R"]:
@@ -93,7 +100,7 @@ func update_for_tool(tool_num: int) -> void:
 			continue
 
 		var button = action_buttons[action_key]
-		var action_info = tool_info.get(action_key, {})
+		var action_info = actions.get(action_key, {})
 		var label = action_info.get("label", "?")
 		var emoji = action_info.get("emoji", "")
 

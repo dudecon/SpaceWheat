@@ -130,7 +130,7 @@ func _create_ui_elements():
 	emoji_label_north.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	emoji_label_north.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	emoji_label_north.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	emoji_label_north.add_theme_font_size_override("font_size", 48)
+	emoji_label_north.add_theme_font_size_override("font_size", 36)
 	emoji_label_north.z_index = 3  # Above selection border
 	emoji_label_north.set_anchors_preset(Control.PRESET_FULL_RECT)  # Fill parent
 	add_child(emoji_label_north)
@@ -140,7 +140,7 @@ func _create_ui_elements():
 	emoji_label_south.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	emoji_label_south.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	emoji_label_south.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	emoji_label_south.add_theme_font_size_override("font_size", 48)
+	emoji_label_south.add_theme_font_size_override("font_size", 36)
 	emoji_label_south.z_index = 3  # Same layer as north (overlaid)
 	emoji_label_south.set_anchors_preset(Control.PRESET_FULL_RECT)  # Fill parent
 	add_child(emoji_label_south)

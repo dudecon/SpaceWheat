@@ -7,6 +7,7 @@ extends HBoxContainer
 ## Supports arbitrary resources via emoji keys - no hardcoding needed!
 
 const FarmEconomy = preload("res://Core/GameMechanics/FarmEconomy.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 # Layout manager reference (for dynamic scaling)
 var layout_manager: Node  # Will be UILayoutManager instance
@@ -66,7 +67,7 @@ func _on_resource_changed(emoji: String, credits_amount: int) -> void:
 	_ensure_display_exists(emoji)
 
 	# Convert credits to quantum units for display
-	var units = credits_amount / FarmEconomy.QUANTUM_TO_CREDITS
+	var units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	_update_display(emoji, units)
 
 

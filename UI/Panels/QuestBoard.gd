@@ -16,11 +16,12 @@ signal action_performed(action: String, data: Dictionary)  # v2 overlay compatib
 # v2 Overlay Interface
 var overlay_name: String = "quests"
 var overlay_icon: String = "📜"
+var overlay_tier: int = 3000  # Z_TIER_MODAL
 var action_labels: Dictionary = {
 	"Q": "Accept/Complete",
 	"E": "Reroll/Abandon",
 	"R": "Lock/Unlock",
-	"F": "Browse Factions"
+	"F": "Next Page"
 }
 
 # References
@@ -40,6 +41,10 @@ var accessible_factions_label: Label
 # Quest slots (4 slots: U, I, O, P)
 var quest_slots: Array = []  # Array of QuestSlot instances
 var selected_slot_index: int = 0
+
+# Quest pool for F-cycling
+var all_available_quests: Array = []  # All quests from accessible factions
+var quest_page_offset: int = 0  # Current page offset (0, 4, 8, ...)
 
 # Faction browser
 var faction_browser: Node = null
@@ -153,9 +158,6 @@ func handle_input(event: InputEvent) -> bool:
 		KEY_F:
 			on_f_pressed()
 			return true
-		KEY_C:
-			open_faction_browser()
-			return true
 
 	return false  # Input not consumed
 
@@ -213,9 +215,9 @@ func _create_ui() -> void:
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	main_vbox.add_child(title_label)
 
-	# Simplified controls - JUST SELECTION + BROWSE (QER shown in toolbar!)
+	# Simplified controls - SELECTION + QER ACTIONS + F PAGE
 	controls_label = Label.new()
-	controls_label.text = "🎯 [Arrows or UIOP] Select  |  [QER] Actions  |  📚 [C] Browse  |  ✖️ [ESC] Close"
+	controls_label.text = "🎯 [Arrows/UIOP] Select  |  [QER] Actions  |  [F] Next Page  |  ✖️ [ESC] Close"
 	controls_label.add_theme_font_size_override("font_size", normal_size)
 	controls_label.modulate = Color(1.0, 0.9, 0.5)  # Gold/yellow for visibility
 	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -360,38 +362,55 @@ func _get_saved_quest_slots() -> Array:
 
 
 func _refresh_slots() -> void:
-	"""Refresh all quest slots from quest manager and game state"""
-	if not quest_manager:
+	"""Refresh all quest slots - displays current page from all_available_quests pool
+
+	IMPORTANT: Locked and Active slots are PINNED - they don't change when F cycles pages.
+	Only EMPTY and OFFERED (not locked) slots get updated from the quest pool.
+	"""
+	if not quest_manager or not current_biome:
 		return
 
-	# Load slot data from GameStateManager (safe access)
-	var slot_data = _get_saved_quest_slots()
+	# Build the full quest pool from all accessible factions
+	all_available_quests = quest_manager.offer_all_faction_quests(current_biome)
+
+	# Identify pinned slots and their factions (locked OR active)
+	var pinned_factions: Array = []
+	var unpinned_slot_indices: Array = []
 
 	for i in range(4):
 		var slot = quest_slots[i]
+		var is_pinned = slot.is_locked or slot.state == SlotState.ACTIVE or slot.state == SlotState.READY
 
-		# Load saved slot data if available
-		if i < slot_data.size() and slot_data[i] != null:
-			var data = slot_data[i]
+		if is_pinned and slot.quest_data.has("faction"):
+			pinned_factions.append(slot.quest_data.get("faction", ""))
+		elif not is_pinned:
+			unpinned_slot_indices.append(i)
 
-			# Check if quest is still active in quest manager
-			var quest_id = data.get("quest_id", -1)
-			var active_quest = quest_manager.get_quest_by_id(quest_id) if quest_id >= 0 else {}
+	# Filter quest pool to exclude factions already in pinned slots
+	var available_for_cycling: Array = []
+	for quest in all_available_quests:
+		var faction = quest.get("faction", "")
+		if faction not in pinned_factions:
+			available_for_cycling.append(quest)
 
-			if not active_quest.is_empty():
-				# Quest still active
-				slot.set_quest_active(active_quest)
-			elif data.get("is_locked", false) and data.has("offered_quest"):
-				# Locked offer
-				slot.set_quest_offered(data.offered_quest, true)
-			else:
-				# Slot expired or completed - auto-fill new
-				_auto_fill_slot(i)
+	# Reset page offset if it exceeds filtered quests
+	if quest_page_offset >= available_for_cycling.size():
+		quest_page_offset = 0
+
+	# Fill only UNPINNED slots from current page of available quests
+	var quest_index = quest_page_offset
+	for slot_index in unpinned_slot_indices:
+		var slot = quest_slots[slot_index]
+
+		if quest_index < available_for_cycling.size():
+			var quest = available_for_cycling[quest_index]
+			slot.set_quest_offered(quest, false)
+			quest_index += 1
 		else:
-			# Empty slot - auto-fill
-			_auto_fill_slot(i)
+			slot.set_empty()
 
 	_update_slot_selection()
+	_update_page_display()
 
 
 func _auto_fill_slot(slot_index: int) -> void:
@@ -441,6 +460,37 @@ func _update_accessible_count() -> void:
 
 	var all_quests = quest_manager.offer_all_faction_quests(current_biome)
 	accessible_factions_label.text = "📚 %d/68 factions accessible (learn more emojis!)" % all_quests.size()
+
+
+func _update_page_display() -> void:
+	"""Update the page indicator in accessible_factions_label"""
+	# Count pinned slots
+	var pinned_count = 0
+	var pinned_factions: Array = []
+	for slot in quest_slots:
+		var is_pinned = slot.is_locked or slot.state == SlotState.ACTIVE or slot.state == SlotState.READY
+		if is_pinned:
+			pinned_count += 1
+			if slot.quest_data.has("faction"):
+				pinned_factions.append(slot.quest_data.get("faction", ""))
+
+	# Count available quests (excluding pinned factions)
+	var available_count = 0
+	for quest in all_available_quests:
+		var faction = quest.get("faction", "")
+		if faction not in pinned_factions:
+			available_count += 1
+
+	var unpinned_slots = 4 - pinned_count
+	var total_pages = int(ceil(float(available_count) / float(max(1, unpinned_slots)))) if available_count > 0 else 1
+	var current_page = (quest_page_offset / max(1, unpinned_slots)) + 1
+
+	# Show pinned count if any slots are pinned
+	var pinned_text = " | 📌 %d pinned" % pinned_count if pinned_count > 0 else ""
+
+	accessible_factions_label.text = "📚 Page %d/%d  |  %d quests%s  |  [F] Next" % [
+		current_page, total_pages, all_available_quests.size(), pinned_text
+	]
 
 
 func select_slot(index: int) -> void:
@@ -716,9 +766,34 @@ func on_r_pressed() -> void:
 
 
 func on_f_pressed() -> void:
-	"""v2 overlay action: F key opens faction browser."""
-	open_faction_browser()
-	action_performed.emit("quest_browse_factions", {"slot": selected_slot_index})
+	"""v2 overlay action: F key cycles to next page of quests.
+
+	Advances by the number of UNPINNED slots, so locked/active quests stay put.
+	"""
+	if all_available_quests.is_empty():
+		return
+
+	# Count unpinned slots to determine page size
+	var unpinned_count = 0
+	for slot in quest_slots:
+		var is_pinned = slot.is_locked or slot.state == SlotState.ACTIVE or slot.state == SlotState.READY
+		if not is_pinned:
+			unpinned_count += 1
+
+	# No unpinned slots means nothing to cycle
+	if unpinned_count == 0:
+		return
+
+	# Advance by number of unpinned slots (dynamic page size)
+	quest_page_offset += unpinned_count
+
+	# Wrap around handled in _refresh_slots()
+
+	# Refresh slots with new page
+	_refresh_slots()
+
+	# Keep current selection (don't reset to 0)
+	action_performed.emit("quest_next_page", {"page_offset": quest_page_offset})
 
 
 func get_action_labels() -> Dictionary:
@@ -758,8 +833,14 @@ func get_overlay_info() -> Dictionary:
 	return {
 		"name": overlay_name,
 		"icon": overlay_icon,
-		"action_labels": get_action_labels()
+		"action_labels": get_action_labels(),
+		"tier": overlay_tier
 	}
+
+
+func get_overlay_tier() -> int:
+	"""Get z-index tier for OverlayStackManager."""
+	return overlay_tier
 
 
 # =============================================================================

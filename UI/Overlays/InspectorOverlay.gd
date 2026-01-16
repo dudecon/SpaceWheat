@@ -43,6 +43,10 @@ const CELL_SIZE: int = 24
 const BAR_HEIGHT: int = 20
 const BAR_MAX_WIDTH: int = 200
 
+# Auto-refresh settings (matches BiomeInspectorOverlay pattern)
+var update_interval: float = 0.5  # Update every 0.5s when visible
+var update_timer: float = 0.0
+
 
 func _init():
 	overlay_name = "inspector"
@@ -203,15 +207,77 @@ func _create_details_panel() -> Control:
 func activate() -> void:
 	"""Called when overlay opens - refresh data."""
 	super.activate()
+
+	# Auto-find biome if not set
+	if not biome:
+		_auto_find_biome()
+
 	_refresh_data()
 	_update_view()
+	update_timer = 0.0  # Reset timer on open
+
+
+func deactivate() -> void:
+	"""Called when overlay closes."""
+	super.deactivate()
+	update_timer = 0.0
+
+
+func _process(delta: float) -> void:
+	"""Periodic refresh while overlay is visible.
+
+	Updates density matrix display every 0.5s to show:
+	- Quantum evolution changes
+	- Measurement collapse effects
+	- Gate application results
+	"""
+	if not visible:
+		return
+
+	update_timer += delta
+	if update_timer >= update_interval:
+		_refresh_data()
+		_update_view()
+		update_timer = 0.0
+
+
+func _auto_find_biome() -> void:
+	"""Auto-detect the current biome from farm/selected plot."""
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm and "active_farm" in gsm and gsm.active_farm:
+		var farm = gsm.active_farm
+		if farm.has_method("get") and "grid" in farm and farm.grid:
+			# Get the first biome as default
+			var biomes = farm.grid.get_biomes() if farm.grid.has_method("get_biomes") else []
+			if biomes.size() > 0:
+				set_biome(biomes[0])
+				return
+
+	# Fallback: search scene tree for Farm
+	var farm = _find_node_recursive(get_tree().root, "Farm")
+	if farm and "grid" in farm and farm.grid:
+		var biomes = farm.grid.get_biomes() if farm.grid.has_method("get_biomes") else []
+		if biomes.size() > 0:
+			set_biome(biomes[0])
+
+
+func _find_node_recursive(node: Node, target_name: String) -> Node:
+	if node.name == target_name:
+		return node
+	for child in node.get_children():
+		var found = _find_node_recursive(child, target_name)
+		if found:
+			return found
+	return null
 
 
 func set_biome(b) -> void:
 	"""Set the biome to inspect."""
 	biome = b
-	if biome and biome.quantum_computer:
+	if biome and "quantum_computer" in biome:
 		quantum_computer = biome.quantum_computer
+	elif biome and biome.has_method("get_quantum_computer"):
+		quantum_computer = biome.get_quantum_computer()
 	_refresh_data()
 
 
@@ -226,7 +292,7 @@ func _refresh_data() -> void:
 	if not rho:
 		return
 
-	var dim = rho.get_dimension()
+	var dim = rho.n  # ComplexMatrix uses .n for dimension
 	var register_map = quantum_computer.register_map if quantum_computer.has("register_map") else null
 
 	for i in range(dim):

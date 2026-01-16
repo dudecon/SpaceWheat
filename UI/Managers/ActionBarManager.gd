@@ -94,11 +94,11 @@ func _position_tool_row() -> void:
 		action_row_height *= scale
 		tool_row_height *= scale
 
-	# Position tool row above action row
+	# Position tool row above action row (reduced margins for more button space)
 	tool_selection_row.offset_top = -(action_row_height + tool_row_height)
 	tool_selection_row.offset_bottom = -action_row_height
-	tool_selection_row.offset_left = 20
-	tool_selection_row.offset_right = -20
+	tool_selection_row.offset_left = 10
+	tool_selection_row.offset_right = -10
 
 	# Ensure proper sizing
 	tool_selection_row.custom_minimum_size = Vector2(0, tool_row_height)
@@ -128,11 +128,11 @@ func _position_action_row() -> void:
 	if action_row_height > parent_height * 0.25:  # Max 25% of viewport
 		action_row_height = parent_height * 0.25
 
-	# Position at very bottom
+	# Position at very bottom (reduced margins for more button space)
 	action_preview_row.offset_top = -action_row_height
 	action_preview_row.offset_bottom = 0
-	action_preview_row.offset_left = 20
-	action_preview_row.offset_right = -20
+	action_preview_row.offset_left = 10
+	action_preview_row.offset_right = -10
 
 	# Ensure proper sizing
 	action_preview_row.custom_minimum_size = Vector2(0, action_row_height)

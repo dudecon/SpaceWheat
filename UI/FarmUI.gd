@@ -143,11 +143,13 @@ func _input(event: InputEvent) -> void:
 
 
 func _select_tool(tool_num: int) -> void:
-	"""Switch to a different tool"""
+	"""Switch to a different tool via FarmInputHandler (emits signals for UI updates)"""
 	current_tool = tool_num
-	if input_handler:
-		input_handler.current_tool = tool_num
-	# Action bars are updated via PlayerShell's ActionBarManager
+	if input_handler and input_handler.has_method("_select_tool"):
+		input_handler._select_tool(tool_num)  # Use input handler's method to emit tool_changed
+	elif input_handler:
+		input_handler.current_tool = tool_num  # Fallback: direct assignment
+	# Action bars are updated via PlayerShell's ActionBarManager (listens to tool_changed signal)
 	print("🔧 Tool changed to %d" % tool_num)
 
 

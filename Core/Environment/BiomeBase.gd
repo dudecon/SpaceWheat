@@ -23,10 +23,14 @@ const Icon = preload("res://Core/QuantumSubstrate/Icon.gd")
 const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 const DensityMatrix = preload("res://Core/QuantumSubstrate/DensityMatrix.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 # Operator caching system
 const CacheKey = preload("res://Core/QuantumSubstrate/CacheKey.gd")
 const OperatorCache = preload("res://Core/QuantumSubstrate/OperatorCache.gd")
+
+# Quantum game mechanics (Phase 6: Semantic Drift)
+const SemanticDrift = preload("res://Core/QuantumSubstrate/SemanticDrift.gd")
 
 # Common infrastructure
 var time_tracker: BiomeTimeTracker = BiomeTimeTracker.new()
@@ -105,6 +109,10 @@ var quantum_evolution_accumulator: float = 0.0
 var quantum_evolution_timestep: float = 0.1  # 10 Hz - standardized across all systems
 var quantum_evolution_enabled: bool = true  # Can be toggled for debugging
 
+# BUILD mode pause: Evolution stops when player enters BUILD mode (TAB)
+# This allows safe modification of biome structure (adding qubits, etc.)
+var evolution_paused: bool = false
+
 # Performance: Lazy evolution for idle biomes
 # Lazy = no active farm plots (user not involved)
 var is_idle: bool = false
@@ -167,6 +175,10 @@ func advance_simulation(dt: float) -> void:
 	#		print("⏸️ %s: IDLE (skipping evolution)" % get_biome_type())
 	#	return  # Skip quantum evolution entirely
 
+	# BUILD MODE PAUSE: Skip evolution entirely when paused (allows safe biome modification)
+	if evolution_paused:
+		return
+
 	# OPTIMIZATION: Accumulate time and evolve at lower frequency (30 Hz instead of 60 Hz)
 	if quantum_evolution_enabled:
 		quantum_evolution_accumulator += dt
@@ -196,9 +208,57 @@ func _update_quantum_substrate(dt: float) -> void:
 	"""Virtual method: Override in child classes for Model C evolution.
 
 	Called by advance_simulation() when quantum_computer exists.
-	Default implementation does nothing - child classes implement their own physics.
+	Default implementation applies semantic drift (🌀) game mechanics.
+	Child classes should call super._update_quantum_substrate(dt) to apply drift.
+
+	Semantic Drift (Phase 6):
+	When 🌀 population is high, nearby icon couplings are randomly perturbed.
+	✨ (sparkle) counteracts drift, providing stability.
 	"""
-	pass
+	# Apply semantic drift game mechanic (🌀 chaos vs ✨ stability)
+	_apply_semantic_drift(dt)
+
+
+func _apply_semantic_drift(dt: float) -> void:
+	"""Apply semantic drift based on 🌀 population.
+
+	Semantic drift causes nearby icons to have their couplings randomly perturbed
+	when 🌀 (spiral) population exceeds a threshold. The ✨ (sparkle) emoji
+	counteracts this effect, providing stability.
+
+	This is called at 10Hz (not 60Hz) to reduce computational overhead.
+	The drift strength is accumulated over the actual timestep.
+
+	Integration note: This method uses the static SemanticDrift class which
+	operates on icons' hamiltonian_couplings and lindblad rates. Changes
+	persist until operators are rebuilt (which happens rarely).
+	"""
+	if not _icon_registry:
+		return
+
+	# SemanticDrift needs a bath-like interface with get_probability()
+	# QuantumComputer provides get_population() which serves the same purpose
+	if quantum_computer:
+		SemanticDrift.apply_drift(quantum_computer, _icon_registry, dt)
+
+
+func get_drift_status() -> Dictionary:
+	"""Get current semantic drift status for UI display.
+
+	Returns:
+		Dictionary with:
+		- active: bool - whether drift is currently affecting the system
+		- intensity: float - drift intensity (0-1 scale)
+		- status_text: String - human-readable status
+	"""
+	if not quantum_computer:
+		return {"active": false, "intensity": 0.0, "status_text": "No quantum state"}
+
+	return {
+		"active": SemanticDrift.is_drift_active(quantum_computer),
+		"intensity": SemanticDrift.get_drift_intensity(quantum_computer),
+		"status_text": SemanticDrift.get_drift_status(quantum_computer)
+	}
 
 
 func update_idle_status() -> void:
@@ -223,6 +283,253 @@ func on_plot_planted(position: Vector2i) -> void:
 func on_plot_harvested(position: Vector2i) -> void:
 	"""Called when a plot is harvested in this biome"""
 	active_plot_count = max(0, active_plot_count - 1)
+
+
+func set_evolution_paused(paused: bool) -> void:
+	"""Pause or resume quantum evolution (used by BUILD mode).
+
+	When paused:
+	- Quantum state stops evolving (Hamiltonian + Lindblad frozen)
+	- Safe to modify biome structure (add qubits, rebuild operators)
+	- Time accumulator is NOT reset (evolution continues from same point)
+	"""
+	if evolution_paused == paused:
+		return  # No change
+
+	evolution_paused = paused
+	if paused:
+		print("⏸️ %s: Quantum evolution PAUSED (BUILD mode)" % get_biome_type())
+	else:
+		print("▶️ %s: Quantum evolution RESUMED (PLAY mode)" % get_biome_type())
+
+
+func is_evolution_paused() -> bool:
+	"""Check if quantum evolution is paused."""
+	return evolution_paused
+
+
+# ============================================================================
+# VOCABULARY INJECTION (BUILD Mode Feature)
+# ============================================================================
+
+func can_inject_vocabulary(emoji: String) -> Dictionary:
+	"""Check if a new emoji can be injected into this biome.
+
+	Args:
+		emoji: The emoji to inject
+
+	Returns:
+		Dictionary with:
+		- can_inject: bool
+		- reason: String (error message if can_inject is false)
+		- cost: Dictionary (emoji-credits cost if can_inject is true)
+	"""
+	# Must be in BUILD mode (evolution paused)
+	if not evolution_paused:
+		return {"can_inject": false, "reason": "Must be in BUILD mode (TAB to toggle)"}
+
+	# Check if emoji already exists in biome
+	if emoji in producible_emojis:
+		return {"can_inject": false, "reason": "%s already exists in this biome" % emoji}
+
+	# Get cost from unified EconomyConstants
+	var cost = EconomyConstants.get_vocab_injection_cost(emoji)
+	var cost_credits = cost.get("💰", 0)
+
+	# Check if player can afford the injection
+	if grid and grid.farm_economy:
+		var current_credits = grid.farm_economy.get_resource("💰")
+		if current_credits < cost_credits:
+			return {
+				"can_inject": false,
+				"reason": "Need %d 💰-credits but only have %d" % [cost_credits, current_credits],
+				"cost": cost
+			}
+
+	return {"can_inject": true, "reason": "", "cost": cost}
+
+
+func inject_vocabulary(emoji: String) -> Dictionary:
+	"""Inject a new emoji into this biome's quantum vocabulary.
+
+	REQUIREMENT: Evolution must be paused (BUILD mode)
+
+	This expands the biome's producible_emojis list.
+	NOTE: Full qubit expansion (adding to Hilbert space) is more complex
+	and would require rebuilding the density matrix. This simplified
+	version just adds to the vocabulary list for future harvests.
+
+	Args:
+		emoji: The emoji to inject
+
+	Returns:
+		Dictionary with:
+		- success: bool
+		- error: String (if success is false)
+		- emoji: String (the injected emoji)
+	"""
+	# Validate injection
+	var check = can_inject_vocabulary(emoji)
+	if not check.can_inject:
+		return {"success": false, "error": check.reason}
+
+	# Get the cost and enforce resource deduction
+	var cost = EconomyConstants.get_vocab_injection_cost(emoji)
+	var cost_credits = cost.get("💰", 0)
+
+	# Check if economy is available and player can afford it
+	if grid and grid.farm_economy:
+		var current_credits = grid.farm_economy.get_resource("💰")
+		if current_credits < cost_credits:
+			return {
+				"success": false,
+				"error": "insufficient_resources",
+				"message": "Need %d 💰-credits but only have %d" % [cost_credits, current_credits],
+				"required": cost_credits,
+				"available": current_credits
+			}
+
+		# Deduct the cost before injection
+		grid.farm_economy.remove_resource("💰", cost_credits, "vocabulary_injection_%s" % emoji)
+	else:
+		# No economy context - allow injection but warn
+		push_warning("BiomeBase.inject_vocabulary: No grid/farm_economy context - cannot enforce costs")
+
+	# Add to producible emojis
+	producible_emojis.append(emoji)
+
+	# Add to emoji_pairings with a default opposite (can be configured later)
+	if emoji not in emoji_pairings:
+		emoji_pairings[emoji] = "❓"  # Unknown opposite until configured
+
+	print("✨ Injected %s into %s vocabulary" % [emoji, get_biome_type()])
+	print("   New producible emojis: %s" % str(producible_emojis))
+
+	return {"success": true, "emoji": emoji, "cost": cost}
+
+
+func get_injectable_emojis(player_vocab: Array) -> Array:
+	"""Get list of emojis that can be injected from player vocabulary.
+
+	Args:
+		player_vocab: Player's known emojis
+
+	Returns:
+		Array of emojis that can be injected (not already in biome)
+	"""
+	var injectable = []
+	for emoji in player_vocab:
+		if emoji not in producible_emojis:
+			injectable.append(emoji)
+	return injectable
+
+
+# ============================================================================
+# QUANTUM SYSTEM EXPANSION (BUILD Mode)
+# ============================================================================
+
+func expand_quantum_system(north_emoji: String, south_emoji: String) -> Dictionary:
+	"""Expand the biome's quantum computer to include a new emoji axis.
+
+	BUILD MODE ONLY: This is a computer-altering operation that requires
+	evolution to be paused. Adds a new qubit axis to the quantum system,
+	rebuilds Hamiltonian and Lindblad operators with coupling terms from
+	the faction/icon system.
+
+	Args:
+		north_emoji: North pole emoji (|0⟩ basis state)
+		south_emoji: South pole emoji (|1⟩ basis state)
+
+	Returns:
+		Dictionary with:
+		- success: bool
+		- error: String (if failure)
+		- qubit_index: int (new qubit index if success)
+		- old_dim: int (dimension before expansion)
+		- new_dim: int (dimension after expansion)
+	"""
+	# 1. Require BUILD mode (evolution paused)
+	if not evolution_paused:
+		return {
+			"success": false,
+			"error": "build_mode_required",
+			"message": "Quantum expansion requires BUILD mode (TAB to toggle)"
+		}
+
+	# 2. Check if quantum_computer exists
+	if not quantum_computer:
+		return {
+			"success": false,
+			"error": "no_quantum_computer",
+			"message": "Biome has no quantum computer to expand"
+		}
+
+	# 3. Check if axis already exists (use register_map.has() method)
+	if quantum_computer.register_map.has(north_emoji) and quantum_computer.register_map.has(south_emoji):
+		# Axis already exists - no expansion needed
+		return {
+			"success": true,
+			"already_exists": true,
+			"message": "Axis %s/%s already exists in quantum system" % [north_emoji, south_emoji]
+		}
+
+	# 4. Get IconRegistry for coupling terms
+	var icon_registry = get_node_or_null("/root/IconRegistry")
+	if not icon_registry:
+		push_warning("expand_quantum_system: IconRegistry not available - using default couplings")
+
+	# 5. Record old dimension
+	var old_dim = quantum_computer.register_map.dim()
+	var old_num_qubits = quantum_computer.register_map.num_qubits
+
+	# 6. Add new axis to quantum computer
+	var new_qubit_index = old_num_qubits
+	quantum_computer.allocate_axis(new_qubit_index, north_emoji, south_emoji)
+
+	# 7. Update producible_emojis and emoji_pairings
+	if north_emoji not in producible_emojis:
+		producible_emojis.append(north_emoji)
+	if south_emoji not in producible_emojis:
+		producible_emojis.append(south_emoji)
+	emoji_pairings[north_emoji] = south_emoji
+	emoji_pairings[south_emoji] = north_emoji
+
+	# 8. Gather ALL icons for this biome (existing + new)
+	var all_icons = {}
+	if icon_registry:
+		# Get icons for all emojis in the quantum system
+		for emoji in quantum_computer.register_map.coordinates.keys():
+			var icon = icon_registry.get_icon(emoji)
+			if icon:
+				all_icons[emoji] = icon
+
+	# 9. Rebuild Hamiltonian and Lindblad operators with new coupling terms
+	var HamBuilder = load("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
+	var LindBuilder = load("res://Core/QuantumSubstrate/LindbladBuilder.gd")
+	var verbose = get_node_or_null("/root/VerboseConfig")
+
+	quantum_computer.hamiltonian = HamBuilder.build(all_icons, quantum_computer.register_map, verbose)
+	var lindblad_result = LindBuilder.build(all_icons, quantum_computer.register_map, verbose)
+	quantum_computer.lindblad_operators = lindblad_result.get("operators", [])
+	quantum_computer.gated_lindblad_configs = lindblad_result.get("gated_configs", [])
+
+	# 10. Set up native evolution engine
+	quantum_computer.setup_native_evolution()
+
+	var new_dim = quantum_computer.register_map.dim()
+
+	print("🔬 Expanded %s quantum system: %d → %d qubits (%dD → %dD)" % [
+		get_biome_type(), old_num_qubits, new_qubit_index + 1, old_dim, new_dim])
+	print("   New axis: %s ↔ %s (qubit %d)" % [north_emoji, south_emoji, new_qubit_index])
+
+	return {
+		"success": true,
+		"qubit_index": new_qubit_index,
+		"old_dim": old_dim,
+		"new_dim": new_dim,
+		"north_emoji": north_emoji,
+		"south_emoji": south_emoji
+	}
 
 
 # ============================================================================
@@ -2637,6 +2944,11 @@ func build_operators_cached(biome_name: String, icons: Dictionary) -> void:
 		# Cache HIT - use cached operators
 		quantum_computer.hamiltonian = cached_ops.hamiltonian
 		quantum_computer.lindblad_operators = cached_ops.lindblad_operators
+
+		# CRITICAL: Set up native evolution engine for batched performance
+		# (This is normally done by set_lindblad_operators, which is bypassed when loading from cache)
+		quantum_computer.setup_native_evolution()
+
 		if verbose:
 			var h_dim = quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0
 			var l_count = quantum_computer.lindblad_operators.size()
@@ -2742,7 +3054,8 @@ func get_register_probability(register_id: int) -> float:
 			if diag:
 				prob_north += diag.re
 
-	return prob_north
+	# Clamp to valid probability range (numerical precision can cause small negatives)
+	return clamp(prob_north, 0.0, 1.0)
 
 
 func get_register_probabilities() -> Dictionary:
@@ -2793,6 +3106,72 @@ func get_total_register_count() -> int:
 	return quantum_computer.register_map.num_qubits
 
 
+# ============================================================================
+# QUANTUM DATA ACCESS (for QuantumNode visualization)
+# ============================================================================
+
+func get_emoji_probability(emoji: String) -> float:
+	"""Get probability of seeing this emoji when measured.
+
+	Maps emoji to its register and pole, then computes marginal probability.
+	Used by QuantumNode for opacity visualization.
+	"""
+	if not quantum_computer or not quantum_computer.register_map:
+		return 0.5
+
+	if not quantum_computer.register_map.has(emoji):
+		return 0.0
+
+	var qubit = quantum_computer.register_map.qubit(emoji)
+	var pole = quantum_computer.register_map.pole(emoji)
+
+	# Get probability of |0⟩ (north) for this qubit
+	var p_north = get_register_probability(qubit)
+
+	# Return probability based on pole (0 = north, 1 = south)
+	return p_north if pole == 0 else (1.0 - p_north)
+
+
+func get_emoji_coherence(north_emoji: String, south_emoji: String):
+	"""Get coherence (off-diagonal element) between north and south states.
+
+	Returns Complex or null if not computable.
+	Used by QuantumNode for color phase visualization.
+	"""
+	if not quantum_computer or not quantum_computer.register_map:
+		return null
+
+	# Both emojis should be on same qubit
+	if not quantum_computer.register_map.has(north_emoji):
+		return null
+	if not quantum_computer.register_map.has(south_emoji):
+		return null
+
+	var north_q = quantum_computer.register_map.qubit(north_emoji)
+	var south_q = quantum_computer.register_map.qubit(south_emoji)
+
+	if north_q != south_q:
+		return null  # Not on same qubit
+
+	# Get coherence for this qubit from quantum_computer
+	var comp = quantum_computer.get_main_component()
+	if comp:
+		return comp.get_coherence_complex(north_q)
+
+	return null
+
+
+func get_purity() -> float:
+	"""Get purity Tr(ρ²) of the quantum state.
+
+	Pure state = 1.0 (bright glow), maximally mixed = 1/N (dim).
+	Used by QuantumNode for glow intensity.
+	"""
+	if quantum_computer:
+		return quantum_computer.get_purity()
+	return 0.5  # Default: partially mixed
+
+
 func get_register_emoji_pair(register_id: int) -> Dictionary:
 	"""Get the north/south emoji pair for a register (qubit).
 
@@ -2810,26 +3189,6 @@ func get_register_emoji_pair(register_id: int) -> Dictionary:
 		"north": axis.get("north", "?"),
 		"south": axis.get("south", "?")
 	}
-
-
-# ============================================================================
-# V2 ARCHITECTURE: EVOLUTION PAUSE CONTROL
-# ============================================================================
-
-func set_evolution_paused(paused: bool) -> void:
-	"""Set evolution pause state (called by FarmInputHandler on Spacebar).
-
-	When paused:
-	- Quantum evolution stops (density matrix frozen)
-	- Player actions still work (EXPLORE, MEASURE, POP, gates)
-	- Visual indicators should show paused state
-	"""
-	quantum_evolution_enabled = not paused
-
-
-func is_evolution_paused() -> bool:
-	"""Check if evolution is currently paused."""
-	return not quantum_evolution_enabled
 
 
 # ============================================================================
@@ -2869,6 +3228,56 @@ func collapse_register(register_id: int, is_north: bool) -> void:
 		])
 
 
+func drain_register_probability(register_id: int, is_north: bool, drain_factor: float) -> void:
+	"""Drain probability from measured outcome (Ensemble model).
+
+	Reduces probability in ρ for the measured state without full collapse.
+	Used by MEASURE action to simulate extracting from the ensemble.
+
+	Args:
+		register_id: Which qubit was measured
+		is_north: True if outcome was north (|0⟩)
+		drain_factor: Fraction to drain (e.g., 0.5 = reduce by half)
+	"""
+	if not quantum_computer:
+		return
+
+	var rho = quantum_computer.get_density_matrix()
+	if not rho:
+		return
+
+	var num_qubits = quantum_computer.register_map.num_qubits
+	if register_id < 0 or register_id >= num_qubits:
+		return
+
+	var dim = rho.n
+	var outcome_pole = 0 if is_north else 1
+	var shift = num_qubits - 1 - register_id
+
+	# Drain diagonal elements where this qubit is in the measured state
+	for basis_idx in range(dim):
+		var bit = (basis_idx >> shift) & 1
+		if bit == outcome_pole:
+			var diag = rho.get_element(basis_idx, basis_idx)
+			if diag:
+				# Reduce by drain_factor (e.g., 0.5 means halve it)
+				var new_re = diag.re * (1.0 - drain_factor)
+				rho.set_element(basis_idx, basis_idx, Complex.new(new_re, diag.im))
+
+	# Renormalize to maintain trace = 1
+	var trace: float = 0.0
+	for i in range(dim):
+		var elem = rho.get_element(i, i)
+		if elem:
+			trace += elem.re
+
+	if trace > 0.0:
+		for i in range(dim):
+			var elem = rho.get_element(i, i)
+			if elem:
+				rho.set_element(i, i, Complex.new(elem.re / trace, elem.im))
+
+
 func get_coherence_with_other_registers(register_id: int) -> float:
 	"""Get total coherence (entanglement indicator) between this register and others.
 
@@ -2882,7 +3291,7 @@ func get_coherence_with_other_registers(register_id: int) -> float:
 	if not rho:
 		return 0.0
 
-	var dim = rho.get_dimension()
+	var dim = rho.n  # ComplexMatrix uses .n for dimension
 	if register_id < 0 or register_id >= dim:
 		return 0.0
 

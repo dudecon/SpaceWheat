@@ -41,6 +41,9 @@ var parametric_ring: float = 0.5   # Radial parameter [0, 1] (0=center, 1=edge)
 # When false, this is a free-floating biome bubble (no tether)
 var has_farm_tether: bool = false
 
+# Lifeless mode - no quantum data available, should not wiggle
+var is_lifeless: bool = false
+
 # Legacy compatibility (deprecated - use biome_name + parametric coords)
 var venn_zone: int = -1      # Zone enum value (-1 = not set)
 
@@ -49,6 +52,12 @@ var visual_scale: float = 0.0  # Animated scale (0 to 1)
 var visual_alpha: float = 0.0  # Animated alpha (0 to 1)
 var spawn_time: float = 0.0    # Time when node was created
 var is_spawning: bool = false  # Currently animating in
+
+# Orbit trail history (for visualizing evolution path)
+var position_history: Array[Vector2] = []  # Last N positions
+const MAX_TRAIL_LENGTH: int = 30  # Number of positions to remember
+var trail_update_timer: float = 0.0
+const TRAIL_UPDATE_INTERVAL: float = 0.05  # Update every 50ms
 
 # Constants
 const MIN_RADIUS = 10.0
@@ -64,9 +73,10 @@ func _init(wheat_plot: FarmPlot, anchor_pos: Vector2, grid_pos: Vector2i, center
 	# Start at the tether location (where the classical plot is)
 	position = anchor_pos
 
-	# Initialize visual scale and alpha to 1.0 (visible immediately)
-	visual_scale = 1.0
-	visual_alpha = 1.0
+	# Initialize visual scale and alpha to 0.0 (spawn animation will fade in)
+	# This prevents the "flash at full size" bug when bubbles are created
+	visual_scale = 0.0
+	visual_alpha = 0.0
 
 	if plot:
 		plot_id = plot.plot_id
@@ -132,28 +142,32 @@ func update_from_quantum_state():
 		visual_alpha = 0.0
 		return
 
-	# Guard: no parent_biome or no bath → fallback visualization
-	if not plot.parent_biome or not plot.parent_biome.bath:
-		energy = 1.0
-		coherence = 0.5
-		radius = MAX_RADIUS
-		color = Color(0.7, 0.8, 0.9, 0.8)
+	# Guard: no parent_biome or no quantum_computer → LIFELESS fallback (no wiggle)
+	var biome = plot.parent_biome
+	if not biome or not biome.quantum_computer:
+		is_lifeless = true  # Mark as frozen - no physics
+		energy = 0.0       # No glow - lifeless
+		coherence = 0.0    # No pulse - static
+		radius = MIN_RADIUS  # Small - minimal presence
+		color = Color(0.4, 0.4, 0.5, 0.5)  # Dim gray - disconnected
 		var emojis = plot.get_plot_emojis()
 		emoji_north = emojis["north"]
 		emoji_south = emojis["south"]
-		emoji_north_opacity = 0.5
-		emoji_south_opacity = 0.5
+		emoji_north_opacity = 0.3  # Dim
+		emoji_south_opacity = 0.3
 		return
 
-	# === QUERY BATH FOR REAL QUANTUM DATA ===
-	var bath = plot.parent_biome.bath
+	# Has real quantum data - not lifeless
+	is_lifeless = false
+
+	# === QUERY BIOME FOR REAL QUANTUM DATA ===
 	var emojis = plot.get_plot_emojis()
 	emoji_north = emojis["north"]
 	emoji_south = emojis["south"]
 
 	# 1. EMOJI OPACITY ← Normalized probabilities (θ-like)
-	var north_prob = bath.get_probability(emoji_north)
-	var south_prob = bath.get_probability(emoji_south)
+	var north_prob = biome.get_emoji_probability(emoji_north)
+	var south_prob = biome.get_emoji_probability(emoji_south)
 	var mass = north_prob + south_prob  # Total probability in our subspace
 
 	if mass > 0.001:
@@ -165,7 +179,7 @@ func update_from_quantum_state():
 		emoji_south_opacity = 0.1
 
 	# 2. COLOR HUE ← Coherence phase arg(ρ_{n,s}) (φ-like)
-	var coh = bath.get_coherence(emoji_north, emoji_south)
+	var coh = biome.get_emoji_coherence(emoji_north, emoji_south)
 	var coh_magnitude = 0.0
 	var coh_phase = 0.0
 	if coh:
@@ -179,7 +193,7 @@ func update_from_quantum_state():
 
 	# 3. GLOW (energy) ← Purity Tr(ρ²)
 	# Pure state = 1.0 (bright glow), maximally mixed = 1/N (dim)
-	energy = bath.get_purity()
+	energy = biome.get_purity()
 
 	# 4. PULSE RATE (coherence) ← |ρ_{n,s}| coherence magnitude
 	# High coherence = stable/slow pulse, low = jittery/fast
@@ -227,47 +241,51 @@ func update_position(delta: float):
 	"""Update position from velocity"""
 	position += velocity * delta
 
+	# Update orbit trail history
+	trail_update_timer += delta
+	if trail_update_timer >= TRAIL_UPDATE_INTERVAL:
+		trail_update_timer = 0.0
+		position_history.append(position)
+		if position_history.size() > MAX_TRAIL_LENGTH:
+			position_history.remove_at(0)
+
 
 func get_glow_alpha() -> float:
-	"""Get glow halo alpha based on ENERGY + BERRY PHASE
+	"""Get glow halo alpha based on PURITY (energy) only.
 
-	Glow components:
-	- Energy: Current quantum energy level (0.0-0.4)
-	- Berry phase: Accumulated evolution (unbounded - grows indefinitely)
+	Glow = Purity Tr(ρ²): Pure states glow brightly, mixed states are dim.
+	Range: 0.3 (mixed) to 0.8 (pure)
 
-	The glow intensifies with quantum evolution history, acting as a
-	visual "measurement apparatus" showing full quantum activity.
-	Highly evolved bubbles will have intense glows.
-
-	Strong glow = high energy + extensive quantum evolution
-	Faint glow = low energy, fresh qubit
+	NOTE: Berry phase has been moved to pulse rate animation.
 	"""
-	var energy_glow = energy * 0.4  # 0.0 to 0.4 range
-	var berry_glow = berry_phase * 0.2  # Unbounded, grows with evolution
-	return energy_glow + berry_glow  # Energy baseline + accumulated evolution
+	return energy * 0.5 + 0.3  # 0.3 to 0.8 range based on purity
 
 
 func get_berry_phase_glow() -> float:
-	"""Get glow contribution from berry phase (experience/evolution indicator)
-
-	Raw unbounded value that grows indefinitely with quantum evolution.
-	This represents the full "measurement apparatus" aesthetic - showing
-	every bit of quantum activity with intense visual feedback.
-
-	The more evolved a quantum state is, the brighter it glows.
-	Range: Unlimited (0.0 at fresh qubit, increases with evolution)
+	"""DEPRECATED: Berry phase now affects pulse rate, not glow.
+	Kept for backward compatibility.
 	"""
-	return berry_phase * 0.2
+	return 0.0  # No longer contributes to glow
 
 
 func get_pulse_rate() -> float:
-	"""Get pulse/oscillation speed based on COHERENCE
+	"""Get pulse/oscillation speed based on COHERENCE + BERRY PHASE.
 
-	Fast pulse = high decoherence threat (low coherence)
-	Slow pulse = stable coherent state (high coherence)
+	Components:
+	- Coherence: Low coherence = fast pulse (decoherence threat)
+	- Berry phase: More evolution history = faster pulse (experience)
 
-	Inverted relationship: pulse_rate = 1.0 - coherence
-	Range: 0.2 to 2.0 (fast when incoherent, slow when coherent)
+	Fast pulse = unstable state OR highly evolved
+	Slow pulse = stable coherent state AND fresh qubit
+
+	Range: 0.3 to 3.0 Hz
 	"""
-	var decoherence_threat = 1.0 - coherence  # Invert: high coherence = low pulse
-	return 0.2 + (decoherence_threat * 1.8)  # Range 0.2 (stable) to 2.0 (chaotic)
+	# Base rate from decoherence threat (inverted coherence)
+	var decoherence_threat = 1.0 - coherence  # 0 = stable, 1 = chaotic
+	var base_rate = 0.3 + (decoherence_threat * 1.5)  # 0.3 to 1.8 Hz
+
+	# Berry phase adds experience-based pulse acceleration
+	# Clamp to prevent runaway pulse rates
+	var berry_boost = clampf(berry_phase * 0.1, 0.0, 1.2)  # 0 to 1.2 Hz bonus
+
+	return base_rate + berry_boost  # 0.3 to 3.0 Hz

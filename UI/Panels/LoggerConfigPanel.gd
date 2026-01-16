@@ -60,17 +60,17 @@ func _ready():
 	background.layout_mode = 1
 	add_child(background)
 
-	# Menu panel - centered, fixed size
+	# Menu panel - centered, sized to fit 960x540 screen
 	menu_panel = PanelContainer.new()
-	menu_panel.custom_minimum_size = Vector2(600, 700)
+	menu_panel.custom_minimum_size = Vector2(550, 480)
 	menu_panel.anchor_left = 0.5
 	menu_panel.anchor_right = 0.5
 	menu_panel.anchor_top = 0.5
 	menu_panel.anchor_bottom = 0.5
-	menu_panel.offset_left = -300
-	menu_panel.offset_right = 300
-	menu_panel.offset_top = -350
-	menu_panel.offset_bottom = 350
+	menu_panel.offset_left = -275
+	menu_panel.offset_right = 275
+	menu_panel.offset_top = -240
+	menu_panel.offset_bottom = 240
 	menu_panel.layout_mode = 1
 	add_child(menu_panel)
 
@@ -103,7 +103,7 @@ func _ready():
 
 	# Scroll container for categories
 	scroll_container = ScrollContainer.new()
-	scroll_container.custom_minimum_size = Vector2(0, 400)
+	scroll_container.custom_minimum_size = Vector2(0, 280)
 	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	main_vbox.add_child(scroll_container)
 

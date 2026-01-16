@@ -3,17 +3,21 @@ extends RefCounted
 
 ## ProbeActions - Core EXPLORE → MEASURE → POP gameplay loop (v2 Architecture)
 ##
-## Implements the "Quantum Tomography Paradigm":
-##   EXPLORE: Discover pre-existing state in quantum soup (weighted by probability)
-##   MEASURE: Born rule collapse, freeze bubble, break entanglement visuals
-##   POP: Harvest resource, unbind terminal, return to pool
+## Implements the "Ensemble + Drain" model:
+##   - ρ represents an ensemble of identically-prepared quantum systems
+##   - EXPLORE: Bind terminal to register (no quantum effect)
+##   - MEASURE: Sample via Born rule, DRAIN probability from ρ, record claim
+##   - POP: Convert recorded probability to credits (no quantum effect)
+##   - HARVEST: Global collapse, convert all probability, end level
 ##
-## Key Difference from v1:
-##   - Players DISCOVER state, not CREATE it
-##   - Probability-weighted selection from density matrix
-##   - Unique binding constraint: one terminal per register
+## Physics:
+##   - Ensemble interpretation: MEASURE samples without full collapse
+##   - Drain simulates "extracting" from the ensemble
+##   - External pump (sun) replenishes probability over time
+##   - Creates sustainable farming loop: grow → harvest → regrow
 
 const WeightedRandom = preload("res://Core/Utilities/WeightedRandom.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 
 ## ============================================================================
@@ -60,13 +64,17 @@ static func action_explore(plot_pool, biome) -> Dictionary:
 			"message": "No unbound registers available in this biome."
 		}
 
-	# 3. Weighted random selection
+	# 3. Weighted random selection using squared probabilities
+	# This makes high-probability registers MORE likely to be discovered
+	# Squaring ensures weights are always positive and emphasizes differences
 	var register_ids: Array[int] = []
 	var weights: Array[float] = []
 
 	for reg_id in probabilities:
 		register_ids.append(reg_id)
-		weights.append(probabilities[reg_id])
+		var prob = probabilities[reg_id]
+		# Use prob² for weighting (ensures positive, emphasizes high-prob states)
+		weights.append(prob * prob)
 
 	var selected_index = WeightedRandom.weighted_choice_index(weights)
 	if selected_index < 0:
@@ -104,19 +112,27 @@ static func action_explore(plot_pool, biome) -> Dictionary:
 
 
 ## ============================================================================
-## MEASURE ACTION - Collapse quantum state via Born rule
+## MEASURE ACTION - Sample from ensemble and drain probability
 ## ============================================================================
 
 static func action_measure(terminal, biome) -> Dictionary:
-	"""Execute MEASURE action: collapse the quantum state.
+	"""Execute MEASURE action: sample from ensemble, record claim, drain ρ.
+
+	Ensemble Model:
+	- ρ represents a statistical ensemble of quantum systems
+	- MEASURE samples one outcome via Born rule
+	- The sampled probability is RECORDED (the "claim" for POP)
+	- ρ is DRAINED (probability reduced) but NOT fully collapsed
+	- Sun/pump can replenish drained probability over time
 
 	Algorithm:
-	1. Check terminal is bound and not already measured
-	2. Get density matrix element for this register
-	3. Born rule: P(outcome) = |<outcome|rho|outcome>|
-	4. Sample outcome (north or south emoji)
-	5. Mark terminal as measured with outcome
-	6. (Optional) Break tether visuals for entanglement
+	1. Validate terminal state
+	2. Get current probability from ρ (this is the "claim")
+	3. Born rule sampling → outcome
+	4. Record the probability (stored on terminal)
+	5. DRAIN ρ (reduce probability by DRAIN_FACTOR)
+	6. Handle entangled registers (drain them too)
+	7. Mark terminal as measured
 
 	Args:
 		terminal: Terminal instance (must be bound)
@@ -126,8 +142,8 @@ static func action_measure(terminal, biome) -> Dictionary:
 		Dictionary with keys:
 		- success: bool
 		- outcome: String (emoji result)
-		- probability: float (Born rule probability)
-		- was_entangled: bool (had visible tethers)
+		- recorded_probability: float (the "claim" for POP)
+		- was_drained: bool
 		- error: String (if failure)
 	"""
 	# 1. Validate terminal state
@@ -150,98 +166,149 @@ static func action_measure(terminal, biome) -> Dictionary:
 			"message": "Terminal cannot be measured."
 		}
 
-	# 2. Get register probability (diagonal of density matrix)
+	# 2. Get current probability from ρ (this becomes our "claim")
 	var register_id = terminal.bound_register_id
-	var north_prob = biome.get_register_probability(register_id)
+	var north_prob = biome.get_register_probability(register_id) if biome else 0.5
 	var south_prob = 1.0 - north_prob
 
 	# 3. Born rule sampling
 	var outcome: String
 	var outcome_prob: float
+	var is_north: bool
 
 	if randf() < north_prob:
 		outcome = terminal.north_emoji
 		outcome_prob = north_prob
+		is_north = true
 	else:
 		outcome = terminal.south_emoji
 		outcome_prob = south_prob
+		is_north = false
 
 	# Handle edge case where emoji not set
 	if outcome.is_empty():
 		outcome = "?"
 
-	# 4. Check entanglement before collapse
+	# 4. Record the probability - this is the "claim" that POP will convert
+	var recorded_probability = outcome_prob
+
+	# 5. Check entanglement before drain
 	var was_entangled = _check_entanglement(register_id, biome)
+	var entangled_drains: Array = []
 
-	# 5. Collapse density matrix (project to measured state)
-	_collapse_density_matrix(register_id, outcome == terminal.north_emoji, biome)
+	# 6. DRAIN: Reduce probability in ρ (ensemble depletion)
+	var drain_success = _drain_register(register_id, is_north, biome)
 
-	# 6. Mark terminal as measured
-	terminal.mark_measured(outcome, outcome_prob)
+	# 7. Handle entangled registers (drain them too)
+	if was_entangled and biome and biome.has_method("get_entangled_registers"):
+		var entangled = biome.get_entangled_registers(register_id)
+		for ent_reg_id in entangled:
+			# Drain entangled partner with correlated outcome
+			_drain_register(ent_reg_id, is_north, biome)  # Same direction for correlation
+			entangled_drains.append(ent_reg_id)
+
+	# 8. Mark terminal as measured with RECORDED probability
+	terminal.mark_measured(outcome, recorded_probability)
 
 	return {
 		"success": true,
 		"outcome": outcome,
-		"probability": outcome_prob,
+		"probability": recorded_probability,  # Primary key (consistent with action_explore)
+		"recorded_probability": recorded_probability,  # Alias for backward compatibility
 		"was_entangled": was_entangled,
+		"was_drained": drain_success,
+		"drain_factor": EconomyConstants.DRAIN_FACTOR,
+		"entangled_drains": entangled_drains,
 		"register_id": register_id
 	}
 
 
 static func _check_entanglement(register_id: int, biome) -> bool:
 	"""Check if register has significant off-diagonal coherence (entanglement)."""
-	# This would check the density matrix for off-diagonal elements
-	# involving this register. For now, return false as placeholder.
-	# Full implementation requires density matrix access.
+	if not biome:
+		return false
 	if biome.has_method("get_coherence_with_other_registers"):
 		var coherence = biome.get_coherence_with_other_registers(register_id)
 		return coherence > 0.1  # Threshold for "visible" entanglement
 	return false
 
 
-static func _collapse_density_matrix(register_id: int, is_north: bool, biome) -> void:
-	"""Collapse density matrix for measured register.
+static func _drain_register(register_id: int, is_north: bool, biome) -> bool:
+	"""Drain probability from measured outcome in density matrix.
 
-	Applies projection operator P = |outcome><outcome| to density matrix.
-	This zeros off-diagonal elements and updates diagonal.
+	Ensemble Model: We're "extracting" copies from the ensemble that
+	were in the measured state. This reduces probability without full collapse.
+
+	Args:
+		register_id: Which register was measured
+		is_north: true if outcome was north emoji
+		biome: BiomeBase with density matrix
+
+	Returns:
+		true if drain was applied, false otherwise
 	"""
-	# Call biome's collapse method if available
-	if biome.has_method("collapse_register"):
-		biome.collapse_register(register_id, is_north)
-	elif biome.has_method("project_register"):
-		biome.project_register(register_id, 0 if is_north else 1)
-	else:
-		# Fallback: just log (density matrix may be handled elsewhere)
-		print("ProbeActions: collapse_density_matrix called but no handler in biome")
+	if not biome:
+		return false
+
+	# Try biome's drain method first (preferred)
+	if biome.has_method("drain_register_probability"):
+		biome.drain_register_probability(register_id, is_north, EconomyConstants.DRAIN_FACTOR)
+		return true
+
+	# Fallback: try to access density matrix directly
+	if biome.has_method("get_density_matrix"):
+		var dm = biome.get_density_matrix()
+		if dm and dm.has_method("drain_diagonal"):
+			dm.drain_diagonal(register_id, EconomyConstants.DRAIN_FACTOR)
+			return true
+
+	# Last resort: log warning
+	print("ProbeActions: drain_register called but biome doesn't support drain")
+	return false
+
+
+static func _collapse_density_matrix(register_id: int, is_north: bool, biome) -> void:
+	"""DEPRECATED: Use _drain_register for ensemble model.
+
+	Full collapse is reserved for GLOBAL HARVEST action.
+	Kept for backward compatibility.
+	"""
+	# For ensemble model, drain instead of collapse
+	_drain_register(register_id, is_north, biome)
 
 
 ## ============================================================================
-## POP ACTION - Harvest resource and unbind terminal
+## POP ACTION - Convert recorded probability to credits
 ## ============================================================================
 
 static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
-	"""Execute POP action: harvest measured outcome and free terminal.
+	"""Execute POP action: convert recorded probability to credits.
+
+	Ensemble Model:
+	- The quantum effect (drain) already happened at MEASURE time
+	- POP is purely classical bookkeeping
+	- Credits = recorded_probability × CONVERSION_RATE
+	- No further interaction with ρ
 
 	Algorithm:
 	1. Check terminal is measured
-	2. Get measured outcome (resource type)
-	3. Add to economy/inventory if available
-	4. Unbind terminal from register
-	5. Clear measurement state
-	6. Return result for particle effects
+	2. Get recorded probability (the "claim" from MEASURE)
+	3. Convert to credits: P × CONVERSION_RATE
+	4. Add credits to economy
+	5. Unbind terminal (return to pool)
 
 	Args:
 		terminal: Terminal instance (must be measured)
 		plot_pool: PlotPool instance
-		economy: FarmEconomy instance (optional, for resource tracking)
+		economy: FarmEconomy instance (optional, for credit tracking)
 
 	Returns:
 		Dictionary with keys:
 		- success: bool
 		- resource: String (emoji that was harvested)
-		- amount: int (typically 1)
+		- recorded_probability: float (from MEASURE)
+		- credits: float (probability × conversion rate)
 		- terminal_id: String
-		- error: String (if failure)
 	"""
 	# 1. Validate terminal state
 	if not terminal.can_pop():
@@ -263,30 +330,136 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 			"message": "Terminal cannot be popped."
 		}
 
-	# 2. Get measured outcome
+	# 2. Get recorded probability (the "claim" from MEASURE time)
 	var resource = terminal.measured_outcome
+	var recorded_prob = terminal.measured_probability
 	var terminal_id = terminal.terminal_id
 	var register_id = terminal.bound_register_id
 	var biome = terminal.bound_biome
 
-	# 3. Add to economy if available
-	var amount = 1
-	if economy and economy.has_method("add_resource"):
-		economy.add_resource(resource, amount)
+	# 3. Convert probability to credits
+	var credits = recorded_prob * EconomyConstants.QUANTUM_TO_CREDITS
 
-	# 4. Mark register unbound in biome before unbinding terminal
+	# 4. Add credits to economy (NOT the resource emoji - we're in credit mode)
+	if economy:
+		# POP always adds to 💰-credits, regardless of measured outcome
+		economy.add_resource("💰", int(credits), "pop_%s" % resource)
+
+	# 5. Mark register unbound in biome BEFORE unbinding terminal
+	# This releases the register for future EXPLORE actions
 	if biome and biome.has_method("mark_register_unbound"):
 		biome.mark_register_unbound(register_id)
+		print("📤 Register %d released in %s" % [register_id, biome.get_biome_type() if biome.has_method("get_biome_type") else "biome"])
+	else:
+		push_warning("ProbeActions.action_pop: Could not release register %d (biome=%s)" % [register_id, biome])
 
-	# 5. Unbind terminal (clears measurement state)
+	# 6. Unbind terminal (no quantum effect - drain already happened at MEASURE)
 	plot_pool.unbind_terminal(terminal)
 
 	return {
 		"success": true,
 		"resource": resource,
-		"amount": amount,
+		"recorded_probability": recorded_prob,
+		"credits": credits,
 		"terminal_id": terminal_id,
 		"register_id": register_id
+	}
+
+
+## ============================================================================
+## HARVEST ACTION - Global collapse, end level
+## ============================================================================
+
+static func action_harvest_global(biome, plot_pool = null, economy = null) -> Dictionary:
+	"""Execute HARVEST: collapse entire ensemble, convert all probability to credits.
+
+	This is the "end of turn" action - true projective measurement of
+	the entire quantum system. Unlike MEASURE (which drains), HARVEST
+	fully collapses ρ and ends the level.
+
+	Algorithm:
+	1. Get all register probabilities from ρ
+	2. Convert each to credits: P × CONVERSION_RATE
+	3. Sum total credits
+	4. Collapse ρ (make diagonal / fully decohered)
+	5. Stop evolution
+	6. Signal level complete
+
+	Args:
+		biome: BiomeBase instance
+		plot_pool: PlotPool instance (optional, to clean up terminals)
+		economy: FarmEconomy instance (optional, for credit tracking)
+
+	Returns:
+		Dictionary with keys:
+		- success: bool
+		- total_credits: float
+		- harvested: Array[{register, outcome, probability, credits}]
+		- level_complete: bool
+	"""
+	if not biome:
+		return {
+			"success": false,
+			"error": "no_biome",
+			"message": "No biome to harvest."
+		}
+
+	var total_credits: float = 0.0
+	var harvested: Array = []
+
+	# 1. Get all register probabilities
+	var probabilities = biome.get_register_probabilities() if biome.has_method("get_register_probabilities") else {}
+
+	if probabilities.is_empty():
+		# Fallback: try to get register count and individual probabilities
+		var num_registers = biome.get_register_count() if biome.has_method("get_register_count") else 0
+		for reg_id in range(num_registers):
+			var prob = biome.get_register_probability(reg_id) if biome.has_method("get_register_probability") else 0.5
+			probabilities[reg_id] = prob
+
+	# 2. Convert each register to credits
+	for reg_id in probabilities:
+		var prob = probabilities[reg_id]
+		var credits = prob * EconomyConstants.QUANTUM_TO_CREDITS
+		total_credits += credits
+
+		# Get emoji for display
+		var emoji_pair = biome.get_register_emoji_pair(reg_id) if biome.has_method("get_register_emoji_pair") else {}
+		var outcome = emoji_pair.get("north", "?") if prob > 0.5 else emoji_pair.get("south", "?")
+
+		harvested.append({
+			"register": reg_id,
+			"outcome": outcome,
+			"probability": prob,
+			"credits": credits
+		})
+
+	# 3. Add total credits to economy
+	if economy:
+		if economy.has_method("add_credits"):
+			economy.add_credits(total_credits, "global_harvest")
+		elif economy.has_method("add_resource"):
+			economy.add_resource("credits", int(total_credits))
+
+	# 4. Collapse density matrix (full decoherence)
+	if biome.has_method("collapse_all_registers"):
+		biome.collapse_all_registers()
+	elif biome.has_method("decohere"):
+		biome.decohere()
+
+	# 5. Stop evolution
+	if biome.has_method("stop_evolution"):
+		biome.stop_evolution()
+
+	# 6. Clean up any bound terminals
+	if plot_pool and plot_pool.has_method("unbind_all_terminals"):
+		plot_pool.unbind_all_terminals()
+
+	return {
+		"success": true,
+		"total_credits": total_credits,
+		"harvested": harvested,
+		"level_complete": true
 	}
 
 

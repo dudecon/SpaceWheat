@@ -4,12 +4,20 @@ extends Control
 ## Save/Load Menu
 ## Shows 3 save slots with save information
 ## Can operate in "save" or "load" mode
+##
+## OverlayStackManager Integration:
+##   System-tier overlay (Z_TIER_SYSTEM = 4000)
+##   Implements: handle_input(), activate(), deactivate(), get_overlay_tier()
 
 signal slot_selected(slot: int, mode: String)
 signal debug_environment_selected(env_name: String)
 signal menu_closed()
 
 enum Mode { SAVE, LOAD }
+
+# Overlay interface
+var overlay_name: String = "save_load_menu"
+var overlay_tier: int = 4000  # Z_TIER_SYSTEM - highest priority
 
 var current_mode: Mode = Mode.LOAD
 var background: ColorRect
@@ -35,6 +43,9 @@ var debug_environments = {
 }
 
 
+var scroll_container: ScrollContainer
+var content_vbox: VBoxContainer
+
 func _init():
 	name = "SaveLoadMenu"
 
@@ -51,64 +62,76 @@ func _init():
 	background.layout_mode = 1
 	add_child(background)
 
-	# Center container - use size_flags for proper centering
-	var center = CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	center.layout_mode = 1
-	add_child(center)
-
-	# Menu panel - will be sized parametrically when shown
+	# Menu panel - positioned near top with max height
 	var menu_panel = PanelContainer.new()
-	# Default size (will be overridden when shown)
-	menu_panel.custom_minimum_size = Vector2(600, 500)
-	center.add_child(menu_panel)
+	menu_panel.anchor_left = 0.5
+	menu_panel.anchor_right = 0.5
+	menu_panel.anchor_top = 0.0
+	menu_panel.anchor_bottom = 0.0
+	menu_panel.offset_left = -300
+	menu_panel.offset_right = 300
+	menu_panel.offset_top = 10
+	menu_panel.offset_bottom = 530  # 10 + 520 = fits in 540 screen
+	menu_panel.layout_mode = 1
+	add_child(menu_panel)
 
 	menu_vbox = VBoxContainer.new()
 	menu_vbox.alignment = BoxContainer.ALIGNMENT_BEGIN
-	menu_vbox.add_theme_constant_override("separation", 15)
+	menu_vbox.add_theme_constant_override("separation", 8)
 	menu_panel.add_child(menu_vbox)
 
 	# Title (will be updated based on mode)
 	var title = Label.new()
 	title.name = "TitleLabel"
 	title.text = "LOAD GAME"
-	title.add_theme_font_size_override("font_size", 40)
+	title.add_theme_font_size_override("font_size", 32)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	menu_vbox.add_child(title)
 
 	# Keyboard hints
 	var hints = Label.new()
-	hints.text = "↑↓ or 1-3 to select  |  ENTER/SPACE to confirm  |  ESC to cancel"
-	hints.add_theme_font_size_override("font_size", 16)
+	hints.text = "↑↓ to select  |  ENTER to confirm  |  ESC to cancel"
+	hints.add_theme_font_size_override("font_size", 14)
 	hints.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hints.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 	menu_vbox.add_child(hints)
 
-	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 20)
-	menu_vbox.add_child(spacer1)
+	# Scrollable content area
+	scroll_container = ScrollContainer.new()
+	scroll_container.custom_minimum_size = Vector2(580, 380)  # Fixed height for scrolling
+	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	menu_vbox.add_child(scroll_container)
+
+	content_vbox = VBoxContainer.new()
+	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_vbox.add_theme_constant_override("separation", 8)
+	scroll_container.add_child(content_vbox)
+
+	# === SAVE SLOTS SECTION ===
+	var saves_label = Label.new()
+	saves_label.name = "SavesLabel"
+	saves_label.text = "💾 SAVE SLOTS"
+	saves_label.add_theme_font_size_override("font_size", 18)
+	saves_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	saves_label.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0))
+	content_vbox.add_child(saves_label)
 
 	# Create 3 save slot buttons
 	for slot in range(3):
 		var slot_btn = _create_slot_button(slot)
 		slot_buttons.append(slot_btn)
-		menu_vbox.add_child(slot_btn)
+		content_vbox.add_child(slot_btn)
 
-	var spacer2 = Control.new()
-	spacer2.custom_minimum_size = Vector2(0, 20)
-	menu_vbox.add_child(spacer2)
-
-	# Debug environments section (only shown in LOAD mode)
+	# === DEBUG SCENARIOS SECTION ===
 	var debug_section_label = Label.new()
 	debug_section_label.name = "DebugSectionLabel"
-	debug_section_label.text = "DEBUG SCENARIOS"
-	debug_section_label.add_theme_font_size_override("font_size", 20)
+	debug_section_label.text = "🧪 DEBUG SCENARIOS"
+	debug_section_label.add_theme_font_size_override("font_size", 18)
 	debug_section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	debug_section_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.0))
 	debug_section_label.visible = false  # Hidden in SAVE mode
-	menu_vbox.add_child(debug_section_label)
+	content_vbox.add_child(debug_section_label)
 
 	# Create debug environment buttons
 	var debug_list = debug_environments.keys()
@@ -116,15 +139,10 @@ func _init():
 		var display_name = debug_environments[env_name]
 		var env_btn = _create_debug_env_button(env_name, display_name)
 		debug_env_buttons.append(env_btn)
-		menu_vbox.add_child(env_btn)
+		content_vbox.add_child(env_btn)
 		env_btn.visible = false  # Hidden in SAVE mode
 
-	var spacer3 = Control.new()
-	spacer3.custom_minimum_size = Vector2(0, 20)
-	spacer3.name = "Spacer3"
-	menu_vbox.add_child(spacer3)
-
-	# Cancel button
+	# Cancel button (outside scroll area)
 	var cancel_btn = _create_menu_button("Cancel (ESC)", Color(0.6, 0.3, 0.3))
 	cancel_btn.pressed.connect(_on_cancel_pressed)
 	menu_vbox.add_child(cancel_btn)
@@ -402,6 +420,8 @@ func _select_previous_slot():
 
 func _update_visual_selection():
 	"""Update visual feedback for keyboard selection"""
+	var selected_control: Control = null
+
 	# Update slot buttons
 	for i in range(slot_buttons.size()):
 		var btn = slot_buttons[i]
@@ -414,6 +434,7 @@ func _update_visual_selection():
 			style.border_width_top = 4
 			style.border_width_bottom = 4
 			style.border_color = Color(1.0, 0.8, 0.0)  # Yellow border
+			selected_control = btn
 		else:
 			# Remove highlight
 			style.border_width_left = 0
@@ -433,12 +454,36 @@ func _update_visual_selection():
 			style.border_width_top = 4
 			style.border_width_bottom = 4
 			style.border_color = Color(1.0, 0.8, 0.0)  # Yellow border
+			selected_control = btn
 		else:
 			# Remove highlight
 			style.border_width_left = 0
 			style.border_width_right = 0
 			style.border_width_top = 0
 			style.border_width_bottom = 0
+
+	# Scroll to make selected item visible
+	if selected_control and scroll_container:
+		_scroll_to_control(selected_control)
+
+
+func _scroll_to_control(ctrl: Control):
+	"""Scroll to make the given control visible in the scroll container"""
+	if not scroll_container or not ctrl:
+		return
+
+	# Get control's position relative to content_vbox
+	var ctrl_pos = ctrl.position.y
+	var ctrl_height = ctrl.size.y
+	var scroll_pos = scroll_container.scroll_vertical
+	var view_height = scroll_container.size.y
+
+	# Check if control is above visible area
+	if ctrl_pos < scroll_pos:
+		scroll_container.scroll_vertical = int(ctrl_pos)
+	# Check if control is below visible area
+	elif ctrl_pos + ctrl_height > scroll_pos + view_height:
+		scroll_container.scroll_vertical = int(ctrl_pos + ctrl_height - view_height)
 
 
 func _confirm_selection():
@@ -481,7 +526,7 @@ func show_menu(mode: Mode):
 	_update_slot_info()
 
 	# Show/hide debug environments section
-	var debug_label = menu_vbox.get_node("DebugSectionLabel") as Label
+	var debug_label = content_vbox.get_node("DebugSectionLabel") as Label
 	if debug_label:
 		debug_label.visible = (mode == Mode.LOAD)
 
@@ -590,4 +635,27 @@ func _on_debug_env_pressed(env_name: String):
 func _on_cancel_pressed():
 	print("❌ Save/Load cancelled")
 	menu_closed.emit()
+	hide_menu()
+
+
+# ============================================================================
+# OVERLAY STACK INTERFACE
+# ============================================================================
+
+func get_overlay_tier() -> int:
+	"""Get z-index tier for OverlayStackManager."""
+	return overlay_tier
+
+
+func activate() -> void:
+	"""Overlay lifecycle: Called when pushed onto stack.
+
+	Note: SaveLoadMenu requires mode to be set before showing.
+	Use show_menu(mode) directly, or set current_mode first.
+	"""
+	show_menu(current_mode)
+
+
+func deactivate() -> void:
+	"""Overlay lifecycle: Called when popped from stack."""
 	hide_menu()

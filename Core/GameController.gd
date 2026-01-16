@@ -4,6 +4,8 @@ extends Node
 ## Central controller for all game actions
 ## Coordinates between farm grid, economy, goals, and UI
 
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
+
 # References to game systems (set by FarmView)
 # Note: Using untyped vars to avoid circular dependencies
 var farm_grid
@@ -183,7 +185,7 @@ func _format_missing_resources(costs: Dictionary) -> String:
 		var need = costs[emoji]
 		var have = economy.get_resource(emoji)
 		if have < need:
-			var shortfall = (need - have) / FarmEconomy.QUANTUM_TO_CREDITS
+			var shortfall = (need - have) / EconomyConstants.QUANTUM_TO_CREDITS
 			missing.append("%d %s" % [shortfall, emoji])
 	return ", ".join(missing)
 
@@ -218,12 +220,12 @@ func harvest_plot(pos: Vector2i) -> Dictionary:
 		# Fallback: if energy not provided, derive from yield
 		if quantum_energy == 0.0:
 			var yield_amount = harvest_data.get("yield", 1)
-			quantum_energy = float(yield_amount) / float(FarmEconomy.QUANTUM_TO_CREDITS)
+			quantum_energy = float(yield_amount) / float(EconomyConstants.QUANTUM_TO_CREDITS)
 
 		if not outcome_emoji.is_empty():
 			# Generic routing: any emoji → its credits
 			var credits_earned = economy.receive_harvest(outcome_emoji, quantum_energy, "harvest")
-			var units = credits_earned / FarmEconomy.QUANTUM_TO_CREDITS
+			var units = credits_earned / EconomyConstants.QUANTUM_TO_CREDITS
 
 			# Goal tracking for wheat
 			if outcome_emoji == "🌾":

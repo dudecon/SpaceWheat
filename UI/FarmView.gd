@@ -8,6 +8,7 @@ extends Control
 
 const Farm = preload("res://Core/Farm.gd")
 const BathQuantumViz = preload("res://Core/Visualization/BathQuantumVisualizationController.gd")
+const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
 # BootManager is an autoload singleton - no need to preload
 
 var shell = null  # PlayerShell (from scene)
@@ -50,6 +51,11 @@ func _ready():
 	if _game_state:
 		_game_state.active_farm = farm
 		_verbose.info("farm", "✅", "Farm registered with GameStateManager")
+
+		# Initialize game state if not already set (first run or fresh start)
+		if not _game_state.current_state:
+			_game_state.new_game("default")
+			_verbose.info("farm", "✅", "Initialized new game state with default scenario")
 	else:
 		_verbose.warn("farm", "⚠️", "GameStateManager not available (test mode)")
 
@@ -135,35 +141,56 @@ func _on_overlay_state_changed(overlay_name: String, visible: bool) -> void:
 
 
 func _on_quantum_node_clicked(grid_pos: Vector2i, button_index: int) -> void:
-	"""Handle tap gesture on quantum bubble - TAP TO MEASURE/HARVEST
+	"""Handle tap gesture on quantum bubble - TAP TO MEASURE/POP (v2 Terminal system)
 
 	Triggered when user taps a quantum bubble (short press <50px distance).
-	Performs contextual action based on plot state:
-	- Empty plot → Plant (if tool supports it)
-	- Planted/unmeasured → MEASURE (collapse quantum state)
-	- Measured → HARVEST
+	Uses Terminal-based architecture (EXPLORE → MEASURE → POP):
+	- Bound but not measured → MEASURE (collapse quantum state)
+	- Measured → POP (harvest and return terminal to pool)
 	"""
 	_verbose.debug("ui", "🎯", "BUBBLE TAP HANDLER CALLED! Grid pos: %s, button: %d" % [grid_pos, button_index])
 
-	if not farm or not farm.grid:
-		_verbose.warn("ui", "⚠️", "No farm available")
+	if not farm or not farm.plot_pool:
+		_verbose.warn("ui", "⚠️", "No farm or plot_pool available")
 		return
 
-	var plot = farm.grid.get_plot(grid_pos)
-	if not plot:
-		_verbose.warn("ui", "⚠️", "No plot at %s" % grid_pos)
+	# v2: Look up terminal by grid position
+	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
+	if not terminal:
+		_verbose.warn("ui", "⚠️", "No terminal bound at %s" % grid_pos)
 		return
 
-	# Contextual action based on plot state
-	if not plot.is_planted:
-		_verbose.debug("ui", "→", "Plot empty - planting wheat")
-		farm.plant_wheat(grid_pos)
-	elif not plot.has_been_measured:
-		_verbose.debug("ui", "→", "Plot planted - MEASURING quantum state")
-		farm.measure_plot(grid_pos)
+	# Get biome for this position (needed for MEASURE)
+	var biome = farm.grid.get_biome_for_plot(grid_pos) if farm.grid else null
+
+	# Bubble tap action: measure or pop (Ensemble Model)
+	if not terminal.is_measured:
+		# MEASURE: Sample from ensemble, drain ρ, record claim
+		_verbose.debug("ui", "→", "MEASURING terminal at %s" % grid_pos)
+		var result = ProbeActions.action_measure(terminal, biome)
+		if result.success:
+			var prob = result.recorded_probability
+			var drained = result.was_drained
+			_verbose.info("ui", "📊", "Measured: %s (%.1f%% recorded, drained=%s)" % [
+				result.outcome, prob * 100, drained
+			])
+			# Emit with recorded probability for visualization
+			farm.plot_measured.emit(grid_pos, result.outcome)
+		else:
+			_verbose.warn("ui", "⚠️", "Measure failed: %s" % result.get("message", "unknown"))
 	else:
-		_verbose.debug("ui", "→", "Plot measured - HARVESTING")
-		farm.harvest_plot(grid_pos)
+		# POP: Convert recorded probability to credits (no quantum effect)
+		_verbose.debug("ui", "→", "POPPING terminal at %s" % grid_pos)
+		var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy)
+		if result.success:
+			var credits = result.credits
+			_verbose.info("ui", "🎉", "Popped: %s → %.1f credits" % [result.resource, credits])
+			farm.plot_harvested.emit(grid_pos, {
+				"emoji": result.resource,
+				"credits": credits
+			})
+		else:
+			_verbose.warn("ui", "⚠️", "Pop failed: %s" % result.get("message", "unknown"))
 
 
 func _on_quantum_nodes_swiped(from_grid_pos: Vector2i, to_grid_pos: Vector2i) -> void:

@@ -18,13 +18,16 @@ extends RefCounted
 const CoreFactions = preload("res://Core/Factions/CoreFactions.gd")
 const CivilizationFactions = preload("res://Core/Factions/CivilizationFactions.gd")
 const Tier2Factions = preload("res://Core/Factions/Tier2Factions.gd")
+const CenterFactions = preload("res://Core/Factions/CenterFactions.gd")
+const FringeFactions = preload("res://Core/Factions/FringeFactions.gd")
+const OuterFactions = preload("res://Core/Factions/OuterFactions.gd")
 
 ## ========================================
 ## Faction Collections
 ## ========================================
 
-## Get ALL factions (Core + Civilization + Tier 2)
-## Returns Array with 27 factions total
+## Get ALL factions (Core + Civilization + Tier 2 + Center + Fringe + Outer)
+## Returns Array with all registered factions
 static func get_all() -> Array:
 	var factions: Array = []
 
@@ -38,6 +41,18 @@ static func get_all() -> Array:
 
 	# Tier 2 factions (10)
 	for f in Tier2Factions.get_all():
+		factions.append(f)
+
+	# Center ring factions (new)
+	for f in CenterFactions.get_all():
+		factions.append(f)
+
+	# Fringe ring factions
+	for f in FringeFactions.get_all():
+		factions.append(f)
+
+	# Outer ring factions
+	for f in OuterFactions.get_all():
 		factions.append(f)
 
 	return factions

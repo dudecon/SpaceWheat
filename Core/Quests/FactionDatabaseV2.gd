@@ -108,7 +108,7 @@ const ALL_FACTIONS = [
 		"domain": "Commerce",
 		"ring": "center",
 		"bits": [1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1],
-		"sig": ["🌱", "🍞", "💰", "🧺"],
+		"sig": ["🌾", "🌱", "🍞", "💰", "🧺"],
 		"motto": "From seed to loaf, we are the chain.",
 		"description": "They set grain prices, maintain storage standards, and arbitrate harvest disputes. Boring work that feeds everyone. The Yeast Prophets sometimes consult with senior Guild members about fermentation techniques - a professional courtesy that the Guild considers entirely mundane. When crop failures threaten, the Guilds decide who eats. This makes them more powerful than any army, though they rarely think of it that way."
 	},
@@ -117,7 +117,7 @@ const ALL_FACTIONS = [
 		"domain": "Civic",
 		"ring": "center",
 		"bits": [1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1],
-		"sig": ["🌱", "💧", "⚖", "🪣"],
+		"sig": ["🌾", "🌱", "💧", "⚖", "🪣"],
 		"motto": "Water flows where justice wills.",
 		"description": "Twelve citizens who decide where water goes. Their judgments shape harvests, determine which settlements thrive, and settle disputes older than anyone's memory. The position is elected, unpaid, and considered a burden by most who hold it. Yet the Jury's decisions are respected even by Station Lords - because everyone needs water, and everyone knows what happens when the channels run dry."
 	},

@@ -33,8 +33,8 @@ func boot(farm: Node, shell: Node, quantum_viz: Node) -> void:
 	# Stage 3B: Visualization
 	_stage_visualization(farm, quantum_viz)
 
-	# Stage 3C: UI
-	_stage_ui(farm, shell, quantum_viz)
+	# Stage 3C: UI (async - must await to ensure FarmInputHandler is created)
+	await _stage_ui(farm, shell, quantum_viz)
 
 	# Stage 3D: Start Simulation
 	_stage_start_simulation(farm)
@@ -178,6 +178,18 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 	input_handler.farm = farm
 	input_handler.plot_grid_display = farm_ui.plot_grid_display
 	farm_ui.input_handler = input_handler
+
+	# CRITICAL: Inject grid_config (was missing - caused "grid_config is NULL" warnings)
+	if farm.grid_config:
+		input_handler.inject_grid_config(farm.grid_config)
+		print("  ✓ GridConfig injected into FarmInputHandler")
+
+	# CRITICAL: Connect input_handler signals to action bar AFTER input_handler exists
+	# (farm_setup_complete fires too early, before input_handler is created)
+	if shell.has_method("connect_to_farm_input_handler"):
+		shell.connect_to_farm_input_handler()
+		print("  ✓ Input handler connected to action bars")
+
 	# Note: input_handler is a child of shell, accessible via shell.get_node("FarmInputHandler")
 	print("  ✓ FarmInputHandler created\n")
 
