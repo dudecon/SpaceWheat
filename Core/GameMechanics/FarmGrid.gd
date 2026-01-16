@@ -1422,43 +1422,12 @@ func measure_plot(position: Vector2i) -> String:
 
 	var result = ""
 
-	# MODEL C: Try bath-based measurement first (analog model)
-	if "bath" in biome and biome.bath:
-		# Use BasePlot's measure() method which calls bath.measure_axis()
-		var basis_outcome = plot.measure()  # Returns "north", "south", or "" on failure
-
-		# Handle measurement failure
-		if basis_outcome == "":
-			_verbose.warn("farm", "⚠️", "Measurement failed for plot at %s - biome may not support these emojis" % position)
-			return ""
-
-		result = plot.north_emoji if basis_outcome == "north" else plot.south_emoji
-		_verbose.debug("farm", "📊", "Measure operation (bath): %s collapsed to %s" % [position, result])
-		return result
-
-	# MODEL C (density matrix): Try quantum_computer with measure_axis() method
-	if biome.quantum_computer and biome.quantum_computer.has_method("measure_axis"):
-		# Direct axis measurement using plot's emoji pair
-		var outcome_emoji = biome.quantum_computer.measure_axis(plot.north_emoji, plot.south_emoji)
-
-		if outcome_emoji == "":
-			_verbose.warn("farm", "⚠️", "Measurement failed (quantum_computer) for plot at %s - emojis %s/%s not in biome" % [
-				position, plot.north_emoji, plot.south_emoji])
-			return ""
-
-		# Update plot state
-		plot.has_been_measured = true
-		plot.measured_outcome = "north" if outcome_emoji == plot.north_emoji else "south"
-
-		_verbose.debug("farm", "📊", "Measure operation (quantum_computer.measure_axis): %s collapsed to %s" % [position, outcome_emoji])
-		return outcome_emoji
-
-	# MODEL B: Fall back to quantum_computer component-based (legacy digital model)
+	# MODEL C: quantum_computer register-based measurement (migrated from bath)
 	var register_id = plot_register_mapping.get(position, -1)
 
 	if not biome.quantum_computer or register_id < 0:
 		# No quantum system available
-		_verbose.warn("farm", "⚠️", "No quantum system (bath or quantum_computer) for plot at %s" % position)
+		_verbose.warn("farm", "⚠️", "No quantum system for plot at %s - no register allocated" % position)
 		return plot.north_emoji  # Default fallback
 
 	var comp = biome.quantum_computer.get_component_containing(register_id)
@@ -1757,83 +1726,60 @@ func _auto_cluster_from_gate(position: Vector2i, linked_plots: Array) -> void:
 
 
 func _create_quantum_entanglement(pos_a: Vector2i, pos_b: Vector2i, bell_type: String = "phi_plus") -> bool:
-	"""Create quantum state entanglement (internal helper)"""
+	"""Create quantum state entanglement (internal helper) - Model C: quantum_computer wiring"""
 	var plot_a = get_plot(pos_a)
 	var plot_b = get_plot(pos_b)
 
 	if not plot_a or not plot_b or not plot_a.is_planted or not plot_b.is_planted:
 		return false
 
-	# MODEL C (Bath): Entanglement is implicit through shared bath
-	# Check if either plot is bath-based (has bath_subplot_id instead of quantum_state)
-	if ("bath_subplot_id" in plot_a and plot_a.bath_subplot_id >= 0) or ("bath_subplot_id" in plot_b and plot_b.bath_subplot_id >= 0):
-		_verbose.info("quantum", "ℹ️", "Bath-based plots are implicitly entangled through shared quantum bath")
-		_verbose.debug("quantum", "ℹ️", "All plots in same bath share composite quantum state")
-		return true  # Success - entanglement exists via bath
+	# MODEL C: Entanglement via quantum_computer component merging
+	var biome_a = get_biome_for_plot(pos_a)
+	var biome_b = get_biome_for_plot(pos_b)
 
-	# MODEL A/B: Explicit quantum_state entanglement (legacy code below)
-	# Ensure plots have quantum_state before accessing it
-	if not "quantum_state" in plot_a or not plot_a.quantum_state:
-		push_warning("Plot at %s has no quantum_state (Model C?)" % pos_a)
-		return false
-	if not "quantum_state" in plot_b or not plot_b.quantum_state:
-		push_warning("Plot at %s has no quantum_state (Model C?)" % pos_b)
+	# Ensure both plots are in same biome (required for quantum_computer entanglement)
+	if biome_a != biome_b:
+		push_error("Cannot entangle plots from different biomes - each biome has its own quantum_computer")
 		return false
 
-	# Smart entanglement logic: Cluster upgrade system (existing code)
-	# Case 1: Plot A in cluster → Add B to cluster
-	if plot_a.quantum_state.is_in_cluster():
-		return _add_to_cluster(
-			plot_a.quantum_state.entangled_cluster,
-			plot_b,
-			plot_a.quantum_state.cluster_qubit_index
-		)
+	# Get register IDs from plot mappings
+	var reg_id_a = plot_register_mapping.get(pos_a, -1)
+	var reg_id_b = plot_register_mapping.get(pos_b, -1)
 
-	# Case 2: Plot B in cluster → Add A to cluster
-	if plot_b.quantum_state.is_in_cluster():
-		return _add_to_cluster(
-			plot_b.quantum_state.entangled_cluster,
-			plot_a,
-			plot_b.quantum_state.cluster_qubit_index
-		)
+	if reg_id_a < 0 or reg_id_b < 0:
+		push_error("Cannot entangle: plots don't have valid register allocations")
+		return false
 
-	# Case 3: Plot A in pair → Upgrade to cluster
-	if plot_a.quantum_state.is_in_pair():
-		return _upgrade_pair_to_cluster(plot_a.quantum_state.entangled_pair, plot_b)
+	# Merge components in quantum_computer to create entanglement
+	if biome_a and biome_a.quantum_computer:
+		var comp_a = biome_a.quantum_computer.get_component_containing(reg_id_a)
+		var comp_b = biome_a.quantum_computer.get_component_containing(reg_id_b)
 
-	# Case 4: Plot B in pair → Upgrade to cluster
-	if plot_b.quantum_state.is_in_pair():
-		return _upgrade_pair_to_cluster(plot_b.quantum_state.entangled_pair, plot_a)
+		if not comp_a or not comp_b:
+			push_error("Cannot entangle: components not found in quantum_computer")
+			return false
 
-	# Case 5: Neither entangled → Create new EntangledPair
-	var pair = EntangledPair.new()
-	pair.qubit_a_id = plot_a.plot_id
-	pair.qubit_b_id = plot_b.plot_id
-	pair.north_emoji_a = plot_a.quantum_state.north_emoji
-	pair.south_emoji_a = plot_a.quantum_state.south_emoji
-	pair.north_emoji_b = plot_b.quantum_state.north_emoji
-	pair.south_emoji_b = plot_b.quantum_state.south_emoji
+		# If already in same component, already entangled
+		if comp_a.component_id == comp_b.component_id:
+			_verbose.info("quantum", "ℹ️", "Plots already in same quantum component (already entangled)")
+			plot_a.add_entanglement(plot_b.plot_id, 1.0)
+			plot_b.add_entanglement(plot_a.plot_id, 1.0)
+			return true
 
-	# Create Bell state
-	match bell_type:
-		"phi_plus": pair.create_bell_phi_plus()
-		"phi_minus": pair.create_bell_phi_minus()
-		"psi_plus": pair.create_bell_psi_plus()
-		"psi_minus": pair.create_bell_psi_minus()
-		_: pair.create_bell_phi_plus()
+		# Merge components to create entanglement
+		var merged_comp = biome_a.quantum_computer.merge_components(comp_a, comp_b)
+		_verbose.info("quantum", "🔗", "Merged components %d + %d → %d for entanglement" % [
+			comp_a.component_id, comp_b.component_id, merged_comp.component_id])
+	else:
+		push_error("Biome has no quantum_computer for entanglement")
+		return false
 
-	# Link qubits to pair
-	plot_a.quantum_state.entangled_pair = pair
-	plot_a.quantum_state.is_qubit_a = true
-	plot_b.quantum_state.entangled_pair = pair
-	plot_b.quantum_state.is_qubit_a = false
-
-	# Add to pairs array
-	entangled_pairs.append(pair)
-
-	# Update gameplay entanglement tracking
+	# Update gameplay entanglement tracking (metadata for visualization)
 	plot_a.add_entanglement(plot_b.plot_id, 1.0)
 	plot_b.add_entanglement(plot_a.plot_id, 1.0)
+
+	# Emit signal for UI updates (entanglement visualization)
+	entanglement_created.emit()
 
 	return true
 
