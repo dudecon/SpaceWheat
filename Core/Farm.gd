@@ -80,9 +80,50 @@ const GATHER_ACTIONS = {
 signal state_changed(state_data: Dictionary)
 signal action_result(action: String, success: bool, message: String)
 signal action_rejected(action: String, position: Vector2i, reason: String)  # For visual/audio feedback
-signal plot_planted(position: Vector2i, plant_type: String)
-signal plot_harvested(position: Vector2i, yield_data: Dictionary)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TERMINAL LIFECYCLE SIGNALS (EXPLORE/MEASURE/POP actions)
+# These trigger bubble visualization in BathQuantumVisualizationController
+# ═══════════════════════════════════════════════════════════════════════════════
+
+## Emitted when EXPLORE binds a terminal to a quantum register
+signal terminal_bound(grid_position: Vector2i, terminal_id: String, emoji_pair: Dictionary)
+
+## Emitted when MEASURE collapses the terminal's quantum state
+signal terminal_measured(grid_position: Vector2i, terminal_id: String, outcome: String, probability: float)
+
+## Emitted when POP releases the terminal back to pool
+signal terminal_released(grid_position: Vector2i, terminal_id: String, credits_earned: int)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STRUCTURE LIFECYCLE SIGNALS (BUILD mode actions)
+# These trigger plot tile updates in PlotGridDisplay
+# ═══════════════════════════════════════════════════════════════════════════════
+
+## Emitted when BUILD creates a new structure (mill, market, kitchen, crop)
+signal structure_built(grid_position: Vector2i, structure_type: String, emoji_pair: Dictionary)
+
+## Emitted when structure is demolished
+signal structure_demolished(grid_position: Vector2i, structure_type: String)
+
+## Emitted when biome quantum system expands (new axis added)
+signal biome_expanded(biome_name: String, qubit_index: int, emoji_pair: Dictionary)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LEGACY SIGNALS (kept for internal use and backwards compatibility)
+# For visualization, use terminal_* signals instead
+# ═══════════════════════════════════════════════════════════════════════════════
+
+## @deprecated - Use terminal_measured for visualization
 signal plot_measured(position: Vector2i, outcome: String)
+
+## @deprecated - Use terminal_released for visualization
+signal plot_harvested(position: Vector2i, yield_data: Dictionary)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OTHER SIGNALS
+# ═══════════════════════════════════════════════════════════════════════════════
+
 signal plots_entangled(pos1: Vector2i, pos2: Vector2i, bell_state: String)
 signal economy_changed(state: Dictionary)
 
@@ -602,8 +643,15 @@ func build(pos: Vector2i, build_type: String) -> bool:
 				success = true
 
 	if success:
-		print("🌱 Farm: Emitting plot_planted signal for %s at %s" % [build_type, pos])
-		plot_planted.emit(pos, build_type)
+		# Get emoji pair for the built structure (empty for infrastructure, defined for plants)
+		var emoji_pair = {}
+		if config["type"] == "plant":
+			var built_plot = grid.get_plot(pos)
+			if built_plot:
+				emoji_pair = built_plot.get_plot_emojis()
+
+		print("🏗️ Farm: Emitting structure_built signal for %s at %s" % [build_type, pos])
+		structure_built.emit(pos, build_type, emoji_pair)
 		_emit_state_changed()
 		action_result.emit("build_%s" % build_type, true, "%s placed successfully!" % build_type.capitalize())
 		return true

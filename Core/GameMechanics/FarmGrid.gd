@@ -839,8 +839,8 @@ func plant(position: Vector2i, plant_type: String, quantum_state: Resource = nul
 		push_error("Plot %s planted but register_id not set!" % position)
 
 	total_plots_planted += 1
-	plot_planted.emit(position)
 
+	# Note: structure_built signal is emitted by Farm.build() - don't emit plot_planted here
 	# Emit generic signals for visualization and biome updates
 	plot_changed.emit(position, "planted", {"plant_type": plant_type})
 	visualization_changed.emit()
@@ -935,8 +935,8 @@ func plant_energy_tap(position: Vector2i, target_emoji: String, drain_rate: floa
 
 	plot.is_planted = true
 	total_plots_planted += 1
-	plot_planted.emit(position)
 
+	# Note: structure_built signal is emitted by Farm.build() - don't emit plot_planted here
 	_verbose.info("farm", "⚡", "Planted energy tap at %s targeting %s (κ=%.3f/sec, sink-based drain)" % [
 		plot.plot_id, target_emoji, drain_rate
 	])
@@ -966,7 +966,7 @@ func place_mill(position: Vector2i) -> bool:
 	# Track mill
 	quantum_mills[position] = mill
 
-	plot_planted.emit(position)
+	# Note: structure_built signal is emitted by Farm.build() - don't emit here
 	_verbose.info("farm", "🏭", "Placed quantum mill at %s" % plot.plot_id)
 	return true
 
@@ -1004,9 +1004,8 @@ func place_market(position: Vector2i) -> bool:
 	plot.plot_type = FarmPlot.PlotType.MARKET
 	plot.conspiracy_node_id = "market"  # Entangle with market node
 	plot.is_planted = true
-	# Quantum-only: No is_mature property (instant full size)
-	plot_planted.emit(position)
 
+	# Note: structure_built signal is emitted by Farm.build() - don't emit here
 	_verbose.info("farm", "💰", "Placed market at %s → entangled with 💰→📈 market node (value fluctuation)" % plot.plot_id)
 	return true
 
@@ -1029,8 +1028,8 @@ func place_kitchen(position: Vector2i) -> bool:
 	# Mark as occupied (buildings are instantly "mature")
 	plot.plot_type = FarmPlot.PlotType.KITCHEN
 	plot.is_planted = true
-	plot_planted.emit(position)
 
+	# Note: structure_built signal is emitted by Farm.build() - don't emit here
 	_verbose.info("farm", "🍳", "Placed kitchen at %s - ready for Bell state baking!" % position)
 	return true
 

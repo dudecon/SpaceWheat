@@ -1428,8 +1428,8 @@ func _action_explore():
 			# Link terminal to grid position for bubble tap lookup
 			terminal.grid_position = plot_pos
 
-			# Emit signal for visualization (bubble spawn) at THIS plot position
-			farm.plot_planted.emit(plot_pos, emoji)
+			# Emit terminal_bound signal for visualization (bubble spawn)
+			farm.terminal_bound.emit(plot_pos, terminal.terminal_id, result.emoji_pair)
 
 			_verbose.info("action", "🔍", "EXPLORE: Bound terminal %s to register %d (%s) at %s" % [
 				terminal.terminal_id, result.register_id, emoji, plot_pos
@@ -1470,10 +1470,10 @@ func _action_measure(positions: Array[Vector2i]):
 
 	if result.success:
 		var outcome = result.outcome
-		var prob = result.recorded_probability  # Fixed: was 'probability', should be 'recorded_probability'
+		var prob = result.recorded_probability
 
-		# Emit signal for visualization (bubble freeze/collapse) - use target_pos
-		farm.plot_measured.emit(target_pos, outcome)
+		# Emit terminal_measured signal for visualization (bubble shows measured state)
+		farm.terminal_measured.emit(terminal.grid_position, terminal.terminal_id, outcome, prob)
 
 		action_performed.emit("measure", true, "👁️ Measured: %s (p=%.0f%%)" % [outcome, prob * 100])
 		_verbose.info("action", "👁️", "MEASURE: Terminal %s collapsed to %s" % [
@@ -1507,18 +1507,23 @@ func _action_pop(positions: Array[Vector2i]):
 		action_performed.emit("pop", false, "⚠️  No measured terminals. MEASURE first.")
 		return
 
+	# Save grid position before terminal is released (it gets cleared)
+	var grid_pos = terminal.grid_position
+	var terminal_id = terminal.terminal_id
+
 	# Execute POP via ProbeActions
 	var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy)
 
 	if result.success:
 		var resource = result.resource
+		var credits = result.get("credits", 0)
 
-		# Emit signal for visualization (bubble pop, particle effect) - use target_pos
-		farm.plot_harvested.emit(target_pos, {"emoji": resource, "amount": 1})
+		# Emit terminal_released signal for visualization (bubble removal)
+		farm.terminal_released.emit(grid_pos, terminal_id, credits)
 
-		action_performed.emit("pop", true, "✂️ Harvested: %s" % resource)
-		_verbose.info("action", "✂️", "POP: Harvested %s from terminal %s" % [
-			resource, result.terminal_id
+		action_performed.emit("pop", true, "✂️ Harvested: %s (+%d💰)" % [resource, credits])
+		_verbose.info("action", "✂️", "POP: Harvested %s from terminal %s (+%d credits)" % [
+			resource, terminal_id, credits
 		])
 	else:
 		var msg = result.get("message", "Pop failed")

@@ -126,10 +126,10 @@ func initialize() -> void:
 
 
 func connect_to_farm(farm) -> void:
-	"""Connect to farm signals to auto-request bubbles when plots are planted
+	"""Connect to farm signals to auto-request bubbles when terminals are bound
 
 	Args:
-		farm: Farm instance with plot_planted signal
+		farm: Farm instance with terminal lifecycle signals
 	"""
 	if not farm:
 		push_warning("BathQuantumViz: null farm reference")
@@ -143,25 +143,36 @@ func connect_to_farm(farm) -> void:
 		graph.plot_pool = farm.plot_pool
 		print("   📡 Passed plot_pool to QuantumForceGraph for measured state detection")
 
-	if farm.has_signal("plot_planted"):
-		farm.plot_planted.connect(_on_plot_planted)
-		print("   📡 Connected to farm.plot_planted for auto-requesting bubbles")
+	# Connect to terminal lifecycle signals (EXPLORE/MEASURE/POP)
+	if farm.has_signal("terminal_bound"):
+		farm.terminal_bound.connect(_on_terminal_bound)
+		print("   📡 Connected to farm.terminal_bound for bubble spawn")
 	else:
-		push_warning("BathQuantumViz: farm has no plot_planted signal")
+		push_warning("BathQuantumViz: farm has no terminal_bound signal")
 
-	if farm.has_signal("plot_harvested"):
-		farm.plot_harvested.connect(_on_plot_harvested)
-		print("   📡 Connected to farm.plot_harvested for auto-despawning bubbles")
+	if farm.has_signal("terminal_measured"):
+		farm.terminal_measured.connect(_on_terminal_measured)
+		print("   📡 Connected to farm.terminal_measured for bubble state update")
 	else:
-		push_warning("BathQuantumViz: farm has no plot_harvested signal")
+		push_warning("BathQuantumViz: farm has no terminal_measured signal")
 
-func _on_plot_planted(position: Vector2i, plant_type: String) -> void:
-	"""Handle plot planted event - request bubble for the planted plot
+	if farm.has_signal("terminal_released"):
+		farm.terminal_released.connect(_on_terminal_released)
+		print("   📡 Connected to farm.terminal_released for bubble despawn")
+	else:
+		push_warning("BathQuantumViz: farm has no terminal_released signal")
 
-	v2 Architecture: Uses terminals via PlotPool, not plot properties.
-	plant_type is the north emoji from the terminal's emoji_pair.
+func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dictionary) -> void:
+	"""Handle terminal bound event - spawn bubble when EXPLORE binds a terminal
+
+	Args:
+		position: Grid position where terminal is bound
+		terminal_id: Unique terminal identifier
+		emoji_pair: {north: String, south: String} - the emoji basis states
 	"""
-	print("🔔 BathQuantumViz: Received plot_planted signal for %s at %s" % [plant_type, position])
+	var north_emoji = emoji_pair.get("north", "?")
+	var south_emoji = emoji_pair.get("south", "?")
+	print("🔔 BathQuantumViz: Terminal %s bound at %s (%s/%s)" % [terminal_id, position, north_emoji, south_emoji])
 
 	# Get plot's biome assignment from stored farm reference
 	if not farm_ref or not farm_ref.grid:
@@ -178,28 +189,42 @@ func _on_plot_planted(position: Vector2i, plant_type: String) -> void:
 	# Get the actual plot (needed for entanglement visualization)
 	var plot = farm_ref.grid.get_plot(position)
 
-	# v2: Try to get terminal from PlotPool for full emoji data
-	var north_emoji = plant_type
-	var south_emoji = "?"  # Default fallback
-
-	if farm_ref.plot_pool:
-		# Find terminal bound in this biome that matches the emoji
-		for terminal in farm_ref.plot_pool.get_active_terminals():
-			if terminal.north_emoji == plant_type:
-				south_emoji = terminal.south_emoji if terminal.south_emoji else "?"
-				print("   🔗 Found terminal with emojis: %s/%s" % [north_emoji, south_emoji])
-				break
-
 	# Create bubble with plot reference (enables entanglement visualization)
 	_create_bubble_for_terminal(biome_name, position, north_emoji, south_emoji, plot)
 
 
-func _on_plot_harvested(position: Vector2i, yield_data: Dictionary) -> void:
-	"""Handle plot harvested event - despawn bubble for the harvested plot
+func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: String, probability: float) -> void:
+	"""Handle terminal measured event - update bubble to show measured state
 
-	This automatically removes bubbles when the player harvests crops.
+	Args:
+		position: Grid position of the measured terminal
+		terminal_id: Unique terminal identifier
+		outcome: The measured emoji outcome
+		probability: The recorded probability (for credits on POP)
 	"""
-	print("✂️  BathQuantumViz: Received plot_harvested signal at %s" % position)
+	print("📏 BathQuantumViz: Terminal %s measured at %s → %s (p=%.2f)" % [terminal_id, position, outcome, probability])
+
+	if not graph:
+		return
+
+	# Find bubble by grid position and update its measured state
+	var bubble = graph.quantum_nodes_by_grid_pos.get(position)
+	if bubble:
+		# Mark as measured - this will trigger cyan glow in rendering
+		if bubble.plot:
+			bubble.plot.has_been_measured = true
+		print("   ✨ Bubble at %s marked as measured" % position)
+
+
+func _on_terminal_released(position: Vector2i, terminal_id: String, credits_earned: int) -> void:
+	"""Handle terminal released event - despawn bubble when POP releases a terminal
+
+	Args:
+		position: Grid position of the released terminal
+		terminal_id: Unique terminal identifier
+		credits_earned: Credits gained from the harvest
+	"""
+	print("💰 BathQuantumViz: Terminal %s released at %s (+%d credits)" % [terminal_id, position, credits_earned])
 
 	if not graph:
 		print("   ⚠️  No graph found")
