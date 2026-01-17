@@ -687,6 +687,13 @@ func _process(delta):
 	if quantum_nodes.is_empty():
 		return
 
+	# VIEWPORT CHANGE DETECTION: Recompute layout if screen size changed
+	# Do this BEFORE throttle so we respond to resize even if physics is throttled
+	var viewport = get_viewport()
+	var current_viewport_size = viewport.get_visible_rect().size if viewport else Vector2(1280, 720)
+	if current_viewport_size != cached_viewport_size:
+		update_layout()  # Will only update if size actually changed
+
 	# Accumulate time for animations
 	time_accumulator += delta
 	process_accumulator += delta
@@ -1308,10 +1315,10 @@ func _draw():
 	# Track frame for debug logging
 	frame_count += 1
 
-	# PARAMETRIC LAYOUT: Use BiomeLayoutCalculator for all positioning
-	# This handles viewport resize and biome config changes
-	if not lock_dimensions:
-		update_layout()  # Recomputes positions if viewport changed
+	# NOTE: DO NOT call update_layout() here!
+	# Position updates should ONLY come from force physics (_update_forces + _update_positions)
+	# Layout setup happens once at initialization, not every frame
+	# Viewport changes are detected in _process via cached_viewport_size check
 
 	# Draw strange attractor (political season cycle)
 	_draw_strange_attractor()

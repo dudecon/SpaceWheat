@@ -2998,12 +2998,11 @@ func _format_positions(positions: Array) -> String:
 # V2.2 Architecture: Query PlotPool.get_terminals_in_biome() instead.
 # Terminal is the single source of truth for binding state.
 
-## Bound register tracking: register_id → terminal_id (DEPRECATED)
-## Kept for backward compatibility - prefer querying PlotPool directly
-var _bound_registers: Dictionary = {}
+## V2 Architecture: Terminal is the single source of truth for binding state.
+## No longer maintain separate _bound_registers dictionary.
 
 
-func get_unbound_registers() -> Array[int]:
+func get_unbound_registers(plot_pool = null) -> Array[int]:
 	"""Get all register IDs not currently bound to a terminal.
 
 	Used by EXPLORE action for probability-weighted discovery.
@@ -3011,6 +3010,9 @@ func get_unbound_registers() -> Array[int]:
 
 	NOTE: In v2 architecture, a "register" is a qubit axis (0, 1, 2, ...).
 	Each register has a north/south emoji pair from RegisterMap.
+
+	Args:
+		plot_pool: PlotPool instance (needed to query Terminal binding state)
 	"""
 	if not quantum_computer or not quantum_computer.register_map:
 		return []
@@ -3020,7 +3022,8 @@ func get_unbound_registers() -> Array[int]:
 	var unbound: Array[int] = []
 
 	for reg_id in range(num_qubits):
-		if not _bound_registers.has(reg_id):
+		# Query PlotPool to check if register is bound to ANY terminal
+		if not plot_pool or not plot_pool.is_register_bound(reg_id, self):
 			unbound.append(reg_id)
 
 	return unbound
@@ -3063,14 +3066,17 @@ func get_register_probability(register_id: int) -> float:
 	return clamp(prob_north, 0.0, 1.0)
 
 
-func get_register_probabilities() -> Dictionary:
+func get_register_probabilities(plot_pool = null) -> Dictionary:
 	"""Get probability distribution over all unbound registers.
 
 	Returns: {register_id: probability} for unbound registers only.
 	Used by EXPLORE for weighted selection.
+
+	Args:
+		plot_pool: PlotPool instance (needed to query Terminal binding state)
 	"""
 	var probs: Dictionary = {}
-	var unbound = get_unbound_registers()
+	var unbound = get_unbound_registers(plot_pool)
 
 	for reg_id in unbound:
 		probs[reg_id] = get_register_probability(reg_id)
@@ -3078,30 +3084,10 @@ func get_register_probabilities() -> Dictionary:
 	return probs
 
 
-func is_register_bound(register_id: int) -> bool:
-	"""Check if a register is currently bound to a terminal."""
-	return _bound_registers.has(register_id)
-
-
-func mark_register_bound(register_id: int, terminal_id: String = "") -> void:
-	"""Mark a register as bound to a terminal.
-
-	Called by PlotPool when binding a terminal to this biome's register.
-	"""
-	_bound_registers[register_id] = terminal_id
-
-
-func mark_register_unbound(register_id: int) -> void:
-	"""Mark a register as unbound (available for exploration).
-
-	Called by PlotPool when unbinding a terminal.
-	"""
-	_bound_registers.erase(register_id)
-
-
-func get_bound_register_count() -> int:
-	"""Get count of currently bound registers."""
-	return _bound_registers.size()
+## REMOVED: is_register_bound() - was redundant with PlotPool.is_register_bound()
+## REMOVED: mark_register_bound() - Terminal is now the single source of truth
+## REMOVED: mark_register_unbound() - Terminal unbind is the only state mutation
+## REMOVED: get_bound_register_count() - Query PlotPool instead
 
 
 func get_total_register_count() -> int:

@@ -69,8 +69,8 @@ static func action_explore(plot_pool, biome) -> Dictionary:
 			"message": "All terminals are bound. POP a measured terminal to free one."
 		}
 
-	# 2. Get unbound registers with probabilities
-	var probabilities = biome.get_register_probabilities()
+	# 2. Get unbound registers with probabilities (queries PlotPool for binding state)
+	var probabilities = biome.get_register_probabilities(plot_pool)
 	if probabilities.is_empty():
 		return {
 			"success": false,
@@ -104,7 +104,7 @@ static func action_explore(plot_pool, biome) -> Dictionary:
 	# 4. Get emoji pair for this register
 	var emoji_pair = biome.get_register_emoji_pair(selected_register)
 
-	# 5. Bind terminal to register
+	# 5. Bind terminal to register (Terminal is now the single source of truth)
 	var bound = plot_pool.bind_terminal(terminal, selected_register, biome, emoji_pair)
 	if not bound:
 		return {
@@ -113,8 +113,8 @@ static func action_explore(plot_pool, biome) -> Dictionary:
 			"message": "Failed to bind terminal to register (already bound?)."
 		}
 
-	# Mark register as bound in biome
-	biome.mark_register_bound(selected_register, terminal.terminal_id)
+	# NOTE: No need to call mark_register_bound() - Terminal.is_bound is the source of truth
+	# PlotPool.is_register_bound() queries Terminal directly
 
 	return {
 		"success": true,
@@ -412,16 +412,10 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 			resource_amount = 1  # Minimum 1 unit per harvest
 		economy.add_resource(resource, resource_amount, "pop")
 
-	# 5. Mark register unbound in biome BEFORE unbinding terminal
-	# This releases the register for future EXPLORE actions
-	if biome and biome.has_method("mark_register_unbound"):
-		biome.mark_register_unbound(register_id)
-		print("📤 Register %d released in %s" % [register_id, biome.get_biome_type() if biome.has_method("get_biome_type") else "biome"])
-	else:
-		push_warning("ProbeActions.action_pop: Could not release register %d (biome=%s)" % [register_id, biome])
-
-	# 6. Unbind terminal (no quantum effect - drain already happened at MEASURE)
+	# 5. Unbind terminal (this is the ONLY mutation point for binding state)
+	# Terminal.unbind() makes the register available again for future EXPLORE
 	plot_pool.unbind_terminal(terminal)
+	print("📤 Register %d released in %s" % [register_id, biome.get_biome_type() if biome.has_method("get_biome_type") else "biome"])
 
 	# Calculate the actual resource amount that was added
 	var resource_amount = int(credits)
