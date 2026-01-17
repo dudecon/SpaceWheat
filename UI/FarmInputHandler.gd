@@ -1452,10 +1452,11 @@ func _action_measure(positions: Array[Vector2i]):
 		action_performed.emit("measure", false, "⚠️  Farm not ready")
 		return
 
-	# Get biome for current selection
-	var biome = farm.grid.get_biome_for_plot(current_selection)
+	# Get biome from SELECTED plots (not cursor) - fixes Issue #1
+	var target_pos = positions[0] if not positions.is_empty() else current_selection
+	var biome = farm.grid.get_biome_for_plot(target_pos)
 	if not biome:
-		action_performed.emit("measure", false, "⚠️  No biome at current selection")
+		action_performed.emit("measure", false, "⚠️  No biome at selected plot")
 		return
 
 	# Find first active terminal (bound but not measured) in this biome
@@ -1471,8 +1472,8 @@ func _action_measure(positions: Array[Vector2i]):
 		var outcome = result.outcome
 		var prob = result.recorded_probability  # Fixed: was 'probability', should be 'recorded_probability'
 
-		# Emit signal for visualization (bubble freeze/collapse)
-		farm.plot_measured.emit(current_selection, outcome)
+		# Emit signal for visualization (bubble freeze/collapse) - use target_pos
+		farm.plot_measured.emit(target_pos, outcome)
 
 		action_performed.emit("measure", true, "👁️ Measured: %s (p=%.0f%%)" % [outcome, prob * 100])
 		_verbose.info("action", "👁️", "MEASURE: Terminal %s collapsed to %s" % [
@@ -1493,10 +1494,11 @@ func _action_pop(positions: Array[Vector2i]):
 		action_performed.emit("pop", false, "⚠️  Farm not ready")
 		return
 
-	# Get biome for current selection
-	var biome = farm.grid.get_biome_for_plot(current_selection)
+	# Get biome from SELECTED plots (not cursor) - fixes Issue #1
+	var target_pos = positions[0] if not positions.is_empty() else current_selection
+	var biome = farm.grid.get_biome_for_plot(target_pos)
 	if not biome:
-		action_performed.emit("pop", false, "⚠️  No biome at current selection")
+		action_performed.emit("pop", false, "⚠️  No biome at selected plot")
 		return
 
 	# Find first measured terminal in this biome
@@ -1511,8 +1513,8 @@ func _action_pop(positions: Array[Vector2i]):
 	if result.success:
 		var resource = result.resource
 
-		# Emit signal for visualization (bubble pop, particle effect)
-		farm.plot_harvested.emit(current_selection, {"emoji": resource, "amount": 1})
+		# Emit signal for visualization (bubble pop, particle effect) - use target_pos
+		farm.plot_harvested.emit(target_pos, {"emoji": resource, "amount": 1})
 
 		action_performed.emit("pop", true, "✂️ Harvested: %s" % resource)
 		_verbose.info("action", "✂️", "POP: Harvested %s from terminal %s" % [
@@ -1559,28 +1561,28 @@ func _action_harvest_global():
 
 
 func _find_active_terminal_in_biome(biome) -> RefCounted:
-	"""Find the first bound-but-not-measured terminal in a biome."""
-	if not farm or not farm.plot_pool:
+	"""Find the first bound-but-not-measured terminal in a biome.
+	Uses object identity for reliable matching (Issue #5 fix).
+	"""
+	if not farm or not farm.plot_pool or not biome:
 		return null
 
-	var biome_name = biome.get_biome_type() if biome else ""
-
 	for terminal in farm.plot_pool.get_active_terminals():
-		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome_name:
+		if terminal.bound_biome == biome:  # Object identity comparison
 			return terminal
 
 	return null
 
 
 func _find_measured_terminal_in_biome(biome) -> RefCounted:
-	"""Find the first measured terminal in a biome."""
-	if not farm or not farm.plot_pool:
+	"""Find the first measured terminal in a biome.
+	Uses object identity for reliable matching (Issue #5 fix).
+	"""
+	if not farm or not farm.plot_pool or not biome:
 		return null
 
-	var biome_name = biome.get_biome_type() if biome else ""
-
 	for terminal in farm.plot_pool.get_measured_terminals():
-		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome_name:
+		if terminal.bound_biome == biome:  # Object identity comparison
 			return terminal
 
 	return null
@@ -2954,9 +2956,9 @@ func _can_execute_tool_action(action_key: String) -> bool:
 		"explore":
 			return _can_execute_explore()
 		"measure":
-			return _can_execute_measure()
+			return _can_execute_measure(selected_plots)  # Pass selected plots for Issue #4 fix
 		"pop":
-			return _can_execute_pop()
+			return _can_execute_pop(selected_plots)  # Pass selected plots for Issue #4 fix
 
 		# ═══════════════════════════════════════════════════════════════
 		# v2 ENTANGLE Tool (Tool 2)
@@ -3055,42 +3057,48 @@ func _can_execute_explore() -> bool:
 	return not probabilities.is_empty()
 
 
-func _can_execute_measure() -> bool:
+func _can_execute_measure(selected_plots: Array[Vector2i] = []) -> bool:
 	"""Check if MEASURE action is available (v2 PROBE Tool 1)
 
 	MEASURE collapses an active terminal (bound but not measured).
-	Available when: active terminal exists in current biome.
+	Available when: active terminal exists in selected biome.
+	Uses selected_plots[0] to match execution behavior (Issue #4 fix).
 	"""
 	if not farm or not farm.plot_pool:
 		return false
 
-	var biome = _get_current_biome()
+	# Use selected plots if available, otherwise fall back to current_selection
+	var target_pos = selected_plots[0] if not selected_plots.is_empty() else current_selection
+	var biome = farm.grid.get_biome_for_plot(target_pos) if farm.grid else null
 	if not biome:
 		return false
 
 	# Must have active terminal (bound but not measured) in this biome
 	for terminal in farm.plot_pool.get_active_terminals():
-		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome.get_biome_type():
+		if terminal.bound_biome == biome:  # Object identity instead of string comparison (Issue #5)
 			return true
 	return false
 
 
-func _can_execute_pop() -> bool:
+func _can_execute_pop(selected_plots: Array[Vector2i] = []) -> bool:
 	"""Check if POP action is available (v2 PROBE Tool 1)
 
 	POP harvests a measured terminal and unbinds it.
-	Available when: measured terminal exists in current biome.
+	Available when: measured terminal exists in selected biome.
+	Uses selected_plots[0] to match execution behavior (Issue #4 fix).
 	"""
 	if not farm or not farm.plot_pool:
 		return false
 
-	var biome = _get_current_biome()
+	# Use selected plots if available, otherwise fall back to current_selection
+	var target_pos = selected_plots[0] if not selected_plots.is_empty() else current_selection
+	var biome = farm.grid.get_biome_for_plot(target_pos) if farm.grid else null
 	if not biome:
 		return false
 
 	# Must have measured terminal in this biome
 	for terminal in farm.plot_pool.get_measured_terminals():
-		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome.get_biome_type():
+		if terminal.bound_biome == biome:  # Object identity instead of string comparison (Issue #5)
 			return true
 	return false
 

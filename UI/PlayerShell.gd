@@ -500,6 +500,15 @@ func connect_to_farm_input_handler() -> void:
 				)
 				_verbose.info("ui", "✔", "Action buttons will update on resource changes")
 
+			# Connect to action_performed to refresh availability after EXPLORE/MEASURE/POP (Issue #2 fix)
+			if farm_ui.input_handler and farm_ui.input_handler.has_signal("action_performed"):
+				farm_ui.input_handler.action_performed.connect(func(_action, _success, _message):
+					var action_row = action_bar_manager.get_action_row()
+					if action_row and action_row.has_method("update_action_availability"):
+						action_row.update_action_availability()
+				)
+				_verbose.info("ui", "✔", "Action buttons will update after action performed")
+
 		# QuantumHUDPanel connection REMOVED - use InspectorOverlay (N key) instead
 
 

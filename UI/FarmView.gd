@@ -87,6 +87,15 @@ func _ready():
 			quantum_viz.add_biome("Kitchen", farm.kitchen_biome)
 
 	# ═══════════════════════════════════════════════════════════════════════
+	# PRE-BOOT: Signal connections needed before game starts
+	# ═══════════════════════════════════════════════════════════════════════
+
+	# CRITICAL: Connect visualization signals BEFORE boot emits game_ready
+	# Otherwise EXPLORE will emit plot_planted before viz is connected to listen
+	if farm.biome_enabled and quantum_viz:
+		quantum_viz.connect_to_farm(farm)
+
+	# ═══════════════════════════════════════════════════════════════════════
 	# CLEAN BOOT SEQUENCE - Explicit multi-phase initialization
 	# ═══════════════════════════════════════════════════════════════════════
 	_verbose.info("farm", "🚀", "Starting Clean Boot Sequence...")
@@ -94,26 +103,22 @@ func _ready():
 	_verbose.info("farm", "✅", "Clean Boot Sequence complete")
 
 	# ═══════════════════════════════════════════════════════════════════════
-	# POST-BOOT: Signal connections and final setup
+	# POST-BOOT: Additional signal connections and final setup
 	# ═══════════════════════════════════════════════════════════════════════
 
-	# Connect visualization signals to farm (plot-driven bubble spawning)
-	if farm.biome_enabled and quantum_viz:
-		quantum_viz.connect_to_farm(farm)
+	# Connect touch gesture signals from QuantumForceGraph
+	if quantum_viz and quantum_viz.graph:
+		var swipe_result = quantum_viz.graph.node_swiped_to.connect(_on_quantum_nodes_swiped)
+		if swipe_result != OK:
+			_verbose.warn("ui", "⚠️", "Failed to connect node_swiped_to signal")
+		else:
+			_verbose.info("ui", "✅", "Touch: Swipe-to-entangle connected")
 
-		# Connect touch gesture signals from QuantumForceGraph
-		if quantum_viz.graph:
-			var swipe_result = quantum_viz.graph.node_swiped_to.connect(_on_quantum_nodes_swiped)
-			if swipe_result != OK:
-				_verbose.warn("ui", "⚠️", "Failed to connect node_swiped_to signal")
-			else:
-				_verbose.info("ui", "✅", "Touch: Swipe-to-entangle connected")
-
-			var click_result = quantum_viz.graph.node_clicked.connect(_on_quantum_node_clicked)
-			if click_result != OK:
-				_verbose.warn("ui", "⚠️", "Failed to connect node_clicked signal")
-			else:
-				_verbose.info("ui", "✅", "Touch: Tap-to-measure connected")
+		var click_result = quantum_viz.graph.node_clicked.connect(_on_quantum_node_clicked)
+		if click_result != OK:
+			_verbose.warn("ui", "⚠️", "Failed to connect node_clicked signal")
+		else:
+			_verbose.info("ui", "✅", "Touch: Tap-to-measure connected")
 
 	# Input is now handled by PlayerShell._input() → modal stack → FarmInputHandler._unhandled_input()
 	# No need for InputController anymore!
