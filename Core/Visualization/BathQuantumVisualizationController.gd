@@ -28,13 +28,18 @@ var biomes: Dictionary = {}
 var farm_ref = null
 
 # Basis state bubbles (biome_name → Array[QuantumNode])
+# V2.2 Architecture: This is REDUNDANT with graph.quantum_nodes
+# Kept for backward compatibility but should be phased out
+# Primary lookup should use graph.quantum_nodes_by_grid_pos
 var basis_bubbles: Dictionary = {}
 
 # Requested emojis per biome (biome_name → Array[String])
 # Only emojis that plots have requested will have bubbles
+# DEPRECATED: Legacy basis state bubbles - v2 uses terminal-driven bubbles
 var requested_emojis: Dictionary = {}
 
 # Emoji to bubble mapping for quick lookup (biome_name → {emoji → QuantumNode})
+# DEPRECATED: Not used in v2 architecture - use graph.quantum_nodes_by_grid_pos
 var emoji_to_bubble: Dictionary = {}
 
 # Visual tuning (power law scaling for better differentiation at low probabilities)
@@ -165,6 +170,9 @@ func connect_to_farm(farm) -> void:
 func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dictionary) -> void:
 	"""Handle terminal bound event - spawn bubble when EXPLORE binds a terminal
 
+	V2.2 Architecture: Gets terminal reference and passes it to bubble for
+	single source of truth queries.
+
 	Args:
 		position: Grid position where terminal is bound
 		terminal_id: Unique terminal identifier
@@ -189,12 +197,33 @@ func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dic
 	# Get the actual plot (needed for entanglement visualization)
 	var plot = farm_ref.grid.get_plot(position)
 
-	# Create bubble with plot reference (enables entanglement visualization)
-	_create_bubble_for_terminal(biome_name, position, north_emoji, south_emoji, plot)
+	# V2.2: Get terminal reference from plot_pool (single source of truth)
+	# Try multiple lookup methods to ensure we find it
+	var terminal = null
+	if farm_ref.plot_pool:
+		# First try by grid position
+		terminal = farm_ref.plot_pool.get_terminal_at_grid_pos(position)
+		# If not found, try by terminal_id
+		if not terminal:
+			terminal = farm_ref.plot_pool.get_terminal(terminal_id)
+			if terminal:
+				print("   🔗 Found terminal by ID (grid_pos lookup failed)")
+
+	if terminal:
+		print("   ✅ Terminal reference acquired: %s (is_bound=%s)" % [terminal.terminal_id, terminal.is_bound])
+	else:
+		print("   ⚠️  Could not find terminal %s in plot_pool" % terminal_id)
+
+	# Create bubble with terminal reference (enables state queries)
+	_create_bubble_for_terminal(biome_name, position, north_emoji, south_emoji, plot, terminal)
 
 
 func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: String, probability: float) -> void:
-	"""Handle terminal measured event - update bubble to show measured state
+	"""Handle terminal measured event - trigger visual update
+
+	V2.2 Architecture: Visualization is READ-ONLY. We do NOT mutate game state.
+	The terminal's is_measured flag is the single source of truth.
+	Rendering queries terminal.is_measured to determine visual appearance.
 
 	Args:
 		position: Grid position of the measured terminal
@@ -207,13 +236,25 @@ func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: Str
 	if not graph:
 		return
 
-	# Find bubble by grid position and update its measured state
+	# Find bubble by grid position
 	var bubble = graph.quantum_nodes_by_grid_pos.get(position)
 	if bubble:
-		# Mark as measured - this will trigger cyan glow in rendering
-		if bubble.plot:
-			bubble.plot.has_been_measured = true
-		print("   ✨ Bubble at %s marked as measured" % position)
+		# V2.2: Ensure bubble has terminal reference (may have been missed during creation)
+		if not bubble.terminal and farm_ref and farm_ref.plot_pool:
+			bubble.terminal = farm_ref.plot_pool.get_terminal_at_grid_pos(position)
+			if bubble.terminal:
+				print("   🔗 Late-bound terminal to bubble at %s" % position)
+
+		# Freeze position for measurement visualization
+		if bubble.terminal:
+			bubble.frozen_anchor = bubble.position
+			bubble.terminal.frozen_position = bubble.position
+
+		# Trigger redraw to update visual appearance
+		graph.queue_redraw()
+		print("   ✨ Bubble at %s visual update triggered (terminal=%s)" % [position, "found" if bubble.terminal else "missing"])
+	else:
+		print("   ⚠️  No bubble found at %s" % position)
 
 
 func _on_terminal_released(position: Vector2i, terminal_id: String, credits_earned: int) -> void:
@@ -416,8 +457,11 @@ func _create_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> Quantu
 	return bubble
 
 
-func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_emoji: String, south_emoji: String, plot = null) -> void:
-	"""Create a bubble for a terminal (v2 architecture)
+func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_emoji: String, south_emoji: String, plot = null, terminal = null) -> void:
+	"""Create a bubble for a terminal (v2.2 architecture)
+
+	V2.2: Now accepts terminal reference for single source of truth.
+	Bubble queries terminal for is_measured, emoji_pair, etc.
 
 	Args:
 		biome_name: Which biome this terminal belongs to
@@ -425,6 +469,7 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 		north_emoji: North pole emoji
 		south_emoji: South pole emoji
 		plot: Optional FarmPlot reference (enables entanglement visualization)
+		terminal: Terminal instance (v2.2 - single source of truth)
 	"""
 	if not biomes.has(biome_name):
 		print("   ⚠️  Unknown biome: %s" % biome_name)
@@ -475,6 +520,9 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 	bubble.has_farm_tether = true  # Show tether to grid position
 	bubble.is_terminal_bubble = true  # CRITICAL: Mark as terminal so opacities don't get reset!
 
+	# V2.2: Store terminal reference (single source of truth for state queries)
+	bubble.terminal = terminal
+
 	# Add to tracking
 	if not basis_bubbles.has(biome_name):
 		basis_bubbles[biome_name] = []
@@ -487,7 +535,11 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 		graph.node_by_plot_id[bubble.plot_id] = bubble
 
 	# Start spawn animation so visual_scale/alpha go from 0→1
-	bubble.start_spawn_animation(Time.get_ticks_msec() / 1000.0)
+	# CRITICAL: Must use graph.time_accumulator, NOT real time, because
+	# update_animation() is called with time_accumulator and computes
+	# elapsed = current_time - spawn_time. Mismatched time bases cause
+	# visual_scale to stay at 0 forever (bubbles invisible).
+	bubble.start_spawn_animation(graph.time_accumulator)
 
 	print("   🔵 Created terminal bubble (%s/%s) at grid %s%s" % [
 		north_emoji, south_emoji, grid_pos,
@@ -639,6 +691,11 @@ func _apply_skating_rink_forces(delta: float) -> void:
 		for bubble in bubbles:
 			# Skip bubbles without plot OR farm_tether (neither v1 nor v2 style)
 			if not bubble.plot and not bubble.has_farm_tether:
+				continue
+
+			# MEASURED BUBBLES: Freeze in place - no skating rink forces
+			if bubble.is_terminal_measured():
+				bubble.velocity = Vector2.ZERO
 				continue
 
 			# ANGULAR POSITION: spread bubbles around oval

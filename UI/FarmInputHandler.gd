@@ -1443,91 +1443,104 @@ func _action_explore():
 
 
 func _action_measure(positions: Array[Vector2i]):
-	"""MEASURE: Collapse an explored register via Born rule.
+	"""MEASURE: Collapse explored registers via Born rule (BATCH operation).
 
-	Finds the first bound-but-not-measured terminal in the selected biome
-	and performs quantum measurement.
+	V2.2 Architecture: Processes ALL active terminals at selected positions.
+	This enables measuring multiple terminals with a single keypress.
 	"""
 	if not farm or not farm.plot_pool:
 		action_performed.emit("measure", false, "⚠️  Farm not ready")
 		return
 
-	# Get biome from SELECTED plots (not cursor) - fixes Issue #1
-	var target_pos = positions[0] if not positions.is_empty() else current_selection
-	var biome = farm.grid.get_biome_for_plot(target_pos)
-	if not biome:
-		action_performed.emit("measure", false, "⚠️  No biome at selected plot")
-		return
+	# Get positions to measure - use current selection if no explicit positions
+	if positions.is_empty():
+		positions.append(current_selection)
 
-	# Find first active terminal (bound but not measured) in this biome
-	var terminal = _find_active_terminal_in_biome(biome)
-	if not terminal:
-		action_performed.emit("measure", false, "⚠️  No terminals to measure. EXPLORE first.")
-		return
+	var measured_count = 0
+	var total_probability = 0.0
+	var outcomes: Array[String] = []
 
-	# Execute MEASURE via ProbeActions
-	var result = ProbeActions.action_measure(terminal, biome)
+	# Process each selected position
+	for pos in positions:
+		var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		if not terminal or not terminal.can_measure():
+			continue
 
-	if result.success:
-		var outcome = result.outcome
-		var prob = result.recorded_probability
+		var biome = terminal.bound_biome
+		if not biome:
+			continue
 
-		# Emit terminal_measured signal for visualization (bubble shows measured state)
-		farm.terminal_measured.emit(terminal.grid_position, terminal.terminal_id, outcome, prob)
+		# Execute MEASURE via ProbeActions
+		var result = ProbeActions.action_measure(terminal, biome)
 
-		action_performed.emit("measure", true, "👁️ Measured: %s (p=%.0f%%)" % [outcome, prob * 100])
-		_verbose.info("action", "👁️", "MEASURE: Terminal %s collapsed to %s" % [
-			terminal.terminal_id, outcome
-		])
+		if result.success:
+			measured_count += 1
+			total_probability += result.recorded_probability
+			outcomes.append(result.outcome)
+
+			# Emit terminal_measured signal for this terminal
+			farm.terminal_measured.emit(pos, terminal.terminal_id, result.outcome, result.recorded_probability)
+
+			_verbose.info("action", "📏", "MEASURE: Terminal %s at %s collapsed to %s (p=%.0f%%)" % [
+				terminal.terminal_id, pos, result.outcome, result.recorded_probability * 100
+			])
+
+	if measured_count > 0:
+		var outcome_str = ", ".join(outcomes) if measured_count <= 3 else "%d terminals" % measured_count
+		action_performed.emit("measure", true, "📏 Measured %s (total p=%.0f%%)" % [outcome_str, total_probability * 100])
 	else:
-		var msg = result.get("message", "Measure failed")
-		action_performed.emit("measure", false, "⚠️  %s" % msg)
+		action_performed.emit("measure", false, "⚠️  No terminals to measure at selected positions. EXPLORE first.")
 
 
 func _action_pop(positions: Array[Vector2i]):
-	"""POP: Harvest a measured terminal and free it for reuse.
+	"""POP: Harvest measured terminals and free them for reuse (BATCH operation).
 
-	Finds the first measured terminal in the selected biome,
-	adds the resource to economy, and unbinds the terminal.
+	V2.2 Architecture: Processes ALL measured terminals at selected positions.
+	This enables harvesting multiple terminals with a single keypress.
 	"""
 	if not farm or not farm.plot_pool:
 		action_performed.emit("pop", false, "⚠️  Farm not ready")
 		return
 
-	# Get biome from SELECTED plots (not cursor) - fixes Issue #1
-	var target_pos = positions[0] if not positions.is_empty() else current_selection
-	var biome = farm.grid.get_biome_for_plot(target_pos)
-	if not biome:
-		action_performed.emit("pop", false, "⚠️  No biome at selected plot")
-		return
+	# Get positions to pop - use current selection if no explicit positions
+	if positions.is_empty():
+		positions.append(current_selection)
 
-	# Find first measured terminal in this biome
-	var terminal = _find_measured_terminal_in_biome(biome)
-	if not terminal:
-		action_performed.emit("pop", false, "⚠️  No measured terminals. MEASURE first.")
-		return
+	var popped_count = 0
+	var total_credits = 0
+	var resources: Array[String] = []
 
-	# Save grid position before terminal is released (it gets cleared)
-	var grid_pos = terminal.grid_position
-	var terminal_id = terminal.terminal_id
+	# Process each selected position
+	for pos in positions:
+		var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		if not terminal or not terminal.can_pop():
+			continue
 
-	# Execute POP via ProbeActions
-	var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy)
+		# Save grid position and terminal_id before unbind clears them
+		var grid_pos = terminal.grid_position
+		var terminal_id = terminal.terminal_id
 
-	if result.success:
-		var resource = result.resource
-		var credits = result.get("credits", 0)
+		# Execute POP via ProbeActions
+		var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy)
 
-		# Emit terminal_released signal for visualization (bubble removal)
-		farm.terminal_released.emit(grid_pos, terminal_id, credits)
+		if result.success:
+			popped_count += 1
+			var credits = result.get("credits", 0)
+			total_credits += credits
+			resources.append(result.resource)
 
-		action_performed.emit("pop", true, "✂️ Harvested: %s (+%d💰)" % [resource, credits])
-		_verbose.info("action", "✂️", "POP: Harvested %s from terminal %s (+%d credits)" % [
-			resource, terminal_id, credits
-		])
+			# Emit terminal_released signal for this terminal
+			farm.terminal_released.emit(grid_pos, terminal_id, credits)
+
+			_verbose.info("action", "💰", "POP: Harvested %s from terminal %s at %s (+%d credits)" % [
+				result.resource, terminal_id, grid_pos, credits
+			])
+
+	if popped_count > 0:
+		var resource_str = ", ".join(resources) if popped_count <= 3 else "%d terminals" % popped_count
+		action_performed.emit("pop", true, "💰 Harvested %s (+%d💰)" % [resource_str, total_credits])
 	else:
-		var msg = result.get("message", "Pop failed")
-		action_performed.emit("pop", false, "⚠️  %s" % msg)
+		action_performed.emit("pop", false, "⚠️  No measured terminals to harvest at selected positions. MEASURE first.")
 
 
 func _action_harvest_global():

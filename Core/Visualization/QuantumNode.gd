@@ -47,6 +47,13 @@ var has_farm_tether: bool = false
 # Should NOT call update_from_quantum_state() which would zero out opacities
 var is_terminal_bubble: bool = false
 
+# V2 Architecture: Direct reference to the bound terminal (source of truth)
+# When set, emoji and measurement state are queried from here
+var terminal = null  # Terminal instance
+
+# V2 Architecture: Frozen anchor position (set on MEASURE, used for snapping)
+var frozen_anchor: Vector2 = Vector2.ZERO
+
 # Lifeless mode - no quantum data available, should not wiggle
 var is_lifeless: bool = false
 
@@ -134,6 +141,10 @@ func update_from_quantum_state():
 	- Pulse rate (coherence) ← |ρ_{n,s}| coherence magnitude (decoherence threat)
 	- Radius ← Mass P(n)+P(s) (probability in measurement subspace)
 	"""
+	# V2.2: Terminal bubbles preserve their state set by _create_bubble_for_terminal
+	if is_terminal_bubble:
+		return
+
 	var is_transitioning_planted = (radius == MAX_RADIUS)
 
 	# Guard: unplanted or no bath connection → invisible
@@ -191,6 +202,13 @@ func update_from_quantum_state():
 	if coh:
 		coh_magnitude = coh.abs()
 		coh_phase = coh.arg()  # Returns angle in radians [-π, π]
+		# DEBUG: Log if we're getting real coherence
+		if is_transitioning_planted and coh_magnitude > 0.01:
+			print("⚛️  COHERENCE FOUND: |coh|=%.4f arg=%.2f° for %s/%s" % [coh_magnitude, rad_to_deg(coh_phase), emoji_north, emoji_south])
+	else:
+		# DEBUG: Log when coherence is null (possible problem)
+		if is_transitioning_planted:
+			print("⚠️  COHERENCE NULL for %s/%s at %s" % [emoji_north, emoji_south, grid_position])
 
 	# Map phase to hue [0, 1] for HSV color
 	var hue = (coh_phase + PI) / TAU  # Normalize to [0, 1]
@@ -295,3 +313,74 @@ func get_pulse_rate() -> float:
 	var berry_boost = clampf(berry_phase * 0.1, 0.0, 1.2)  # 0 to 1.2 Hz bonus
 
 	return base_rate + berry_boost  # 0.3 to 3.0 Hz
+
+
+# ============================================================================
+# V2 Architecture: Terminal-delegating computed properties
+# ============================================================================
+
+func get_emoji_north() -> String:
+	"""Get north emoji - delegates to terminal when available (v2 single source of truth)"""
+	if terminal and terminal.is_bound:
+		return terminal.north_emoji
+	return emoji_north
+
+
+func get_emoji_south() -> String:
+	"""Get south emoji - delegates to terminal when available (v2 single source of truth)"""
+	if terminal and terminal.is_bound:
+		return terminal.south_emoji
+	return emoji_south
+
+
+func get_emoji_opacities(biome = null) -> Dictionary:
+	"""Get emoji opacities computed from biome's density matrix at render time.
+
+	V2 Architecture: Opacities are computed fresh each frame from biome state.
+	This eliminates the need to cache/duplicate probability state.
+
+	Args:
+		biome: BiomeBase to query for probabilities (optional)
+
+	Returns:
+		Dictionary with "north" and "south" opacity values (0.0-1.0)
+	"""
+	# If no terminal or not bound, use cached values
+	if not terminal or not terminal.is_bound:
+		return {"north": emoji_north_opacity, "south": emoji_south_opacity}
+
+	# If measured, show only the measured outcome
+	if terminal.is_measured:
+		if terminal.measured_outcome == terminal.north_emoji:
+			return {"north": 1.0, "south": 0.0}
+		else:
+			return {"north": 0.0, "south": 1.0}
+
+	# If no biome provided, try to get from terminal
+	if not biome:
+		biome = terminal.bound_biome
+
+	if not biome:
+		return {"north": emoji_north_opacity, "south": emoji_south_opacity}
+
+	# Query biome for current probability of this register
+	var north_prob = 0.5
+	if biome.has_method("get_register_probability"):
+		north_prob = biome.get_register_probability(terminal.bound_register_id)
+
+	var south_prob = 1.0 - north_prob
+	var mass = north_prob + south_prob
+
+	if mass > 0.001:
+		return {"north": north_prob / mass, "south": south_prob / mass}
+	return {"north": 0.1, "south": 0.1}
+
+
+func is_terminal_measured() -> bool:
+	"""Check if this node's terminal is measured (v2 single source of truth)"""
+	if terminal:
+		return terminal.is_measured
+	# Fallback to plot-based check for v1 compatibility
+	if plot:
+		return plot.is_measured() if plot.has_method("is_measured") else plot.has_been_measured
+	return false

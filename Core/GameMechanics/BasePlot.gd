@@ -35,9 +35,13 @@ var parent_biome: Node = null  # Reference to BiomeBase that owns quantum comput
 
 # Plot metadata (NOT quantum state)
 @export var is_planted: bool = false
-@export var has_been_measured: bool = false
+@export var has_been_measured: bool = false  # DEPRECATED: use is_measured() for v2 terminals
 @export var theta_frozen: bool = false  # Measurement locked the theta value (stops Hamiltonian drift)
 @export var measured_outcome: String = ""  # Measurement result ("north", "south", or empty)
+
+# V2 Architecture: Reference to bound terminal (when using terminal-based binding)
+# When bound_terminal is set, query it for is_measured, emoji_pair, etc.
+var bound_terminal = null  # Terminal instance
 
 # Conspiracy network connection
 @export var conspiracy_node_id: String = ""
@@ -148,11 +152,18 @@ func get_dominant_emoji() -> String:
 func get_plot_emojis() -> Dictionary:
 	"""Get the dual-emoji pair for this plot type
 
+	V2 Architecture: Delegates to bound_terminal when available.
+	Falls back to legacy behavior for v1 compatibility.
+
 	PHASE 5 (PARAMETRIC): Queries parent biome capabilities for emoji pair.
 	Falls back to current north/south emojis if no biome or capability found.
 
 	Subclasses can override to customize per-plot basis.
 	"""
+	# V2: If bound_terminal exists, delegate to it (single source of truth)
+	if bound_terminal and bound_terminal.is_bound:
+		return bound_terminal.get_emoji_pair()
+
 	# PARAMETRIC: Query parent biome for capability if plot_type_name is set
 	if parent_biome and parent_biome.has_method("get_plantable_capabilities"):
 		# Get plot_type_name from subclass (FarmPlot has this property)
@@ -165,6 +176,20 @@ func get_plot_emojis() -> Dictionary:
 
 	# Fallback: Return current basis labels (set during planting)
 	return {"north": north_emoji, "south": south_emoji}
+
+
+## V2 computed property: is this plot measured?
+## Delegates to bound_terminal when available, falls back to has_been_measured
+func is_measured() -> bool:
+	if bound_terminal:
+		return bound_terminal.is_measured
+	return has_been_measured
+
+
+## V2 computed property: is this plot occupied (bound to a terminal)?
+## For v2 architecture, a plot is "occupied" if it has a bound terminal
+func is_occupied() -> bool:
+	return bound_terminal != null and bound_terminal.is_bound
 
 
 func plant(biome_or_labor = null, wheat_cost: float = 0.0, optional_biome = null) -> bool:

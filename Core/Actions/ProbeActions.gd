@@ -402,10 +402,15 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 	# 3. Convert probability to credits
 	var credits = recorded_prob * EconomyConstants.QUANTUM_TO_CREDITS
 
-	# 4. Add credits to economy (NOT the resource emoji - we're in credit mode)
+	# 4. Add resource to economy - use the MEASURED EMOJI as the resource type
+	# The "credits" value represents the quantum energy extracted (probability × conversion)
+	# Each emoji type becomes its own classical resource (🌾, 🍄, etc.)
 	if economy:
-		# POP always adds to 💰-credits, regardless of measured outcome
-		economy.add_resource("💰", int(credits), "pop_%s" % resource)
+		# Resource type = measured emoji, amount = quantum energy converted to units
+		var resource_amount = int(credits)
+		if resource_amount < 1:
+			resource_amount = 1  # Minimum 1 unit per harvest
+		economy.add_resource(resource, resource_amount, "pop")
 
 	# 5. Mark register unbound in biome BEFORE unbinding terminal
 	# This releases the register for future EXPLORE actions
@@ -418,11 +423,17 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 	# 6. Unbind terminal (no quantum effect - drain already happened at MEASURE)
 	plot_pool.unbind_terminal(terminal)
 
+	# Calculate the actual resource amount that was added
+	var resource_amount = int(credits)
+	if resource_amount < 1:
+		resource_amount = 1
+
 	return {
 		"success": true,
-		"resource": resource,
+		"resource": resource,  # The emoji that was harvested (🌾, 🍄, etc.)
+		"amount": resource_amount,  # Amount of this emoji-resource added
 		"recorded_probability": recorded_prob,
-		"credits": credits,
+		"credits": credits,  # Raw quantum energy value (backward compat)
 		"terminal_id": terminal_id,
 		"register_id": register_id
 	}

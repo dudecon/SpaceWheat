@@ -2993,8 +2993,13 @@ func _format_positions(positions: Array) -> String:
 # ============================================================================
 # Tracks which registers are bound to Terminals via PlotPool.
 # Used by EXPLORE action for probability-weighted register discovery.
+#
+# DEPRECATED: _bound_registers is redundant with Terminal state.
+# V2.2 Architecture: Query PlotPool.get_terminals_in_biome() instead.
+# Terminal is the single source of truth for binding state.
 
-## Bound register tracking: register_id → terminal_id
+## Bound register tracking: register_id → terminal_id (DEPRECATED)
+## Kept for backward compatibility - prefer querying PlotPool directly
 var _bound_registers: Dictionary = {}
 
 
@@ -3106,6 +3111,32 @@ func get_total_register_count() -> int:
 	return quantum_computer.register_map.num_qubits
 
 
+## V2.2 Architecture: Query PlotPool for available registers (single source of truth)
+func get_available_registers_v2(plot_pool) -> Array[int]:
+	"""Get registers not currently bound to any terminal (V2 Architecture).
+
+	V2.2: Queries PlotPool directly instead of relying on _bound_registers.
+	This ensures Terminal is the single source of truth.
+
+	Args:
+		plot_pool: PlotPool instance to query
+
+	Returns:
+		Array of register IDs available for binding
+	"""
+	if not quantum_computer or not quantum_computer.register_map:
+		return []
+
+	var num_qubits = quantum_computer.register_map.num_qubits
+	var available: Array[int] = []
+
+	for reg_id in range(num_qubits):
+		if not plot_pool.is_register_bound_v2(self, reg_id):
+			available.append(reg_id)
+
+	return available
+
+
 # ============================================================================
 # QUANTUM DATA ACCESS (for QuantumNode visualization)
 # ============================================================================
@@ -3138,7 +3169,7 @@ func get_emoji_coherence(north_emoji: String, south_emoji: String):
 	Returns Complex or null if not computable.
 	Used by QuantumNode for color phase visualization.
 	"""
-	if not quantum_computer or not quantum_computer.register_map:
+	if not quantum_computer or not quantum_computer.register_map or not quantum_computer.density_matrix:
 		return null
 
 	# Both emojis should be on same qubit
@@ -3153,10 +3184,11 @@ func get_emoji_coherence(north_emoji: String, south_emoji: String):
 	if north_q != south_q:
 		return null  # Not on same qubit
 
-	# Get coherence for this qubit from quantum_computer
-	var comp = quantum_computer.get_main_component()
-	if comp:
-		return comp.get_coherence_complex(north_q)
+	# Get coherence DIRECTLY from density matrix via RegisterMap
+	# ρ_{north,south} is the off-diagonal element between north|qubit and south|qubit basis states
+	var coh = quantum_computer.density_matrix.get_coherence(north_emoji, south_emoji)
+	if coh:
+		return coh
 
 	return null
 

@@ -53,6 +53,10 @@ var measured_outcome: String = ""
 ## Ensemble model: this represents the snapshot we took from the ensemble
 var measured_probability: float = 0.0
 
+## Frozen screen position (set on MEASURE, used by visualization)
+## When measured, bubble should snap to this position instead of floating
+var frozen_position: Vector2 = Vector2.ZERO
+
 
 func _init(id: String = ""):
 	terminal_id = id if id else "T_%d" % randi()
@@ -100,6 +104,7 @@ func unbind() -> void:
 	north_emoji = ""
 	south_emoji = ""
 	grid_position = Vector2i(-1, -1)
+	frozen_position = Vector2.ZERO
 
 	unbound.emit()
 	state_changed.emit(self)
@@ -149,6 +154,25 @@ func get_display_emoji() -> String:
 		return current_emoji if current_emoji else "?"
 	else:
 		return ""
+
+
+## Get the emoji pair for this terminal's bound register
+func get_emoji_pair() -> Dictionary:
+	return {"north": north_emoji, "south": south_emoji}
+
+
+## Get complete binding information for queries
+func get_binding_info() -> Dictionary:
+	return {
+		"is_bound": is_bound,
+		"register_id": bound_register_id,
+		"biome": bound_biome,
+		"grid_position": grid_position,
+		"emoji_pair": get_emoji_pair(),
+		"is_measured": is_measured,
+		"measured_outcome": measured_outcome,
+		"measured_probability": measured_probability
+	}
 
 
 ## Check if this terminal can be used for EXPLORE action
