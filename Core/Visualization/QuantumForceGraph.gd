@@ -1114,20 +1114,117 @@ func _update_forces(delta: float):
 	_apply_semantic_coupling_lazy(delta, active_nodes)
 
 
+func _get_quantum_coupling_strength(node_a: QuantumNode, node_b: QuantumNode) -> float:
+	"""Get coupling strength between two nodes from off-diagonal density matrix elements
+
+	Returns magnitude of coupling (0.0 to 1.0):
+	- 0.0 = uncoupled / unentangled
+	- 1.0 = maximally entangled / perfectly coherent
+
+	Sources:
+	- Same register: |ρ_{n,s}| (coherence between basis states)
+	- Different registers: entanglement strength via density matrix
+	"""
+	if not node_a.plot or not node_b.plot:
+		return 0.0
+
+	var biome_a = node_a.plot.parent_biome
+	var biome_b = node_b.plot.parent_biome
+
+	if not biome_a or not biome_b:
+		return 0.0
+
+	# Same biome, same plot: coherence within register (within-qubit coupling)
+	if biome_a == biome_b and node_a.plot == node_b.plot:
+		var coh = biome_a.get_emoji_coherence(node_a.emoji_north, node_a.emoji_south)
+		if coh:
+			return coh.abs()  # |ρ_{n,s}| = coherence magnitude
+		return 0.0
+
+	# Same biome, different plots: entanglement between registers
+	if biome_a == biome_b:
+		# Query register IDs
+		var reg_a = node_a.plot.register_id if "register_id" in node_a.plot else -1
+		var reg_b = node_b.plot.register_id if "register_id" in node_b.plot else -1
+
+		if reg_a >= 0 and reg_b >= 0 and biome_a.quantum_computer:
+			# Check if registers are entangled via entanglement_graph
+			var qc = biome_a.quantum_computer
+			if reg_a in qc.entanglement_graph and reg_b in qc.entanglement_graph[reg_a]:
+				# Registers are entangled - compute coupling strength
+				# For now, use fixed strength proportional to state structure
+				# TODO: Compute from density_matrix partial trace
+				return 0.5  # Placeholder: medium coupling for entangled pairs
+
+			# Not explicitly entangled, but might have weak coupling
+			# Check if they share quantum components
+			if reg_a in qc.register_to_component and reg_b in qc.register_to_component:
+				var comp_a = qc.register_to_component[reg_a]
+				var comp_b = qc.register_to_component[reg_b]
+				if comp_a == comp_b:
+					# Same component but not in adjacency list - very weak coupling
+					return 0.1
+		return 0.0
+
+	# Different biomes: no direct coupling
+	return 0.0
+
+
 func _calculate_tether_force(node: QuantumNode, is_measured: bool = false) -> Vector2:
-	"""Calculate spring force pulling node toward its classical anchor
+	"""Calculate spring force based on quantum coupling (off-diagonal density matrix)
+
+	Instead of tethering to classical_anchor (plot grid position), nodes are attracted
+	to each other based on their quantum coupling strength from density_matrix elements.
+
+	This creates natural clustering:
+	- Strongly coupled nodes cluster tightly
+	- Weakly coupled nodes cluster loosely
+	- Uncoupled nodes separate
 
 	Args:
 		node: The quantum node
-		is_measured: If true, use MUCH stronger tether (measured nodes snap to position)
+		is_measured: If true, snap to anchor regardless of coupling
 	"""
-	# Only apply tether force if node is attached to a farm plot
+	# Only apply force if node is attached to a farm plot
 	if not node.has_farm_tether:
 		return Vector2.ZERO
 
-	var tether_vector = node.classical_anchor - node.position
-	var spring_constant = MEASURED_TETHER_STRENGTH if is_measured else TETHER_SPRING_CONSTANT
-	return tether_vector * spring_constant
+	# MEASURED NODES: Snap to anchor (classical outcome frozen)
+	if is_measured:
+		var tether_vector = node.classical_anchor - node.position
+		return tether_vector * MEASURED_TETHER_STRENGTH
+
+	# UNMEASURED NODES: Cluster by quantum coupling strength
+	var total_coupling = 0.0
+	var coupled_center = Vector2.ZERO
+	var num_coupled = 0
+
+	# Find all coupled neighbors and their center of mass
+	for other_node in quantum_nodes:
+		if other_node == node or not other_node.plot or other_node.plot.is_planted == false:
+			continue
+
+		var coupling = _get_quantum_coupling_strength(node, other_node)
+		if coupling > 0.01:  # Only consider meaningful coupling
+			total_coupling += coupling
+			coupled_center += other_node.position
+			num_coupled += 1
+
+	if num_coupled == 0:
+		# No quantum coupling to other nodes - weakly tether to anchor
+		# This keeps unentangled qubits loosely tied to their biome location
+		var tether_vector = node.classical_anchor - node.position
+		return tether_vector * 0.02  # Very weak: mostly free floating
+
+	# Has quantum coupling: pull toward center of coupled nodes
+	coupled_center /= num_coupled
+	var coupling_vector = coupled_center - node.position
+
+	# Spring constant scales with average coupling strength
+	# Stronger coupling = tighter clustering
+	var spring_constant = (total_coupling / num_coupled) * 0.3
+
+	return coupling_vector * spring_constant
 
 
 func _calculate_repulsion_forces_lazy(node: QuantumNode, active_nodes: Array[QuantumNode]) -> Vector2:

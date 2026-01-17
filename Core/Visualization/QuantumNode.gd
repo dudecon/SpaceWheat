@@ -286,8 +286,17 @@ func get_entangled_partner_ids() -> Array:
 
 
 func apply_force(force: Vector2, delta: float):
-	"""Apply a force to this node"""
-	velocity += force * delta
+	"""Apply a force to this node, scaled by inverse mass for realism
+
+	Physics: acceleration = force / mass
+	Here: mass ~ node.radius (probability weight)
+	Lighter nodes (small radius) accelerate more, heavier nodes resist
+	"""
+	# Scale acceleration by inverse mass (larger radius = more inertia)
+	# Clamp to avoid division by very small numbers
+	var effective_mass = max(radius, 5.0)  # Minimum mass scaling
+	var acceleration = force / effective_mass
+	velocity += acceleration * delta
 
 
 func apply_damping(damping_factor: float):
