@@ -177,7 +177,35 @@ func update_from_quantum_state():
 	# Has real quantum data - not lifeless
 	is_lifeless = false
 
-	# === QUERY BIOME FOR REAL QUANTUM DATA ===
+	# === CHECK IF MEASURED: If so, freeze at measurement outcome ===
+	var is_measured_now = is_terminal_measured()
+	if is_measured_now:
+		# Measurement outcome is frozen - don't query evolving quantum state
+		# Just show the measured outcome with static properties
+		energy = 0.5  # Static glow at neutral
+		coherence = 0.0  # No pulse (stable/static)
+		color = Color(0.6, 0.6, 0.6, 0.8)  # Neutral gray - measured state
+
+		# Show measured outcome as 100% on one emoji, 0% on other
+		if terminal and terminal.is_measured and terminal.measured_outcome:
+			emoji_north = terminal.north_emoji
+			emoji_south = terminal.south_emoji
+			if terminal.measured_outcome == emoji_north:
+				emoji_north_opacity = 1.0
+				emoji_south_opacity = 0.0
+			else:
+				emoji_north_opacity = 0.0
+				emoji_south_opacity = 1.0
+		else:
+			# Fallback for plot-based measurement
+			emoji_north_opacity = 0.5
+			emoji_south_opacity = 0.5
+
+		# Freeze radius at current size
+		# (don't query evolving probabilities)
+		return
+
+	# === QUERY BIOME FOR REAL QUANTUM DATA (UNMEASURED ONLY) ===
 	# Get emojis from either terminal or plot
 	var emojis = {}
 	if terminal and terminal.is_bound:
