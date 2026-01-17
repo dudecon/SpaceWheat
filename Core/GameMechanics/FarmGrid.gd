@@ -472,8 +472,8 @@ func _process_quantum_mills(delta: float) -> void:
 	for position in quantum_mills.keys():
 		var mill = quantum_mills[position]
 		if mill:
-			# Let mill run its measurement cycle
-			mill._process(delta)
+			# QuantumMill is passive (no _process cycle needed)
+			pass
 
 
 func process_mill_flour(flour_amount: int) -> void:
@@ -961,18 +961,13 @@ func place_mill(position: Vector2i) -> bool:
 	# Create QuantumMill
 	var mill = QuantumMill.new()
 	mill.grid_position = position
-	mill.farm_grid = self
 	add_child(mill)
-
-	# Link adjacent wheat to mill
-	var adjacent_wheat = _get_adjacent_wheat(position)
-	mill.set_entangled_wheat(adjacent_wheat)
 
 	# Track mill
 	quantum_mills[position] = mill
 
 	plot_planted.emit(position)
-	_verbose.info("farm", "🏭", "Placed quantum mill at %s with %d adjacent wheat" % [plot.plot_id, adjacent_wheat.size()])
+	_verbose.info("farm", "🏭", "Placed quantum mill at %s" % plot.plot_id)
 	return true
 
 
