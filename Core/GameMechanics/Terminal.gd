@@ -166,6 +166,44 @@ func can_pop() -> bool:
 	return is_bound and is_measured
 
 
+## Validate that terminal state is internally consistent
+## Returns error message if invalid state detected, empty string if valid
+func validate_state() -> String:
+	# Valid state combinations:
+	# UNBOUND: is_bound=false, is_measured=false
+	# BOUND: is_bound=true, is_measured=false, bound_register_id>=0
+	# MEASURED: is_bound=true, is_measured=true, measured_outcome!=""
+
+	if not is_bound:
+		# Unbound state should have no register
+		if is_measured:
+			return "INVALID: unbound but marked measured"
+		if bound_register_id != -1:
+			return "INVALID: unbound but has register_id"
+		if bound_biome != null:
+			return "INVALID: unbound but has biome reference"
+		return ""
+
+	# Bound state (is_bound=true)
+	if bound_register_id < 0:
+		return "INVALID: bound but register_id invalid"
+	if bound_biome == null:
+		return "INVALID: bound but no biome reference"
+
+	if is_measured:
+		# Measured state requires outcome
+		if measured_outcome.is_empty():
+			return "INVALID: measured but no outcome recorded"
+		if measured_probability <= 0.0:
+			return "INVALID: measured but probability not set"
+	else:
+		# Bound but not measured - should have emojis
+		if north_emoji.is_empty() or south_emoji.is_empty():
+			return "INVALID: bound but no emojis set"
+
+	return ""
+
+
 ## String representation for debugging
 func _to_string() -> String:
 	if not is_bound:

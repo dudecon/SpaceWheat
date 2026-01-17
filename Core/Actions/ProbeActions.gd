@@ -46,6 +46,20 @@ static func action_explore(plot_pool, biome) -> Dictionary:
 		- emoji_pair: {north, south} (if success)
 		- error: String (if failure)
 	"""
+	# 0. Null checks for required parameters
+	if not plot_pool:
+		return {
+			"success": false,
+			"error": "no_pool",
+			"message": "Plot pool not initialized."
+		}
+	if not biome:
+		return {
+			"success": false,
+			"error": "no_biome",
+			"message": "Biome not initialized."
+		}
+
 	# 1. Get unbound terminal
 	var terminal = plot_pool.get_unbound_terminal()
 	if not terminal:
@@ -146,7 +160,31 @@ static func action_measure(terminal, biome) -> Dictionary:
 		- was_drained: bool
 		- error: String (if failure)
 	"""
-	# 1. Validate terminal state
+	# 0. Null checks - terminal and biome must exist
+	if not terminal:
+		return {
+			"success": false,
+			"error": "no_terminal",
+			"message": "No terminal to measure. Use EXPLORE first."
+		}
+	if not biome:
+		return {
+			"success": false,
+			"error": "no_biome",
+			"message": "Biome not initialized."
+		}
+
+	# 1. Validate terminal state consistency
+	var state_error = terminal.validate_state()
+	if state_error != "":
+		push_warning("ProbeActions.action_measure: Terminal state invalid - %s" % state_error)
+		return {
+			"success": false,
+			"error": "invalid_terminal_state",
+			"message": "Terminal in invalid state: %s" % state_error
+		}
+
+	# 2. Validate terminal can be measured
 	if not terminal.can_measure():
 		if not terminal.is_bound:
 			return {
@@ -310,7 +348,31 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 		- credits: float (probability × conversion rate)
 		- terminal_id: String
 	"""
-	# 1. Validate terminal state
+	# 0. Null checks - terminal and plot_pool must exist
+	if not terminal:
+		return {
+			"success": false,
+			"error": "no_terminal",
+			"message": "No terminal to harvest. Use MEASURE first."
+		}
+	if not plot_pool:
+		return {
+			"success": false,
+			"error": "no_pool",
+			"message": "Plot pool not initialized."
+		}
+
+	# 1. Validate terminal state consistency
+	var state_error = terminal.validate_state()
+	if state_error != "":
+		push_warning("ProbeActions.action_pop: Terminal state invalid - %s" % state_error)
+		return {
+			"success": false,
+			"error": "invalid_terminal_state",
+			"message": "Terminal in invalid state: %s" % state_error
+		}
+
+	# 2. Validate terminal can be popped
 	if not terminal.can_pop():
 		if not terminal.is_bound:
 			return {
