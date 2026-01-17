@@ -47,6 +47,10 @@ var gated_lindblad_configs: Array = []
 ## Accumulated energy flux per tapped emoji (accumulated this frame from Lindblad drain operators)
 var sink_flux_per_emoji: Dictionary = {}  # emoji → float (accumulated flux)
 
+## TIME TRACKING FOR TIME-DEPENDENT HAMILTONIAN
+## Tracks elapsed time to apply time-dependent drivers (e.g., sun oscillation)
+var elapsed_time: float = 0.0  # Total time elapsed since biome initialization
+
 var _next_component_id: int = 0
 
 func _init(name: String = ""):
@@ -946,6 +950,12 @@ func evolve(dt: float) -> void:
 	var dim = register_map.dim()
 	if dim == 0:
 		return
+
+	# UPDATE TIME-DEPENDENT HAMILTONIAN TERMS (e.g., sun/moon oscillation)
+	# This must be done before evolution so drivers are applied correctly
+	elapsed_time += dt
+	if hamiltonian != null:
+		hamiltonian.update(elapsed_time)
 
 	# ==========================================================================
 	# BATCHED NATIVE PATH: 100x faster (single C++ call with internal subcycling)

@@ -442,6 +442,8 @@ func _reset_custom() -> void:
 	# Icon system now managed by IconRegistry (deprecated icon variables removed)
 
 	# Model B: Quantum state management handled by quantum_computer
+	if quantum_computer:
+		quantum_computer.elapsed_time = 0.0  # Reset time tracking for drivers
 	temperature_grid.clear()
 	base_temperature = 300.0
 

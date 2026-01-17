@@ -416,6 +416,9 @@ func _reset_custom() -> void:
 	total_apples_harvested = 0.0
 	total_eggs_harvested = 0.0
 
+	if quantum_computer:
+		quantum_computer.elapsed_time = 0.0  # Reset time tracking for drivers
+
 	for x in range(grid_width):
 		for y in range(grid_height):
 			var pos = Vector2i(x, y)
