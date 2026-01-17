@@ -141,9 +141,9 @@ func update_from_quantum_state():
 	- Pulse rate (coherence) ← |ρ_{n,s}| coherence magnitude (decoherence threat)
 	- Radius ← Mass P(n)+P(s) (probability in measurement subspace)
 	"""
-	# V2.2: Terminal bubbles preserve their state set by _create_bubble_for_terminal
-	if is_terminal_bubble:
-		return
+	# REMOVED: Terminal bubbles SHOULD update from quantum state to get real opacities!
+	# if is_terminal_bubble:
+	#     return
 
 	var is_transitioning_planted = (radius == MAX_RADIUS)
 
