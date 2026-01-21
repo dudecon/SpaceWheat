@@ -42,8 +42,18 @@ extends Resource
 
 ## Player Vocabulary - Emojis the player has discovered
 ## This determines which factions are accessible and what quests they can receive
-## Default: wheat and people - the starter emojis that seed faction access
-@export var known_emojis: Array = ["🌾", "👥"]
+## Default: Two starter pairs that seed faction access:
+##   🌾/🍂 (wheat/detritus - farming cycle)
+##   👥/💸 (people/money - labor economy)
+@export var known_emojis: Array = ["🌾", "🍂", "👥", "💸"]
+
+## Known Pairs - Plantable qubit axes the player has learned
+## Each pair is {north: String, south: String}
+## These are the actual plantable combinations
+@export var known_pairs: Array = [
+	{"north": "🌾", "south": "🍂"},
+	{"north": "👥", "south": "💸"}
+]
 
 ## Quest Slots - 4 persistent quest slots (UIOP)
 ## Each slot can be empty (null) or contain quest data

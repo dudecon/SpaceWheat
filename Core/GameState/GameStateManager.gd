@@ -13,6 +13,7 @@ const QuantumRigorConfig = preload("res://Core/GameState/QuantumRigorConfig.gd")
 
 # Signals
 signal emoji_discovered(emoji: String)
+signal pair_discovered(north: String, south: String)
 signal factions_unlocked(factions: Array)
 
 # Save configuration
@@ -86,6 +87,36 @@ func discover_emoji(emoji: String) -> void:
 		for faction in newly_accessible:
 			var sig = faction.get("sig", [])
 			_verbose.info("quest", "-", "%s %s" % ["".join(sig.slice(0, 3)), faction.get("name", "?")])
+
+
+func discover_pair(north: String, south: String) -> void:
+	"""Player learns a vocabulary pair (plantable qubit axis)
+
+	This is called when:
+	- Quest completion grants paired vocabulary
+	- Starting the game with initial pairs
+
+	Args:
+		north: The North pole emoji (from faction)
+		south: The South pole emoji (rolled from physics)
+	"""
+	if not current_state:
+		return
+
+	# Check if pair already known
+	for pair in current_state.known_pairs:
+		if pair.get("north") == north and pair.get("south") == south:
+			return  # Already known
+
+	# Add pair
+	current_state.known_pairs.append({"north": north, "south": south})
+
+	# Also add individual emojis to known_emojis
+	discover_emoji(north)
+	discover_emoji(south)
+
+	emit_signal("pair_discovered", north, south)
+	_verbose.info("quest", "📖", "Discovered pair: %s/%s (vocabulary: %d pairs)" % [north, south, current_state.known_pairs.size()])
 
 
 func _check_newly_accessible_factions(new_emoji: String) -> Array:

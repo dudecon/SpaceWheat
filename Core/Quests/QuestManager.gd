@@ -25,6 +25,7 @@ signal quest_failed(quest_id: int, reason: String)
 signal quest_expired(quest_id: int)
 signal active_quests_changed()
 signal vocabulary_learned(emoji: String, faction: String)
+signal vocabulary_pair_learned(north: String, south: String, faction: String)
 
 # =============================================================================
 # STATE
@@ -361,10 +362,25 @@ func complete_quest(quest_id: int) -> bool:
 		economy.add_resource("💰", reward.money_amount, "quest_reward")
 
 	# Grant vocabulary rewards
-	for emoji in reward.learned_vocabulary:
-		GameStateManager.discover_emoji(emoji)
-		vocabulary_learned.emit(emoji, quest.get("faction", "Unknown"))
-		print("📖 %s taught you: %s" % [quest.get("faction", "Unknown"), emoji])
+	var faction_name = quest.get("faction", "Unknown")
+
+	# Paired vocabulary (preferred - uses discover_pair which handles both emojis)
+	for pair in reward.learned_pairs:
+		var north = pair.get("north", "")
+		var south = pair.get("south", "")
+		if north != "" and south != "":
+			GameStateManager.discover_pair(north, south)
+			vocabulary_pair_learned.emit(north, south, faction_name)
+			vocabulary_learned.emit(north, faction_name)
+			vocabulary_learned.emit(south, faction_name)
+			print("📖 %s taught you: %s/%s axis" % [faction_name, north, south])
+
+	# Single emojis (fallback for emojis without connections)
+	if reward.learned_pairs.is_empty():
+		for emoji in reward.learned_vocabulary:
+			GameStateManager.discover_emoji(emoji)
+			vocabulary_learned.emit(emoji, faction_name)
+			print("📖 %s taught you: %s" % [faction_name, emoji])
 
 	# Update quest status
 	quest["status"] = "completed"
@@ -933,10 +949,25 @@ func _complete_non_delivery_quest(quest_id: int, completion_reason: String) -> v
 		economy.add_resource("💰", reward.money_amount, "quest_reward")
 
 	# Grant vocabulary rewards
-	for emoji in reward.learned_vocabulary:
-		GameStateManager.discover_emoji(emoji)
-		vocabulary_learned.emit(emoji, quest.get("faction", "Unknown"))
-		print("📖 %s taught you: %s (for mastering quantum state!)" % [quest.get("faction", "Unknown"), emoji])
+	var faction_name = quest.get("faction", "Unknown")
+
+	# Paired vocabulary (preferred - uses discover_pair which handles both emojis)
+	for pair in reward.learned_pairs:
+		var north = pair.get("north", "")
+		var south = pair.get("south", "")
+		if north != "" and south != "":
+			GameStateManager.discover_pair(north, south)
+			vocabulary_pair_learned.emit(north, south, faction_name)
+			vocabulary_learned.emit(north, faction_name)
+			vocabulary_learned.emit(south, faction_name)
+			print("📖 %s taught you: %s/%s axis (for mastering quantum state!)" % [faction_name, north, south])
+
+	# Single emojis (fallback for emojis without connections)
+	if reward.learned_pairs.is_empty():
+		for emoji in reward.learned_vocabulary:
+			GameStateManager.discover_emoji(emoji)
+			vocabulary_learned.emit(emoji, faction_name)
+			print("📖 %s taught you: %s (for mastering quantum state!)" % [faction_name, emoji])
 
 	# Update quest status
 	quest["status"] = "completed"

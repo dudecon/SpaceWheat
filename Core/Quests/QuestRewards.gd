@@ -5,6 +5,7 @@ extends RefCounted
 ## Handles reward generation and vocabulary teaching for completed quests
 
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
+const VocabularyPairing = preload("res://Core/Quests/VocabularyPairing.gd")
 
 
 ## Icon Modification: How quest rewards can modify icon physics
@@ -33,7 +34,8 @@ class IconModification:
 class QuestReward:
 	"""Rewards for completing a quest"""
 	var money_amount: int = 0  # 💰-credits reward (no universal currency!)
-	var learned_vocabulary: Array[String] = []  # Emojis player learned
+	var learned_vocabulary: Array[String] = []  # Emojis player learned (both north and south)
+	var learned_pairs: Array = []  # Array of {north, south, weight, probability} - paired vocabulary
 	var reputation_gain: int = 0  # Future: faction reputation
 	var bonus_multiplier: float = 1.0  # From alignment
 	var icon_modifications: Array = []  # Array[IconModification] - physics changes
@@ -65,7 +67,27 @@ static func generate_reward(quest: Dictionary, bath, player_vocab: Array) -> Que
 	if faction_dict:
 		var vocab = select_vocabulary_reward(faction_dict, bath, player_vocab)
 		if vocab != "":
-			reward.learned_vocabulary.append(vocab)
+			# Roll for partner using VocabularyPairing system
+			var pair_result = VocabularyPairing.roll_partner(vocab)
+
+			if pair_result.get("south", "") != "":
+				# Successfully rolled a pair
+				var north = vocab
+				var south = pair_result["south"]
+
+				reward.learned_vocabulary.append(north)
+				reward.learned_vocabulary.append(south)
+
+				reward.learned_pairs.append({
+					"north": north,
+					"south": south,
+					"weight": pair_result.get("weight", 0.0),
+					"probability": pair_result.get("probability", 0.0)
+				})
+			else:
+				# No connections found - teach single emoji
+				reward.learned_vocabulary.append(vocab)
+				push_warning("QuestRewards: No pair found for %s, teaching single emoji" % vocab)
 
 		# Icon modification reward (for higher-tier quests)
 		if should_grant_icon_modification(quest):
@@ -157,11 +179,17 @@ static func format_reward_text(reward: QuestReward) -> String:
 	# 💰-credits (no universal currency - 💰 is just the most widely accepted)
 	lines.append("💰 +%d" % reward.money_amount)
 
-	# Vocabulary
-	for emoji in reward.learned_vocabulary:
-		lines.append("📖 Learned: %s" % emoji)
-
-	if reward.learned_vocabulary.is_empty():
+	# Vocabulary pairs (preferred display)
+	if reward.learned_pairs.size() > 0:
+		for pair in reward.learned_pairs:
+			var north = pair.get("north", "?")
+			var south = pair.get("south", "?")
+			lines.append("📖 Learned: %s/%s axis" % [north, south])
+	elif reward.learned_vocabulary.size() > 0:
+		# Fallback for single emojis (shouldn't happen often)
+		for emoji in reward.learned_vocabulary:
+			lines.append("📖 Learned: %s" % emoji)
+	else:
 		lines.append("📖 (No new vocabulary)")
 
 	# Icon modifications
@@ -195,9 +223,10 @@ static func preview_possible_rewards(quest: Dictionary, player_vocab: Array) -> 
 				unknown_vocab.append(emoji)
 
 		if unknown_vocab.size() > 0:
-			# Show preview of possible vocabulary
+			# Show preview of possible vocabulary (north emoji)
 			var preview = unknown_vocab.slice(0, 3)  # First 3
-			lines.append("📖 Learn: %s" % " or ".join(preview))
+			lines.append("📖 Learn: %s/? axis" % " or ".join(preview))
+			lines.append("   (partner rolled from physics)")
 			if unknown_vocab.size() > 3:
 				lines.append("   (+%d more possible)" % (unknown_vocab.size() - 3))
 		else:
