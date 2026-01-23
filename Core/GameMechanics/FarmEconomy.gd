@@ -8,6 +8,8 @@ extends Node
 
 const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
+@onready var _verbose = get_node_or_null("/root/VerboseConfig")
+
 # Universal resource change signal
 signal resource_changed(emoji: String, new_amount: int)
 
@@ -74,7 +76,7 @@ func _ready():
 	for emoji in INITIAL_RESOURCES:
 		emoji_credits[emoji] = INITIAL_RESOURCES[emoji]
 
-	VerboseConfig.info("economy", "⚛️", "Unified Emoji-Credits Economy initialized (1 quantum = %d credits)" % EconomyConstants.QUANTUM_TO_CREDITS)
+	if _verbose: _verbose.info("economy", "⚛️", "Unified Emoji-Credits Economy initialized (1 quantum = %d credits)" % EconomyConstants.QUANTUM_TO_CREDITS)
 
 
 func _print_resources():
@@ -82,7 +84,7 @@ func _print_resources():
 	for emoji in emoji_credits:
 		var quantum_units = emoji_credits[emoji] / EconomyConstants.QUANTUM_TO_CREDITS
 		output += "%s: %d  " % [emoji, quantum_units]
-	VerboseConfig.debug("economy", "📊", output)
+	if _verbose: _verbose.debug("economy", "📊", output)
 
 
 ## ============================================================================
@@ -99,7 +101,7 @@ func add_resource(emoji: String, credits_amount: int, reason: String = "") -> vo
 
 	var quantum_units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	if reason != "":
-		VerboseConfig.info("economy", "+", "%d %s-credits (%d units) from %s" % [credits_amount, emoji, quantum_units, reason])
+		if _verbose: _verbose.info("economy", "+", "%d %s-credits (%d units) from %s" % [credits_amount, emoji, quantum_units, reason])
 
 
 func remove_resource(emoji: String, credits_amount: int, reason: String = "") -> bool:
@@ -113,7 +115,7 @@ func remove_resource(emoji: String, credits_amount: int, reason: String = "") ->
 
 	var quantum_units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	if reason != "":
-		VerboseConfig.info("economy", "-", "%d %s-credits (%d units) for %s" % [credits_amount, emoji, quantum_units, reason])
+		if _verbose: _verbose.info("economy", "-", "%d %s-credits (%d units) for %s" % [credits_amount, emoji, quantum_units, reason])
 	return true
 
 
@@ -155,7 +157,7 @@ func spend_cost(cost: Dictionary, reason: String = "") -> bool:
 		_emit_resource_change(emoji)
 
 	if reason != "":
-		VerboseConfig.info("economy", "💸", "Spent %s on %s" % [_format_cost(cost), reason])
+		if _verbose: _verbose.info("economy", "💸", "Spent %s on %s" % [_format_cost(cost), reason])
 	return true
 
 
@@ -222,7 +224,7 @@ func process_wheat_to_flour(wheat_amount: int) -> Dictionary:
 
 	flour_processed.emit(wheat_amount, flour_gained)
 
-	VerboseConfig.info("economy", "🏭", "Milled %d wheat → %d flour + %d 💰" % [wheat_amount, flour_gained, credit_bonus])
+	if _verbose: _verbose.info("economy", "🏭", "Milled %d wheat → %d flour + %d 💰" % [wheat_amount, flour_gained, credit_bonus])
 
 	return {
 		"success": true,
@@ -254,7 +256,7 @@ func process_flour_to_bread(flour_amount: int) -> Dictionary:
 	# Add bread (using 🍞 emoji)
 	add_resource("🍞", bread_gained * EconomyConstants.QUANTUM_TO_CREDITS, "kitchen_output")
 
-	VerboseConfig.info("economy", "🍳", "Baked %d flour → %d bread" % [flour_amount, bread_gained])
+	if _verbose: _verbose.info("economy", "🍳", "Baked %d flour → %d bread" % [flour_amount, bread_gained])
 
 	return {
 		"success": true,
@@ -293,14 +295,14 @@ func get_stats() -> Dictionary:
 func reset_harvest_counter():
 	"""Reset harvest counter (called when contract completes)"""
 	total_wheat_harvested = 0
-	VerboseConfig.debug("economy", "📊", "Harvest counter reset")
+	if _verbose: _verbose.debug("economy", "📊", "Harvest counter reset")
 
 
 func print_stats():
-	"""Debug: Print economic stats (uses VerboseConfig.debug)"""
-	VerboseConfig.debug("economy", "📊", "=== FARM ECONOMY (Emoji-Credits) ===")
+	"""Debug: Print economic stats (uses if _verbose: _verbose.debug)"""
+	if _verbose: _verbose.debug("economy", "📊", "=== FARM ECONOMY (Emoji-Credits) ===")
 	for emoji in emoji_credits:
 		var credits_val = emoji_credits[emoji]
 		var units = credits_val / EconomyConstants.QUANTUM_TO_CREDITS
-		VerboseConfig.debug("economy", "  ", "%s: %d units (%d credits)" % [emoji, units, credits_val])
-	VerboseConfig.debug("economy", "📊", "Total wheat harvested: %d" % total_wheat_harvested)
+		if _verbose: _verbose.debug("economy", "  ", "%s: %d units (%d credits)" % [emoji, units, credits_val])
+	if _verbose: _verbose.debug("economy", "📊", "Total wheat harvested: %d" % total_wheat_harvested)

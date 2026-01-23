@@ -54,6 +54,9 @@ var effects_renderer
 var input_handler
 var node_manager
 
+# Autoload references
+@onready var _touch_input_manager = get_node_or_null("/root/TouchInputManager")
+
 
 # State
 var quantum_nodes: Array = []
@@ -356,7 +359,8 @@ func _on_bubble_tapped(node: QuantumNode):
 
 	# CRITICAL: Mark tap as consumed in TouchInputManager to prevent
 	# PlotGridDisplay from also handling this tap (spatial hierarchy)
-	TouchInputManager.consume_current_tap()
+	if _touch_input_manager:
+		_touch_input_manager.consume_current_tap()
 
 
 func _on_node_swiped_to(from_grid_pos: Vector2i, to_grid_pos: Vector2i):
