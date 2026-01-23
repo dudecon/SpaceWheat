@@ -41,7 +41,7 @@ static func compute_prophecy(biome) -> Dictionary:
 	var rho = null
 	var emoji_list: Array = []
 
-	# Try quantum_computer first (new architecture)
+	# Get quantum data from biome's quantum_computer
 	if biome and biome.get("quantum_computer"):
 		var qc = biome.quantum_computer
 		if qc.get("hamiltonian"):
@@ -50,17 +50,6 @@ static func compute_prophecy(biome) -> Dictionary:
 			rho = qc.get_density_matrix()
 		if qc.get("register_map"):
 			emoji_list = qc.register_map.keys()
-
-	# Fallback to bath (legacy architecture)
-	if H == null and biome and biome.get("bath"):
-		var bath = biome.bath
-		if bath.get("_H"):
-			H = bath._H
-		elif bath.get("hamiltonian"):
-			H = bath.hamiltonian
-		if bath.get("_density_matrix"):
-			rho = bath._density_matrix
-			emoji_list = rho.emoji_list
 
 	# No Hamiltonian found
 	if H == null:

@@ -7,7 +7,7 @@ extends Node
 ## Each Icon is the additive union of all faction contributions
 
 # Preload Faction system (replaces CoreIcons)
-const AllFactions = preload("res://Core/Factions/AllFactions.gd")
+const FactionRegistry = preload("res://Core/Factions/FactionRegistry.gd")
 const IconBuilder = preload("res://Core/Factions/IconBuilder.gd")
 const IconScript = preload("res://Core/QuantumSubstrate/Icon.gd")
 
@@ -73,16 +73,17 @@ func get_icons_by_trophic_level(level: int) -> Array:
 
 ## Build Icons from Factions (Model C upgrade)
 func _load_builtin_icons() -> void:
-	# Build all Icons from faction contributions (27 factions total)
-	# Includes: Core ecosystem (10) + Civilization (7) + Tier 2 (10)
-	var all_factions = AllFactions.get_all()
+	# Build all Icons from faction contributions (79 factions total)
+	# Loaded from JSON via FactionRegistry
+	var registry = FactionRegistry.new()
+	var all_factions = registry.get_all()
 	var built_icons = IconBuilder.build_icons_for_factions(all_factions)
 
 	# Register each built Icon
 	for icon in built_icons:
 		register_icon(icon)
 
-	print("📜 Built %d icons from %d factions (Core + Civilization + Tier2)" % [built_icons.size(), all_factions.size()])
+	print("📜 Built %d icons from %d factions (JSON)" % [built_icons.size(), all_factions.size()])
 
 ## Derive Icons from a Markov chain
 ## Useful for bootstrapping biome Icons from transition probabilities

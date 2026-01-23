@@ -86,17 +86,7 @@ func _stage_core_systems(farm: Node) -> void:
 	for biome_name in farm.grid.biomes.keys():
 		var biome = farm.grid.biomes[biome_name]
 		assert(biome != null, "Biome '%s' is null!" % biome_name)
-
-		# Check for either old (bath) or new (quantum_computer) architecture
-		var has_bath = biome.bath != null
-		var has_qc = biome.quantum_computer != null
-		assert(has_bath or has_qc, "Biome '%s' has neither bath nor quantum_computer!" % biome_name)
-
-		# Verify bath components if using old architecture
-		if has_bath:
-			assert(biome.bath._hamiltonian != null, "Biome '%s' bath has null hamiltonian!" % biome_name)
-			assert(biome.bath._lindblad != null, "Biome '%s' bath has null lindblad!" % biome_name)
-
+		assert(biome.quantum_computer != null, "Biome '%s' has no quantum_computer!" % biome_name)
 		print("  ✓ Biome '%s' verified" % biome_name)
 
 	# Any additional farm finalization

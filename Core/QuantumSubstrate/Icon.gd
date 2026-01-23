@@ -57,6 +57,12 @@ extends Resource
 @export var decay_rate: float = 0.0
 @export var decay_target: String = "🍂"  # Default: organic matter
 
+## Gated Lindblad transfers: conditional transfers based on gate emoji population
+## Key = target emoji, Value = Array of gate configs
+## Each gate config: { "source": emoji, "rate": float, "gate": emoji, "power": float }
+## Transfer only occurs when gate emoji has significant population
+@export var gated_lindblad: Dictionary = {}
+
 ## ========================================
 ## Energy Tap Configuration (Gozouta 1)
 ## Manifest Section 4.1: Trickle Drain
@@ -103,6 +109,11 @@ extends Resource
 @export var is_driver: bool = false      # External forcing (like sun)
 @export var is_adaptive: bool = false    # Dynamically changes (like tomato)
 @export var is_eternal: bool = false     # Never decays
+
+## Named drivers for time-dependent dynamics
+## Key = driver name, Value = { "type": str, "period": float, "amplitude": float, ... }
+## Types: "oscillator" (periodic), "pulse" (on/off), "decay" (exponential)
+@export var drivers: Dictionary = {}
 
 ## ========================================
 ## Methods

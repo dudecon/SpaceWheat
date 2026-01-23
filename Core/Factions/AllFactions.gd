@@ -1,189 +1,84 @@
 class_name AllFactions
 extends RefCounted
 
-## AllFactions: Unified access to all faction groups
+## AllFactions: Backward-compatible wrapper for FactionRegistry
 ##
-## This provides a single point of access for all factions in SpaceWheat:
-## - Core Ecosystem Factions (10): Nature, markets, kitchen
-## - Civilization Factions (7): Bread/population accessible starter factions
-## - Tier 2 Factions (10): Commerce, Industry, Governance branches
+## DEPRECATED: Use FactionRegistry directly for new code.
+## This wrapper maintains API compatibility with existing code.
 ##
-## Total: 27 factions defining 100+ unique emojis
-##
-## Usage:
-##   var all_factions = AllFactions.get_all()
-##   var icons = IconBuilder.build_icons_for_factions(all_factions)
+## Migration:
+##   OLD: var factions = AllFactions.get_all()
+##   NEW: var registry = FactionRegistry.new()
+##        var factions = registry.get_all()
 
-# Preload faction group scripts
-const CoreFactions = preload("res://Core/Factions/CoreFactions.gd")
-const CivilizationFactions = preload("res://Core/Factions/CivilizationFactions.gd")
-const Tier2Factions = preload("res://Core/Factions/Tier2Factions.gd")
-const CenterFactions = preload("res://Core/Factions/CenterFactions.gd")
-const FringeFactions = preload("res://Core/Factions/FringeFactions.gd")
-const OuterFactions = preload("res://Core/Factions/OuterFactions.gd")
+const FactionRegistry = preload("res://Core/Factions/FactionRegistry.gd")
+
+# Cached registry instance
+static var _registry: FactionRegistry = null
+
+## Get or create registry instance
+static func _get_registry() -> FactionRegistry:
+	if _registry == null:
+		_registry = FactionRegistry.new()
+	return _registry
+
 
 ## ========================================
-## Faction Collections
+## Faction Collections (delegated to FactionRegistry)
 ## ========================================
 
-## Get ALL factions (Core + Civilization + Tier 2 + Center + Fringe + Outer)
-## Returns Array with all registered factions
+## Get ALL factions
 static func get_all() -> Array:
-	var factions: Array = []
+	return _get_registry().get_all()
 
-	# Core ecosystem factions (10)
-	for f in CoreFactions.get_all():
-		factions.append(f)
 
-	# Civilization factions (7)
-	for f in CivilizationFactions.get_all():
-		factions.append(f)
-
-	# Tier 2 factions (10)
-	for f in Tier2Factions.get_all():
-		factions.append(f)
-
-	# Center ring factions (new)
-	for f in CenterFactions.get_all():
-		factions.append(f)
-
-	# Fringe ring factions
-	for f in FringeFactions.get_all():
-		factions.append(f)
-
-	# Outer ring factions
-	for f in OuterFactions.get_all():
-		factions.append(f)
-
-	return factions
-
-## Get core ecosystem factions only (nature, markets, kitchen)
+## Get core ecosystem factions only
 static func get_core() -> Array:
-	return CoreFactions.get_all()
+	return _get_registry().get_core()
 
-## Get civilization factions only (bread/population accessible)
+
+## Get civilization factions only
 static func get_civilization() -> Array:
-	return CivilizationFactions.get_all()
+	return _get_registry().get_civilization()
 
-## Get tier 2 factions only (commerce, industry, governance)
+
+## Get tier 2 factions only
 static func get_tier2() -> Array:
-	return Tier2Factions.get_all()
+	return _get_registry().get_tier2()
 
-## Get factions accessible from starter emojis (🍞 + 👥)
+
+## Get factions accessible from starter emojis
 static func get_starter_accessible() -> Array:
-	var factions: Array = []
+	return _get_registry().get_starter_accessible()
 
-	# Hearth Keepers (🍞 producer)
-	factions.append(CoreFactions.create_hearth_keepers())
-
-	# All civilization factions are accessible from 🍞👥
-	for f in CivilizationFactions.get_all():
-		factions.append(f)
-
-	return factions
 
 ## ========================================
-## Faction Queries
+## Faction Queries (delegated to FactionRegistry)
 ## ========================================
 
 ## Find all factions that speak a given emoji
 static func get_factions_for_emoji(emoji: String) -> Array:
-	var result: Array = []
-	for faction in get_all():
-		if faction.speaks(emoji):
-			result.append(faction)
-	return result
+	return _get_registry().get_factions_for_emoji(emoji)
+
 
 ## Get all unique emojis across all factions
 static func get_all_emojis() -> Array:
-	var emojis: Array[String] = []
-	for faction in get_all():
-		for emoji in faction.get_all_emojis():
-			if emoji not in emojis:
-				emojis.append(emoji)
-	return emojis
+	return _get_registry().get_all_emojis()
 
-## Count how many factions speak each emoji (contestation map)
+
+## Count how many factions speak each emoji
 static func get_emoji_contestation() -> Dictionary:
-	var contestation: Dictionary = {}
-	for faction in get_all():
-		for emoji in faction.signature:
-			if not contestation.has(emoji):
-				contestation[emoji] = []
-			contestation[emoji].append(faction.name)
-	return contestation
+	return _get_registry().get_emoji_contestation()
+
 
 ## ========================================
-## Biome Presets
+## Biome Presets (delegated to FactionRegistry)
 ## ========================================
 
 ## Get factions for a specific biome type
 static func get_biome_factions(biome_type: String) -> Array:
-	match biome_type:
-		"BioticFlux":
-			return [
-				CoreFactions.create_celestial_archons(),
-				CoreFactions.create_verdant_pulse(),
-				CoreFactions.create_mycelial_web(),
-			]
+	return _get_registry().get_biome_factions(biome_type)
 
-		"Kitchen":
-			return [
-				CoreFactions.create_celestial_archons(),
-				CoreFactions.create_hearth_keepers(),
-				CoreFactions.create_verdant_pulse(),
-			]
-
-		"Market":
-			return [
-				CoreFactions.create_market_spirits(),
-			]
-
-		"Forest":
-			return [
-				CoreFactions.create_celestial_archons(),
-				CoreFactions.create_verdant_pulse(),
-				CoreFactions.create_mycelial_web(),
-				CoreFactions.create_swift_herd(),
-				CoreFactions.create_pack_lords(),
-				CoreFactions.create_pollinator_guild(),
-				CoreFactions.create_plague_vectors(),
-				CoreFactions.create_wildfire_dynamics(),
-			]
-
-		"Village":
-			# Early civilization
-			return [
-				CoreFactions.create_celestial_archons(),
-				CoreFactions.create_verdant_pulse(),
-				CoreFactions.create_hearth_keepers(),
-				CivilizationFactions.create_granary_guilds(),
-				CivilizationFactions.create_millwrights_union(),
-				CivilizationFactions.create_yeast_prophets(),
-			]
-
-		"Imperial":
-			# Full civilization with extraction
-			return [
-				CoreFactions.create_market_spirits(),
-				CivilizationFactions.create_granary_guilds(),
-				CivilizationFactions.create_millwrights_union(),
-				CivilizationFactions.create_station_lords(),
-				CivilizationFactions.create_void_serfs(),
-				CivilizationFactions.create_carrion_throne(),
-			]
-
-		"Scavenger":
-			# Waste economy
-			return [
-				CoreFactions.create_hearth_keepers(),
-				CivilizationFactions.create_scavenged_psithurism(),
-				CivilizationFactions.create_millwrights_union(),
-			]
-
-		_:
-			push_warning("Unknown biome type: %s, returning empty faction list" % biome_type)
-			return []
 
 ## ========================================
 ## Debug Utilities
@@ -191,25 +86,10 @@ static func get_biome_factions(biome_type: String) -> Array:
 
 ## Print summary of all factions
 static func debug_print_all() -> void:
-	print("\n========== ALL FACTIONS ==========")
+	_get_registry().debug_print_all()
 
-	print("\n--- CORE ECOSYSTEM (10) ---")
-	for f in CoreFactions.get_all():
-		print("  %s [%s]: %s" % [f.name, f.ring, ", ".join(f.signature)])
 
-	print("\n--- CIVILIZATION (7) ---")
-	for f in CivilizationFactions.get_all():
-		print("  %s [%s]: %s" % [f.name, f.ring, ", ".join(f.signature)])
-
-	print("\n--- TIER 2 (10) ---")
-	for f in Tier2Factions.get_all():
-		print("  %s [%s]: %s" % [f.name, f.ring, ", ".join(f.signature)])
-
-	print("\nTotal factions: %d" % get_all().size())
-	print("Total unique emojis: %d" % get_all_emojis().size())
-	print("==================================\n")
-
-## Print emoji contestation map (which emojis are shared)
+## Print emoji contestation map
 static func debug_print_contestation() -> void:
 	print("\n========== EMOJI CONTESTATION ==========")
 	var contestation = get_emoji_contestation()
@@ -228,9 +108,10 @@ static func debug_print_contestation() -> void:
 	print("\nTotal contested emojis: %d / %d" % [contested_emojis.size(), contestation.size()])
 	print("=========================================\n")
 
-## Print statistics about new mechanics
+
+## Print statistics about mechanics
 static func debug_print_mechanics() -> void:
-	print("\n========== NEW MECHANICS ==========")
+	print("\n========== MECHANICS STATISTICS ==========")
 	var inverse_gates = 0
 	var measurement_inversions = 0
 	var negative_energies = 0
@@ -260,4 +141,4 @@ static func debug_print_mechanics() -> void:
 	print("Measurement inversions: %d" % measurement_inversions)
 	print("Negative self-energies: %d" % negative_energies)
 	print("Time-dependent drivers: %d" % drivers)
-	print("===================================\n")
+	print("==========================================\n")

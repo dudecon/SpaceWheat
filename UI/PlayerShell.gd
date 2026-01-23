@@ -20,6 +20,16 @@ const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const LoggerConfigPanel = preload("res://UI/Panels/LoggerConfigPanel.gd")
 # QuantumHUDPanel REMOVED - content merged into InspectorOverlay (N key)
 const QuantumModeStatusIndicator = preload("res://UI/Panels/QuantumModeStatusIndicator.gd")
+const BiomeTabBarClass = preload("res://UI/BiomeTabBar.gd")
+
+## Key-to-overlay mapping (DRY - single source of truth for toggle keys)
+const KEY_TO_OVERLAY = {
+	KEY_C: "quests",
+	KEY_V: "semantic_map",
+	KEY_B: "biome_detail",
+	KEY_N: "inspector",
+	KEY_K: "controls",
+}
 
 var current_farm_ui = null  # FarmUI instance (from scene)
 var overlay_manager: OverlayManager = null
@@ -31,6 +41,7 @@ var action_preview_row: Control = null  # Cached reference from ActionBarManager
 var logger_config_panel: LoggerConfigPanel = null  # Logger configuration UI
 # quantum_hud_panel REMOVED - content merged into InspectorOverlay (N key)
 var quantum_mode_indicator: QuantumModeStatusIndicator = null  # Current quantum mode display
+var biome_tab_bar: BiomeTabBarClass = null  # Top bar for biome selection
 
 ## Unified Overlay Stack Management (replaces modal_stack)
 var overlay_stack: OverlayStackManager = null
@@ -65,51 +76,41 @@ func _input(event: InputEvent) -> void:
 func _handle_shell_action(event: InputEvent) -> bool:
 	"""Handle shell-level actions (overlay toggles, menu)
 
-	Overlay keys (v2 system): C/V/B/N/K
-
-	IMPORTANT: When an overlay is active, we block shell toggle keys to prevent
-	confusing state. ESC is the only key that works during overlay (closes top overlay).
-	This prevents the bug where pressing C/V/B/N/K while an overlay is open would
-	open a new overlay on top, or where ESC would both close overlay AND open EscapeMenu.
+	Toggle keys (C/V/B/N/K): Open overlay if closed, close if same key pressed again.
+	ESC: Closes any open overlay, or opens escape menu if nothing is open.
+	L: Logger config (only when no overlay active).
+	TAB: Build/Play mode toggle (only when no overlay active).
 	"""
-	# When overlay is active, only ESC should work (and it uses the stack's handle_escape)
-	if overlay_stack and not overlay_stack.is_empty():
-		if event.keycode == KEY_ESCAPE:
-			# Use stack's handle_escape which properly pops the top overlay
+	# ESC has special handling - closes overlay OR opens escape menu
+	if event.keycode == KEY_ESCAPE:
+		if overlay_stack and not overlay_stack.is_empty():
 			overlay_stack.handle_escape()
 			return true
-		# Block all other shell keys while overlay is active
-		# (The key might still be consumed by the overlay itself via route_input above)
+		else:
+			_toggle_escape_menu()
+			return true
+
+	# Toggle keys (C/V/B/N/K) - work whether overlay is open or not
+	# This enables same-key-to-close: press B to open biome, press B again to close
+	if KEY_TO_OVERLAY.has(event.keycode):
+		_toggle_v2_overlay(KEY_TO_OVERLAY[event.keycode])
+		return true
+
+	# Other keys only work when no overlay is active
+	if overlay_stack and not overlay_stack.is_empty():
 		return false
 
-	# No overlay active - normal shell key handling
+	# Remaining shell keys (L, TAB)
 	match event.keycode:
-		KEY_C:  # Quests
-			_toggle_v2_overlay("quests")
-			return true
-		KEY_V:  # Vocabulary/Semantic Map
-			_toggle_v2_overlay("semantic_map")
-			return true
-		KEY_B:  # Biome Detail
-			_toggle_v2_overlay("biome_detail")
-			return true
-		KEY_N:  # iNspector (density matrix + quantum state)
-			_toggle_v2_overlay("inspector")
-			return true
-		KEY_K:  # Keyboard/Controls reference
-			_toggle_v2_overlay("controls")
-			return true
 		KEY_L:
 			_toggle_logger_config()
-			return true
-		KEY_ESCAPE:
-			_toggle_escape_menu()
 			return true
 		KEY_TAB:
 			# TAB must be handled here (in _input) because Godot's focus system
 			# intercepts TAB before _unhandled_input() runs
 			_toggle_build_play_mode()
 			return true
+
 	return false
 
 
@@ -315,10 +316,22 @@ func _ready() -> void:
 	quantum_mode_indicator = QuantumModeStatusIndicator.new()
 	quantum_mode_indicator.name = "QuantumModeIndicator"
 	overlay_layer.add_child(quantum_mode_indicator)
-	# Position in top-right
+	# Position in top-right, below the ResourcePanel
 	quantum_mode_indicator.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	quantum_mode_indicator.position = Vector2(-200, 10)  # Offset from right edge
+	quantum_mode_indicator.position = Vector2(-200, 54)  # Below 50px resource panel
 	_verbose.info("ui", "✅", "Quantum mode indicator created")
+
+	# Create biome tab bar (top-center for biome selection)
+	biome_tab_bar = BiomeTabBarClass.new()
+	biome_tab_bar.name = "BiomeTabBar"
+	overlay_layer.add_child(biome_tab_bar)
+	# Position at top-center, below the ResourcePanel (50px min height + 4px gap)
+	biome_tab_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	biome_tab_bar.offset_top = 54  # Below 50px resource panel + 4px gap
+	biome_tab_bar.offset_bottom = 94  # 40px height
+	biome_tab_bar.offset_left = 200  # Leave room for any left-side UI
+	biome_tab_bar.offset_right = -200  # Leave room for quantum mode indicator
+	_verbose.info("ui", "✅", "Biome tab bar created")
 
 	# Connect overlay signals
 	_connect_overlay_signals()
@@ -370,43 +383,6 @@ func _connect_overlay_signals() -> void:
 		_verbose.info("ui", "✅", "Save/Load menu signals connected")
 
 
-func load_farm(farm_ref: Node) -> void:
-	"""Load a farm into FarmUIContainer (swappable)"""
-	_verbose.info("ui", "📂", "Loading farm into PlayerShell...")
-
-	# Clean up old farm UI if it exists
-	if current_farm_ui:
-		current_farm_ui.queue_free()
-		current_farm_ui = null
-
-	# Store farm reference
-	farm = farm_ref
-
-	# Connect quest manager to farm economy
-	if quest_manager and farm.economy:
-		quest_manager.connect_to_economy(farm.economy)
-		_verbose.info("ui", "✅", "Quest manager connected to economy")
-
-		# Offer initial quest
-		_offer_initial_quest()
-
-	# Load FarmUI as scene and add to container
-	var farm_ui_scene = load("res://UI/FarmUI.tscn")
-	if farm_ui_scene:
-		current_farm_ui = farm_ui_scene.instantiate()
-		farm_ui_container.add_child(current_farm_ui)
-
-		# Setup farm AFTER layout engine calculates sizes (proper Godot 4 pattern)
-		# call_deferred here is the CORRECT TOOL for "run after engine initialization"
-		current_farm_ui.call_deferred("setup_farm", farm_ref)
-		_verbose.info("ui", "✅", "FarmUI loaded (setup deferred until after layout calculation)")
-	else:
-		_verbose.warn("ui", "❌", "FarmUI.tscn not found - cannot load farm UI")
-		return
-
-	_verbose.info("ui", "✅", "Farm loaded into PlayerShell")
-
-
 func get_farm_ui():
 	"""Get the currently loaded FarmUI instance"""
 	return current_farm_ui
@@ -449,6 +425,11 @@ func connect_to_farm_input_handler() -> void:
 	# Already connected? Skip
 	if farm_ui.input_handler.tool_changed.get_connections().size() > 0:
 		return
+
+	# Connect quest_manager to economy (CRITICAL for quest completion!)
+	if quest_manager and farm_ui.farm and farm_ui.farm.economy:
+		quest_manager.connect_to_economy(farm_ui.farm.economy)
+		_verbose.info("ui", "✅", "QuestManager connected to economy")
 
 	if farm_ui and farm_ui.input_handler:
 		# Connect input handler tool changes to action bar
@@ -511,36 +492,6 @@ func connect_to_farm_input_handler() -> void:
 
 		# QuantumHUDPanel connection REMOVED - use InspectorOverlay (N key) instead
 
-
-## OVERLAY SYSTEM INITIALIZATION
-
-func _initialize_overlay_system() -> void:
-	"""Initialize OverlayManager with minimal dependencies"""
-	if not overlay_manager:
-		return
-
-	# Create a minimal UILayoutManager for compatibility
-	# (OverlayManager requires it even if we don't use all features)
-	const UILayoutManager = preload("res://UI/Managers/UILayoutManager.gd")
-	var layout_mgr = UILayoutManager.new()
-
-	# Get system dependencies from Farm if available
-	# (These will be null but OverlayManager handles it gracefully)
-	var vocab_sys = null
-	var faction_mgr = null
-	var conspiracy_net = null
-
-	# Initialize OverlayManager with dependencies
-	overlay_manager.setup(layout_mgr, vocab_sys, faction_mgr, conspiracy_net)
-
-	# Create the overlay UI panels
-	overlay_manager.create_overlays(self)
-
-	_verbose.info("ui", "🎭", "Overlay system initialized")
-
-
-## QUEST SYSTEM HELPERS
-
 ## ACTION TOOLBAR UPDATES (for quest board context)
 
 func _update_action_toolbar_for_quest(slot_state: int = 1, is_locked: bool = false) -> void:
@@ -566,30 +517,3 @@ func _on_tool_selected_from_bar(tool_num: int) -> void:
 		current_farm_ui._on_tool_selected(tool_num)
 
 
-## QUEST SYSTEM HELPERS
-
-func _offer_initial_quest() -> void:
-	"""Offer first quest to player when farm loads"""
-	if not quest_manager or not farm:
-		return
-
-	# Get random faction from database
-	var faction = FactionDatabase.get_random_faction()
-	if faction.is_empty():
-		_verbose.warn("ui", "⚠️", "No factions available for quests")
-		return
-
-	# Get resources from current biome
-	var resources = []
-	if farm.biotic_flux_biome:
-		resources = farm.biotic_flux_biome.get_harvestable_emojis()
-
-	if resources.is_empty():
-		resources = ["🌾", "👥"]  # Fallback
-
-	# Generate and offer quest
-	var quest = quest_manager.offer_quest(faction, "BioticFlux", resources)
-	if not quest.is_empty():
-		# Auto-accept first quest for tutorial
-		quest_manager.accept_quest(quest)
-		_verbose.info("ui", "📜", "Initial quest offered: %s - %s" % [quest.get("faction", ""), quest.get("body", "")])

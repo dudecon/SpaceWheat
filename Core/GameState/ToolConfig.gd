@@ -17,56 +17,139 @@ static var current_mode: String = "play"
 ## F-cycling mode indices per tool (mode_tool_num → current mode index)
 ## Key format: "play_2" or "build_4" to track modes per mode+tool combo
 static var tool_mode_indices: Dictionary = {
+	"play_2": 0,  # GATES: 0=convert, 1=phase
+	"play_3": 0,  # ENTANGLE: 0=link, 1=manage
+	"play_4": 0,  # INDUSTRY: 0=build, 1=harvest
 	"build_4": 0  # QUANTUM: 0=system, 1=phase, 2=rotation
 }
 
 # ============================================================================
 # PLAY MODE TOOLS - Primary gameplay (Tab = "play")
 # ============================================================================
+#
+# Tool Organization Philosophy:
+#   Tool 1 (PROBE): Core loop - EXPLORE → MEASURE → POP (80% of gameplay)
+#   Tool 2 (GATES): 1-qubit gates - probability control for resource conversion
+#   Tool 3 (ENTANGLE): 2-qubit gates - create and manage entanglement
+#   Tool 4 (INDUSTRY): Economy - buildings and automation
+#
+# F-Cycling: Tools 2 and 3 have multiple banks accessible via F key
+#   - Bank 1: Most useful gates (default)
+#   - Bank 2: Advanced/niche gates
 
 const PLAY_TOOLS = {
 	1: {  # PROBE - Core loop (80% of gameplay)
 		"name": "Probe",
 		"emoji": "🔬",
+		"icon": "res://Assets/UI/Science/Probe.svg",
 		"description": "Explore quantum soup, measure, harvest",
 		"has_f_cycling": false,
 		"actions": {
-			"Q": {"action": "explore", "label": "Explore", "emoji": "🔍"},
-			"E": {"action": "measure", "label": "Measure", "emoji": "👁️"},
-			"R": {"action": "pop", "label": "Pop/Harvest", "emoji": "✂️"}
+			"Q": {"action": "explore", "label": "Explore", "emoji": "🔍",
+				  "icon": "res://Assets/UI/Science/Explore.svg"},
+			"E": {"action": "measure", "label": "Measure", "emoji": "👁️",
+				  "icon": "res://Assets/UI/Science/Measure.svg"},
+			"R": {"action": "pop", "label": "Pop/Harvest", "emoji": "✂️",
+				  "icon": "res://Assets/UI/Science/Pop-Harvest.svg"}
 		}
 	},
-	2: {  # ENTANGLE - Multi-qubit entanglement operations
+	2: {  # GATES - 1-qubit gates with F-cycling
+		"name": "Gates",
+		"emoji": "⚡",
+		"icon": "res://Assets/UI/Q-Bit/Unitary.svg",
+		"description": "1-qubit gates for probability control",
+		"has_f_cycling": true,
+		"modes": ["convert", "phase"],
+		"mode_labels": ["Convert", "Phase"],
+		"actions": {
+			"convert": {  # Bank 1: Most useful for gameplay (default)
+				"Q": {"action": "apply_pauli_x", "label": "X Flip", "emoji": "↔️",
+					  "icon": "res://Assets/UI/Q-Bit/Pauli-X.svg",
+					  "hint": "Swap north↔south emoji"},
+				"E": {"action": "apply_hadamard", "label": "H Superpose", "emoji": "🌀",
+					  "icon": "res://Assets/UI/Q-Bit/Hadamard.svg",
+					  "hint": "Reset to 50/50"},
+				"R": {"action": "apply_ry", "label": "Ry Tune", "emoji": "🎚️",
+					  "icon": "res://Assets/UI/Tools/Quantum/RY.svg",
+					  "hint": "Dial exact probability"}
+			},
+			"phase": {  # Bank 2: Phase gates (advanced)
+				"Q": {"action": "apply_pauli_z", "label": "Z Phase", "emoji": "📐",
+					  "icon": "res://Assets/UI/Q-Bit/Pauli-Z.svg",
+					  "hint": "Phase flip |1⟩"},
+				"E": {"action": "apply_s_gate", "label": "S π/2", "emoji": "🌙",
+					  "icon": "res://Assets/UI/Tools/Quantum/S.svg",
+					  "hint": "Quarter phase turn"},
+				"R": {"action": "apply_t_gate", "label": "T π/4", "emoji": "✨",
+					  "icon": "res://Assets/UI/Tools/Quantum/T.svg",
+					  "hint": "Eighth phase turn"}
+			}
+		}
+	},
+	3: {  # ENTANGLE - 2-qubit gates with F-cycling
 		"name": "Entangle",
 		"emoji": "🔗",
-		"description": "Create and manage entanglement between qubits",
-		"has_f_cycling": false,
+		"icon": "res://Assets/UI/Tools/Entangle/Entangle.svg",
+		"description": "2-qubit gates for entanglement",
+		"has_f_cycling": true,
+		"modes": ["link", "manage"],
+		"mode_labels": ["Link", "Manage"],
 		"actions": {
-			"Q": {"action": "cluster", "label": "Cluster", "emoji": "🕸️"},
-			"E": {"action": "measure_trigger", "label": "Trigger", "emoji": "⚡"},
-			"R": {"action": "remove_gates", "label": "Disentangle", "emoji": "✂️"}
+			"link": {  # Bank 1: Core entanglement gates (default)
+				"Q": {"action": "apply_cnot", "label": "CNOT", "emoji": "🔗",
+					  "icon": "res://Assets/UI/Tools/Entangle/Entangle.svg",
+					  "hint": "Flip target if control=|1⟩"},
+				"E": {"action": "apply_swap", "label": "SWAP", "emoji": "🔄",
+					  "icon": "res://Assets/UI/Icon/Swap.svg",
+					  "hint": "Exchange two qubit states"},
+				"R": {"action": "apply_cz", "label": "CZ", "emoji": "⚡",
+					  "icon": "res://Assets/UI/Tools/Entangle/Trigger.svg",
+					  "hint": "Phase kick on |11⟩"}
+			},
+			"manage": {  # Bank 2: Entanglement management
+				"Q": {"action": "create_bell_pair", "label": "Bell Pair", "emoji": "💑",
+					  "icon": "res://Assets/UI/Tools/Entangle/Cluster.svg",
+					  "hint": "Create maximally entangled pair"},
+				"E": {"action": "disentangle", "label": "Disentangle", "emoji": "✂️",
+					  "icon": "res://Assets/UI/Tools/Entangle/Disentangle.svg",
+					  "hint": "Break entanglement"},
+				"R": {"action": "inspect_entanglement", "label": "Inspect", "emoji": "🔍",
+					  "icon": "res://Assets/UI/Biome/BiomeInspect.svg",
+					  "hint": "View entanglement graph"}
+			}
 		}
 	},
-	3: {  # INDUSTRY - Simplified to match implemented actions
+	4: {  # INDUSTRY - Economy & automation (F-cycle: Build → Harvest)
 		"name": "Industry",
 		"emoji": "🏭",
+		"icon": "res://Assets/UI/Industry/Industry.svg",
 		"description": "Economy & automation",
-		"has_f_cycling": false,
+		"has_f_cycling": true,
+		"modes": ["build", "harvest"],
+		"mode_labels": ["Build", "Harvest"],
 		"actions": {
-			"Q": {"action": "place_mill", "label": "Mill", "emoji": "⚙️"},
-			"E": {"action": "place_market", "label": "Market", "emoji": "🏪"},
-			"R": {"action": "place_kitchen", "label": "Kitchen", "emoji": "🍳"}
-		}
-	},
-	4: {  # UNITARY - Single-qubit gate operations
-		"name": "Unitary",
-		"emoji": "⚡",
-		"description": "Apply single-qubit unitary gates",
-		"has_f_cycling": false,
-		"actions": {
-			"Q": {"action": "apply_pauli_x", "label": "Pauli-X", "emoji": "↔️"},
-			"E": {"action": "apply_hadamard", "label": "Hadamard", "emoji": "🌀"},
-			"R": {"action": "apply_pauli_z", "label": "Pauli-Z", "emoji": "⚡"}
+			"build": {  # Mode 0: Place buildings (default)
+				"Q": {"action": "submenu_mill_power", "label": "Mill ▸", "emoji": "⚙️",
+					  "icon": "res://Assets/UI/Industry/Mill.svg",
+					  "hint": "Place mill (coupling injector)", "submenu": "mill_power"},
+				"E": {"action": "place_market", "label": "Market", "emoji": "🏪",
+					  "icon": "res://Assets/UI/Industry/Market.svg",
+					  "hint": "Place market (sell for 💰)"},
+				"R": {"action": "place_kitchen", "label": "Kitchen", "emoji": "🍳",
+					  "icon": "res://Assets/UI/Industry/Kitchen.svg",
+					  "hint": "Place kitchen (3 plots)"}
+			},
+			"harvest": {  # Mode 1: Harvest from buildings
+				"Q": {"action": "harvest_flour", "label": "Harvest 💨", "emoji": "💨",
+					  "icon": "res://Assets/UI/Science/Pop-Harvest.svg",
+					  "hint": "Harvest flour when P(💨) high"},
+				"E": {"action": "market_sell", "label": "Sell 💰", "emoji": "💰",
+					  "icon": "res://Assets/UI/Industry/Market.svg",
+					  "hint": "Quantum sale for credits"},
+				"R": {"action": "bake_bread", "label": "Bake 🍞", "emoji": "🍞",
+					  "icon": "res://Assets/UI/Industry/Kitchen.svg",
+					  "hint": "Bake bread (💧+🔥+💨)"}
+			}
 		}
 	}
 }
@@ -161,6 +244,27 @@ const SUBMENUS = {
 		"Q": {"action": "icon_assign_wheat", "label": "Wheat", "emoji": "🌾"},
 		"E": {"action": "icon_assign_mushroom", "label": "Mushroom", "emoji": "🍄"},
 		"R": {"action": "icon_assign_tomato", "label": "Tomato", "emoji": "🍅"},
+	},
+	# Mill two-stage submenus (power source → conversion)
+	"mill_power": {
+		"name": "Mill Power",
+		"emoji": "⚡",
+		"parent_tool": 4,
+		"parent_mode": "play",
+		"dynamic": false,
+		"Q": {"action": "mill_select_power_water", "label": "Water", "emoji": "💧"},
+		"E": {"action": "mill_select_power_wind", "label": "Wind", "emoji": "🌬️"},
+		"R": {"action": "mill_select_power_fire", "label": "Fire", "emoji": "🔥"},
+	},
+	"mill_conversion": {
+		"name": "Mill Conversion",
+		"emoji": "⚙️",
+		"parent_tool": 4,
+		"parent_mode": "play",
+		"dynamic": false,
+		"Q": {"action": "mill_convert_flour", "label": "Flour", "emoji": "🌾→💨"},
+		"E": {"action": "mill_convert_lumber", "label": "Lumber", "emoji": "🌲→🪵"},
+		"R": {"action": "mill_convert_energy", "label": "Energy", "emoji": "🍂→⚡"},
 	}
 }
 
@@ -285,6 +389,11 @@ static func get_tool_emoji(tool_num: int) -> String:
 	return get_tool(tool_num).get("emoji", "?")
 
 
+static func get_tool_icon_path(tool_num: int) -> String:
+	"""Get tool icon path by number. Returns empty string if no icon."""
+	return get_tool(tool_num).get("icon", "")
+
+
 static func has_f_cycling(tool_num: int) -> bool:
 	"""Check if tool supports F-cycling."""
 	return get_tool(tool_num).get("has_f_cycling", false)
@@ -327,6 +436,11 @@ static func get_action_emoji(tool_num: int, key: String) -> String:
 static func get_action_name(tool_num: int, key: String) -> String:
 	"""Get action name (for dispatching to handlers)."""
 	return get_action(tool_num, key).get("action", "")
+
+
+static func get_action_icon(tool_num: int, key: String) -> String:
+	"""Get action icon path for UI display."""
+	return get_action(tool_num, key).get("icon", "")
 
 
 static func get_all_actions(tool_num: int) -> Dictionary:
@@ -430,7 +544,7 @@ static func _generate_icon_assign_submenu(base: Dictionary, farm, current_select
 	var player_vocab: Array = []
 	var gsm = Engine.get_main_loop().root.get_node_or_null("/root/GameStateManager")
 	if gsm and gsm.current_state:
-		player_vocab = gsm.current_state.known_emojis
+		player_vocab = gsm.current_state.get_known_emojis()  # Derived from known_pairs
 
 	if player_vocab.is_empty():
 		generated["Q"] = {"action": "", "label": "No Vocab!", "emoji": "📖"}
@@ -445,7 +559,7 @@ static func _generate_icon_assign_submenu(base: Dictionary, farm, current_select
 	for i in range(min(3, player_vocab.size())):
 		var emoji = player_vocab[i]
 		generated[keys[i]] = {
-			"action": "icon_assign_%s" % emoji.hash(),
+			"action": "icon_assign_%s" % emoji,
 			"label": emoji,
 			"emoji": emoji
 		}

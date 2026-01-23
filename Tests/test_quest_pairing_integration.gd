@@ -82,11 +82,19 @@ func _test_quest_reward_pairing() -> void:
 	print("  Testing faction: %s" % faction_name)
 	print("  Faction signature: %s" % str(faction_sig))
 
-	# Create mock quest
+	# Pre-roll vocabulary pair (this happens at quest creation time now)
+	var north_emoji = faction_sig[0] if faction_sig.size() > 0 else ""
+	var pair_result = VocabularyPairing.roll_partner(north_emoji) if north_emoji != "" else {}
+
+	# Create mock quest WITH pre-rolled vocab (new architecture)
 	var quest = {
 		"faction": faction_name,
 		"quantity": 5,
-		"reward_multiplier": 1.0
+		"reward_multiplier": 1.0,
+		"reward_vocab_north": pair_result.get("north", ""),
+		"reward_vocab_south": pair_result.get("south", ""),
+		"reward_vocab_weight": pair_result.get("weight", 0.0),
+		"reward_vocab_probability": pair_result.get("probability", 0.0),
 	}
 
 	# Empty player vocabulary so we get a reward
@@ -128,10 +136,18 @@ func _test_multiple_factions() -> void:
 		if faction_sig.is_empty():
 			continue
 
+		# Pre-roll vocabulary pair for this faction
+		var north_emoji = faction_sig[randi() % faction_sig.size()]
+		var pair_result = VocabularyPairing.roll_partner(north_emoji)
+
 		var quest = {
 			"faction": faction_name,
 			"quantity": 5,
-			"reward_multiplier": 1.0
+			"reward_multiplier": 1.0,
+			"reward_vocab_north": pair_result.get("north", ""),
+			"reward_vocab_south": pair_result.get("south", ""),
+			"reward_vocab_weight": pair_result.get("weight", 0.0),
+			"reward_vocab_probability": pair_result.get("probability", 0.0),
 		}
 
 		var reward = QuestRewards.generate_reward(quest, null, [])

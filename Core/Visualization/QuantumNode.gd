@@ -66,6 +66,9 @@ var visual_alpha: float = 0.0  # Animated alpha (0 to 1)
 var spawn_time: float = 0.0    # Time when node was created
 var is_spawning: bool = false  # Currently animating in
 
+# Visibility (for single-biome filtering - not a Node2D so we manage manually)
+var visible: bool = true
+
 # Orbit trail history (for visualizing evolution path)
 var position_history: Array[Vector2] = []  # Last N positions
 const MAX_TRAIL_LENGTH: int = 30  # Number of positions to remember
@@ -131,7 +134,7 @@ func update_animation(current_time: float, delta: float):
 
 
 func update_from_quantum_state():
-	"""Update visual properties from quantum state (Model C: queries parent_biome.bath)
+	"""Update visual properties from quantum state (queries parent_biome.quantum_computer)
 
 	Visual mapping (no duplicates):
 	- Emoji opacity ← Normalized probabilities (θ-like, measurement outcome)
@@ -236,13 +239,17 @@ func update_from_quantum_state():
 	if coh:
 		coh_magnitude = coh.abs()
 		coh_phase = coh.arg()  # Returns angle in radians [-π, π]
-		# DEBUG: Log if we're getting real coherence
+		# DEBUG: Log if we're getting real coherence (verbose filtered)
 		if is_transitioning_planted and coh_magnitude > 0.01:
-			print("⚛️  COHERENCE FOUND: |coh|=%.4f arg=%.2f° for %s/%s" % [coh_magnitude, rad_to_deg(coh_phase), emoji_north, emoji_south])
+			var verbose = _get_verbose()
+			if verbose:
+				verbose.debug("quantum", "⚛️", "COHERENCE FOUND: |coh|=%.4f arg=%.2f° for %s/%s" % [coh_magnitude, rad_to_deg(coh_phase), emoji_north, emoji_south])
 	else:
 		# DEBUG: Log when coherence is null (possible problem)
 		if is_transitioning_planted:
-			print("⚠️  COHERENCE NULL for %s/%s at %s" % [emoji_north, emoji_south, grid_position])
+			var verbose = _get_verbose()
+			if verbose:
+				verbose.debug("quantum", "⚠️", "COHERENCE NULL for %s/%s at %s" % [emoji_north, emoji_south, grid_position])
 
 	# Map phase to hue [0, 1] for HSV color
 	var hue = (coh_phase + PI) / TAU  # Normalize to [0, 1]
@@ -264,9 +271,11 @@ func update_from_quantum_state():
 	berry_phase += energy * 0.01
 
 	if is_transitioning_planted:
-		print("⚛️  Node %s: θ=(%.2f/%.2f) φ=%.1f° purity=%.3f |coh|=%.3f mass=%.3f" % [
-			grid_position, emoji_north_opacity, emoji_south_opacity,
-			rad_to_deg(coh_phase), energy, coh_magnitude, mass])
+		var verbose = _get_verbose()
+		if verbose:
+			verbose.debug("quantum", "⚛️", "Node %s: θ=(%.2f/%.2f) φ=%.1f° purity=%.3f |coh|=%.3f mass=%.3f" % [
+				grid_position, emoji_north_opacity, emoji_south_opacity,
+				rad_to_deg(coh_phase), energy, coh_magnitude, mass])
 
 
 func get_entangled_partner_ids() -> Array:
@@ -427,3 +436,11 @@ func is_terminal_measured() -> bool:
 	if plot:
 		return plot.is_measured() if plot.has_method("is_measured") else plot.has_been_measured
 	return false
+
+
+func _get_verbose():
+	"""Safely access VerboseConfig autoload from RefCounted class"""
+	var main_loop = Engine.get_main_loop()
+	if main_loop and main_loop.root:
+		return main_loop.root.get_node_or_null("/root/VerboseConfig")
+	return null

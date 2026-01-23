@@ -25,6 +25,9 @@ const PlotTile = preload("res://UI/PlotTile.gd")
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
 const BiomeLayoutCalculator = preload("res://Core/Visualization/BiomeLayoutCalculator.gd")
 
+# Single-biome view: Only show tiles for the active biome
+var active_biome_manager: Node = null
+
 # References
 var farm: Node = null
 var ui_controller: Node = null
@@ -41,7 +44,6 @@ var classical_plot_positions: Dictionary = {}  # Vector2i (grid) → Vector2 (sc
 
 # Multi-select management (INLINED - no separate SelectionManager)
 var selected_plots: Dictionary = {}  # Vector2i -> true (which plots are selected)
-var previous_selection: Dictionary = {}  # For restoring selection state
 
 # Backward compatibility: also track last single-click for operations
 var current_selection: Vector2i = Vector2i.ZERO
@@ -78,7 +80,6 @@ func _ready():
 
 	# Initialize selection (inlined - no separate manager)
 	selected_plots = {}
-	previous_selection = {}
 
 	# REFACTORING: Create tiles immediately in _ready()
 	# Dependencies (grid_config, biomes) are injected BEFORE add_child(), so they're available now
@@ -92,6 +93,9 @@ func _ready():
 	# Calculate positions and create tiles SYNCHRONOUSLY
 	_calculate_parametric_positions()
 	_create_tiles()
+
+	# Connect to ActiveBiomeManager for single-biome view filtering
+	_connect_to_biome_manager()
 
 	_verbose.info("ui", "✅", "PlotGridDisplay ready - %d tiles created synchronously (child_count after: %d)" % [tiles.size(), get_child_count()])
 
@@ -155,6 +159,7 @@ func inject_layout_calculator(calculator: BiomeLayoutCalculator) -> void:
 		_verbose.debug("ui", "🎨", "Layout calculator now available - calculating positions...")
 		_calculate_parametric_positions()
 		_create_tiles()
+		_connect_to_biome_manager()
 		_verbose.info("ui", "✅", "Tiles created after layout_calculator injection")
 
 
@@ -172,13 +177,14 @@ func inject_biomes(biomes_dict: Dictionary) -> void:
 		if tiles.size() == 0 and grid_config:
 			_verbose.debug("ui", "🎨", "Creating tiles with parametric positions...")
 			_create_tiles()
+			_connect_to_biome_manager()
 			_verbose.info("ui", "✅", "Tiles created after biome injection")
 	else:
 		_verbose.debug("ui", "⏳", "Waiting for layout_calculator injection before positioning tiles...")
 
 
 func _calculate_parametric_positions() -> void:
-	"""Calculate parametric plot positions using BiomeLayoutCalculator (SINGLE source of truth)"""
+	"""Calculate parametric plot positions - delegates to unified function"""
 	if not grid_config:
 		_verbose.warn("ui", "⚠️", "PlotGridDisplay: GridConfig not available")
 		return
@@ -191,69 +197,22 @@ func _calculate_parametric_positions() -> void:
 		push_error("PlotGridDisplay: layout_calculator not injected! Call inject_layout_calculator() first.")
 		return
 
-	_verbose.debug("ui", "📐", "Calculating parametric positions (using SHARED BiomeLayoutCalculator)...")
-	_verbose.debug("ui", "", "Grid: %dx%d" % [grid_config.grid_width, grid_config.grid_height])
-	_verbose.debug("ui", "", "Biomes: %d" % biomes.size())
-	_verbose.debug("ui", "", "Using injected layout: graph_center=%s, graph_radius=%.1f" % [
-		layout_calculator.graph_center, layout_calculator.graph_radius
-	])
+	# Get active biome from manager (or default to first biome)
+	var active_biome = ""
+	var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+	if biome_mgr and biome_mgr.has_method("get_active_biome"):
+		active_biome = biome_mgr.get_active_biome()
 
-	# Group plots by biome (same logic as before)
-	var plots_by_biome: Dictionary = {}
-	for plot_config in grid_config.get_all_active_plots():
-		var biome_name = grid_config.get_biome_for_plot(plot_config.position)
-		if biome_name == "":
-			biome_name = "default"
+	if active_biome == "" and biomes.size() > 0:
+		active_biome = biomes.keys()[0]
+		_verbose.debug("ui", "📐", "No active biome set, defaulting to '%s'" % active_biome)
 
-		if not plots_by_biome.has(biome_name):
-			plots_by_biome[biome_name] = []
+	_verbose.debug("ui", "📐", "Initial layout for active biome: '%s'" % active_biome)
 
-		plots_by_biome[biome_name].append(plot_config.position)
+	# Use unified function - same code path as biome switching
+	_update_layout_for_active_biome(active_biome)
 
-	# For each biome, get plot positions from the layout calculator
-	classical_plot_positions.clear()
-
-	for biome_name in plots_by_biome:
-		var plot_list = plots_by_biome[biome_name]
-		var oval = layout_calculator.get_biome_oval(biome_name)
-
-		if oval.is_empty():
-			_verbose.warn("ui", "⚠️", "No oval found for biome '%s'" % biome_name)
-			continue
-
-		# Get positions within the biome's oval using biome's method
-		var biome_obj = biomes.get(biome_name)
-		if not biome_obj:
-			continue
-
-		var biome_center = oval.get("center", Vector2.ZERO)
-		var semi_a = oval.get("semi_a", 0.0)
-		var semi_b = oval.get("semi_b", 0.0)
-		var viewport_scale = layout_calculator.graph_radius / layout_calculator.BASE_REFERENCE_RADIUS
-
-		_verbose.debug("ui", "🔵", "Biome '%s': %d plots, center=(%.1f, %.1f), semi_a=%.1f, semi_b=%.1f, scale=%.3f" % [
-			biome_name, plot_list.size(), biome_center.x, biome_center.y, semi_a, semi_b, viewport_scale
-		])
-
-		var plot_positions = biome_obj.get_plot_positions_in_oval(
-			plot_list.size(),
-			biome_center,
-			viewport_scale
-		)
-
-		_verbose.debug("ui", "", "→ Got %d positions from biome" % plot_positions.size())
-
-		# Assign positions to plots (in grid order)
-		for i in range(plot_list.size()):
-			if i < plot_positions.size():
-				var screen_pos = plot_positions[i]
-				# Store position directly (no offset - tiles are centered via tile.position calculation)
-				classical_plot_positions[plot_list[i]] = screen_pos
-
-	_verbose.info("ui", "✅", "PlotGridDisplay: Calculated %d parametric plot positions" % classical_plot_positions.size())
-	if classical_plot_positions.size() > 0:
-		for key in classical_plot_positions.keys().slice(0, 3):
-			_verbose.debug("ui", "", "%s → %s" % [key, classical_plot_positions[key]])
+	_verbose.info("ui", "✅", "PlotGridDisplay: Calculated %d positions (unified path)" % classical_plot_positions.size())
 
 
 func _create_tiles() -> void:
@@ -315,11 +274,9 @@ func _create_tiles() -> void:
 				])
 				_verbose.debug("ui", "", "PlotGridDisplay global_transform.origin: %s" % get_global_transform().origin)
 		else:
-			# Fallback: position in a temporary grid at origin
-			# This shouldn't happen if biomes are properly injected
+			# Tile is in another biome - hide it until that biome is active
+			tile.visible = false
 			fallback_count += 1
-			_verbose.warn("ui", "⚠️", "Tile at grid %s NOT in classical_plot_positions!" % [pos])
-			_verbose.debug("ui", "", "Available positions: %s" % classical_plot_positions.keys())
 
 		add_child(tile)
 		tiles[pos] = tile
@@ -339,6 +296,153 @@ func _create_tiles() -> void:
 	if TouchInputManager and not TouchInputManager.tap_detected.is_connected(_on_touch_tap):
 		TouchInputManager.tap_detected.connect(_on_touch_tap, CONNECT_DEFERRED)
 		_verbose.info("ui", "✅", "Touch: Tap-to-select connected with DEFERRED (bubbles have priority)")
+
+
+## ═══════════════════════════════════════════════════════════════════════════════
+## SINGLE-BIOME VIEW FILTERING
+## ═══════════════════════════════════════════════════════════════════════════════
+
+func _connect_to_biome_manager() -> void:
+	"""Connect to ActiveBiomeManager for single-biome view (idempotent - safe to call multiple times)"""
+	# Skip if already fully connected and initialized
+	if _biome_manager_connected:
+		return
+
+	active_biome_manager = get_node_or_null("/root/ActiveBiomeManager")
+	if active_biome_manager:
+		if not active_biome_manager.active_biome_changed.is_connected(_on_active_biome_changed):
+			active_biome_manager.active_biome_changed.connect(_on_active_biome_changed)
+			_verbose.info("ui", "📡", "PlotGridDisplay connected to ActiveBiomeManager")
+
+		# Apply initial biome filter only once (when tiles exist)
+		if tiles.size() > 0:
+			_filter_tiles_for_biome(active_biome_manager.get_active_biome())
+			_biome_manager_connected = true  # Mark as fully initialized
+	else:
+		_verbose.warn("ui", "⚠️", "ActiveBiomeManager not found - showing all tiles")
+
+
+func _on_active_biome_changed(new_biome: String, _old_biome: String) -> void:
+	"""Handle biome change - recalculate positions and show only tiles for the new biome"""
+	_verbose.debug("ui", "🔄", "PlotGridDisplay: Biome changed to %s" % new_biome)
+
+	# CRITICAL: Recalculate layout with new active_biome for proper centering
+	_update_layout_for_active_biome(new_biome)
+
+	_filter_tiles_for_biome(new_biome)
+
+
+func _update_layout_for_active_biome(biome_name: String) -> void:
+	"""UNIFIED: Calculate and apply positions for the active biome (single-biome view)
+
+	This is the SINGLE function for position calculation. Used for:
+	- Initial load (called from _calculate_parametric_positions)
+	- Biome switching (called from _on_active_biome_changed)
+	"""
+	if not layout_calculator or not grid_config or biomes.is_empty():
+		return
+
+	# Get viewport size for layout calculation
+	var viewport = get_viewport()
+	var viewport_size = viewport.get_visible_rect().size if viewport else Vector2(1280, 720)
+
+	# Compute layout centered on active biome
+	layout_calculator.compute_layout(biomes, viewport_size, biome_name)
+
+	_verbose.debug("ui", "📐", "Layout for '%s': center=%s, radius=%.1f" % [
+		biome_name, layout_calculator.graph_center, layout_calculator.graph_radius
+	])
+
+	# Get plots in this biome
+	var plots_in_biome: Array[Vector2i] = []
+	for plot_config in grid_config.get_all_active_plots():
+		var plot_biome = grid_config.get_biome_for_plot(plot_config.position)
+		if plot_biome == biome_name:
+			plots_in_biome.append(plot_config.position)
+
+	if plots_in_biome.is_empty():
+		return
+
+	# Get screen positions - use FIXED hex layout for 6 plots (same size for all biomes)
+	var screen_positions: Array[Vector2] = []
+	if plots_in_biome.size() == 6:
+		# Use fixed hex positions (same size, 1.67:1 aspect ratio for all biomes)
+		screen_positions = layout_calculator.get_hex_screen_positions()
+		_verbose.debug("ui", "⬡", "Using FIXED hex layout (1.67:1 aspect ratio)")
+	else:
+		# Fall back to parametric for non-6 plot counts
+		var parametric_coords = layout_calculator.distribute_nodes_in_biome(biome_name, plots_in_biome.size())
+		for params in parametric_coords:
+			screen_positions.append(layout_calculator.get_parametric_position(
+				biome_name, params["t"], params["ring"]
+			))
+
+	# Apply positions to tiles
+	for i in range(plots_in_biome.size()):
+		if i >= screen_positions.size():
+			break
+
+		var grid_pos = plots_in_biome[i]
+		var screen_pos = screen_positions[i]
+
+		# Store in classical_plot_positions
+		classical_plot_positions[grid_pos] = screen_pos
+
+		# If tile exists, reposition it (handles biome switching)
+		if tiles.has(grid_pos):
+			var tile = tiles[grid_pos]
+			var tile_size = tile.custom_minimum_size if tile.custom_minimum_size != Vector2.ZERO else Vector2(90, 90)
+			# Convert screen coords to local coords (CRITICAL: same transform as _create_tiles)
+			var local_pos = get_global_transform().affine_inverse() * screen_pos
+			tile.position = local_pos - tile_size / 2.0
+
+	_verbose.debug("ui", "✅", "Positioned %d plots for '%s'" % [plots_in_biome.size(), biome_name])
+
+
+func _filter_tiles_for_biome(biome_name: String) -> void:
+	"""Show only tiles that belong to the specified biome"""
+	if not grid_config:
+		return
+
+	var visible_count = 0
+	var hidden_count = 0
+
+	for pos in tiles.keys():
+		var tile = tiles[pos]
+		var tile_biome = grid_config.get_biome_for_plot(pos)
+
+		if tile_biome == biome_name:
+			tile.visible = true
+			visible_count += 1
+		else:
+			tile.visible = false
+			hidden_count += 1
+
+	_verbose.debug("ui", "👁️", "Biome filter: %d tiles visible (%s), %d hidden" % [visible_count, biome_name, hidden_count])
+
+	# Clear selection when changing biomes (plots from other biomes may be selected)
+	_clear_selection_for_other_biomes(biome_name)
+
+
+func _clear_selection_for_other_biomes(active_biome: String) -> void:
+	"""Clear selections for plots not in the active biome"""
+	var cleared_count = 0
+	var to_clear: Array[Vector2i] = []
+
+	for pos in selected_plots.keys():
+		var plot_biome = grid_config.get_biome_for_plot(pos) if grid_config else ""
+		if plot_biome != active_biome:
+			to_clear.append(pos)
+
+	for pos in to_clear:
+		selected_plots.erase(pos)
+		if tiles.has(pos):
+			tiles[pos].set_checkbox_selected(false)
+		cleared_count += 1
+
+	if cleared_count > 0:
+		_verbose.debug("ui", "🗑️", "Cleared %d selections from non-active biomes" % cleared_count)
+		selection_count_changed.emit(selected_plots.size())
 
 
 func inject_farm(farm_ref: Node) -> void:
@@ -379,6 +483,18 @@ func inject_farm(farm_ref: Node) -> void:
 			farm.grid.visualization_changed.connect(queue_redraw)
 			_verbose.debug("ui", "📡", "Connected to farm.grid.visualization_changed")
 
+	# Connect to terminal_bound for EXPLORE action tile updates
+	if farm.has_signal("terminal_bound"):
+		if not farm.terminal_bound.is_connected(_on_terminal_bound):
+			farm.terminal_bound.connect(_on_terminal_bound)
+			_verbose.debug("ui", "📡", "Connected to farm.terminal_bound")
+
+	# Connect to structure_built for industry building tile updates
+	if farm.has_signal("structure_built"):
+		if not farm.structure_built.is_connected(_on_structure_built):
+			farm.structure_built.connect(_on_structure_built)
+			_verbose.debug("ui", "📡", "Connected to farm.structure_built")
+
 	_verbose.info("ui", "💉", "Farm injected into PlotGridDisplay")
 
 
@@ -399,6 +515,10 @@ func rebuild_from_grid() -> void:
 	if grid_config and not biomes.is_empty():
 		_calculate_parametric_positions()
 		_create_tiles()
+
+		# Apply biome filter for single-biome view
+		if active_biome_manager:
+			_filter_tiles_for_biome(active_biome_manager.get_active_biome())
 
 		# Update tiles with current farm data if farm is available
 		if farm:
@@ -464,16 +584,22 @@ func update_tile_from_farm(pos: Vector2i) -> void:
 		return
 
 	var plot = farm.grid.get_plot(pos)
-	if not plot:
-		# Empty plot
-		_verbose.debug("ui", "⚠️", "update_tile_from_farm(%s): plot is null/empty" % pos)
+	var terminal = null
+
+	# Check for terminal-bound state (from EXPLORE action)
+	if farm.plot_pool:
+		terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+
+	if not plot and not terminal:
+		# Truly empty plot - no plot object and no terminal
+		_verbose.debug("ui", "⚠️", "update_tile_from_farm(%s): plot is null/empty and no terminal" % pos)
 		var tile = tiles[pos]
 		tile.set_plot_data(null, pos, -1)
 		return
 
-	# Transform plot → PlotUIData inline
-	_verbose.debug("ui", "✓", "update_tile_from_farm(%s): found plot, transforming data..." % pos)
-	var ui_data = _transform_plot_to_ui_data(pos, plot)
+	# Transform plot/terminal → PlotUIData inline
+	_verbose.debug("ui", "✓", "update_tile_from_farm(%s): found plot=%s, terminal=%s" % [pos, plot != null, terminal != null])
+	var ui_data = _transform_plot_to_ui_data(pos, plot, terminal)
 	var tile = tiles[pos]
 	tile.set_plot_data(ui_data, pos, -1)
 	_verbose.debug("ui", "🌾", "PlotGridDisplay updating tile for plot %s" % pos)
@@ -481,44 +607,81 @@ func update_tile_from_farm(pos: Vector2i) -> void:
 
 ## PHASE 4: PLOT TRANSFORMATION HELPER
 
-func _transform_plot_to_ui_data(pos: Vector2i, plot) -> Dictionary:
-	"""Transform WheatPlot state → PlotUIData dictionary
+func _transform_plot_to_ui_data(pos: Vector2i, plot, terminal = null) -> Dictionary:
+	"""Transform WheatPlot/Terminal state → PlotUIData dictionary
 
 	This inline transformation replaces the FarmUIState layer for real-time updates.
+	Handles both:
+	- Traditional planted plots (plot.is_planted)
+	- Terminal-bound plots from EXPLORE action (terminal.is_bound)
 	"""
 	# Get entangled plots from the plot data
 	var entangled_list = []
-	if plot.entangled_plots:
+	if plot and plot.entangled_plots:
 		entangled_list = plot.entangled_plots.keys()
 
 	var ui_data = {
 		"position": pos,
-		"is_planted": plot.is_planted,
-		"plot_type": _get_plot_type_string(plot.plot_type),
+		"is_planted": (plot and plot.is_planted) or (terminal and terminal.is_bound),
+		"plot_type": _get_plot_type_string(plot.plot_type) if plot else "terminal",
 		"north_emoji": "",
 		"south_emoji": "",
 		"north_probability": 0.0,
 		"south_probability": 0.0,
 		"energy_level": 0.0,
 		"coherence": 0.0,
-		"has_been_measured": plot.has_been_measured,
+		"has_been_measured": (plot and plot.has_been_measured) or (terminal and terminal.is_measured),
 		"entangled_plots": entangled_list
 	}
 
-	# Transform quantum state (Model C: via parent biome's bath)
-	if plot.is_planted and plot.parent_biome and plot.bath_subplot_id >= 0:
+	# CASE 1: Terminal-bound (from EXPLORE action) - takes priority for emoji display
+	if terminal and terminal.is_bound:
+		ui_data["north_emoji"] = terminal.north_emoji
+		ui_data["south_emoji"] = terminal.south_emoji
+
+		# Get probabilities from biome's quantum_computer
+		var north_prob = 0.5
+		var south_prob = 0.5
+		var biome = terminal.bound_biome
+
+		if biome and biome.quantum_computer:
+			north_prob = biome.get_emoji_probability(terminal.north_emoji)
+			south_prob = biome.get_emoji_probability(terminal.south_emoji)
+
+			# Normalize to ensure they sum to 1.0
+			var total = north_prob + south_prob
+			if total > 0.0:
+				north_prob /= total
+				south_prob /= total
+
+		ui_data["north_probability"] = north_prob
+		ui_data["south_probability"] = south_prob
+
+		# If measured, show the measured outcome
+		if terminal.is_measured:
+			ui_data["has_been_measured"] = true
+			# Set probability to 1.0 for measured outcome
+			if terminal.measured_outcome == "north":
+				ui_data["north_probability"] = 1.0
+				ui_data["south_probability"] = 0.0
+			else:
+				ui_data["north_probability"] = 0.0
+				ui_data["south_probability"] = 1.0
+
+	# CASE 2: Traditional planted plot (no terminal, or terminal doesn't override)
+	elif plot and plot.is_planted and plot.parent_biome and plot.bath_subplot_id >= 0:
 		var emojis = plot.get_plot_emojis()
 		ui_data["north_emoji"] = emojis["north"]
 		ui_data["south_emoji"] = emojis["south"]
 
-		# Model C: Get probabilities from parent biome's quantum bath
+		# Model C: Get probabilities from parent biome's quantum_computer
 		var north_prob = 0.5  # Default fallback
 		var south_prob = 0.5  # Default fallback
 
-		if plot.parent_biome.bath:
-			# Query bath for actual emoji probabilities
-			north_prob = plot.parent_biome.bath.get_probability(emojis["north"])
-			south_prob = plot.parent_biome.bath.get_probability(emojis["south"])
+		if plot.parent_biome.quantum_computer:
+			# Query quantum_computer for actual emoji probabilities
+			north_prob = plot.parent_biome.get_emoji_probability(emojis["north"])
+			south_prob = plot.parent_biome.get_emoji_probability(emojis["south"])
 
 			# Normalize to ensure they sum to 1.0 (for display purposes)
 			var total = north_prob + south_prob
@@ -606,6 +769,18 @@ func _on_entanglement_created(pos_a: Vector2i, pos_b: Vector2i) -> void:
 	queue_redraw()  # Trigger connection line drawing immediately
 
 
+func _on_terminal_bound(pos: Vector2i, _terminal_id: String, _emoji_pair: Dictionary) -> void:
+	"""Handle terminal bound event from EXPLORE action - update tile to show bound terminal"""
+	_verbose.debug("ui", "🔍", "Farm.terminal_bound received at PlotGridDisplay: %s" % pos)
+	update_tile_from_farm(pos)
+
+
+func _on_structure_built(pos: Vector2i, structure_type: String, _emoji_pair: Dictionary) -> void:
+	"""Handle structure built event from industry building - update tile to show structure"""
+	_verbose.debug("ui", "🏭", "Farm.structure_built received at PlotGridDisplay: %s → %s" % [pos, structure_type])
+	update_tile_from_farm(pos)
+
+
 ## KEYBOARD SELECTION SUPPORT
 
 func select_plot_by_key(action: String) -> void:
@@ -640,9 +815,6 @@ func toggle_plot_selection(pos: Vector2i) -> void:
 		_verbose.warn("ui", "⚠️", "Tile at %s not found!" % pos)
 		return
 
-	# Save state before toggling (for ] restoration)
-	previous_selection = selected_plots.duplicate()
-
 	# Toggle selection
 	var now_selected: bool
 	if selected_plots.has(pos):
@@ -671,23 +843,62 @@ func clear_all_selection() -> void:
 	selection_count_changed.emit(0)
 
 
-func restore_previous_selection() -> void:
-	"""Restore previous selection state (] key)"""
-	selected_plots = previous_selection.duplicate()
+func select_all_plots() -> void:
+	"""Select all plots in the active biome (] key)"""
+	# Get active biome
+	var active_biome = ""
+	var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+	if biome_mgr and biome_mgr.has_method("get_active_biome"):
+		active_biome = biome_mgr.get_active_biome()
 
-	# Update all tiles to match
+	# Clear current selections first
+	selected_plots.clear()
+
+	# Select all plots in the active biome
+	var count = 0
 	for pos in tiles.keys():
-		var is_selected = selected_plots.has(pos)
-		tiles[pos].set_checkbox_selected(is_selected)
+		var tile = tiles[pos]
+		if grid_config:
+			var plot_biome = grid_config.get_biome_for_plot(pos)
+			if plot_biome == active_biome:
+				selected_plots[pos] = true
+				tile.set_checkbox_selected(true)
+				count += 1
+			else:
+				tile.set_checkbox_selected(false)
+		else:
+			# No grid config - select all visible tiles
+			if tile.visible:
+				selected_plots[pos] = true
+				tile.set_checkbox_selected(true)
+				count += 1
 
-	selection_count_changed.emit(selected_plots.size())
+	_verbose.debug("ui", "✅", "Selected all %d plots in %s" % [count, active_biome])
+	selection_count_changed.emit(count)
 
 
 func get_selected_plots() -> Array[Vector2i]:
-	"""Get all currently selected plots (NEW)"""
+	"""Get selected plots in the ACTIVE biome only.
+
+	Filters out any stale selections from other biomes.
+	"""
 	var result: Array[Vector2i] = []
+
+	# Get active biome to filter selections
+	var active_biome = ""
+	var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+	if biome_mgr and biome_mgr.has_method("get_active_biome"):
+		active_biome = biome_mgr.get_active_biome()
+
 	for pos in selected_plots.keys():
-		result.append(pos)
+		# Only include if this plot belongs to the active biome
+		if grid_config:
+			var plot_biome = grid_config.get_biome_for_plot(pos)
+			if active_biome == "" or plot_biome == active_biome:
+				result.append(pos)
+		else:
+			result.append(pos)
+
 	return result
 
 
@@ -724,39 +935,27 @@ func get_plot_position(grid_pos: Vector2i) -> Vector2:
 func _input(event: InputEvent) -> void:
 	"""Handle drag/swipe selection across multiple plots
 
-	CRITICAL: Only consume events when we actually process them.
-	Let clicks on bubbles (not plots) pass through to _unhandled_input() handlers.
-	CRITICAL: Do NOT consume touch events - let TouchInputManager handle touches!
+	NOTE: Single clicks/taps are handled via TouchInputManager.tap_detected signal
+	connected in _create_tiles(). This function handles:
+	- Mouse press on plot: Start drag tracking
+	- Mouse motion: Add plots to drag selection
+	- Mouse release: End drag and select all dragged plots
 	"""
 	if event is InputEventMouseButton:
-		# Check if this is a touch-generated mouse event
-		# TouchInputManager handles touch gestures, we only handle real mouse
-		if event.device == -1:
-			# device == -1 means real mouse (not touch-generated)
-			if event.button_index == MOUSE_BUTTON_LEFT:
-				_verbose.debug("ui", "🎯", "PlotGridDisplay._input: Mouse click at %s" % event.global_position)
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				# Start drag tracking if pressing on a plot
 				var plot_pos = _get_plot_at_screen_position(event.global_position)
-				_verbose.debug("ui", "", "Plot at position: %s" % plot_pos)
-				if event.pressed:
-					# Start drag if over a plot
-					if plot_pos != Vector2i(-1, -1):
-						_start_drag(plot_pos)
-						# CRITICAL: Mark event as handled so quantum bubbles don't also respond
-						get_viewport().set_input_as_handled()
-						_verbose.debug("ui", "✅", "Consumed by PlotGridDisplay (plot click)")
-					else:
-						# NOT over a plot - let event pass to quantum bubbles
-						_verbose.debug("ui", "⏩", "Forwarding to _unhandled_input (not on plot)")
-						# Don't return, don't consume - let it flow naturally
-				else:
-					# End drag
-					if is_dragging:
-						_end_drag()
-						get_viewport().set_input_as_handled()
-						_verbose.debug("ui", "✅", "Consumed by PlotGridDisplay (drag end)")
-		else:
-			# Touch-generated mouse event - ignore, let TouchInputManager handle it
-			_verbose.debug("ui", "🎯", "PlotGridDisplay._input: Touch-generated mouse event (device=%d) - ignoring for TouchInputManager" % event.device)
+				if plot_pos != Vector2i(-1, -1):
+					_start_drag(plot_pos)
+					# Don't consume - let TouchInputManager also track for tap detection
+					_verbose.debug("ui", "📱", "PlotGridDisplay: Started drag tracking at %s" % plot_pos)
+			else:
+				# End drag
+				if is_dragging:
+					_end_drag()
+					get_viewport().set_input_as_handled()
+					_verbose.debug("ui", "✅", "Consumed by PlotGridDisplay (drag end)")
 
 	elif event is InputEventMouseMotion:
 		if is_dragging:
@@ -833,9 +1032,6 @@ func _end_drag() -> void:
 	# Multi-plot drag completed - skip the click handler that will fire next
 	_skip_next_click = true
 
-	# Save previous selection for undo
-	previous_selection = selected_plots.duplicate()
-
 	# Toggle all dragged plots
 	_verbose.debug("ui", "📱", "Drag ended - selecting %d plots: %s" % [drag_plots.size(), drag_plots.keys()])
 	for pos in drag_plots.keys():
@@ -852,9 +1048,12 @@ func _end_drag() -> void:
 
 func _get_plot_at_screen_position(screen_pos: Vector2) -> Vector2i:
 	"""Find which plot (if any) is at the given screen position"""
-	# Check each tile using global rect
+	# Check each VISIBLE tile using global rect
 	for pos in tiles.keys():
 		var tile = tiles[pos]
+		# Skip hidden tiles (tiles from non-active biomes)
+		if not tile.visible:
+			continue
 		var rect = tile.get_global_rect()
 		if rect.has_point(screen_pos):
 			return pos
@@ -868,6 +1067,7 @@ func _get_plot_at_screen_position(screen_pos: Vector2) -> Vector2i:
 
 var _time_accumulator: float = 0.0
 var _check_connections_timer: float = 0.0
+var _biome_manager_connected: bool = false  # Track if we've done initial biome manager setup
 
 
 func _get_tile_center(grid_pos: Vector2i) -> Vector2:

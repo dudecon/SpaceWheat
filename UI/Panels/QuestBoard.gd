@@ -5,6 +5,8 @@ extends Control
 ## Controls hijacked when open (like ESC menu)
 ## Press C to drill into faction browser
 
+const VocabularyPairing = preload("res://Core/Quests/VocabularyPairing.gd")
+
 signal quest_accepted(quest: Dictionary)
 signal quest_completed(quest_id: int, rewards: Dictionary)
 signal quest_abandoned(quest_id: int)
@@ -33,8 +35,6 @@ var current_biome: Node
 var background: ColorRect
 var menu_panel: PanelContainer
 var title_label: Label
-var biome_state_label: Label
-var controls_label: Label
 var slot_container: GridContainer  # Changed to GridContainer for 2×2 quadrant layout
 var accessible_factions_label: Label
 
@@ -176,65 +176,51 @@ func _create_ui() -> void:
 	"""Create the quest board UI - 2×2 QUADRANT LAYOUT with auto-scaling"""
 	var scale = layout_manager.scale_factor if layout_manager else 1.0
 
-	# UPGRADED font sizes - much larger for readability
-	var title_size = 36
-	var large_size = 22
-	var normal_size = 18
+	# Balanced font sizes - readable but compact
+	var title_size = 24
+	var large_size = 16
+	var normal_size = 14
 
-	# Background - fill screen to block interaction
+	# Background - starts BELOW resource bar so player can see resources
 	background = ColorRect.new()
-	background.color = Color(0.0, 0.0, 0.0, 0.95)  # High opacity to prevent biome bleed-through
-	background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	background.color = Color(0.0, 0.0, 0.0, 0.92)
+	background.anchor_left = 0.0
+	background.anchor_right = 1.0
+	background.anchor_top = 0.06  # Start at 6% (below resource bar)
+	background.anchor_bottom = 1.0
 	background.layout_mode = 1
 	add_child(background)
 
-	# Center container for panel - positioned in play zone (below top bar, above tool selection)
+	# Center container for panel - positioned in play zone (below resource bar)
 	var center = CenterContainer.new()
 	center.anchor_left = 0.0
 	center.anchor_right = 1.0
-	center.anchor_top = 0.06  # Start at 6% (below top bar)
-	center.anchor_bottom = 0.72  # End at 72% (above tool selection at 72%-87%)
+	center.anchor_top = 0.06  # Start right at 6% (below resource bar)
+	center.anchor_bottom = 0.72  # End at 72% (above tool selection)
 	center.offset_left = 0
 	center.offset_right = 0
-	center.offset_top = 40  # 40px margin below resource bar to avoid overlap
+	center.offset_top = 0  # No extra margin - start right below resources
 	center.offset_bottom = 0
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	center.layout_mode = 1
 	add_child(center)
 
-	# Quest board panel - Larger size for better readability
+	# Quest board panel - compact, fits in play zone
 	menu_panel = PanelContainer.new()
-	menu_panel.custom_minimum_size = Vector2(900, 520)
+	menu_panel.custom_minimum_size = Vector2(880, 340)
 	center.add_child(menu_panel)
 
 	var main_vbox = VBoxContainer.new()
-	main_vbox.add_theme_constant_override("separation", int(12 * scale))
+	main_vbox.add_theme_constant_override("separation", int(8 * scale))
 	menu_panel.add_child(main_vbox)
 
-	# Header - BIG and BOLD
+	# Header - compact
 	title_label = Label.new()
 	title_label.text = "⚛️ QUEST ORACLE ⚛️"
 	title_label.add_theme_font_size_override("font_size", title_size)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	main_vbox.add_child(title_label)
-
-	# Simplified controls - SELECTION + QER ACTIONS + F PAGE
-	controls_label = Label.new()
-	controls_label.text = "🎯 [Arrows/UIOP] Select  |  [QER] Actions  |  [F] Next Page  |  ✖️ [ESC] Close"
-	controls_label.add_theme_font_size_override("font_size", normal_size)
-	controls_label.modulate = Color(1.0, 0.9, 0.5)  # Gold/yellow for visibility
-	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	main_vbox.add_child(controls_label)
-
-	# Biome state - SIMPLIFIED, BIG, VISUAL
-	biome_state_label = Label.new()
-	biome_state_label.text = "🌾 Biome State: Loading..."
-	biome_state_label.add_theme_font_size_override("font_size", large_size)
-	biome_state_label.modulate = Color(0.5, 1.0, 1.0)  # Cyan - high contrast
-	biome_state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	biome_state_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	main_vbox.add_child(biome_state_label)
 
 	# Quest slots container - 2×2 GRID LAYOUT!
 	slot_container = GridContainer.new()
@@ -320,18 +306,8 @@ func _create_faction_browser() -> void:
 
 
 func _refresh_biome_state() -> void:
-	"""Update biome state display - FLASH GAME STYLE (big, visual, simple)"""
-	if not quest_manager or not current_biome:
-		return
-
-	var obs = quest_manager.get_biome_observables(current_biome)
-
-	# SIMPLIFIED: Show only the most important stat (purity = order vs chaos)
-	# Visual bar representation using block characters
-	var purity_pct = int(obs.purity * 100)
-	var purity_bar = _make_bar(obs.purity, 10)
-
-	biome_state_label.text = "🌾 Farm State: %s %d%% Order" % [purity_bar, purity_pct]
+	"""Biome state is now visible via resource bar - no separate display needed"""
+	pass
 
 
 func _make_bar(value: float, length: int) -> String:
@@ -573,20 +549,26 @@ func action_q_on_selected() -> void:
 	"""Q action: Accept (OFFERED), Deliver (ACTIVE DELIVERY), or Claim (READY)"""
 	var slot = quest_slots[selected_slot_index]
 	var quest_type = slot.quest_data.get("type", 0)  # 0 = DELIVERY
+	print("🎯 action_q_on_selected: slot=%d, state=%d, quest_type=%d, quest_id=%d" % [
+		selected_slot_index, slot.state, quest_type, slot.quest_data.get("id", -1)])
 
 	match slot.state:
 		SlotState.OFFERED:
+			print("  → Accepting quest")
 			_accept_quest(slot)
 		SlotState.READY:
 			# Claim rewards (works for both DELIVERY and non-DELIVERY)
 			if quest_type == 0:
+				print("  → Delivering READY quest")
 				_deliver_quest(slot)  # DELIVERY: deduct resources, grant rewards
 			else:
+				print("  → Claiming READY quest")
 				_claim_quest(slot)  # Non-DELIVERY: just grant rewards
 		SlotState.ACTIVE:
 			if quest_type == 0:  # DELIVERY
 				# Check if player has resources to deliver
 				var can_deliver = _check_can_complete(slot)
+				print("  → ACTIVE DELIVERY, can_deliver=%s" % str(can_deliver))
 				if can_deliver:
 					_deliver_quest(slot)
 				else:
@@ -623,12 +605,15 @@ func action_r_on_selected() -> void:
 func _accept_quest(slot: QuestSlot) -> void:
 	"""Accept an offered quest"""
 	if not quest_manager:
+		print("❌ _accept_quest: quest_manager is null!")
 		return
 
 	# CRITICAL: Save quest data and set slot to ACTIVE *before* calling accept_quest
 	# because accept_quest emits active_quests_changed which triggers _refresh_slots,
 	# and we need the slot to be pinned (ACTIVE) so it doesn't get overwritten!
 	var quest_data_copy = slot.quest_data.duplicate(true)
+	print("📝 _accept_quest: Duplicated quest ID=%d, faction=%s" % [
+		quest_data_copy.get("id", -1), quest_data_copy.get("faction", "?")])
 	slot.set_quest_active(quest_data_copy)
 
 	var success = quest_manager.accept_quest(quest_data_copy)
@@ -639,6 +624,7 @@ func _accept_quest(slot: QuestSlot) -> void:
 		_emit_selection_update()
 		print("✅ Accepted quest: %s (ID: %d)" % [quest_data_copy.get("faction", "Unknown"), quest_data_copy.get("id", -1)])
 	else:
+		print("❌ _accept_quest: accept_quest returned false")
 		# Revert slot state if accept failed
 		slot.set_quest_offered(quest_data_copy, slot.is_locked)
 
@@ -646,33 +632,43 @@ func _accept_quest(slot: QuestSlot) -> void:
 func _deliver_quest(slot: QuestSlot) -> void:
 	"""Deliver a DELIVERY quest - deducts resources and grants rewards"""
 	if not quest_manager:
+		print("❌ _deliver_quest: quest_manager is null!")
 		return
 
 	var quest_id = slot.quest_data.get("id", -1)
+	print("📦 _deliver_quest: quest_id=%d, faction=%s" % [quest_id, slot.quest_data.get("faction", "?")])
 	if quest_id < 0:
+		print("❌ _deliver_quest: invalid quest_id!")
 		return
 
 	var success = quest_manager.complete_quest(quest_id)
 	if success:
-		print("📦 Delivered quest: %s" % slot.quest_data.get("faction", "Unknown"))
+		print("✅ Delivered quest: %s" % slot.quest_data.get("faction", "Unknown"))
 		_emit_selection_update()
 		# Slot will be auto-filled on next refresh
+	else:
+		print("❌ _deliver_quest: complete_quest returned false")
 
 
 func _claim_quest(slot: QuestSlot) -> void:
 	"""Claim rewards for a READY non-DELIVERY quest"""
 	if not quest_manager:
+		print("❌ _claim_quest: quest_manager is null!")
 		return
 
 	var quest_id = slot.quest_data.get("id", -1)
+	print("🎁 _claim_quest: quest_id=%d, faction=%s" % [quest_id, slot.quest_data.get("faction", "?")])
 	if quest_id < 0:
+		print("❌ _claim_quest: invalid quest_id!")
 		return
 
 	var success = quest_manager.claim_quest(quest_id)
 	if success:
-		print("🎁 Claimed quest rewards: %s" % slot.quest_data.get("faction", "Unknown"))
+		print("✅ Claimed quest rewards: %s" % slot.quest_data.get("faction", "Unknown"))
 		_emit_selection_update()
 		# Slot will be auto-filled on next refresh
+	else:
+		print("❌ _claim_quest: claim_quest returned false")
 
 
 func _reject_quest(slot: QuestSlot) -> void:
@@ -934,7 +930,17 @@ func get_overlay_tier() -> int:
 # =============================================================================
 
 class QuestSlot extends PanelContainer:
-	"""Individual quest slot display"""
+	"""Individual quest slot display - Two column layout
+
+	Layout:
+	┌────────────────────────────────────┐
+	│ [U] 🔒  Faction Name        😊 ♾️ │
+	├────────────────┬───────────────────┤
+	│   Deliver      │        🌾         │
+	│    🌾 × 5      │       ━━━         │
+	│                │        🍄         │
+	└────────────────┴───────────────────┘
+	"""
 
 	signal slot_selected(slot_index: int)
 
@@ -946,12 +952,23 @@ class QuestSlot extends PanelContainer:
 	var is_locked: bool = false
 	var is_selected: bool = false
 
-	# UI elements
-	var header_label: Label
-	var faction_label: Label
-	var details_label: Label
-	var status_label: Label
-	# NO action_label - actions shown in QER toolbar at bottom!
+	# UI elements - Header row
+	var slot_label: Label        # [U] 🔒
+	var faction_label: Label     # Faction name
+	var status_label: Label      # 😊 ♾️
+
+	# UI elements - Left column (requirement)
+	var action_type_label: Label   # "Deliver" or "Reach" etc.
+	var requirement_label: Label   # "🌾 × 5" or "purity ≥ 70%"
+
+	# UI elements - Right column (reward)
+	var north_label: Label       # North emoji (BIG)
+	var separator_label: Label   # ━━━
+	var south_label: Label       # South emoji (BIG)
+
+	# UI elements - Bottom bar (faction info)
+	var signature_label: Label      # Faction signature emojis
+	var alignment_bar_label: Label  # 😊 ████████░░
 
 	func _ready() -> void:
 		_create_ui()
@@ -966,74 +983,124 @@ class QuestSlot extends PanelContainer:
 	func set_layout_manager(manager: Node) -> void:
 		layout_manager = manager
 
-	# Additional UI elements for vocabulary display
-	var signature_label: Label
-	var objective_label: Label
-	var reward_label: Label
-
 	func _create_ui() -> void:
-		"""QUADRANT SLOT - Larger fonts, vocabulary-focused display"""
+		"""Two-column layout: requirement on left, reward on right"""
 		var scale = layout_manager.scale_factor if layout_manager else 1.0
 
-		# UPGRADED font sizes - much larger for readability
-		var header_size = 22
-		var signature_size = 28  # Large emoji signature display
-		var faction_size = 20
-		var objective_size = 18
-		var reward_size = 16
+		# Font sizes
+		var header_size = 13
+		var action_size = 12
+		var requirement_size = 16
+		var emoji_size = 28  # BIG emojis for reward
 
 		# Slot expands to fill grid cell
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		size_flags_vertical = Control.SIZE_EXPAND_FILL
-		custom_minimum_size = Vector2(280 * scale, 200 * scale)  # Larger minimum
+		custom_minimum_size = Vector2(200 * scale, 95 * scale)
 
-		var vbox = VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", int(4 * scale))
-		add_child(vbox)
+		var main_vbox = VBoxContainer.new()
+		main_vbox.add_theme_constant_override("separation", int(2 * scale))
+		add_child(main_vbox)
 
-		# Header: [U] 🔒
-		header_label = Label.new()
-		header_label.add_theme_font_size_override("font_size", header_size)
-		vbox.add_child(header_label)
+		# === HEADER ROW ===
+		var header_hbox = HBoxContainer.new()
+		header_hbox.add_theme_constant_override("separation", int(4 * scale))
+		main_vbox.add_child(header_hbox)
 
-		# Faction signature emojis (BIG)
-		signature_label = Label.new()
-		signature_label.add_theme_font_size_override("font_size", signature_size)
-		signature_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(signature_label)
+		# Slot key + lock
+		slot_label = Label.new()
+		slot_label.add_theme_font_size_override("font_size", header_size)
+		header_hbox.add_child(slot_label)
 
-		# Faction name
+		# Faction name (expands)
 		faction_label = Label.new()
-		faction_label.add_theme_font_size_override("font_size", faction_size)
-		faction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(faction_label)
+		faction_label.add_theme_font_size_override("font_size", header_size)
+		faction_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		faction_label.clip_text = true
+		header_hbox.add_child(faction_label)
 
-		# Quest objective (clear description)
-		objective_label = Label.new()
-		objective_label.add_theme_font_size_override("font_size", objective_size)
-		objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(objective_label)
-
-		# Details (for backward compat, may be hidden)
-		details_label = Label.new()
-		details_label.add_theme_font_size_override("font_size", reward_size)
-		details_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		details_label.visible = false  # Hide - using objective_label instead
-		vbox.add_child(details_label)
-
-		# Reward preview
-		reward_label = Label.new()
-		reward_label.add_theme_font_size_override("font_size", reward_size)
-		reward_label.modulate = Color(1.0, 0.9, 0.5)  # Gold
-		reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(reward_label)
-
-		# Status (time remaining, faction mood)
+		# Status (mood + time)
 		status_label = Label.new()
-		status_label.add_theme_font_size_override("font_size", reward_size)
-		status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(status_label)
+		status_label.add_theme_font_size_override("font_size", header_size)
+		status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		header_hbox.add_child(status_label)
+
+		# === CONTENT ROW (two columns) ===
+		var content_hbox = HBoxContainer.new()
+		content_hbox.add_theme_constant_override("separation", int(8 * scale))
+		content_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		main_vbox.add_child(content_hbox)
+
+		# --- LEFT COLUMN: Requirement ---
+		var left_vbox = VBoxContainer.new()
+		left_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		left_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		left_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		content_hbox.add_child(left_vbox)
+
+		# Action type
+		action_type_label = Label.new()
+		action_type_label.add_theme_font_size_override("font_size", action_size)
+		action_type_label.modulate = Color(0.7, 0.7, 0.7)
+		action_type_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		left_vbox.add_child(action_type_label)
+
+		# Requirement (bigger, centered)
+		requirement_label = Label.new()
+		requirement_label.add_theme_font_size_override("font_size", requirement_size)
+		requirement_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		left_vbox.add_child(requirement_label)
+
+		# --- VERTICAL SEPARATOR ---
+		var vsep = VSeparator.new()
+		vsep.modulate = Color(0.5, 0.5, 0.5, 0.5)
+		content_hbox.add_child(vsep)
+
+		# --- RIGHT COLUMN: Reward (N/S pair) ---
+		var right_vbox = VBoxContainer.new()
+		right_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		right_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		right_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		right_vbox.add_theme_constant_override("separation", 0)
+		content_hbox.add_child(right_vbox)
+
+		# North emoji (BIG)
+		north_label = Label.new()
+		north_label.add_theme_font_size_override("font_size", emoji_size)
+		north_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		right_vbox.add_child(north_label)
+
+		# Separator line
+		separator_label = Label.new()
+		separator_label.add_theme_font_size_override("font_size", 10)
+		separator_label.text = "━━━"
+		separator_label.modulate = Color(0.6, 0.6, 0.6)
+		separator_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		right_vbox.add_child(separator_label)
+
+		# South emoji (BIG)
+		south_label = Label.new()
+		south_label.add_theme_font_size_override("font_size", emoji_size)
+		south_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		right_vbox.add_child(south_label)
+
+		# === BOTTOM BAR (faction signature + alignment) ===
+		var bottom_hbox = HBoxContainer.new()
+		bottom_hbox.add_theme_constant_override("separation", int(4 * scale))
+		main_vbox.add_child(bottom_hbox)
+
+		# Faction signature emojis (left)
+		signature_label = Label.new()
+		signature_label.add_theme_font_size_override("font_size", 11)
+		signature_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		signature_label.modulate = Color(0.7, 0.7, 0.7)
+		bottom_hbox.add_child(signature_label)
+
+		# Alignment bar (right)
+		alignment_bar_label = Label.new()
+		alignment_bar_label.add_theme_font_size_override("font_size", 11)
+		alignment_bar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		bottom_hbox.add_child(alignment_bar_label)
 
 		_refresh_ui()
 
@@ -1063,194 +1130,187 @@ class QuestSlot extends PanelContainer:
 		_refresh_ui()
 
 	func _refresh_ui() -> void:
-		"""UPGRADED UI - Large text, vocabulary display, clear objectives"""
-		# Update header - BOLD KEY + LOCK
+		"""Update all UI elements based on state"""
+		# Header: slot key + lock
 		var lock_icon = "🔒" if is_locked else ""
-		header_label.text = "[%s] %s" % [slot_letter, lock_icon]
+		slot_label.text = "[%s]%s" % [slot_letter, lock_icon]
 
-		# Update based on state
 		match state:
 			SlotState.EMPTY:
-				signature_label.text = "⭕"
-				faction_label.text = "EMPTY SLOT"
-				objective_label.text = "Press [F] for more quests"
-				reward_label.text = ""
-				status_label.text = ""
-				_set_bg_color(Color(0.15, 0.15, 0.15, 0.9))
-
+				_refresh_empty_ui()
 			SlotState.OFFERED:
 				_refresh_offered_ui()
-
 			SlotState.ACTIVE:
 				_refresh_active_ui()
-
 			SlotState.READY:
 				_refresh_ready_ui()
 
-		# Highlight if selected - THICKER BORDER
+		# Selection highlight
 		if is_selected:
 			var current_style = get_theme_stylebox("panel")
 			if current_style:
-				current_style.border_width_left = 6  # Thick gold border
-				current_style.border_width_right = 6
-				current_style.border_width_top = 6
-				current_style.border_width_bottom = 6
-				current_style.border_color = Color(1.0, 0.9, 0.0)  # Bright gold
+				current_style.border_width_left = 5
+				current_style.border_width_right = 5
+				current_style.border_width_top = 5
+				current_style.border_width_bottom = 5
+				current_style.border_color = Color(1.0, 0.9, 0.0)
 
+	func _refresh_empty_ui() -> void:
+		"""Empty slot display"""
+		faction_label.text = "Empty"
+		status_label.text = ""
+
+		action_type_label.text = "Press [F]"
+		requirement_label.text = "for quests"
+
+		north_label.text = "?"
+		separator_label.visible = false
+		south_label.text = ""
+
+		# Bottom bar - empty
+		signature_label.text = ""
+		alignment_bar_label.text = ""
+
+		_set_bg_color(Color(0.15, 0.15, 0.15, 0.9))
 
 	func _refresh_offered_ui() -> void:
-		"""Display offered quest with vocabulary and clear objective"""
-		# Faction signature (BIG emoji display)
-		var sig = quest_data.get("faction_signature", quest_data.get("sig", []))
-		if sig.size() > 0:
-			signature_label.text = "".join(sig.slice(0, 5))  # Show up to 5 signature emojis
-		else:
-			signature_label.text = quest_data.get("faction_emoji", "❓")
+		"""Offered quest display"""
+		# Header - just faction name, no mood (moved to bottom bar)
+		faction_label.text = quest_data.get("faction", "Unknown")
+		status_label.text = ""  # Mood moved to bottom bar
 
-		# Faction name
-		faction_label.text = quest_data.get("faction", "Unknown Faction")
-
-		# Quest objective - varies by type
+		# Left: Requirement
 		var quest_type = quest_data.get("type", 0)
-		objective_label.text = _format_objective(quest_type)
+		_set_requirement_display(quest_type)
 
-		# Reward preview
-		reward_label.text = _format_reward_preview()
+		# Right: Vocab pair reward
+		_set_reward_display()
 
-		# Status - Faction mood (alignment) + time
+		# Bottom bar: signature + alignment
 		var alignment = quest_data.get("_alignment", 0.5)
-		var mood = _alignment_to_mood(alignment)
-		var time_limit = quest_data.get("time_limit", -1)
-		var time_str = "⏰ %ds" % int(time_limit) if time_limit > 0 else "♾️ No rush"
-
-		status_label.text = "%s  |  %s" % [mood, time_str]
-		status_label.modulate = Color(0.8, 0.8, 0.8)
+		_set_bottom_bar(alignment)
 
 		_set_bg_color(_get_alignment_color(alignment))
 
-
 	func _refresh_active_ui() -> void:
-		"""Display active quest with progress"""
-		# Faction signature
-		var sig = quest_data.get("faction_signature", quest_data.get("sig", []))
-		if sig.size() > 0:
-			signature_label.text = "".join(sig.slice(0, 5))
-		else:
-			signature_label.text = quest_data.get("faction_emoji", "❓")
-
-		# Faction name with ACTIVE indicator
+		"""Active quest display"""
+		# Header with active indicator
 		faction_label.text = "⚡ %s" % quest_data.get("faction", "Unknown")
+		status_label.text = "🔥"
 
-		# Quest objective
+		# Left: Requirement
 		var quest_type = quest_data.get("type", 0)
-		objective_label.text = _format_objective(quest_type)
+		_set_requirement_display(quest_type)
 
-		# Reward preview
-		reward_label.text = _format_reward_preview()
+		# Right: Vocab pair reward
+		_set_reward_display()
 
-		# Status - time and state
-		var time_limit = quest_data.get("time_limit", -1)
-		var time_str = "⏰ Active" if time_limit > 0 else "♾️ Take your time"
-		status_label.text = "🔥 IN PROGRESS  |  %s" % time_str
-		status_label.modulate = Color(1.0, 0.7, 0.3)
+		# Bottom bar: signature + alignment
+		var alignment = quest_data.get("_alignment", 0.5)
+		_set_bottom_bar(alignment)
 
 		_set_bg_color(Color(0.2, 0.3, 0.5, 0.9))
 
-
 	func _refresh_ready_ui() -> void:
-		"""Display ready-to-claim quest"""
-		# Faction signature
-		var sig = quest_data.get("faction_signature", quest_data.get("sig", []))
-		if sig.size() > 0:
-			signature_label.text = "".join(sig.slice(0, 5))
-		else:
-			signature_label.text = quest_data.get("faction_emoji", "❓")
-
-		# Faction name with READY indicator
+		"""Ready to claim display"""
+		# Header with ready indicator
 		faction_label.text = "✅ %s" % quest_data.get("faction", "Unknown")
+		status_label.text = "✨"
 
-		# Quest objective (completed)
+		# Left: Requirement (completed)
 		var quest_type = quest_data.get("type", 0)
-		objective_label.text = "✨ " + _format_objective(quest_type)
+		_set_requirement_display(quest_type)
+		action_type_label.text = "✓ " + action_type_label.text
 
-		# Reward preview (highlighted)
-		reward_label.text = "🎁 " + _format_reward_preview()
-		reward_label.modulate = Color(0.3, 1.0, 0.5)  # Bright green
+		# Right: Vocab pair reward (highlighted)
+		_set_reward_display()
+		north_label.modulate = Color(0.5, 1.0, 0.5)
+		south_label.modulate = Color(0.5, 1.0, 0.5)
 
-		# Status
-		status_label.text = "✨ READY TO CLAIM! ✨"
-		status_label.modulate = Color(0.3, 1.0, 0.3)
+		# Bottom bar: signature + alignment (bright for ready state)
+		var alignment = quest_data.get("_alignment", 0.5)
+		_set_bottom_bar(alignment)
+		alignment_bar_label.modulate = Color(0.5, 1.0, 0.5)
 
-		_set_bg_color(Color(0.2, 0.6, 0.2, 0.95))
+		_set_bg_color(Color(0.2, 0.5, 0.2, 0.95))
 
-
-	func _format_objective(quest_type: int) -> String:
-		"""Format quest objective based on type"""
+	func _set_requirement_display(quest_type: int) -> void:
+		"""Set left column based on quest type"""
 		match quest_type:
 			0:  # DELIVERY
+				action_type_label.text = "Deliver"
 				var resource = quest_data.get("resource", "?")
 				var quantity = quest_data.get("quantity", 1)
-				return "Deliver: %s × %d" % [resource, quantity]
+				requirement_label.text = "%s × %d" % [resource, quantity]
 			1:  # SHAPE_ACHIEVE
+				action_type_label.text = "Reach"
 				var obs = quest_data.get("observable", "purity")
 				var target = quest_data.get("target", 0.7)
 				var comp = quest_data.get("comparison", ">")
 				var comp_str = "≥" if comp == ">" else "≤"
-				return "Reach %s %s %d%%" % [obs, comp_str, int(target * 100)]
+				requirement_label.text = "%s %s %d%%" % [obs, comp_str, int(target * 100)]
 			2:  # SHAPE_MAINTAIN
+				action_type_label.text = "Hold"
 				var obs = quest_data.get("observable", "purity")
 				var target = quest_data.get("target", 0.7)
 				var duration = quest_data.get("duration", 30)
 				var comp = quest_data.get("comparison", ">")
 				var comp_str = "≥" if comp == ">" else "≤"
-				return "Hold %s %s %d%% for %ds" % [obs, comp_str, int(target * 100), int(duration)]
+				requirement_label.text = "%s %s %d%% %ds" % [obs, comp_str, int(target * 100), int(duration)]
 			3:  # EVOLUTION
+				var direction = quest_data.get("direction", "increase")
+				action_type_label.text = direction.capitalize()
 				var obs = quest_data.get("observable", "purity")
 				var delta = quest_data.get("delta", 0.2)
-				var direction = quest_data.get("direction", "increase")
-				var dir_str = "+" if direction == "increase" else "-"
-				return "%s %s by %s%d%%" % [direction.capitalize(), obs, dir_str, int(delta * 100)]
+				requirement_label.text = "%s %d%%" % [obs, int(delta * 100)]
 			4:  # ENTANGLEMENT
+				action_type_label.text = "Entangle"
 				var target = quest_data.get("target_coherence", 0.6)
-				return "Create coherence ≥ %d%%" % int(target * 100)
+				requirement_label.text = "≥ %d%%" % int(target * 100)
 			_:
-				return quest_data.get("body", "Complete the quest")
+				action_type_label.text = "Quest"
+				requirement_label.text = quest_data.get("body", "???")
 
+	func _set_reward_display() -> void:
+		"""Set right column with vocab pair"""
+		var north = quest_data.get("reward_vocab_north", "")
+		var south = quest_data.get("reward_vocab_south", "")
 
-	func _format_reward_preview() -> String:
-		"""Format reward preview showing 💰 and potential vocabulary PAIR"""
-		var base_money = quest_data.get("quantity", 5) * 10
-		var multiplier = quest_data.get("reward_multiplier", 1.0)
-		var money = int(base_money * multiplier)
-
-		# Get faction signature (emojis that could be the "north" of a learned pair)
-		var faction_sig = quest_data.get("faction_signature", quest_data.get("sig", []))
-
-		var vocab_str = ""
-		if faction_sig.size() > 0:
-			# Show potential "north" emojis - partner is rolled from quantum physics
-			var preview = faction_sig.slice(0, 2)
-			vocab_str = "  📖 %s/? pair" % " or ".join(preview)
-
-		return "💰 ~%d%s" % [money, vocab_str]
-
-
-	func _alignment_to_mood(alignment: float) -> String:
-		"""Convert alignment to readable faction mood"""
-		if alignment > 0.8:
-			return "😊 Very Pleased"
-		elif alignment > 0.6:
-			return "🙂 Favorable"
-		elif alignment > 0.4:
-			return "😐 Neutral"
-		elif alignment > 0.2:
-			return "😕 Uneasy"
+		if north == "":
+			north_label.text = "✓"
+			separator_label.visible = false
+			south_label.text = "known"
+			north_label.modulate = Color(0.6, 0.6, 0.6)
+			south_label.modulate = Color(0.6, 0.6, 0.6)
+		elif south == "":
+			north_label.text = north
+			separator_label.visible = false
+			south_label.text = "(solo)"
+			north_label.modulate = Color(1.0, 1.0, 1.0)
+			south_label.modulate = Color(0.6, 0.6, 0.6)
 		else:
-			return "😠 Displeased"
+			north_label.text = north
+			separator_label.visible = true
+			south_label.text = south
+			north_label.modulate = Color(1.0, 1.0, 1.0)
+			south_label.modulate = Color(1.0, 1.0, 1.0)
 
+	func _set_bottom_bar(alignment: float) -> void:
+		"""Set bottom bar with faction signature and alignment bar (both left-aligned)"""
+		# Faction signature emojis + alignment bar together
+		var sig = quest_data.get("faction_signature", quest_data.get("sig", []))
+		var sig_text = "".join(sig.slice(0, 5)) if sig.size() > 0 else ""
 
-	func _make_bar(value: float, length: int) -> String:
-		"""Create a visual bar using block characters"""
+		# Alignment bar: 😊 ████████░░
+		var mood = _alignment_to_mood_icon(alignment)
+		var bar = _make_alignment_bar(alignment, 8)
+
+		# Combine: signature + spacing + mood bar
+		signature_label.text = "%s  %s%s" % [sig_text, mood, bar]
+		alignment_bar_label.text = ""  # Not used anymore, all in signature_label
+
+	func _make_alignment_bar(value: float, length: int) -> String:
+		"""Create visual alignment bar: ████████░░"""
 		var filled = int(value * length)
 		var bar = ""
 		for i in range(length):
@@ -1260,23 +1320,36 @@ class QuestSlot extends PanelContainer:
 				bar += "░"
 		return bar
 
+	func _alignment_to_mood_icon(alignment: float) -> String:
+		"""Convert alignment to single mood emoji"""
+		if alignment > 0.8:
+			return "😊"
+		elif alignment > 0.6:
+			return "🙂"
+		elif alignment > 0.4:
+			return "😐"
+		elif alignment > 0.2:
+			return "😕"
+		else:
+			return "😠"
+
 	func _set_bg_color(color: Color) -> void:
-		"""FLASH GAME STYLE - Chunky borders, more padding"""
+		"""Set background with clean style"""
 		var style = StyleBoxFlat.new()
 		style.bg_color = color
-		style.border_color = Color(0.7, 0.7, 0.7, 0.8)  # Brighter border
-		style.border_width_left = 4  # THICKER borders!
-		style.border_width_right = 4
-		style.border_width_top = 4
-		style.border_width_bottom = 4
-		style.corner_radius_top_left = 12  # Rounder corners
-		style.corner_radius_top_right = 12
-		style.corner_radius_bottom_left = 12
-		style.corner_radius_bottom_right = 12
-		style.content_margin_left = 20  # MORE PADDING!
-		style.content_margin_right = 20
-		style.content_margin_top = 16
-		style.content_margin_bottom = 16
+		style.border_color = Color(0.5, 0.5, 0.5, 0.6)
+		style.border_width_left = 3
+		style.border_width_right = 3
+		style.border_width_top = 3
+		style.border_width_bottom = 3
+		style.corner_radius_top_left = 6
+		style.corner_radius_top_right = 6
+		style.corner_radius_bottom_left = 6
+		style.corner_radius_bottom_right = 6
+		style.content_margin_left = 8
+		style.content_margin_right = 8
+		style.content_margin_top = 4
+		style.content_margin_bottom = 4
 		add_theme_stylebox_override("panel", style)
 
 	func _get_alignment_color(alignment: float) -> Color:

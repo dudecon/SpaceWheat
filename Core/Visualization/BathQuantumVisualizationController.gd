@@ -73,16 +73,13 @@ func add_biome(biome_name: String, biome_ref) -> void:
 		push_warning("BathQuantumViz: null biome reference for %s" % biome_name)
 		return
 
-	# Model C biomes use quantum_computer, legacy biomes use bath
-	if not biome_ref.bath and not biome_ref.quantum_computer:
-		push_warning("BathQuantumViz: biome %s has neither bath nor quantum_computer" % biome_name)
+	# All biomes must have quantum_computer (Model C)
+	if not biome_ref.quantum_computer:
+		push_warning("BathQuantumViz: biome %s has no quantum_computer" % biome_name)
 		return
 
 	biomes[biome_name] = biome_ref
-	if biome_ref.bath:
-		print("🛁 BathQuantumViz: Added biome '%s' with %d basis states (bath mode)" % [biome_name, biome_ref.bath.emoji_list.size()])
-	elif biome_ref.quantum_computer:
-		print("🛁 BathQuantumViz: Added biome '%s' with %d qubits (Model C)" % [biome_name, biome_ref.quantum_computer.register_map.num_qubits])
+	print("🛁 BathQuantumViz: Added biome '%s' with %d qubits (Model C)" % [biome_name, biome_ref.quantum_computer.register_map.num_qubits])
 
 
 func initialize() -> void:
@@ -121,6 +118,10 @@ func initialize() -> void:
 		emoji_to_bubble[biome_name] = {}
 		basis_bubbles[biome_name] = []
 
+	# CRITICAL: Connect to ActiveBiomeManager for biome switching
+	# This ensures bubbles filter when user switches biomes via tab bar or keyboard
+	_connect_to_biome_manager()
+
 	graph.set_process(true)
 
 	print("✅ BathQuantumViz: Ready (plot-driven mode - bubbles will spawn on demand)")
@@ -128,6 +129,34 @@ func initialize() -> void:
 	print("   📊 QuantumForceGraph exists: %s" % (graph != null))
 	if graph:
 		print("   📊 QuantumForceGraph center: %s, radius: %.1f" % [graph.center_position, graph.graph_radius])
+
+
+func _connect_to_biome_manager() -> void:
+	"""Connect to ActiveBiomeManager for single-biome view filtering.
+
+	When user switches biomes via tab bar or keyboard (7/8/9/0),
+	this ensures the quantum bubbles filter to show only the active biome.
+	"""
+	var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+	if biome_mgr and biome_mgr.has_signal("active_biome_changed"):
+		if not biome_mgr.active_biome_changed.is_connected(_on_active_biome_changed):
+			biome_mgr.active_biome_changed.connect(_on_active_biome_changed)
+			print("   📡 BathQuantumViz connected to ActiveBiomeManager")
+
+			# Apply initial biome filter
+			var initial_biome = biome_mgr.get_active_biome()
+			if graph and initial_biome != "":
+				graph.set_active_biome(initial_biome)
+				print("   🔄 Initial biome filter applied: %s" % initial_biome)
+	else:
+		push_warning("BathQuantumViz: ActiveBiomeManager not found - bubbles won't filter on biome switch")
+
+
+func _on_active_biome_changed(new_biome: String, _old_biome: String) -> void:
+	"""Handle biome change - filter bubbles to show only active biome."""
+	if graph:
+		graph.set_active_biome(new_biome)
+		print("🔄 BathQuantumViz: Biome changed to %s - bubbles filtered" % new_biome)
 
 
 func connect_to_farm(farm) -> void:
@@ -311,7 +340,7 @@ func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
 
 	var biome = biomes.get(biome_name)
 	# Model C: Check for quantum_computer OR legacy bath
-	if not biome or (not biome.bath and not biome.quantum_computer):
+	if not biome or (not biome.quantum_computer):
 		return
 
 	# Get emojis from plot (Model C: uses terminal system now)
@@ -383,17 +412,8 @@ func request_emoji_bubble(biome_name: String, emoji: String) -> void:
 		return
 
 	var biome = biomes[biome_name]
-	# Model C: Check for quantum_computer OR legacy bath
-	if not biome or (not biome.bath and not biome.quantum_computer):
+	if not biome or not biome.quantum_computer:
 		return
-
-	# Check if emoji is in this biome's bath (legacy only - skip for Model C)
-	if biome.bath and not biome.bath.emoji_list.has(emoji):
-		push_warning("BathQuantumViz: Emoji %s not in %s bath" % [emoji, biome_name])
-		return
-	elif not biome.bath:
-		# Model C: quantum_computer doesn't track individual emojis, skip validation
-		pass
 
 	# Skip if already requested
 	if requested_emojis[biome_name].has(emoji):
@@ -425,7 +445,7 @@ func _create_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> Quantu
 	"""
 	var biome = biomes.get(biome_name)
 	# Model C: Check for quantum_computer OR legacy bath
-	if not biome or (not biome.bath and not biome.quantum_computer):
+	if not biome or (not biome.quantum_computer):
 		return null
 
 	# Determine initial position (scatter around oval perimeter)
@@ -447,12 +467,8 @@ func _create_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> Quantu
 	var bubble = QuantumNode.new(plot, initial_pos, grid_pos, stored_center)
 	bubble.biome_name = biome_name
 
-	# Emojis will be set by update_from_quantum_state() during first render
-	# This ensures they always match the plot's current quantum state
-
-	# Set initial visual properties (will be updated by update_from_quantum_state)
-	bubble.radius = 40.0  # MAX_RADIUS from QuantumNode
-	bubble.color = Color(0.8, 0.8, 0.8, 0.8)
+	# NOTE: Constructor calls update_from_quantum_state() which sets color from coherence
+	# Do NOT overwrite color here - let quantum state determine it
 
 	return bubble
 
@@ -476,7 +492,7 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 		return
 
 	var biome = biomes.get(biome_name)
-	if not biome or (not biome.bath and not biome.quantum_computer):
+	if not biome or (not biome.quantum_computer):
 		print("   ⚠️  Biome %s has no quantum backend" % biome_name)
 		return
 
@@ -513,11 +529,8 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 	bubble.biome_name = biome_name
 	bubble.emoji_north = north_emoji
 	bubble.emoji_south = south_emoji
-	# DO NOT HARDCODE OPACITIES - let them be computed from real quantum state!
-	# bubble.emoji_north_opacity = 0.7  ← REMOVED (was fake)
-	# bubble.emoji_south_opacity = 0.3  ← REMOVED (was fake)
-	bubble.radius = 40.0
-	bubble.color = Color(0.8, 0.8, 0.8, 0.8)
+	# NOTE: Constructor calls update_from_quantum_state() which sets color from coherence
+	# Do NOT hardcode color - let quantum state determine it
 	bubble.has_farm_tether = true  # Show tether to grid position
 	bubble.is_terminal_bubble = true  # V2 architecture marker
 
@@ -556,7 +569,7 @@ func _create_single_bubble(biome_name: String, emoji: String, grid_pos: Vector2i
 	"""
 	var biome = biomes.get(biome_name)
 	# Model C: Check for quantum_computer OR legacy bath
-	if not biome or (not biome.bath and not biome.quantum_computer):
+	if not biome or (not biome.quantum_computer):
 		return null
 
 	# Create dummy qubit for interface compatibility (QuantumNode expects one)
@@ -589,14 +602,8 @@ func _create_single_bubble(biome_name: String, emoji: String, grid_pos: Vector2i
 	bubble.emoji_south = "💀"
 	bubble.biome_name = biome_name
 
-	# Set initial visual properties
-	if biome.bath:
-		# Legacy bath mode: size based on probability
-		var prob = biome.bath.get_probability(emoji)
-		bubble.radius = base_bubble_size + pow(prob, size_exponent) * size_scale
-	else:
-		# Model C: use default size (no bath probability available)
-		bubble.radius = 40.0
+	# Set initial visual properties (Model C: fixed size, color from emoji)
+	bubble.radius = 40.0
 	bubble.color = _get_emoji_color(emoji)
 
 	# Store in graph arrays (don't add_child - QuantumNode extends RefCounted, not Node)
@@ -624,41 +631,13 @@ func _process(delta: float) -> void:
 
 
 func _update_bubble_visuals_from_bath() -> void:
-	"""Update bubble size and color from bath probabilities
+	"""Update bubble visuals from quantum state
 
-	Power law scaling (prob^0.3) gives better differentiation at low probabilities:
-	- prob=0.01: pow=0.215 (2x better than sqrt)
-	- prob=0.10: pow=0.464 (vs sqrt=0.316)
-	- prob=0.50: pow=0.812 (vs sqrt=0.707)
+	Model C: Bubble visuals are updated by QuantumForceGraph from density matrix,
+	not from this function. This is kept as a no-op for compatibility.
 	"""
-	for biome_name in basis_bubbles:
-		var biome = biomes.get(biome_name)
-		# Model C: Check for quantum_computer OR legacy bath
-		if not biome or (not biome.bath and not biome.quantum_computer):
-			continue
-
-		var bubbles = basis_bubbles[biome_name]
-		for bubble in bubbles:
-			var emoji = bubble.emoji_north
-
-			# Model C: Skip probability updates (bath not available)
-			if not biome.bath:
-				continue
-
-			var prob = biome.bath.get_probability(emoji)
-			var amp = biome.bath.get_amplitude(emoji)
-
-			# Size: Power law scaling for better low-end differentiation
-			bubble.radius = base_bubble_size + pow(prob, size_exponent) * size_scale
-
-			# Color: Modulate brightness by probability
-			var phase = amp.arg()
-			var base_color = _get_emoji_color(emoji)
-			var brightness = 0.5 + prob * 0.5
-			bubble.color = base_color.lightened(brightness - 0.5)
-
-			# Update dummy qubit phi for angular positioning (no radial orbit)
-			# Model B: quantum_state no longer exists on plots - skip phi update
+	# Model C uses QuantumForceGraph for all visualization updates
+	pass
 
 
 func _apply_skating_rink_forces(delta: float) -> void:

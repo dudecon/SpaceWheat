@@ -37,8 +37,9 @@ var base_temperature: float = 300.0  # 300K baseline
 var temperature_grid: Dictionary = {}  # Vector2i(x,y) -> local_temperature
 
 # Decoherence base rates (modified by temperature)
-var T1_base_rate: float = 0.001  # Amplitude damping
-var T2_base_rate: float = 0.002  # Phase damping
+# Reduced 10x to allow coherences to build before dephasing destroys them
+var T1_base_rate: float = 0.0001  # Amplitude damping (10x slower)
+var T2_base_rate: float = 0.0002  # Phase damping (10x slower - preserves coherence longer)
 
 # Visualization - Celestial object colors and positions
 var sun_color: Color = Color.YELLOW  # Updated each frame based on sun.theta
@@ -281,6 +282,10 @@ func _update_sun_visualization_from_quantum() -> void:
 		var p_sun_norm = p_sun / (p_sun + p_moon)
 		theta = 2.0 * acos(clamp(sqrt(p_sun_norm), 0.0, 1.0))
 	sun_display_theta = theta
+
+	# CRITICAL: Sync sun_qubit.theta so visualization uses evolving quantum state
+	if sun_qubit:
+		sun_qubit.theta = theta
 
 	# Color transition: θ=0 (yellow ☀️) → θ=π (deep purple/blue 🌙)
 	var day_night_progress = sun_display_theta / PI  # 0.0 (day) to 1.0 (night)

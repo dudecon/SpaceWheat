@@ -15,11 +15,19 @@ extends Control
 ## Architecture:
 ##   Extends Control for unified overlay stack management.
 ##   Uses internal CanvasLayer (render_layer) for rendering above game.
+##
+## Design Philosophy:
+##   - Panels are created fresh on each open, destroyed on close
+##   - No scroll manipulation - always shows from top, user scrolls manually
+##   - Simple state: HIDDEN, SINGLE_BIOME, or ALL_BIOMES
 
 signal overlay_closed
 signal action_performed(action: String, data: Dictionary)  # v2 overlay compatibility
 
 const BiomeOvalPanel = preload("res://UI/Panels/BiomeOvalPanel.gd")
+
+# Biome display order (consistent across app)
+const BIOME_ORDER: Array[String] = ["BioticFlux", "StellarForges", "FungalNetworks", "VolcanicWorlds"]
 
 # v2 Overlay Interface
 var overlay_name: String = "biome_detail"
@@ -29,7 +37,7 @@ var action_labels: Dictionary = {
 	"Q": "Select Icon",
 	"E": "Parameters",
 	"R": "Registers",
-	"F": "Cycle Mode"
+	"F": "Show All"
 }
 
 # v2 Navigation State
@@ -46,12 +54,12 @@ enum DisplayMode {
 
 var current_mode: DisplayMode = DisplayMode.HIDDEN
 
-# UI References
-var render_layer: CanvasLayer  # Child CanvasLayer for rendering above game
-var dimmer: ColorRect  # Dims background
-var center_container: CenterContainer  # For single biome mode
-var scroll_container: ScrollContainer  # For all biomes mode
-var biome_list: VBoxContainer  # Container for multiple panels
+# UI References (created once in _ready)
+var render_layer: CanvasLayer
+var dimmer: ColorRect
+var center_container: CenterContainer
+var scroll_container: ScrollContainer
+var biome_list: VBoxContainer
 
 # Data references
 var farm: Node = null
@@ -60,94 +68,155 @@ var all_biome_panels: Array[BiomeOvalPanel] = []
 
 # Settings
 var dimmer_color: Color = Color(0, 0, 0, 0.5)
-var update_interval: float = 0.5  # Update overlay every 0.5s
+var update_interval: float = 0.5
 var update_timer: float = 0.0
 
-func _ready():
-	# Set up as full-rect Control (z_index managed by OverlayStackManager)
+
+func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let render_layer handle input
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_ui()
-	hide_overlay()
+	_hide_all()
+
+
+func _build_ui() -> void:
+	"""Build UI structure once. Panels are added/removed dynamically."""
+	# CanvasLayer for rendering above game
+	render_layer = CanvasLayer.new()
+	render_layer.layer = 100
+	add_child(render_layer)
+
+	# Dimmer background
+	dimmer = ColorRect.new()
+	dimmer.color = dimmer_color
+	dimmer.mouse_filter = Control.MOUSE_FILTER_STOP
+	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dimmer.gui_input.connect(_on_dimmer_input)
+	render_layer.add_child(dimmer)
+
+	# Center container for single biome mode
+	center_container = CenterContainer.new()
+	center_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center_container.visible = false
+	render_layer.add_child(center_container)
+
+	# Scroll container for all biomes mode
+	scroll_container = ScrollContainer.new()
+	scroll_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_container.visible = false
+	render_layer.add_child(scroll_container)
+
+	# VBox for biome panels list
+	biome_list = VBoxContainer.new()
+	biome_list.add_theme_constant_override("separation", 24)
+	biome_list.alignment = BoxContainer.ALIGNMENT_BEGIN
+	biome_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_container.add_child(biome_list)
+
+
+func _hide_all() -> void:
+	"""Hide everything and reset state."""
+	current_mode = DisplayMode.HIDDEN
+	visible = false
+	if render_layer:
+		render_layer.visible = false
+	if center_container:
+		center_container.visible = false
+	if scroll_container:
+		scroll_container.visible = false
+
+
+func _get_biome_by_name(biome_name: String) -> Node:
+	"""Get biome node by name from farm grid."""
+	if not farm or not farm.grid or not farm.grid.biomes:
+		return null
+	return farm.grid.biomes.get(biome_name)
+
+
+func _select_biome_by_index(index: int) -> void:
+	"""Select biome panel by index and update highlight."""
+	if index < 0 or index >= all_biome_panels.size():
+		return
+	selected_biome_index = index
+	_update_selection_highlight()
 
 
 ## Show single biome inspector
 func show_biome(biome: Node, farm_node: Node) -> void:
-	"""Display inspector for a specific biome"""
+	"""Display inspector for a specific biome."""
 	if not biome or not farm_node:
-		print("⚠️  BiomeInspectorOverlay: Invalid biome or farm")
 		return
 
 	farm = farm_node
+	_clear_panels()
 	current_mode = DisplayMode.SINGLE_BIOME
 
-	# Clear existing
-	_clear_panels()
-
-	# Create panel for this biome
+	# Create panel
 	current_biome_panel = BiomeOvalPanel.new()
-	current_biome_panel.initialize(biome, farm.grid)
 	current_biome_panel.close_requested.connect(_on_close_requested)
 	current_biome_panel.emoji_tapped.connect(_on_emoji_tapped)
-
 	center_container.add_child(current_biome_panel)
+	current_biome_panel.initialize(biome, farm.grid)
 
-	# Show overlay
-	_show_overlay()
-
-	print("🔍 BiomeInspectorOverlay: Showing %s" % biome)
+	# Show
+	visible = true
+	render_layer.visible = true
+	center_container.visible = true
+	scroll_container.visible = false
 
 
 ## Show all biomes
 func show_all_biomes(farm_node: Node) -> void:
-	"""Display inspectors for all registered biomes"""
-	if not farm_node:
-		print("⚠️  BiomeInspectorOverlay: Invalid farm")
+	"""Display inspectors for all registered biomes.
+
+	Always shows panels in consistent BIOME_ORDER from top.
+	No scroll manipulation - user scrolls manually.
+	"""
+	if not farm_node or not farm_node.grid or not farm_node.grid.biomes:
 		return
 
 	farm = farm_node
+	_clear_panels()
 	current_mode = DisplayMode.ALL_BIOMES
 
-	# Clear existing
-	_clear_panels()
-
-	# Get all biomes from farm grid
-	if not farm.grid or not farm.grid.biomes:
-		print("⚠️  BiomeInspectorOverlay: No biomes registered")
-		return
-
-	# Create panel for each biome
-	for biome_name in farm.grid.biomes.keys():
+	# Create panels in consistent order
+	for biome_name in BIOME_ORDER:
+		if not farm.grid.biomes.has(biome_name):
+			continue
 		var biome = farm.grid.biomes[biome_name]
 
 		var panel = BiomeOvalPanel.new()
-		panel.initialize(biome, farm.grid)
 		panel.close_requested.connect(_on_close_requested)
 		panel.emoji_tapped.connect(_on_emoji_tapped)
-
 		biome_list.add_child(panel)
+		panel.initialize(biome, farm.grid)
 		all_biome_panels.append(panel)
 
-	# Show overlay
-	_show_overlay()
+	# Reset selection to first biome
+	selected_biome_index = 0
+	_update_selection_highlight()
 
-	print("🔍 BiomeInspectorOverlay: Showing all %d biomes" % all_biome_panels.size())
+	# Show (scroll starts at top naturally)
+	scroll_container.scroll_vertical = 0
+	visible = true
+	render_layer.visible = true
+	center_container.visible = false
+	scroll_container.visible = true
 
 
 ## Hide overlay
 func hide_overlay() -> void:
-	"""Hide inspector overlay"""
-	current_mode = DisplayMode.HIDDEN
+	"""Hide inspector overlay and clean up panels."""
 	_clear_panels()
-	visible = false
-	if render_layer:
-		render_layer.visible = false
+	_hide_all()
 	overlay_closed.emit()
 
 
 ## Toggle overlay (for button)
 func toggle_all_biomes(farm_node: Node) -> void:
-	"""Toggle between hidden and all biomes mode"""
+	"""Toggle between hidden and all biomes mode."""
 	if current_mode == DisplayMode.HIDDEN:
 		show_all_biomes(farm_node)
 	else:
@@ -155,81 +224,25 @@ func toggle_all_biomes(farm_node: Node) -> void:
 
 
 # ============================================================================
-# UI SETUP
+# PANEL MANAGEMENT
 # ============================================================================
 
-func _build_ui() -> void:
-	"""Build overlay UI structure
-
-	Creates a CanvasLayer child for rendering above game view.
-	All visual elements are added to the render_layer.
-	"""
-	# Create CanvasLayer for rendering above game (layer 100 = above game, below system menus)
-	render_layer = CanvasLayer.new()
-	render_layer.layer = 100
-	add_child(render_layer)
-
-	# Dimmer (tappable background) - added to render_layer
-	dimmer = ColorRect.new()
-	dimmer.color = dimmer_color
-	dimmer.mouse_filter = Control.MOUSE_FILTER_STOP  # Catch taps
-	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	render_layer.add_child(dimmer)
-
-	# Connect tap to close
-	dimmer.gui_input.connect(_on_dimmer_input)
-
-	# Center container (for single biome mode)
-	center_container = CenterContainer.new()
-	center_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	render_layer.add_child(center_container)
-
-	# Scroll container (for all biomes mode)
-	scroll_container = ScrollContainer.new()
-	scroll_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	render_layer.add_child(scroll_container)
-
-	# VBox for multiple biomes
-	biome_list = VBoxContainer.new()
-	biome_list.add_theme_constant_override("separation", 24)
-	biome_list.alignment = BoxContainer.ALIGNMENT_CENTER
-	scroll_container.add_child(biome_list)
-
-
-func _show_overlay() -> void:
-	"""Show overlay and configure for current mode"""
-	visible = true
-	render_layer.visible = true
-
-	# Show/hide containers based on mode
-	center_container.visible = (current_mode == DisplayMode.SINGLE_BIOME)
-	scroll_container.visible = (current_mode == DisplayMode.ALL_BIOMES)
-
-	# Reset update timer
-	update_timer = 0.0
-
-
 func _clear_panels() -> void:
-	"""Remove all biome panels"""
-	# Clear single biome
-	if current_biome_panel:
-		current_biome_panel.queue_free()
-		current_biome_panel = null
-
-	# Clear all biomes
-	for panel in all_biome_panels:
-		panel.queue_free()
+	"""Remove all biome panels immediately."""
+	current_biome_panel = null
 	all_biome_panels.clear()
 
-	# Clear list children
-	for child in biome_list.get_children():
-		child.queue_free()
+	# Clear biome_list children
+	if biome_list:
+		for child in biome_list.get_children():
+			biome_list.remove_child(child)
+			child.free()
 
-	# Clear center children
-	for child in center_container.get_children():
-		child.queue_free()
+	# Clear center_container children
+	if center_container:
+		for child in center_container.get_children():
+			center_container.remove_child(child)
+			child.free()
 
 
 # ============================================================================
@@ -309,6 +322,10 @@ func handle_input(event: InputEvent) -> bool:
 			# overlay_stack.handle_escape() which properly pops us from the stack.
 			# If we consume ESC here, we get hidden but stay on the stack!
 			return false
+		KEY_COMMA, KEY_PERIOD:
+			# Don't consume biome cycling keys - let FarmInputHandler handle them
+			# This allows switching biomes while the overlay is open
+			return false
 		# WASD/Arrow navigation
 		KEY_W, KEY_UP:
 			_navigate_up()
@@ -342,14 +359,21 @@ func handle_input(event: InputEvent) -> bool:
 func activate() -> void:
 	"""v2 overlay lifecycle: Called when overlay opens."""
 	is_active = true
-
-	# Show render layer (ensures visibility even without content)
-	if render_layer:
-		render_layer.visible = true
-
-	# Default to showing all biomes if farm is set
 	if farm:
-		show_all_biomes(farm)
+		# Show only the currently active biome (not all 4)
+		var active_biome_manager = get_node_or_null("/root/ActiveBiomeManager")
+		if active_biome_manager:
+			var active_biome_name = active_biome_manager.get_active_biome()
+			var biome = _get_biome_by_name(active_biome_name)
+			if biome:
+				show_biome(biome, farm)
+				return
+		# Fallback: show first biome if no active biome manager
+		if farm.grid and farm.grid.biomes:
+			for biome_name in BIOME_ORDER:
+				if farm.grid.biomes.has(biome_name):
+					show_biome(farm.grid.biomes[biome_name], farm)
+					return
 
 
 func deactivate() -> void:
@@ -400,7 +424,13 @@ func on_f_pressed() -> void:
 
 func get_action_labels() -> Dictionary:
 	"""v2 overlay interface: Get current QER+F labels."""
-	return action_labels
+	var labels = action_labels.duplicate()
+	# Context-sensitive F label
+	if current_mode == DisplayMode.SINGLE_BIOME:
+		labels["F"] = "Show All"
+	elif current_mode == DisplayMode.ALL_BIOMES:
+		labels["F"] = "Single View"
+	return labels
 
 
 func get_overlay_tier() -> int:

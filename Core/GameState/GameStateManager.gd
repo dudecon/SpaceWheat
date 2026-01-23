@@ -57,42 +57,14 @@ func _ready():
 
 
 ## Player Vocabulary Discovery
-
-func discover_emoji(emoji: String) -> void:
-	"""Player encounters a new emoji - updates vocabulary and checks for unlocked factions
-
-	This is called when:
-	- Player harvests a new resource type
-	- Player completes a quest with a new emoji reward
-	- Player unlocks a new tool/icon
-	"""
-	if not current_state:
-		return
-
-	# Already known?
-	if emoji in current_state.known_emojis:
-		return
-
-	# Add to vocabulary
-	current_state.known_emojis.append(emoji)
-	emit_signal("emoji_discovered", emoji)
-
-	_verbose.info("quest", "📖", "Discovered emoji: %s (vocabulary: %d emojis)" % [emoji, current_state.known_emojis.size()])
-
-	# Check if this unlocks new factions
-	var newly_accessible = _check_newly_accessible_factions(emoji)
-	if newly_accessible.size() > 0:
-		emit_signal("factions_unlocked", newly_accessible)
-		_verbose.info("quest", "🔓", "Unlocked %d new faction(s)!" % newly_accessible.size())
-		for faction in newly_accessible:
-			var sig = faction.get("sig", [])
-			_verbose.info("quest", "-", "%s %s" % ["".join(sig.slice(0, 3)), faction.get("name", "?")])
-
+## known_pairs is the SOURCE OF TRUTH - known_emojis is derived from it
 
 func discover_pair(north: String, south: String) -> void:
 	"""Player learns a vocabulary pair (plantable qubit axis)
 
-	This is called when:
+	This is the ONLY way to add vocabulary. known_emojis is derived from known_pairs.
+
+	Called when:
 	- Quest completion grants paired vocabulary
 	- Starting the game with initial pairs
 
@@ -108,36 +80,49 @@ func discover_pair(north: String, south: String) -> void:
 		if pair.get("north") == north and pair.get("south") == south:
 			return  # Already known
 
-	# Add pair
+	# Get emojis before adding (for checking newly accessible factions)
+	var old_emojis = current_state.get_known_emojis()
+
+	# Add pair (this is the source of truth)
 	current_state.known_pairs.append({"north": north, "south": south})
 
-	# Also add individual emojis to known_emojis
-	discover_emoji(north)
-	discover_emoji(south)
+	# Emit signals for each new emoji
+	if north not in old_emojis:
+		emit_signal("emoji_discovered", north)
+	if south not in old_emojis:
+		emit_signal("emoji_discovered", south)
 
 	emit_signal("pair_discovered", north, south)
 	_verbose.info("quest", "📖", "Discovered pair: %s/%s (vocabulary: %d pairs)" % [north, south, current_state.known_pairs.size()])
 
+	# Check if new emojis unlock factions
+	var new_emojis = current_state.get_known_emojis()
+	for emoji in [north, south]:
+		if emoji not in old_emojis:
+			var newly_accessible = _check_newly_accessible_factions(emoji, old_emojis, new_emojis)
+			if newly_accessible.size() > 0:
+				emit_signal("factions_unlocked", newly_accessible)
+				_verbose.info("quest", "🔓", "Unlocked %d new faction(s)!" % newly_accessible.size())
+				for faction in newly_accessible:
+					var sig = faction.get("sig", [])
+					_verbose.info("quest", "-", "%s %s" % ["".join(sig.slice(0, 3)), faction.get("name", "?")])
 
-func _check_newly_accessible_factions(new_emoji: String) -> Array:
+
+func _check_newly_accessible_factions(new_emoji: String, old_emojis: Array, new_emojis: Array) -> Array:
 	"""Find factions that just became accessible due to vocabulary overlap
 
 	A faction is "newly accessible" if:
 	- It had NO vocabulary overlap before (inaccessible)
 	- It has vocabulary overlap now (accessible)
 	"""
-	if not current_state:
-		return []
-
 	var newly_accessible = []
-	var old_vocab = current_state.known_emojis.filter(func(e): return e != new_emoji)
 
 	for faction in FactionDatabase.ALL_FACTIONS:
 		var faction_vocab = FactionDatabase.get_faction_vocabulary(faction)
 
 		# Check if faction was inaccessible before
-		var old_overlap = FactionDatabase.get_vocabulary_overlap(faction_vocab.all, old_vocab)
-		var new_overlap = FactionDatabase.get_vocabulary_overlap(faction_vocab.all, current_state.known_emojis)
+		var old_overlap = FactionDatabase.get_vocabulary_overlap(faction_vocab.all, old_emojis)
+		var new_overlap = FactionDatabase.get_vocabulary_overlap(faction_vocab.all, new_emojis)
 
 		if old_overlap.is_empty() and not new_overlap.is_empty():
 			newly_accessible.append(faction)
@@ -151,10 +136,11 @@ func get_accessible_factions() -> Array:
 		return []
 
 	var accessible = []
+	var known_emojis = current_state.get_known_emojis()
 
 	for faction in FactionDatabase.ALL_FACTIONS:
 		var faction_vocab = FactionDatabase.get_faction_vocabulary(faction)
-		var overlap = FactionDatabase.get_vocabulary_overlap(faction_vocab.all, current_state.known_emojis)
+		var overlap = FactionDatabase.get_vocabulary_overlap(faction_vocab.all, known_emojis)
 
 		if not overlap.is_empty():
 			accessible.append(faction)
@@ -336,11 +322,16 @@ func capture_state_from_game() -> GameState:
 	state.grid_width = farm.grid.grid_width
 	state.grid_height = farm.grid.grid_height
 
-	# Economy (from Farm.economy) - using emoji-based API
+	# Economy (from Farm.economy) - save ALL emoji credits
 	var economy = farm.economy
+
+	# NEW: Save complete emoji_credits dictionary (persists ALL resources)
+	state.all_emoji_credits = economy.emoji_credits.duplicate()
+
+	# LEGACY: Also populate individual fields for backward compatibility
 	state.wheat_inventory = economy.get_resource("🌾")
 	state.labor_inventory = economy.get_resource("👥")
-	state.flour_inventory = economy.get_resource("🍞")
+	state.flour_inventory = economy.get_resource("💨")  # Fixed: flour is 💨 not 🍞
 	state.flower_inventory = economy.get_resource("🌻")
 	state.mushroom_inventory = economy.get_resource("🍄")
 	state.detritus_inventory = economy.get_resource("🍂")
@@ -348,6 +339,14 @@ func capture_state_from_game() -> GameState:
 	state.credits = economy.get_resource("💰")
 	state.tributes_paid = economy.total_tributes_paid if "total_tributes_paid" in economy else 0
 	state.tributes_failed = economy.total_tributes_failed if "total_tributes_failed" in economy else 0
+
+	_verbose.debug("save", "💰", "Captured %d emoji types in economy" % state.all_emoji_credits.size())
+
+	# Player Vocabulary (known_pairs is source of truth, known_emojis is derived)
+	if current_state:
+		state.known_pairs = current_state.known_pairs.duplicate()
+		state.known_emojis = current_state.get_known_emojis()  # Derived from known_pairs
+		_verbose.debug("save", "📖", "Captured vocabulary: %d pairs → %d emojis" % [state.known_pairs.size(), state.known_emojis.size()])
 
 	# Plots (from Farm.grid)
 	state.plots.clear()
@@ -818,16 +817,27 @@ func apply_state_to_game(state: GameState):
 
 	_verbose.info("save", "🔄", "Applying game state to farm (" + str(state.grid_width) + "x" + str(state.grid_height) + ")...")
 
-	# Apply Economy (from Farm.economy) - using emoji-based API
+	# Apply Economy (from Farm.economy)
 	var economy = farm.economy
-	economy.emoji_credits["🌾"] = state.wheat_inventory
-	economy.emoji_credits["👥"] = state.labor_inventory
-	economy.emoji_credits["🍞"] = state.flour_inventory
-	economy.emoji_credits["🌻"] = state.flower_inventory
-	economy.emoji_credits["🍄"] = state.mushroom_inventory
-	economy.emoji_credits["🍂"] = state.detritus_inventory
-	economy.emoji_credits["👑"] = state.imperium_resource
-	economy.emoji_credits["💰"] = state.credits
+
+	# NEW: Load from all_emoji_credits if available (full persistence)
+	if state.all_emoji_credits and state.all_emoji_credits.size() > 0:
+		# Clear existing and load all saved credits
+		for emoji in state.all_emoji_credits.keys():
+			economy.emoji_credits[emoji] = state.all_emoji_credits[emoji]
+		_verbose.debug("save", "💰", "Loaded %d emoji types from all_emoji_credits" % state.all_emoji_credits.size())
+	else:
+		# LEGACY: Fall back to individual fields for old saves
+		economy.emoji_credits["🌾"] = state.wheat_inventory
+		economy.emoji_credits["👥"] = state.labor_inventory
+		economy.emoji_credits["💨"] = state.flour_inventory  # Fixed: flour is 💨
+		economy.emoji_credits["🌻"] = state.flower_inventory
+		economy.emoji_credits["🍄"] = state.mushroom_inventory
+		economy.emoji_credits["🍂"] = state.detritus_inventory
+		economy.emoji_credits["👑"] = state.imperium_resource
+		economy.emoji_credits["💰"] = state.credits
+		_verbose.debug("save", "💰", "Loaded economy from legacy fields (old save format)")
+
 	if "total_tributes_paid" in economy:
 		economy.total_tributes_paid = state.tributes_paid
 	if "total_tributes_failed" in economy:

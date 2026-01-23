@@ -75,19 +75,22 @@ func _build_ui() -> void:
 	"""Build the semantic map overlay UI."""
 	custom_minimum_size = Vector2(PANEL_WIDTH, PANEL_HEIGHT)
 
+	# Create background panel (Control doesn't render panel stylebox, so use PanelContainer)
+	var background_panel = PanelContainer.new()
+	background_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.08, 0.10, 0.14, 0.95)
 	panel_style.border_color = Color(0.4, 0.3, 0.6, 0.8)
 	panel_style.set_border_width_all(2)
 	panel_style.set_corner_radius_all(12)
 	panel_style.set_content_margin_all(16)
-	add_theme_stylebox_override("panel", panel_style)
+	background_panel.add_theme_stylebox_override("panel", panel_style)
+	add_child(background_panel)
 
-	# Main layout
+	# Main layout inside the background panel
 	var vbox = VBoxContainer.new()
-	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	vbox.add_theme_constant_override("separation", 10)
-	add_child(vbox)
+	background_panel.add_child(vbox)
 
 	# Title bar
 	var title_bar = _create_title_bar()
@@ -225,7 +228,7 @@ func _create_vocab_list_view() -> Control:
 	# Header
 	var header = Label.new()
 	header.name = "VocabListHeader"
-	header.text = "📚 My Vocabulary"
+	header.text = "📚 Known Pairs"
 	header.add_theme_font_size_override("font_size", 18)
 	header.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
 	container.add_child(header)
@@ -233,7 +236,7 @@ func _create_vocab_list_view() -> Control:
 	# Subtitle
 	var subtitle = Label.new()
 	subtitle.name = "VocabListSubtitle"
-	subtitle.text = "Discovered emoji pairs - use these for quests!"
+	subtitle.text = "Emoji pairs you can plant - complete quests to learn more!"
 	subtitle.add_theme_font_size_override("font_size", 12)
 	subtitle.add_theme_color_override("font_color", Color(0.6, 0.7, 0.8))
 	container.add_child(subtitle)
@@ -245,11 +248,11 @@ func _create_vocab_list_view() -> Control:
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	container.add_child(scroll)
 
-	# Grid for vocabulary items
+	# Grid for vocabulary items (pairs need more horizontal space)
 	vocab_list_grid = GridContainer.new()
-	vocab_list_grid.columns = 3  # 3 columns of emoji pairs
-	vocab_list_grid.add_theme_constant_override("h_separation", 16)
-	vocab_list_grid.add_theme_constant_override("v_separation", 8)
+	vocab_list_grid.columns = 2  # 2 columns of emoji pairs
+	vocab_list_grid.add_theme_constant_override("h_separation", 24)
+	vocab_list_grid.add_theme_constant_override("v_separation", 12)
 	scroll.add_child(vocab_list_grid)
 
 	# Mode hint
@@ -389,9 +392,10 @@ func _update_octant_counts() -> void:
 
 
 func _populate_vocab_list() -> void:
-	"""Populate the vocabulary list with player's known emojis.
+	"""Populate the vocabulary list with player's known pairs.
 
-	Shows known_emojis (what determines quest/faction access) not evolved pairs.
+	Shows known_pairs (plantable qubit axes) as the primary display.
+	Pairs are the core vocabulary unit - emojis are learned as pairs.
 	"""
 	# Clear existing items
 	for child in vocab_list_grid.get_children():
@@ -402,29 +406,58 @@ func _populate_vocab_list() -> void:
 		_add_vocab_placeholder("Game not loaded")
 		return
 
-	# Get player's known emojis (determines faction access)
-	var known_emojis = gsm.current_state.known_emojis
+	# Get player's known pairs (the core vocabulary unit - source of truth)
+	var known_pairs = gsm.current_state.known_pairs
+	var known_emojis = gsm.current_state.get_known_emojis()  # Derived from known_pairs
 	var accessible_factions = gsm.get_accessible_factions() if gsm.has_method("get_accessible_factions") else []
 
 	# Update subtitle with count
 	var subtitle = vocab_list_container.find_child("VocabListSubtitle", true, false)
 	if subtitle:
-		subtitle.text = "%d emojis known | %d factions accessible" % [known_emojis.size(), accessible_factions.size()]
+		subtitle.text = "%d pairs known | %d factions accessible" % [known_pairs.size(), accessible_factions.size()]
 
-	if known_emojis.is_empty():
-		_add_vocab_placeholder("No vocabulary yet!\n\nComplete quests to learn new emojis.")
+	if known_pairs.is_empty():
+		_add_vocab_placeholder("No vocabulary yet!\n\nComplete quests to learn new emoji pairs.")
 		return
 
-	# Add each known emoji with nice styling
-	for emoji in known_emojis:
-		var emoji_label = Label.new()
-		emoji_label.text = emoji
-		emoji_label.add_theme_font_size_override("font_size", 32)
-		emoji_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		emoji_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		emoji_label.custom_minimum_size = Vector2(60, 60)
-		emoji_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.9))
-		vocab_list_grid.add_child(emoji_label)
+	# Add each known pair with nice styling
+	for pair in known_pairs:
+		var north = pair.get("north", "?")
+		var south = pair.get("south", "?")
+
+		# Create a horizontal container for the pair
+		var pair_container = HBoxContainer.new()
+		pair_container.add_theme_constant_override("separation", 8)
+		pair_container.custom_minimum_size = Vector2(180, 60)
+
+		# North emoji
+		var north_label = Label.new()
+		north_label.text = north
+		north_label.add_theme_font_size_override("font_size", 32)
+		north_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		north_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		north_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.9))
+		pair_container.add_child(north_label)
+
+		# Divider
+		var divider = Label.new()
+		divider.text = "/"
+		divider.add_theme_font_size_override("font_size", 24)
+		divider.add_theme_color_override("font_color", Color(0.5, 0.6, 0.7))
+		divider.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		divider.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		pair_container.add_child(divider)
+
+		# South emoji
+		var south_label = Label.new()
+		south_label.text = south
+		south_label.add_theme_font_size_override("font_size", 32)
+		south_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		south_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		south_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.9))
+		pair_container.add_child(south_label)
+
+		vocab_list_grid.add_child(pair_container)
 
 	# Add separator and faction info
 	var spacer = Control.new()

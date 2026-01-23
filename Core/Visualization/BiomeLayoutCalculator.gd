@@ -22,12 +22,13 @@ var graph_radius: float = 250.0
 const BASE_REFERENCE_RADIUS = 300.0
 
 
-func compute_layout(biomes: Dictionary, new_viewport_size: Vector2) -> Dictionary:
+func compute_layout(biomes: Dictionary, new_viewport_size: Vector2, active_biome: String = "") -> Dictionary:
 	"""Compute all biome ovals from configs and viewport size
 
 	Args:
 		biomes: Dictionary of biome_name → BiomeBase instances
 		new_viewport_size: Current viewport dimensions
+		active_biome: If set, center this biome on screen (single-biome view)
 
 	Returns:
 		Dictionary of biome_name → oval config
@@ -48,6 +49,11 @@ func compute_layout(biomes: Dictionary, new_viewport_size: Vector2) -> Dictionar
 	var actual_radius = min(actual_viewport.x, actual_viewport.y) * 0.35  # Positioning radius
 	graph_radius = min(reference_size.x, reference_size.y) * 0.35  # Scaling radius (for dimensions)
 
+	# SINGLE-BIOME VIEW: Use larger radius for hex pattern to fill screen
+	var single_biome_mode = active_biome != ""
+	if single_biome_mode:
+		graph_radius = min(reference_size.x, reference_size.y) * 0.40  # Larger for full-screen
+
 	biome_ovals.clear()
 
 	for biome_name in biomes:
@@ -64,21 +70,18 @@ func compute_layout(biomes: Dictionary, new_viewport_size: Vector2) -> Dictionar
 		var color = config.get("color", Color(0.5, 0.5, 0.5, 0.3))
 		var label = config.get("label", biome_name)
 
-		# Convert relative offset to absolute center using ACTUAL radius (keeps ovals on screen)
-		var center = graph_center + center_offset * actual_radius
+		# SINGLE-BIOME VIEW: Center on screen, ignore offset
+		var center: Vector2
+		if single_biome_mode and biome_name == active_biome:
+			center = graph_center  # Centered on screen
+		else:
+			# Multi-biome: use offset positioning
+			center = graph_center + center_offset * actual_radius
 
 		# Scale oval dimensions using reference radius (prevents tiny ovals in headless mode)
 		var scale = graph_radius / BASE_REFERENCE_RADIUS
 		var semi_a = oval_width * scale / 2.0  # Horizontal semi-axis
 		var semi_b = oval_height * scale / 2.0  # Vertical semi-axis
-
-		# DEBUG: Show oval calculation
-		print("🟢 BiomeLayoutCalculator: Biome '%s'" % biome_name)
-		print("   center_offset=%s, oval_width=%.1f, scale=%.3f" % [
-			center_offset, oval_width, scale
-		])
-		print("   Calculated center: (%.1f, %.1f)" % [center.x, center.y])
-		print("   graph_center=%s, graph_radius=%.1f" % [graph_center, graph_radius])
 
 		biome_ovals[biome_name] = {
 			"center": center,
@@ -183,7 +186,8 @@ func update_node_positions(nodes: Array) -> void:
 func distribute_nodes_in_biome(biome_name: String, count: int, seed_offset: int = 0) -> Array:
 	"""Generate evenly distributed parametric positions for nodes in a biome
 
-	Uses golden angle distribution for even spread.
+	Uses hexagonal layout for 6 plots (single-biome view).
+	Falls back to golden angle for other counts.
 
 	Args:
 		biome_name: Which biome to distribute in
@@ -193,6 +197,11 @@ func distribute_nodes_in_biome(biome_name: String, count: int, seed_offset: int 
 	Returns:
 		Array of {t: float, ring: float} parametric coordinates
 	"""
+	# Use hexagonal layout for 6 plots (standard single-biome view)
+	if count == 6:
+		return distribute_nodes_hexagonal()
+
+	# Fallback to golden angle for other counts
 	var positions: Array = []
 
 	for i in range(count):
@@ -202,6 +211,73 @@ func distribute_nodes_in_biome(biome_name: String, count: int, seed_offset: int 
 
 		# Radial rings - spread from inner to outer
 		var ring = 0.2 + (float(i) / max(count - 1, 1)) * 0.6  # Range [0.2, 0.8]
+
+		positions.append({"t": t, "ring": ring})
+
+	return positions
+
+
+func get_hex_screen_positions() -> Array[Vector2]:
+	"""Get FIXED hex screen positions for 6 plots (SINGLE source of truth for hex layout)
+
+	Returns absolute screen positions in hex pattern, centered on screen.
+	All biomes use the SAME hex size with 1.67:1 aspect ratio (wider than tall).
+
+	Layout (positions at 60° intervals, starting from top):
+
+	        [0] ← top
+	    [5]     [1]
+
+	    [4]     [2]
+	        [3] ← bottom
+	"""
+	var positions: Array[Vector2] = []
+
+	# Fixed hex dimensions relative to viewport (consistent across all biomes)
+	# Aspect ratio 1.67:1 (width:height) - wider than tall
+	var hex_height = graph_radius * 0.55  # Vertical extent from center
+	var hex_width = hex_height * 1.67     # Horizontal extent (1.67x wider)
+
+	for i in range(6):
+		# Start from top (90° in standard coords), go clockwise
+		var angle = (PI / 2.0) - (i * PI / 3.0)
+
+		# Calculate position with stretched aspect ratio
+		var x = graph_center.x + cos(angle) * hex_width
+		var y = graph_center.y - sin(angle) * hex_height  # Negative because Y is down in screen coords
+
+		positions.append(Vector2(x, y))
+
+	return positions
+
+
+func distribute_nodes_hexagonal() -> Array:
+	"""Generate hexagonal positions for 6 plots
+
+	Positions at 60° intervals, starting from top (12 o'clock):
+
+	        [0] ← top
+	    [5]     [1]
+
+	    [4]     [2]
+	        [3] ← bottom
+
+	Returns:
+		Array of {t: float, ring: float} parametric coordinates
+	"""
+	var positions: Array = []
+
+	for i in range(6):
+		# Start from top (90° in standard coords), go clockwise
+		# Angle in radians: 90°, 30°, -30°, -90°, -150°, 150° (or +210°)
+		var angle = (PI / 2.0) - (i * PI / 3.0)
+
+		# Convert angle to parametric t (0-1 around the ellipse)
+		# t=0 is right (0°), t=0.25 is top (90°), t=0.5 is left, t=0.75 is bottom
+		var t = fmod(angle / TAU + 1.0, 1.0)
+
+		# All plots at same radius for clean hex pattern
+		var ring = 0.65
 
 		positions.append({"t": t, "ring": ring})
 

@@ -21,9 +21,9 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 const PlotPoolClass = preload("res://Core/GameMechanics/PlotPool.gd")
 const GoalsSystem = preload("res://Core/GameMechanics/GoalsSystem.gd")
 const BioticFluxBiome = preload("res://Core/Environment/BioticFluxBiome.gd")
-const MarketBiome = preload("res://Core/Environment/MarketBiome.gd")
-const ForestBiome = preload("res://Core/Environment/ForestEcosystem_Biome.gd")
-const QuantumKitchen_Biome = preload("res://Core/Environment/QuantumKitchen_Biome.gd")
+const StellarForgesBiome = preload("res://Core/Environment/StellarForgesBiome.gd")
+const FungalNetworksBiome = preload("res://Core/Environment/FungalNetworksBiome.gd")
+const VolcanicWorldsBiome = preload("res://Core/Environment/VolcanicWorldsBiome.gd")
 const FarmUIState = preload("res://Core/GameState/FarmUIState.gd")
 const VocabularyEvolution = preload("res://Core/QuantumSubstrate/VocabularyEvolution.gd")
 
@@ -34,9 +34,9 @@ var grid: FarmGrid
 var economy  # FarmEconomy type
 var goals: GoalsSystem
 var biotic_flux_biome: BioticFluxBiome
-var market_biome: MarketBiome
-var forest_biome: ForestBiome
-var kitchen_biome: QuantumKitchen_Biome
+var stellar_forges_biome: StellarForgesBiome
+var fungal_networks_biome: FungalNetworksBiome
+var volcanic_worlds_biome: VolcanicWorldsBiome
 var vocabulary_evolution: VocabularyEvolution  # Vocabulary evolution system
 var ui_state: FarmUIState  # UI State abstraction layer
 var grid_config: GridConfig = null  # Single source of truth for grid layout
@@ -154,20 +154,20 @@ func _ready():
 	biotic_flux_biome.name = "BioticFlux"
 	add_child(biotic_flux_biome)
 
-	# Instantiate Market Biome
-	market_biome = MarketBiome.new()
-	market_biome.name = "Market"
-	add_child(market_biome)
+	# Instantiate Stellar Forges Biome (replaced Market)
+	stellar_forges_biome = StellarForgesBiome.new()
+	stellar_forges_biome.name = "StellarForges"
+	add_child(stellar_forges_biome)
 
-	# Instantiate Forest Ecosystem Biome
-	forest_biome = ForestBiome.new()
-	forest_biome.name = "Forest"
-	add_child(forest_biome)
+	# Instantiate Fungal Networks Biome (replaced Forest)
+	fungal_networks_biome = FungalNetworksBiome.new()
+	fungal_networks_biome.name = "FungalNetworks"
+	add_child(fungal_networks_biome)
 
-	# Instantiate Kitchen Biome
-	kitchen_biome = QuantumKitchen_Biome.new()
-	kitchen_biome.name = "Kitchen"
-	add_child(kitchen_biome)
+	# Instantiate Volcanic Worlds Biome (replaced Kitchen)
+	volcanic_worlds_biome = VolcanicWorldsBiome.new()
+	volcanic_worlds_biome.name = "VolcanicWorlds"
+	add_child(volcanic_worlds_biome)
 
 	# All four biomes successfully instantiated
 	biome_enabled = true
@@ -189,22 +189,21 @@ func _ready():
 	# Connect economy to grid for mill/market/kitchen flour & bread processing
 	grid.farm_economy = economy
 
-	# Connect economy to Market biome for buy/sell trading
-	market_biome.farm_economy = economy
+	# Note: StellarForges doesn't have direct economy connection (no trading)
 
 	# Wire all four biomes to the grid
 	if biome_enabled:
 		grid.register_biome("BioticFlux", biotic_flux_biome)
 		biotic_flux_biome.grid = grid
 
-		grid.register_biome("Market", market_biome)
-		market_biome.grid = grid
+		grid.register_biome("StellarForges", stellar_forges_biome)
+		stellar_forges_biome.grid = grid
 
-		grid.register_biome("Forest", forest_biome)
-		forest_biome.grid = grid
+		grid.register_biome("FungalNetworks", fungal_networks_biome)
+		fungal_networks_biome.grid = grid
 
-		grid.register_biome("Kitchen", kitchen_biome)
-		kitchen_biome.grid = grid
+		grid.register_biome("VolcanicWorlds", volcanic_worlds_biome)
+		volcanic_worlds_biome.grid = grid
 
 	add_child(grid)
 
@@ -217,33 +216,16 @@ func _ready():
 	set_meta("grid", grid)
 	if biome_enabled:
 		set_meta("biotic_flux_biome", biotic_flux_biome)
-		set_meta("market_biome", market_biome)
-		set_meta("forest_biome", forest_biome)
-		set_meta("kitchen_biome", kitchen_biome)
+		set_meta("stellar_forges_biome", stellar_forges_biome)
+		set_meta("fungal_networks_biome", fungal_networks_biome)
+		set_meta("volcanic_worlds_biome", volcanic_worlds_biome)
 
-	# Configure plot-to-biome assignments
+	# Configure plot-to-biome assignments from GridConfig (4 biomes, 1 row each)
+	# Each biome has its own row: Row 0=BioticFlux, 1=StellarForges, 2=FungalNetworks, 3=VolcanicWorlds
 	if biome_enabled and grid and grid.has_method("assign_plot_to_biome"):
-		# Market biome: T,Y
-		grid.assign_plot_to_biome(Vector2i(0, 0), "Market")
-		grid.assign_plot_to_biome(Vector2i(1, 0), "Market")
-
-		# BioticFlux biome: U,I,O,P
-		grid.assign_plot_to_biome(Vector2i(2, 0), "BioticFlux")
-		grid.assign_plot_to_biome(Vector2i(3, 0), "BioticFlux")
-		grid.assign_plot_to_biome(Vector2i(4, 0), "BioticFlux")
-		grid.assign_plot_to_biome(Vector2i(5, 0), "BioticFlux")
-
-		# Forest biome: 0,9,8,7
-		grid.assign_plot_to_biome(Vector2i(0, 1), "Forest")
-		grid.assign_plot_to_biome(Vector2i(1, 1), "Forest")
-		grid.assign_plot_to_biome(Vector2i(2, 1), "Forest")
-		# Moved to Kitchen - need 3 plots for GHZ entanglement
-		# grid.assign_plot_to_biome(Vector2i(3, 1), "Forest")
-
-		# Kitchen biome: , . / (3 plots for GHZ state)
-		grid.assign_plot_to_biome(Vector2i(3, 1), "Kitchen")
-		grid.assign_plot_to_biome(Vector2i(4, 1), "Kitchen")
-		grid.assign_plot_to_biome(Vector2i(5, 1), "Kitchen")
+		for pos in grid_config.biome_assignments:
+			var biome_name = grid_config.biome_assignments[pos]
+			grid.assign_plot_to_biome(pos, biome_name)
 
 	# Get persistent vocabulary evolution from GameStateManager
 	# The vocabulary persists across farms/biomes and travels with the player
@@ -301,9 +283,9 @@ func rebuild_all_biome_operators() -> void:
 
 	print("  🔧 Rebuilding operators for all biomes...")
 	biotic_flux_biome.rebuild_quantum_operators()
-	market_biome.rebuild_quantum_operators()
-	forest_biome.rebuild_quantum_operators()
-	kitchen_biome.rebuild_quantum_operators()
+	stellar_forges_biome.rebuild_quantum_operators()
+	fungal_networks_biome.rebuild_quantum_operators()
+	volcanic_worlds_biome.rebuild_quantum_operators()
 	print("  ✓ All biome operators rebuilt")
 
 
@@ -314,12 +296,12 @@ func finalize_setup() -> void:
 	Called by BootManager.boot() after biomes are verified to be initialized.
 	This allows for any post-setup operations needed before gameplay starts.
 	"""
-	# Verify all biomes have their quantum systems initialized (Model C: quantum_computer OR legacy bath)
+	# Verify all biomes have their quantum systems initialized
 	if biome_enabled:
-		assert(biotic_flux_biome.bath != null or biotic_flux_biome.quantum_computer != null, "BioticFlux biome has neither bath nor quantum_computer!")
-		assert(market_biome.bath != null or market_biome.quantum_computer != null, "Market biome has neither bath nor quantum_computer!")
-		assert(forest_biome.bath != null or forest_biome.quantum_computer != null, "Forest biome has neither bath nor quantum_computer!")
-		assert(kitchen_biome.bath != null or kitchen_biome.quantum_computer != null, "Kitchen biome has neither bath nor quantum_computer!")
+		assert(biotic_flux_biome.quantum_computer != null, "BioticFlux biome has no quantum_computer!")
+		assert(stellar_forges_biome.quantum_computer != null, "StellarForges biome has no quantum_computer!")
+		assert(fungal_networks_biome.quantum_computer != null, "FungalNetworks biome has no quantum_computer!")
+		assert(volcanic_worlds_biome.quantum_computer != null, "VolcanicWorlds biome has no quantum_computer!")
 
 	print("  ✓ Farm setup finalized")
 
@@ -337,12 +319,12 @@ func enable_simulation() -> void:
 	if biome_enabled:
 		if biotic_flux_biome:
 			biotic_flux_biome.set_process(true)
-		if market_biome:
-			market_biome.set_process(true)
-		if forest_biome:
-			forest_biome.set_process(true)
-		if kitchen_biome:
-			kitchen_biome.set_process(true)
+		if stellar_forges_biome:
+			stellar_forges_biome.set_process(true)
+		if fungal_networks_biome:
+			fungal_networks_biome.set_process(true)
+		if volcanic_worlds_biome:
+			volcanic_worlds_biome.set_process(true)
 		print("  ✓ All biome processing enabled")
 
 	print("  ✓ Farm simulation process enabled")
@@ -424,106 +406,102 @@ func _process_mushroom_composting(delta: float):
 			set_meta("composting_accumulator", accumulator)
 
 
-## GRID CONFIGURATION (Phase 2)
+## GRID CONFIGURATION (Phase 2 → Single-Biome View)
+##
+## NEW ARCHITECTURE: Each biome has 6 independent plots (24 total).
+## Only one biome visible at a time. TYUIOP selects plots within active biome.
+## Biome row mapping: BioticFlux=0, Market=1, Forest=2, Kitchen=3
+
+const BIOME_ROW_MAP: Dictionary = {
+	"BioticFlux": 0,
+	"StellarForges": 1,
+	"FungalNetworks": 2,
+	"VolcanicWorlds": 3,
+}
+
+const ROW_BIOME_MAP: Dictionary = {
+	0: "BioticFlux",
+	1: "StellarForges",
+	2: "FungalNetworks",
+	3: "VolcanicWorlds",
+}
 
 func _create_grid_config() -> GridConfig:
-	"""Create grid configuration - single source of truth for layout"""
+	"""Create grid configuration - single source of truth for layout
+
+	Single-biome view: 4 biomes × 6 plots = 24 total plots
+	Each biome uses y-coordinate as biome identifier:
+	  - BioticFlux: y=0, positions (0,0) through (5,0)
+	  - Market: y=1, positions (0,1) through (5,1)
+	  - Forest: y=2, positions (0,2) through (5,2)
+	  - Kitchen: y=3, positions (0,3) through (5,3)
+
+	TYUIOP keys select within the ACTIVE biome (mapped by ActiveBiomeManager).
+	"""
 	var config = GridConfig.new()
 	config.grid_width = 6
-	config.grid_height = 2
+	config.grid_height = 4  # 4 biomes
 
 	# Create keyboard layout configuration
 	var keyboard = KeyboardLayoutConfig.new()
 
-	# Row 0: TYUIOP → left-to-right grid positions (0,0) through (5,0)
-	var row0_keys = ["t", "y", "u", "i", "o", "p"]
+	# TYUIOP → positions 0-5 (within active biome, y determined at runtime)
+	# For keyboard layout, we map to y=0 (BioticFlux) as default
+	# The actual position used depends on ActiveBiomeManager.active_biome
+	var plot_keys = ["t", "y", "u", "i", "o", "p"]
 	for i in range(6):
-		var pos = Vector2i(i, 0)
-		keyboard.action_to_position["select_plot_" + row0_keys[i]] = pos
-		keyboard.position_to_label[pos] = row0_keys[i].to_upper()
-
-	# Row 1: 7890-= → left-to-right grid positions (0,1) through (5,1)
-	var row1_keys = ["7", "8", "9", "0"]
-	for i in range(4):
-		var pos = Vector2i(i, 1)
-		keyboard.action_to_position["select_plot_" + row1_keys[i]] = pos
-		keyboard.position_to_label[pos] = row1_keys[i]
-
-	# Kitchen keys: , . and /
-	var kitchen_keys = [",", ".", "/"]
-	for i in range(3):
-		var pos = Vector2i(3 + i, 1)
-		keyboard.action_to_position["select_plot_" + kitchen_keys[i]] = pos
-		keyboard.position_to_label[pos] = kitchen_keys[i]
-
-	# NOTE: Removed confusing parametric position overrides
-	# Keyboard now matches grid in simple left-to-right order:
-	#   Row 0: T=0, Y=1, U=2, I=3, O=4, P=5
-	#   Row 1: 7=0, 8=1, 9=2, 0=3, ,=4, .=5
+		var pos = Vector2i(i, 0)  # Default to y=0, remapped at runtime
+		keyboard.action_to_position["select_plot_" + plot_keys[i]] = pos
+		keyboard.position_to_label[pos] = plot_keys[i].to_upper()
+		# Also add labels for other biome rows (same x position, different y)
+		for biome_row in range(1, 4):
+			keyboard.position_to_label[Vector2i(i, biome_row)] = plot_keys[i].to_upper()
 
 	config.keyboard_layout = keyboard
 
 	# =========================================================================
-	# PLOT CONFIGURATIONS - Simple logical positions
-	# Biomes handle their own visual arrangement
+	# PLOT CONFIGURATIONS - 6 plots per biome, 24 total
+	# Each biome has independent quantum state and plots
 	# =========================================================================
 
-	# Market (TY) - positions (0,0), (1,0)
-	for i in range(2):
-		var plot = PlotConfig.new()
-		plot.position = Vector2i(i, 0)
-		plot.is_active = true
-		plot.keyboard_label = row0_keys[i].to_upper()  # T, Y
-		plot.input_action = "select_plot_" + row0_keys[i]
-		plot.biome_name = "Market"
-		config.plots.append(plot)
+	for biome_name in BIOME_ROW_MAP.keys():
+		var biome_row = BIOME_ROW_MAP[biome_name]
+		for i in range(6):
+			var plot = PlotConfig.new()
+			plot.position = Vector2i(i, biome_row)
+			plot.is_active = true
+			plot.keyboard_label = plot_keys[i].to_upper()
+			plot.input_action = "select_plot_" + plot_keys[i]
+			plot.biome_name = biome_name
+			config.plots.append(plot)
 
-	# BioticFlux (UIOP) - positions (2,0), (3,0), (4,0), (5,0)
-	for i in range(4):
-		var plot = PlotConfig.new()
-		plot.position = Vector2i(2 + i, 0)
-		plot.is_active = true
-		plot.keyboard_label = row0_keys[2 + i].to_upper()  # U, I, O, P
-		plot.input_action = "select_plot_" + row0_keys[2 + i]
-		plot.biome_name = "BioticFlux"
-		config.plots.append(plot)
-
-	# Forest (789) - positions (0,1), (1,1), (2,1) [reduced to 3 for Kitchen]
-	for i in range(3):
-		var plot = PlotConfig.new()
-		plot.position = Vector2i(i, 1)
-		plot.is_active = true
-		plot.keyboard_label = row1_keys[i]  # 7, 8, 9
-		plot.input_action = "select_plot_" + row1_keys[i]
-		plot.biome_name = "Forest"
-		config.plots.append(plot)
-
-	# Kitchen (positions 3,1, 4,1, and 5,1) - using keys ',' '.' and '/' [3 plots for GHZ]
-	# Reusing kitchen_keys declared above
-	for i in range(3):
-		var plot = PlotConfig.new()
-		plot.position = Vector2i(3 + i, 1)
-		plot.is_active = true
-		plot.keyboard_label = kitchen_keys[i]
-		plot.input_action = "select_plot_" + kitchen_keys[i]
-		plot.biome_name = "Kitchen"
-		config.plots.append(plot)
-
-	# Set up biome assignments
-	config.biome_assignments[Vector2i(0, 0)] = "Market"
-	config.biome_assignments[Vector2i(1, 0)] = "Market"
-	config.biome_assignments[Vector2i(2, 0)] = "BioticFlux"
-	config.biome_assignments[Vector2i(3, 0)] = "BioticFlux"
-	config.biome_assignments[Vector2i(4, 0)] = "BioticFlux"
-	config.biome_assignments[Vector2i(5, 0)] = "BioticFlux"
-	config.biome_assignments[Vector2i(0, 1)] = "Forest"
-	config.biome_assignments[Vector2i(1, 1)] = "Forest"
-	config.biome_assignments[Vector2i(2, 1)] = "Forest"
-	config.biome_assignments[Vector2i(3, 1)] = "Kitchen"
-	config.biome_assignments[Vector2i(4, 1)] = "Kitchen"
-	config.biome_assignments[Vector2i(5, 1)] = "Kitchen"
+			# Set up biome assignment
+			config.biome_assignments[Vector2i(i, biome_row)] = biome_name
 
 	return config
+
+
+func get_biome_row(biome_name: String) -> int:
+	"""Get the row (y-coordinate) for a biome"""
+	return BIOME_ROW_MAP.get(biome_name, 0)
+
+
+func get_biome_for_row(row: int) -> String:
+	"""Get the biome name for a row (y-coordinate)"""
+	return ROW_BIOME_MAP.get(row, "BioticFlux")
+
+
+func get_plot_position_for_active_biome(plot_index: int) -> Vector2i:
+	"""Convert plot index (0-5) to full position using active biome
+
+	Used by input handling to map TYUIOP to the correct biome's plots.
+	"""
+	var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+	var active_biome = "BioticFlux"
+	if biome_mgr:
+		active_biome = biome_mgr.get_active_biome()
+	var biome_row = get_biome_row(active_biome)
+	return Vector2i(plot_index, biome_row)
 
 
 ## Public API - Game Operations

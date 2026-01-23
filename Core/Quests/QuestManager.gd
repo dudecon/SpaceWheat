@@ -171,16 +171,12 @@ func offer_quest_emergent(faction: Dictionary, biome) -> Dictionary:
 	if active_quests.size() >= MAX_ACTIVE_QUESTS:
 		return {}
 
-	# Get bath from biome
-	var bath = null
-	if biome and biome.get("bath"):
-		bath = biome.bath
-
 	# Get player vocabulary for filtering
-	var player_vocab = GameStateManager.current_state.known_emojis if GameStateManager.current_state else []
+	var player_vocab = GameStateManager.current_state.get_known_emojis() if GameStateManager.current_state else []
 
 	# Generate via abstract machinery + theming (with vocabulary constraint!)
-	var quest = QuestTheming.generate_quest(faction, bath, player_vocab)
+	# Note: bath parameter is null (deprecated - removed from architecture)
+	var quest = QuestTheming.generate_quest(faction, null, player_vocab)
 
 	# Check for vocabulary mismatch error
 	if quest.is_empty() or quest.has("error"):
@@ -213,17 +209,13 @@ func offer_all_faction_quests(biome) -> Array:
 	"""
 	var quests = []
 
-	# Get bath from biome
-	var bath = null
-	if biome and biome.get("bath"):
-		bath = biome.bath
-
 	# Get player vocabulary for filtering
-	var player_vocab = GameStateManager.current_state.known_emojis if GameStateManager.current_state else []
+	var player_vocab = GameStateManager.current_state.get_known_emojis() if GameStateManager.current_state else []
 
 	for faction in FactionDatabase.ALL_FACTIONS:
 		# Use full generate_quest pipeline (handles vocabulary filtering!)
-		var quest = QuestTheming.generate_quest(faction, bath, player_vocab)
+		# Note: bath parameter is null (deprecated)
+		var quest = QuestTheming.generate_quest(faction, null, player_vocab)
 
 		# Skip factions with no vocabulary overlap
 		if quest.is_empty() or quest.has("error"):
@@ -246,12 +238,8 @@ func offer_all_faction_quests(biome) -> Array:
 
 func get_biome_observables(biome) -> Dictionary:
 	"""Get current biome quantum observables for UI display"""
-	var bath = null
-	if biome and biome.get("bath"):
-		bath = biome.bath
-
-	# Pass biome for dynamics tracking
-	var obs = FactionStateMatcher.extract_observables(bath, biome)
+	# Note: bath parameter is null (deprecated)
+	var obs = FactionStateMatcher.extract_observables(null, biome)
 
 	return {
 		"purity": obs.purity,
@@ -326,9 +314,9 @@ func check_quest_completion(quest_id: int) -> bool:
 		return false
 
 	# Check if player has enough resources
+	# quantity is already in credits (10-150 range from QuestTheming)
 	var player_amount = economy.get_resource(required_emoji)
-	var needed_credits = required_qty * EconomyConstants.QUANTUM_TO_CREDITS
-	return player_amount >= needed_credits
+	return player_amount >= required_qty
 
 func complete_quest(quest_id: int) -> bool:
 	"""Complete an active quest
@@ -338,34 +326,39 @@ func complete_quest(quest_id: int) -> bool:
 	Returns:
 		true if completed successfully
 	"""
+	print("🔍 complete_quest called with ID: %d" % quest_id)
+	print("🔍 active_quests keys: %s" % str(active_quests.keys()))
+
 	if not active_quests.has(quest_id):
 		push_error("Cannot complete quest %d: not active" % quest_id)
 		return false
 
 	var quest = active_quests[quest_id]
+	print("🔍 Quest found: %s, resource=%s, qty=%d" % [quest.get("faction", "?"), quest.get("resource", "?"), quest.get("quantity", 0)])
 
 	# Check resources
 	if not check_quest_completion(quest_id):
 		push_warning("Cannot complete quest %d: insufficient resources" % quest_id)
 		return false
+	print("🔍 Resource check passed")
 
-	# Deduct resources
+	# Deduct resources (quantity is already in credits)
 	var required_emoji = quest["resource"]
 	var required_qty = quest["quantity"]
-	var cost_credits = required_qty * EconomyConstants.QUANTUM_TO_CREDITS
 
-	if not economy.remove_resource(required_emoji, cost_credits, "quest_completion"):
-		push_error("Failed to deduct resources for quest %d" % quest_id)
+	# Debug: show exact values being used
+	var player_has = economy.get_resource(required_emoji) if economy else -1
+	print("🔍 Deducting: emoji='%s' qty=%d, player_has=%d" % [required_emoji, required_qty, player_has])
+
+	if not economy.remove_resource(required_emoji, required_qty, "quest_completion"):
+		push_error("Failed to deduct resources for quest %d: need %d %s, have %d" % [quest_id, required_qty, required_emoji, player_has])
 		return false
 
-	# Generate rewards (including vocabulary!)
-	var bath = current_biome.bath if current_biome and current_biome.get("bath") else null
-	var player_vocab = GameStateManager.current_state.known_emojis if GameStateManager.current_state else []
-	var reward = QuestRewards.generate_reward(quest, bath, player_vocab)
+	# Generate rewards (vocabulary only - no universal 💰 currency!)
+	var player_vocab = GameStateManager.current_state.get_known_emojis() if GameStateManager.current_state else []
+	var reward = QuestRewards.generate_reward(quest, null, player_vocab)
 
-	# Grant 💰-credits rewards
-	if reward.money_amount > 0 and economy:
-		economy.add_resource("💰", reward.money_amount, "quest_reward")
+	# NO UNIVERSAL MONEY - removed 💰 grant
 
 	# Grant vocabulary rewards
 	var faction_name = quest.get("faction", "Unknown")
@@ -479,19 +472,11 @@ func claim_quest(quest_id: int) -> bool:
 		push_warning("Cannot claim quest %d: not ready (status=%s)" % [quest_id, quest.get("status", "?")])
 		return false
 
-	# Generate and grant rewards
-	var bath = current_biome.bath if current_biome and current_biome.get("bath") else null
-	var player_vocab = GameStateManager.current_state.known_emojis if GameStateManager.current_state else []
-	var reward = QuestRewards.generate_reward(quest, bath, player_vocab)
+	# Generate and grant rewards (vocabulary only - no universal 💰 currency!)
+	var player_vocab = GameStateManager.current_state.get_known_emojis() if GameStateManager.current_state else []
+	var reward = QuestRewards.generate_reward(quest, null, player_vocab)
 
-	# Override money for state-shaping quests
-	var reward_multiplier = quest.get("reward_multiplier", 2.0)
-	var base_money = 100
-	reward.money_amount = int(base_money * reward_multiplier)
-
-	# Grant money rewards
-	if reward.money_amount > 0 and economy:
-		economy.add_resource("💰", reward.money_amount, "quest_reward")
+	# NO UNIVERSAL MONEY - removed 💰 grant
 
 	# Grant vocabulary rewards
 	var faction_name = quest.get("faction", "Unknown")
@@ -636,8 +621,8 @@ func _calculate_rewards(quest: Dictionary) -> Dictionary:
 	if difficulty_multiplier <= 0.0:
 		difficulty_multiplier = _calculate_difficulty_multiplier(quest)
 
-	# Base cost in credits (what player spent)
-	var cost_credits = quantity * EconomyConstants.QUANTUM_TO_CREDITS
+	# Base cost in credits (quantity is already in credits)
+	var cost_credits = quantity
 
 	# Reward = cost * difficulty_multiplier
 	var reward_credits = int(cost_credits * difficulty_multiplier)
@@ -674,8 +659,9 @@ func _calculate_difficulty_multiplier(quest: Dictionary) -> float:
 	var base = 2.0
 
 	# 1. QUANTITY: Logarithmic scaling (smooth, no buckets!)
-	# log(1+x) gives smooth growth: 1→0.69, 5→1.79, 10→2.40, 20→3.04
-	var quantity_difficulty = log(1.0 + quantity) / log(1.0 + 15.0)  # Normalize to [0,1] for qty ≈ 15
+	# log(1+x) gives smooth growth: 10→2.40, 30→3.43, 50→3.93
+	# Quantity is now in credits (10-50 range)
+	var quantity_difficulty = log(1.0 + quantity) / log(1.0 + 50.0)  # Normalize to [0,1] for qty ≈ 50
 	var quantity_bonus = quantity_difficulty * 1.5  # Scale to [0, 1.5]
 
 	# 2. TIME PRESSURE: Exponential decay (smooth urgency curve)
@@ -950,30 +936,21 @@ func _update_induce_bell_state_quest(quest: Dictionary, delta: float) -> void:
 	if target_pair.size() < 2:
 		return  # Invalid quest
 
-	# Get bath from biome to check specific coherence
-	var bath = null
-	if current_biome and current_biome.get("bath"):
-		bath = current_biome.bath
-
-	if bath == null:
+	# Get quantum_computer from biome to check specific coherence
+	if not current_biome or not current_biome.quantum_computer:
 		return
+
+	var qc = current_biome.quantum_computer
 
 	# Check coherence between the specific pair
 	var emoji_a = target_pair[0]
 	var emoji_b = target_pair[1]
 
-	# Try to get coherence via density matrix
+	# Try to get coherence via quantum_computer
 	var coherence = 0.0
-	if bath.get("_density_matrix"):
-		var dm = bath._density_matrix
-		var emoji_list = dm.emoji_list
-		var idx_a = emoji_list.find(emoji_a)
-		var idx_b = emoji_list.find(emoji_b)
-
-		if idx_a >= 0 and idx_b >= 0:
-			# Get off-diagonal element magnitude
-			var rho_ab = dm.get_element(idx_a, idx_b)
-			coherence = rho_ab.length() if rho_ab else 0.0
+	if qc.has_method("get_coherence"):
+		var coh = qc.get_coherence(emoji_a, emoji_b)
+		coherence = coh.abs() if coh else 0.0
 
 	if coherence >= threshold:
 		var quest_id = quest.get("id", -1)
@@ -1031,25 +1008,19 @@ func _update_collapse_deliberately_quest(quest: Dictionary, delta: float) -> voi
 	if target_emoji.is_empty():
 		return
 
-	# Get bath from biome
-	var bath = null
-	if current_biome and current_biome.get("bath"):
-		bath = current_biome.bath
-
-	if bath == null:
+	# Get quantum_computer from biome
+	if not current_biome or not current_biome.quantum_computer:
 		return
+
+	var qc = current_biome.quantum_computer
 
 	# Check probability of target emoji
 	var probability = 0.0
-	if bath.get("_density_matrix"):
-		var dm = bath._density_matrix
-		var emoji_list = dm.emoji_list
-		var idx = emoji_list.find(target_emoji)
-		if idx >= 0:
-			probability = dm.get_probability_by_index(idx)
+	if qc.has_method("get_population"):
+		probability = qc.get_population(target_emoji)
 
 	# Also check purity - high purity + high probability = collapsed state
-	var purity = bath._density_matrix.get_purity() if bath.get("_density_matrix") else 0.0
+	var purity = qc.get_purity() if qc.has_method("get_purity") else 0.0
 
 	# Quest completes when: high purity AND target emoji dominates
 	if probability >= target_probability and purity >= 0.8:

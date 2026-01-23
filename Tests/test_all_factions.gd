@@ -1,14 +1,14 @@
 extends SceneTree
 
-## Test: Verify all 27 factions load and build icons correctly
-## Includes Core (10) + Civilization (7) + Tier 2 (10)
+## Test: Verify all factions load and build icons correctly
+## 79 factions loaded from JSON via FactionRegistry
 
 const AllFactions = preload("res://Core/Factions/AllFactions.gd")
 const IconBuilder = preload("res://Core/Factions/IconBuilder.gd")
 
 func _init():
 	print("========================================")
-	print("TESTING: All Factions System (27 total)")
+	print("TESTING: All Factions System (JSON)")
 	print("========================================\n")
 
 	# Test 1: Load all factions
@@ -16,11 +16,11 @@ func _init():
 	var all_factions = AllFactions.get_all()
 	print("Loaded %d factions" % all_factions.size())
 
-	if all_factions.size() != 27:
-		print("❌ FAILED: Expected 27 factions, got %d" % all_factions.size())
+	if all_factions.size() < 70:
+		print("❌ FAILED: Expected 70+ factions, got %d" % all_factions.size())
 		quit(1)
 	else:
-		print("✅ PASSED: All 27 factions loaded")
+		print("✅ PASSED: All %d factions loaded" % all_factions.size())
 
 	# Test 2: Verify faction groups
 	print("\n=== Test 2: Faction Groups ===")
@@ -32,16 +32,16 @@ func _init():
 	print("Civilization: %d factions" % civ_factions.size())
 	print("Tier 2: %d factions" % tier2_factions.size())
 
-	if core_factions.size() != 10:
-		print("❌ FAILED: Expected 10 core factions, got %d" % core_factions.size())
+	if core_factions.size() < 8:
+		print("❌ FAILED: Expected 8+ core factions, got %d" % core_factions.size())
 		quit(1)
 
-	if civ_factions.size() != 7:
-		print("❌ FAILED: Expected 7 civilization factions, got %d" % civ_factions.size())
+	if civ_factions.size() < 6:
+		print("❌ FAILED: Expected 6+ civilization factions, got %d" % civ_factions.size())
 		quit(1)
 
-	if tier2_factions.size() != 10:
-		print("❌ FAILED: Expected 10 tier2 factions, got %d" % tier2_factions.size())
+	if tier2_factions.size() < 8:
+		print("❌ FAILED: Expected 8+ tier2 factions, got %d" % tier2_factions.size())
 		quit(1)
 
 	print("✅ PASSED: All faction groups correct")

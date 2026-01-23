@@ -2,6 +2,17 @@
 .godot/
 *.translation
 
+# LLM working directories (not source code)
+llm_inbox/
+llm_outbox/
+
+# Archive directories (deprecated code)
+Archive/
+archive/
+
+# Test files (development only)
+Tests/
+
 # Editor-specific files
 .vscode/
 .idea/

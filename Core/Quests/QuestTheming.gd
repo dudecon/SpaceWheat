@@ -11,6 +11,7 @@ extends RefCounted
 const FactionStateMatcher = preload("res://Core/QuantumSubstrate/FactionStateMatcher.gd")
 const QuestTypes = preload("res://Core/Quests/QuestTypes.gd")
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
+const VocabularyPairing = preload("res://Core/Quests/VocabularyPairing.gd")
 
 ## Safe VerboseConfig accessor for RefCounted classes (no scene tree access)
 static func _log(level: String, category: String, emoji: String, message: String) -> void:
@@ -89,8 +90,10 @@ static func _select_quest_type(params: FactionStateMatcher.QuestParameters) -> i
 static func _generate_delivery_quest(params: FactionStateMatcher.QuestParameters, bath) -> Dictionary:
 	"""Generate traditional delivery quest (current system)"""
 
-	# intensity → quantity (SpaceWheat scale: 1-15)
-	var quantity = 1 + int(params.intensity * 14)
+	# intensity → quantity in CREDITS (10-50 range)
+	# This matches the economy where pop gives: probability × 10 = credits
+	var base_units = 1 + int(params.intensity * 4)  # 1-5 base
+	var quantity = base_units * 10  # Convert to credits: 10-50
 
 	# Sample resource from ALLOWED emojis only (vocabulary constraint!)
 	var allowed_emojis = params.available_emojis if params.available_emojis.size() > 0 else []
@@ -361,7 +364,7 @@ static func generate_quest(faction: Dictionary, bath, player_vocab: Array = []) 
 
 	# 3. If no overlap, faction is inaccessible!
 	if available_emojis.is_empty():
-		_log("info", "quest", "🚫", "%s inaccessible - no signature overlap with player vocab" % faction_name)
+		_log("debug", "quest", "🚫", "%s inaccessible - no signature overlap with player vocab" % faction_name)
 		return {
 			"error": "no_vocabulary_overlap",
 			"message": "Learn more about %s's interests first..." % faction.get("name", "Unknown"),
@@ -401,7 +404,21 @@ static func generate_quest(faction: Dictionary, bath, player_vocab: Array = []) 
 	quest["available_emojis"] = available_emojis
 	quest["vocabulary_overlap_pct"] = float(available_emojis.size()) / max(faction_vocab.all.size(), 1)
 
-	# 10. Add debug info
+	# 10. PRE-ROLL VOCABULARY REWARD PAIR
+	# Roll the vocab pair NOW (at quest creation) so player knows what they'll learn
+	var vocab_pair = _roll_vocabulary_reward_pair(signature, player_vocab)
+	quest["reward_vocab_north"] = vocab_pair.get("north", "")
+	quest["reward_vocab_south"] = vocab_pair.get("south", "")
+	quest["reward_vocab_probability"] = vocab_pair.get("probability", 0.0)
+	quest["reward_vocab_weight"] = vocab_pair.get("weight", 0.0)
+
+	_log("debug", "quest", "📖", "Pre-rolled vocab pair: %s/%s (%.0f%%)" % [
+		vocab_pair.get("north", "?"),
+		vocab_pair.get("south", "?"),
+		vocab_pair.get("probability", 0) * 100
+	])
+
+	# 11. Add debug info
 	quest["_preferences"] = FactionStateMatcher.describe_preferences(faction_bits)
 	quest["_observables"] = FactionStateMatcher.describe_observables(obs)
 
@@ -433,3 +450,62 @@ static func describe_alignment_reason(quest: Dictionary) -> String:
 		return "Partial match with faction preferences."
 	else:
 		return "Farm state misaligned with faction preferences."
+
+
+static func _roll_vocabulary_reward_pair(faction_signature: Array, player_vocab: Array) -> Dictionary:
+	"""Roll vocabulary reward pair at quest creation time
+
+	Strategy:
+	1. Find emojis in faction signature that player doesn't know
+	2. Pick one as "north" (randomly weighted by connections)
+	3. Roll "south" partner using VocabularyPairing physics
+
+	Args:
+		faction_signature: Faction's signature emojis
+		player_vocab: Emojis the player already knows
+
+	Returns:
+		{north, south, weight, probability} or {north: "", south: ""} if none available
+	"""
+	# Filter to unknown signature emojis
+	var unknown_north: Array = []
+	for emoji in faction_signature:
+		if emoji not in player_vocab:
+			unknown_north.append(emoji)
+
+	if unknown_north.is_empty():
+		_log("debug", "quest", "📖", "Player knows all signature emojis - no vocab reward")
+		return {"north": "", "south": "", "all_known": true}
+
+	# Pick a north emoji (random from unknown)
+	var north = unknown_north[randi() % unknown_north.size()]
+
+	# Roll partner using VocabularyPairing (uses IconRegistry physics)
+	var pair_result = VocabularyPairing.roll_partner(north)
+
+	if pair_result.get("south", "") != "":
+		return {
+			"north": north,
+			"south": pair_result["south"],
+			"weight": pair_result.get("weight", 0.0),
+			"probability": pair_result.get("probability", 0.0)
+		}
+	else:
+		# No connections for this north emoji - try another
+		_log("warn", "quest", "⚠️", "No connections for %s - trying next candidate" % north)
+
+		# Try remaining candidates
+		for candidate in unknown_north:
+			if candidate == north:
+				continue
+			var alt_result = VocabularyPairing.roll_partner(candidate)
+			if alt_result.get("south", "") != "":
+				return {
+					"north": candidate,
+					"south": alt_result["south"],
+					"weight": alt_result.get("weight", 0.0),
+					"probability": alt_result.get("probability", 0.0)
+				}
+
+		# No pairs found at all - return north only (single emoji reward)
+		return {"north": north, "south": "", "no_connections": true}

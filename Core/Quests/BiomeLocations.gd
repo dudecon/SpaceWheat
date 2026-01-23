@@ -16,26 +16,26 @@ const LOCATIONS = {
 		"the moon shrine",
 		"the detritus pits"
 	],
-	"Kitchen": [
-		"the eternal flame",
-		"the ice stores",
-		"the bread ovens",
-		"the fermentation vats",
-		"the grinding stones"
+	"StellarForges": [
+		"the central reactor",
+		"the orbital ring",
+		"the ship assembly yard",
+		"the energy conduits",
+		"the nebula docks"
 	],
-	"Forest": [
-		"the wolf den",
-		"the eagle's nest",
-		"the rabbit warrens",
-		"the ancient grove",
-		"the bare clearing"
+	"FungalNetworks": [
+		"the locust swarm grounds",
+		"the mycelium nexus",
+		"the spore chambers",
+		"the nutrient pools",
+		"the colony borders"
 	],
-	"Market": [
-		"the trading floor",
-		"the bull pen",
-		"the bear cave",
-		"the vault",
-		"the auction block"
+	"VolcanicWorlds": [
+		"the lava flows",
+		"the crystal caves",
+		"the steam vents",
+		"the basalt columns",
+		"the eruption crater"
 	],
 	"GranaryGuilds": [
 		"the grain silos",

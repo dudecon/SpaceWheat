@@ -17,29 +17,30 @@ signal flour_processed(wheat_amount: int, flour_produced: int)
 signal flour_sold(flour_amount: int, credits_received: int)
 
 # Initial resources in emoji-credits (10 credits = 1 quantum energy unit)
+# Start with 0 - player must gather all resources through gameplay
 const INITIAL_RESOURCES = {
 	# BioticFlux crops
-	"🌾": 10,    # wheat (agriculture)
-	"👥": 10,    # labor (work)
-	"🍄": 10,    # mushroom (fungal)
-	"🍂": 10,    # detritus (decay)
-	"🍅": 10,    # tomato (life/conspiracy)
-	"🌌": 10,    # cosmic chaos (entropy/void)
+	"🌾": 0,    # wheat (agriculture)
+	"👥": 0,    # labor (work)
+	"🍄": 0,    # mushroom (fungal)
+	"🍂": 0,    # detritus (decay)
+	"🍅": 0,    # tomato (life/conspiracy)
+	"🌌": 0,    # cosmic chaos (entropy/void)
 	# Market commodities
-	"💨": 10,    # flour (processed grain)
-	"🍞": 10,    # bread (finished product)
+	"💨": 0,    # flour (processed grain)
+	"🍞": 0,    # bread (finished product)
 	# Kitchen ingredients
-	"🔥": 10,    # fire (heat)
-	"💧": 10,    # water (moisture)
-	"❄️": 10,    # cold (opposite of fire)
-	"🏜️": 10,    # dry (opposite of water)
+	"🔥": 0,    # fire (heat)
+	"💧": 0,    # water (moisture)
+	"❄️": 0,    # cold (opposite of fire)
+	"🏜️": 0,    # dry (opposite of water)
 	# Forest organisms
-	"🌿": 10,    # vegetation (producer)
-	"🐇": 10,    # rabbit (herbivore)
-	"🐺": 10,    # wolf (predator)
+	"🌿": 0,    # vegetation (producer)
+	"🐇": 0,    # rabbit (herbivore)
+	"🐺": 0,    # wolf (predator)
 	# Other
-	"👑": 10,    # imperium
-	"💰": 10,    # credits (legacy)
+	"👑": 0,    # imperium
+	"💰": 0,    # credits (legacy)
 }
 
 ## ========================================
@@ -73,17 +74,15 @@ func _ready():
 	for emoji in INITIAL_RESOURCES:
 		emoji_credits[emoji] = INITIAL_RESOURCES[emoji]
 
-	print("⚛️  Unified Emoji-Credits Economy initialized")
-	print("   1 quantum energy = %d credits" % EconomyConstants.QUANTUM_TO_CREDITS)
-	_print_resources()
+	VerboseConfig.info("economy", "⚛️", "Unified Emoji-Credits Economy initialized (1 quantum = %d credits)" % EconomyConstants.QUANTUM_TO_CREDITS)
 
 
 func _print_resources():
-	var output = "   "
+	var output = ""
 	for emoji in emoji_credits:
 		var quantum_units = emoji_credits[emoji] / EconomyConstants.QUANTUM_TO_CREDITS
 		output += "%s: %d  " % [emoji, quantum_units]
-	print(output)
+	VerboseConfig.debug("economy", "📊", output)
 
 
 ## ============================================================================
@@ -100,7 +99,7 @@ func add_resource(emoji: String, credits_amount: int, reason: String = "") -> vo
 
 	var quantum_units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	if reason != "":
-		print("+ %d %s-credits (%d units) from %s" % [credits_amount, emoji, quantum_units, reason])
+		VerboseConfig.info("economy", "+", "%d %s-credits (%d units) from %s" % [credits_amount, emoji, quantum_units, reason])
 
 
 func remove_resource(emoji: String, credits_amount: int, reason: String = "") -> bool:
@@ -114,7 +113,7 @@ func remove_resource(emoji: String, credits_amount: int, reason: String = "") ->
 
 	var quantum_units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	if reason != "":
-		print("- %d %s-credits (%d units) for %s" % [credits_amount, emoji, quantum_units, reason])
+		VerboseConfig.info("economy", "-", "%d %s-credits (%d units) for %s" % [credits_amount, emoji, quantum_units, reason])
 	return true
 
 
@@ -156,7 +155,7 @@ func spend_cost(cost: Dictionary, reason: String = "") -> bool:
 		_emit_resource_change(emoji)
 
 	if reason != "":
-		print("💸 Spent %s on %s" % [_format_cost(cost), reason])
+		VerboseConfig.info("economy", "💸", "Spent %s on %s" % [_format_cost(cost), reason])
 	return true
 
 
@@ -223,7 +222,7 @@ func process_wheat_to_flour(wheat_amount: int) -> Dictionary:
 
 	flour_processed.emit(wheat_amount, flour_gained)
 
-	print("🏭 Milled %d wheat → %d flour + %d 💰" % [wheat_amount, flour_gained, credit_bonus])
+	VerboseConfig.info("economy", "🏭", "Milled %d wheat → %d flour + %d 💰" % [wheat_amount, flour_gained, credit_bonus])
 
 	return {
 		"success": true,
@@ -255,7 +254,7 @@ func process_flour_to_bread(flour_amount: int) -> Dictionary:
 	# Add bread (using 🍞 emoji)
 	add_resource("🍞", bread_gained * EconomyConstants.QUANTUM_TO_CREDITS, "kitchen_output")
 
-	print("🍳 Baked %d flour → %d bread" % [flour_amount, bread_gained])
+	VerboseConfig.info("economy", "🍳", "Baked %d flour → %d bread" % [flour_amount, bread_gained])
 
 	return {
 		"success": true,
@@ -294,15 +293,14 @@ func get_stats() -> Dictionary:
 func reset_harvest_counter():
 	"""Reset harvest counter (called when contract completes)"""
 	total_wheat_harvested = 0
-	print("📊 Harvest counter reset")
+	VerboseConfig.debug("economy", "📊", "Harvest counter reset")
 
 
 func print_stats():
-	"""Debug: Print economic stats"""
-	print("\n=== FARM ECONOMY (Emoji-Credits) ===")
+	"""Debug: Print economic stats (uses VerboseConfig.debug)"""
+	VerboseConfig.debug("economy", "📊", "=== FARM ECONOMY (Emoji-Credits) ===")
 	for emoji in emoji_credits:
 		var credits_val = emoji_credits[emoji]
 		var units = credits_val / EconomyConstants.QUANTUM_TO_CREDITS
-		print("  %s: %d units (%d credits)" % [emoji, units, credits_val])
-	print("  Total wheat harvested: %d" % total_wheat_harvested)
-	print("=====================================\n")
+		VerboseConfig.debug("economy", "  ", "%s: %d units (%d credits)" % [emoji, units, credits_val])
+	VerboseConfig.debug("economy", "📊", "Total wheat harvested: %d" % total_wheat_harvested)

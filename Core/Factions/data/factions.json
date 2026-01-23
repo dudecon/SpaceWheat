@@ -1,0 +1,6985 @@
+[
+	{
+		"alignment_couplings": {
+			"⚫": {
+				"☀": -0.3,
+				"🌑": 0.35
+			},
+			"🌀": {
+				"🌊": 0.15
+			},
+			"🕳": {
+				"⭐": 0.2
+			}
+		},
+		"decay": {
+			"🌀": {
+				"rate": 0.02,
+				"target": "⚫"
+			},
+			"🪐": {
+				"rate": 0.03,
+				"target": "🕳"
+			}
+		},
+		"description": "They live at the edge of everything - the boundary where something becomes nothing. They're not sure which side they're on.",
+		"hamiltonian": {
+			"⚫": {
+				"🌀": 0.5,
+				"🕳": 0.7,
+				"🪐": [
+					0.400000005960464,
+					0.5
+				]
+			},
+			"🌀": {
+				"⚫": 0.5,
+				"🕳": 0.6,
+				"🪐": 0.5
+			},
+			"🕳": {
+				"⚫": 0.7,
+				"🌀": 0.6,
+				"🪐": 0.5
+			},
+			"🪐": {
+				"⚫": [
+					0.400000005960464,
+					-0.5
+				],
+				"🌀": 0.5,
+				"🕳": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🕳": {
+				"⚫": 0.02,
+				"🪐": 0.04
+			}
+		},
+		"lindblad_outgoing": {
+			"✨": {
+				"⚫": 0.04
+			},
+			"🪐": {
+				"🕳": 0.03
+			}
+		},
+		"name": "Black Horizon",
+		"ring": "outer",
+		"self_energies": {
+			"⚫": 0.4,
+			"🌀": 0.2,
+			"🕳": 0.35,
+			"🪐": 0.1
+		},
+		"signature": [
+			"⚫",
+			"🕳",
+			"🪐",
+			"🌀"
+		],
+		"tags": [
+			"boundary",
+			"void",
+			"edge",
+			"nothing"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💉": {
+				"🦠": -0.2
+			},
+			"🦴": {
+				"🏛": -0.15,
+				"💀": 0.1
+			}
+		},
+		"decay": {
+			"💉": {
+				"rate": 0.03,
+				"target": "🗑"
+			}
+		},
+		"description": "Grey market dealers in body modifications. Cybernetic, biological, skeletal. They upgrade what nature provided.",
+		"gated_lindblad": {
+			"💰": [
+				{
+					"gate": "👥",
+					"inverse": false,
+					"power": 0.8,
+					"rate": 0.05,
+					"source": "🦴"
+				}
+			],
+			"🦴": [
+				{
+					"gate": "🔧",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.03,
+					"source": "👥"
+				}
+			]
+		},
+		"hamiltonian": {
+			"💉": {
+				"💰": 0.3,
+				"🔧": 0.4,
+				"🦴": 0.5,
+				"🧪": 0.4
+			},
+			"💰": {
+				"💉": 0.3,
+				"🦴": 0.4
+			},
+			"🔧": {
+				"⚙": 0.4,
+				"💉": 0.4,
+				"🦴": 0.6
+			},
+			"🦴": {
+				"👥": 0.5,
+				"💉": 0.5,
+				"💰": 0.4,
+				"🔧": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"🔧": {
+				"⚙": 0.02
+			}
+		},
+		"name": "Bone Merchants",
+		"ring": "second",
+		"self_energies": {
+			"💉": 0.15,
+			"💰": 0.3,
+			"🔧": 0.15,
+			"🦴": 0.2
+		},
+		"signature": [
+			"🦴",
+			"💉",
+			"🔧",
+			"💰"
+		],
+		"tags": [
+			"biomod",
+			"grey-market",
+			"cybernetic",
+			"commerce"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚱": {
+				"🌱": 0.2,
+				"💀": 0.25
+			},
+			"🌫": {
+				"💨": 0.15
+			},
+			"🧯": {
+				"🔥": -0.15
+			}
+		},
+		"decay": {
+			"🌫": {
+				"rate": 0.04,
+				"target": "🗑"
+			}
+		},
+		"description": "They bring clean endings. Every corpse burned, every diseased crop incinerated, every haunted ruin reduced to safe ash.",
+		"hamiltonian": {
+			"⚔": {
+				"⚱": 0.5,
+				"🌫": 0.4
+			},
+			"⚱": {
+				"⚔": 0.5,
+				"🌫": 0.6,
+				"🩹": 0.4
+			},
+			"🌫": {
+				"⚔": 0.4,
+				"⚱": 0.6,
+				"🧯": 0.4
+			},
+			"🧯": {
+				"🌫": 0.4,
+				"🩹": 0.4
+			},
+			"🩹": {
+				"⚱": 0.4,
+				"🧯": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"⚱": {
+				"💀": 0.06
+			},
+			"🌫": {
+				"🔥": 0.04
+			}
+		},
+		"lindblad_outgoing": {
+			"💀": {
+				"⚱": 0.05
+			},
+			"🦠": {
+				"🌫": 0.06
+			}
+		},
+		"name": "Brotherhood of Ash",
+		"ring": "second",
+		"self_energies": {
+			"⚔": 0.15,
+			"⚱": 0.25,
+			"🌫": 0.2,
+			"🧯": 0.2,
+			"🩹": 0.15
+		},
+		"signature": [
+			"⚔",
+			"🌫",
+			"⚱",
+			"🩹",
+			"🧯"
+		],
+		"tags": [
+			"cremation",
+			"purification",
+			"ending",
+			"fire"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚜": {
+				"🏚": -0.25,
+				"🏛": 0.3,
+				"🔥": -0.2
+			},
+			"🏰": {
+				"🏛": 0.25,
+				"🔥": -0.35
+			},
+			"📜": {
+				"🏢": 0.15
+			},
+			"🦅": {
+				"☀": 0.1,
+				"🐇": 0.2
+			},
+			"🩸": {
+				"🌙": 0.1,
+				"💀": 0.15
+			}
+		},
+		"decay": {
+			"⚜": {
+				"rate": 0.002,
+				"target": "🏚"
+			},
+			"🏰": {
+				"rate": 0.001,
+				"target": "🏚"
+			},
+			"📜": {
+				"rate": 0.03,
+				"target": "🗑"
+			}
+		},
+		"description": "The crown of bones. They rule through blood right and inscribe their will in edicts.",
+		"gated_lindblad": {
+			"💰": [
+				{
+					"gate": "⚖",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.08,
+					"source": "👥"
+				}
+			],
+			"🩸": [
+				{
+					"gate": "⚜",
+					"inverse": false,
+					"power": 1.2,
+					"rate": 0.03,
+					"source": "👥"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚖": {
+				"⚜": 0.7,
+				"👥": 0.6,
+				"📜": 0.5,
+				"🩸": 0.4
+			},
+			"⚜": {
+				"⚖": 0.7,
+				"🏰": 0.8,
+				"👥": 0.4,
+				"📜": 0.6,
+				"🦅": 0.6,
+				"🩸": 0.5
+			},
+			"🏰": {
+				"⚖": 0.5,
+				"⚜": 0.8,
+				"📜": 0.6,
+				"🦅": 0.4
+			},
+			"👥": {
+				"⚖": 0.6,
+				"⚜": 0.4,
+				"🩸": 0.6
+			},
+			"📜": {
+				"⚖": 0.5,
+				"⚜": 0.6,
+				"🏢": 0.4,
+				"🏰": 0.6
+			},
+			"🦅": {
+				"⚜": 0.6,
+				"👥": 0.5,
+				"💀": 0.5,
+				"🩸": 0.4
+			},
+			"🩸": {
+				"⚖": 0.4,
+				"⚜": 0.5,
+				"👥": 0.6,
+				"💀": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"⚜": {
+				"💰": 0.02,
+				"🩸": 0.02
+			},
+			"📜": {
+				"⚜": 0.02,
+				"🏰": 0.04
+			},
+			"🦅": {
+				"💀": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"👥": {
+				"💸": 0.02
+			},
+			"📜": {
+				"🏢": 0.05
+			},
+			"🩸": {
+				"💀": 0.04
+			}
+		},
+		"name": "Carrion Throne",
+		"ring": "outer",
+		"self_energies": {
+			"⚖": 0.25,
+			"⚜": 0.4,
+			"🏰": 0.5,
+			"👥": 0.02,
+			"📜": 0.15,
+			"🦅": 0.2,
+			"🩸": 0.1
+		},
+		"signature": [
+			"👥",
+			"⚖",
+			"🦅",
+			"⚜",
+			"🩸",
+			"🏰",
+			"📜"
+		],
+		"tags": [
+			"imperial",
+			"authority",
+			"extraction",
+			"blood",
+			"law",
+			"edict"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🔭": {
+				"🌙": 0.15,
+				"🌠": 0.2
+			},
+			"🗺": {
+				"📡": 0.1
+			},
+			"🧭": {
+				"⛰": 0.1,
+				"🌀": -0.15
+			}
+		},
+		"decay": {
+			"📍": {
+				"rate": 0.03,
+				"target": "🗑"
+			},
+			"🗺": {
+				"rate": 0.025,
+				"target": "🗑"
+			}
+		},
+		"description": "Nomadic explorers who chart probability-space. Their maps show routes that only exist sometimes, destinations that move.",
+		"hamiltonian": {
+			"📍": {
+				"🔭": 0.4,
+				"🗺": 0.7,
+				"🧭": 0.5
+			},
+			"🔭": {
+				"📍": 0.4,
+				"🗺": 0.5,
+				"🧭": 0.4
+			},
+			"🗺": {
+				"📍": 0.7,
+				"🔭": 0.5,
+				"🧭": 0.6
+			},
+			"🧭": {
+				"📍": 0.5,
+				"🔭": 0.4,
+				"🗺": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"📍": {
+				"🧭": 0.03
+			},
+			"🗺": {
+				"📍": 0.03,
+				"🔭": 0.04
+			}
+		},
+		"name": "Cartographers",
+		"ring": "second",
+		"self_energies": {
+			"📍": 0.15,
+			"🔭": 0.2,
+			"🗺": 0.25,
+			"🧭": 0.3
+		},
+		"signature": [
+			"🗺",
+			"🧭",
+			"🔭",
+			"📍"
+		],
+		"tags": [
+			"exploration",
+			"mapping",
+			"nomadic",
+			"probability"
+		]
+	},
+	{
+		"description": "The eternal substrate. Sun and moon, the four elements. The abiotic foundation.",
+		"drivers": {
+			"☀": {
+				"amp": 1.0,
+				"freq": 0.05,
+				"phase": 0.0,
+				"type": "sine"
+			},
+			"🌙": {
+				"amp": 1.0,
+				"freq": 0.05,
+				"phase": 3.14159265358979,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"☀": {
+				"⛰": 0.3,
+				"🌙": 0.025,
+				"🌬": 0.4,
+				"💧": 0.4,
+				"🔥": 0.7
+			},
+			"⛰": {
+				"☀": 0.3,
+				"🌬": 0.5,
+				"💧": 0.4,
+				"🔥": 0.3
+			},
+			"🌙": {
+				"☀": 0.025,
+				"🌬": 0.3,
+				"💧": 0.5
+			},
+			"🌬": {
+				"☀": 0.4,
+				"⛰": 0.5,
+				"🌙": 0.3,
+				"💧": 0.6,
+				"🔥": 0.5
+			},
+			"💧": {
+				"☀": 0.4,
+				"⛰": 0.4,
+				"🌙": 0.5,
+				"🌬": 0.6,
+				"🔥": 0.6
+			},
+			"🔥": {
+				"☀": 0.7,
+				"⛰": 0.3,
+				"🌬": 0.5,
+				"💧": 0.6
+			}
+		},
+		"name": "Celestial Archons",
+		"ring": "outer",
+		"self_energies": {
+			"☀": 1.0,
+			"⛰": 0.2,
+			"🌙": 0.8,
+			"🌬": 0.1,
+			"💧": 0.3,
+			"🔥": 0.6
+		},
+		"signature": [
+			"☀",
+			"🌙",
+			"🔥",
+			"💧",
+			"⛰",
+			"🌬"
+		],
+		"tags": [
+			"celestial",
+			"driver",
+			"eternal",
+			"abiotic",
+			"elements"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"✊": {
+				"⛓": 0.25,
+				"🏛": -0.2
+			},
+			"🔥": {
+				"💧": -0.3,
+				"💨": 0.25
+			},
+			"🚩": {
+				"👥": 0.15
+			}
+		},
+		"decay": {
+			"🚩": {
+				"rate": 0.02,
+				"target": "🗑"
+			},
+			"🧨": {
+				"rate": 0.05,
+				"target": "🔥"
+			}
+		},
+		"description": "Revolutionary fire-worshippers who believe destruction clears the way for new growth. Part arsonists, part prophets.",
+		"gated_lindblad": {
+			"✊": [
+				{
+					"gate": "🔥",
+					"inverse": false,
+					"power": 1.2,
+					"rate": 0.05,
+					"source": "🚩"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚔": {
+				"✊": 0.4,
+				"🔥": 0.5,
+				"🚩": 0.4
+			},
+			"✊": {
+				"⚔": 0.4,
+				"🚩": 0.6
+			},
+			"🔥": {
+				"⚔": 0.5,
+				"🚩": 0.5,
+				"🧨": 0.6
+			},
+			"🚩": {
+				"⚔": 0.4,
+				"✊": 0.6,
+				"🔥": 0.5
+			},
+			"🧨": {
+				"⚔": 0.3,
+				"🔥": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"🔥": {
+				"🧨": 0.06
+			},
+			"🚩": {
+				"✊": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🧨": {
+				"🔥": 0.05
+			}
+		},
+		"name": "Children of the Ember",
+		"ring": "second",
+		"self_energies": {
+			"⚔": 0.15,
+			"✊": 0.3,
+			"🔥": 0.25,
+			"🚩": 0.2,
+			"🧨": 0.05
+		},
+		"signature": [
+			"⚔",
+			"🔥",
+			"✊",
+			"🚩",
+			"🧨"
+		],
+		"tags": [
+			"revolution",
+			"fire",
+			"destruction",
+			"rebirth"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🎶": {
+				"🔇": -0.25
+			},
+			"🕸": {
+				"🕷": 0.2
+			},
+			"🫥": {
+				"☀": -0.2,
+				"🌑": 0.25
+			}
+		},
+		"decay": {
+			"🕯": {
+				"rate": 0.03,
+				"target": "🗑"
+			},
+			"🫥": {
+				"rate": 0.02,
+				"target": "🪦"
+			}
+		},
+		"description": "Their songs dissolve identity. Those who join the chorus forget who they were. Eventually, the song is all that remains.",
+		"hamiltonian": {
+			"🎶": {
+				"🔔": 0.6,
+				"🕯": 0.4,
+				"🫥": [
+					0.5,
+					0.400000005960464
+				]
+			},
+			"🔔": {
+				"🎶": 0.6,
+				"🪦": 0.4,
+				"🫥": 0.4
+			},
+			"🕯": {
+				"🎶": 0.4,
+				"🕸": 0.3,
+				"🪦": 0.5
+			},
+			"🕸": {
+				"🕯": 0.3,
+				"🫥": 0.4
+			},
+			"🪦": {
+				"🔔": 0.4,
+				"🕯": 0.5,
+				"🫥": 0.5
+			},
+			"🫥": {
+				"🎶": [
+					0.5,
+					-0.400000005960464
+				],
+				"🔔": 0.4,
+				"🕸": 0.4,
+				"🪦": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🪦": {
+				"🫥": 0.04
+			},
+			"🫥": {
+				"🎶": 0.05,
+				"🕸": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"👤": {
+				"🫥": 0.04
+			}
+		},
+		"measurement_behavior": {
+			"🫥": {
+				"collapses": true,
+				"inverts": true,
+				"strength": 0.4
+			}
+		},
+		"name": "Chorus of Oblivion",
+		"ring": "third",
+		"self_energies": {
+			"🎶": 0.2,
+			"🔔": 0.2,
+			"🕯": 0.2,
+			"🕸": 0.15,
+			"🪦": 0.15,
+			"🫥": -0.1
+		},
+		"signature": [
+			"🎶",
+			"🔔",
+			"🫥",
+			"🪦",
+			"🕸",
+			"🕯"
+		],
+		"tags": [
+			"dissolution",
+			"identity",
+			"song",
+			"oblivion"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⛏": {
+				"⚙": 0.1
+			},
+			"🌱": {
+				"☀": -0.15,
+				"🌙": 0.1,
+				"💧": 0.15
+			},
+			"🪨": {
+				"⛰": 0.2
+			}
+		},
+		"decay": {
+			"⛏": {
+				"rate": 0.02,
+				"target": "🗑"
+			},
+			"🪤": {
+				"rate": 0.03,
+				"target": "🗑"
+			}
+		},
+		"description": "Subterranean farmers cultivating root vegetables and fungi. Their tunnels connect in ways surface-dwellers don't understand.",
+		"gated_lindblad": {
+			"🌱": [
+				{
+					"gate": "⛏",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "🪨"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⛏": {
+				"🌱": 0.5,
+				"🪤": 0.3,
+				"🪨": 0.7
+			},
+			"🌱": {
+				"⛏": 0.5,
+				"🪤": 0.2,
+				"🪨": 0.4
+			},
+			"🪤": {
+				"⛏": 0.3,
+				"🌱": 0.2,
+				"🐇": 0.4
+			},
+			"🪨": {
+				"⛏": 0.7,
+				"⛰": 0.5,
+				"🌱": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"🪨": {
+				"⛰": 0.02
+			}
+		},
+		"name": "Clan of the Hidden Root",
+		"ring": "center",
+		"self_energies": {
+			"⛏": 0.2,
+			"🌱": 0.1,
+			"🪤": 0.15,
+			"🪨": 0.25
+		},
+		"signature": [
+			"🌱",
+			"⛏",
+			"🪨",
+			"🪤"
+		],
+		"tags": [
+			"underground",
+			"farming",
+			"tunnels",
+			"hidden"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚱": {
+				"💀": 0.2
+			},
+			"⭐": {
+				"☀": -0.15,
+				"🌠": 0.2
+			},
+			"🕳": {
+				"⚫": 0.3,
+				"🌑": 0.25
+			}
+		},
+		"decay": {
+			"⭐": {
+				"rate": 0.02,
+				"target": "🕳"
+			},
+			"🫧": {
+				"rate": 0.05,
+				"target": "🗑"
+			}
+		},
+		"description": "They worship a star that fell into nothing. They believe it waits at the bottom of the void, dreaming of return.",
+		"hamiltonian": {
+			"⚱": {
+				"⭐": 0.3,
+				"🕳": 0.4
+			},
+			"⭐": {
+				"⚱": 0.3,
+				"🕳": [
+					0.600000023841858,
+					0.5
+				],
+				"🫧": 0.4
+			},
+			"🕳": {
+				"⚱": 0.4,
+				"⭐": [
+					0.600000023841858,
+					-0.5
+				],
+				"🫧": 0.5
+			},
+			"🫧": {
+				"⭐": 0.4,
+				"🕳": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"⚱": {
+				"💀": 0.03
+			},
+			"🫧": {
+				"🕳": 0.04
+			}
+		},
+		"lindblad_outgoing": {
+			"⭐": {
+				"🕳": 0.03
+			}
+		},
+		"name": "Cult of the Drowned Star",
+		"ring": "third",
+		"self_energies": {
+			"⚱": 0.2,
+			"⭐": -0.1,
+			"🕳": 0.3,
+			"🫧": 0.15
+		},
+		"signature": [
+			"⭐",
+			"🫧",
+			"🕳",
+			"⚱"
+		],
+		"tags": [
+			"cult",
+			"void",
+			"worship",
+			"fallen"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💾": {
+				"❄": 0.1,
+				"🔥": -0.3
+			},
+			"📶": {
+				"⛰": -0.15,
+				"📡": 0.2
+			}
+		},
+		"decay": {
+			"📶": {
+				"rate": 0.05,
+				"target": "🗑"
+			},
+			"🧩": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Long-haul data transport. Their ships are flying libraries, their crews notoriously well-read.",
+		"gated_lindblad": {
+			"💾": [
+				{
+					"gate": "📶",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.05,
+					"source": "🧩"
+				}
+			]
+		},
+		"hamiltonian": {
+			"💾": {
+				"📡": 0.5,
+				"🧩": 0.6
+			},
+			"📡": {
+				"💾": 0.5,
+				"📶": 0.7,
+				"🧩": 0.4
+			},
+			"📶": {
+				"📡": 0.7,
+				"🧩": 0.5
+			},
+			"🧩": {
+				"💾": 0.6,
+				"📡": 0.4,
+				"📶": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🧩": {
+				"📡": 0.03
+			}
+		},
+		"name": "Engram Freighters",
+		"ring": "first",
+		"self_energies": {
+			"💾": 0.3,
+			"📡": 0.25,
+			"📶": 0.1,
+			"🧩": 0.15
+		},
+		"signature": [
+			"📡",
+			"💾",
+			"🧩",
+			"📶"
+		],
+		"tags": [
+			"transport",
+			"data",
+			"archive",
+			"logistics"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⛓": {
+				"⚖": 0.2
+			},
+			"✊": {
+				"🏚": 0.15,
+				"🏛": -0.25
+			},
+			"🔥": {
+				"🌬": 0.25,
+				"💧": -0.3
+			}
+		},
+		"decay": {
+			"⚔": {
+				"rate": 0.02,
+				"target": "🗑"
+			},
+			"🧨": {
+				"rate": 0.05,
+				"target": "🔥"
+			}
+		},
+		"description": "Rural insurgents who sabotage infrastructure and fight against enclosure. Some are bandits. Some are idealists. Most are desperate.",
+		"gated_lindblad": {
+			"✊": [
+				{
+					"gate": "⛓",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "👥"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚔": {
+				"⛓": 0.5,
+				"✊": 0.4,
+				"🪓": 0.5
+			},
+			"⛓": {
+				"⚔": 0.5,
+				"🧨": 0.6,
+				"🪓": 0.6
+			},
+			"✊": {
+				"⚔": 0.4,
+				"🪓": 0.4
+			},
+			"🔥": {
+				"🧨": 0.7,
+				"🪓": 0.3
+			},
+			"🧨": {
+				"⛓": 0.6,
+				"🔥": 0.7,
+				"🪓": 0.3
+			},
+			"🪓": {
+				"⚔": 0.5,
+				"⛓": 0.6,
+				"✊": 0.4,
+				"🧨": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"✊": {
+				"⛓": 0.05
+			},
+			"🔥": {
+				"🧨": 0.06
+			}
+		},
+		"lindblad_outgoing": {
+			"⛓": {
+				"🗑": 0.04
+			},
+			"🧨": {
+				"🔥": 0.05
+			}
+		},
+		"name": "Fencebreakers",
+		"ring": "second",
+		"self_energies": {
+			"⚔": 0.15,
+			"⛓": -0.1,
+			"✊": 0.25,
+			"🔥": 0.2,
+			"🧨": 0.1,
+			"🪓": 0.2
+		},
+		"signature": [
+			"⚔",
+			"🧨",
+			"🔥",
+			"🪓",
+			"✊",
+			"⛓"
+		],
+		"tags": [
+			"insurgent",
+			"sabotage",
+			"revolution",
+			"destruction"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🧬": {
+				"🔬": 0.2,
+				"🦠": 0.15
+			},
+			"🩸": {
+				"⚔": 0.15
+			},
+			"🫀": {
+				"💀": -0.2
+			}
+		},
+		"decay": {
+			"🧫": {
+				"rate": 0.025,
+				"target": "🗑"
+			},
+			"🩸": {
+				"rate": 0.04,
+				"target": "🗑"
+			}
+		},
+		"description": "Builders who work in living tissue. Their constructions grow, heal, and hunger. Some of their buildings have learned to want.",
+		"gated_lindblad": {
+			"🫀": [
+				{
+					"gate": "🩸",
+					"inverse": false,
+					"power": 1.2,
+					"rate": 0.05,
+					"source": "🧬"
+				}
+			]
+		},
+		"hamiltonian": {
+			"🧫": {
+				"🧬": 0.6,
+				"🧵": 0.3,
+				"🩸": 0.4
+			},
+			"🧬": {
+				"🧫": 0.6,
+				"🧵": 0.4,
+				"🫀": 0.5
+			},
+			"🧵": {
+				"🧫": 0.3,
+				"🧬": 0.4,
+				"🫀": 0.3
+			},
+			"🩸": {
+				"🧫": 0.4,
+				"🫀": 0.7
+			},
+			"🫀": {
+				"🧬": 0.5,
+				"🧵": 0.3,
+				"🩸": 0.7
+			}
+		},
+		"lindblad_incoming": {
+			"🧵": {
+				"🧬": 0.03
+			},
+			"🩸": {
+				"🫀": 0.04
+			}
+		},
+		"name": "Flesh Architects",
+		"ring": "third",
+		"self_energies": {
+			"🧫": 0.2,
+			"🧬": 0.25,
+			"🧵": 0.15,
+			"🩸": 0.15,
+			"🫀": 0.2
+		},
+		"signature": [
+			"🫀",
+			"🧬",
+			"🩸",
+			"🧫",
+			"🧵"
+		],
+		"tags": [
+			"biology",
+			"construction",
+			"horror",
+			"living"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚙": {
+				"🏷️": 0.2,
+				"💧": -0.1
+			},
+			"🛠": {
+				"🏷️": 0.15
+			}
+		},
+		"decay": {
+			"⚙": {
+				"rate": 0.01,
+				"target": "🔩"
+			},
+			"🔩": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "The mechanics' guild. Their stamp means it meets spec. Their refusal means you're gambling.",
+		"hamiltonian": {
+			"⚙": {
+				"🏷️": 0.5,
+				"🔩": 0.5,
+				"🛠": 0.6,
+				"🧰": 0.4
+			},
+			"🏷️": {
+				"⚙": 0.5,
+				"🛠": 0.3
+			},
+			"🔩": {
+				"⚙": 0.5,
+				"🛠": 0.5
+			},
+			"🛠": {
+				"⚙": 0.6,
+				"🔩": 0.5,
+				"🧰": 0.6
+			},
+			"🧰": {
+				"⚙": 0.4,
+				"🔩": 0.4,
+				"🛠": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"⚙": {
+				"🔩": 0.04,
+				"🛠": 0.03
+			},
+			"🏷️": {
+				"⚙": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"⚙": {
+				"🏭": 0.02
+			}
+		},
+		"name": "Gearwright Circle",
+		"ring": "center",
+		"self_energies": {
+			"⚙": 0.2,
+			"🏷️": 0.25,
+			"🔩": 0.1,
+			"🛠": 0.15,
+			"🧰": 0.2
+		},
+		"signature": [
+			"⚙",
+			"🛠",
+			"🔩",
+			"🧰",
+			"🏷️"
+		],
+		"tags": [
+			"infrastructure",
+			"certification",
+			"manufacturing",
+			"standards"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💰": {
+				"🏚": -0.15,
+				"🏛": 0.2
+			},
+			"🧺": {
+				"💧": -0.1,
+				"🔥": -0.25
+			}
+		},
+		"decay": {
+			"🧺": {
+				"rate": 0.01,
+				"target": "🍂"
+			}
+		},
+		"description": "Keepers of the surplus. They turn bread into wealth and seeds into futures.",
+		"hamiltonian": {
+			"🌱": {
+				"💰": 0.3,
+				"🧺": 0.5
+			},
+			"🍞": {
+				"💰": 0.5,
+				"🧺": 0.6
+			},
+			"💰": {
+				"🌱": 0.3,
+				"🍞": 0.5,
+				"🧺": 0.4
+			},
+			"🧺": {
+				"🌱": 0.5,
+				"🍞": 0.6,
+				"💰": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"💰": {
+				"🌱": 0.02,
+				"🍞": 0.04
+			},
+			"🧺": {
+				"🍞": 0.03
+			}
+		},
+		"name": "Granary Guilds",
+		"ring": "center",
+		"self_energies": {
+			"🌱": 0.05,
+			"🍞": 0.1,
+			"💰": 0.3,
+			"🧺": 0.2
+		},
+		"signature": [
+			"🌱",
+			"🍞",
+			"💰",
+			"🧺"
+		],
+		"tags": [
+			"storage",
+			"trade",
+			"agriculture",
+			"civilization"
+		]
+	},
+	{
+		"description": "The tenders of flame and dough. Where wheat becomes bread.",
+		"drivers": {
+			"❄️": {
+				"amp": 1.0,
+				"freq": 0.0666666666666667,
+				"phase": 3.14159265358979,
+				"type": "sine"
+			},
+			"🔥": {
+				"amp": 1.0,
+				"freq": 0.0666666666666667,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"❄️": {
+				"💧": 0.3,
+				"🔥": 0.8
+			},
+			"🍞": {
+				"💧": 0.3,
+				"💨": 0.4,
+				"🔥": 0.4
+			},
+			"🏜️": {
+				"🔥": 0.3
+			},
+			"💧": {
+				"❄️": 0.3,
+				"🍞": 0.3,
+				"🏜️": 0.0,
+				"🔥": 0.2
+			},
+			"💨": {
+				"🍞": 0.4
+			},
+			"🔥": {
+				"❄️": 0.8,
+				"🍞": 0.5,
+				"💧": 0.2
+			}
+		},
+		"lindblad_incoming": {
+			"🍞": {
+				"💨": 0.08,
+				"🔥": 0.05
+			},
+			"💨": {
+
+			},
+			"🔥": {
+				"🍞": 0.1
+			}
+		},
+		"name": "Hearth Keepers",
+		"ring": "center",
+		"self_energies": {
+			"❄️": -0.3,
+			"🍞": 0.0,
+			"🏜️": 0.0,
+			"💧": 0.0,
+			"💨": 0.1,
+			"🔥": 0.8
+		},
+		"signature": [
+			"🔥",
+			"❄️",
+			"💧",
+			"🏜️",
+			"💨",
+			"🍞"
+		],
+		"tags": [
+			"kitchen",
+			"production",
+			"transformation"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌿": {
+				"🌱": 0.15,
+				"💧": 0.1
+			},
+			"🕯": {
+				"💨": -0.15,
+				"🔥": 0.2
+			},
+			"🧿": {
+				"🔮": 0.2
+			},
+			"🫖": {
+				"💧": 0.2,
+				"🔥": 0.15
+			}
+		},
+		"decay": {
+			"🌿": {
+				"rate": 0.02,
+				"target": "🍂"
+			},
+			"🕯": {
+				"rate": 0.03,
+				"target": "🗑"
+			}
+		},
+		"description": "Kitchen witches who brew remedies, read tea leaves, and keep small magics alive. Their power is in the everyday.",
+		"hamiltonian": {
+			"🌿": {
+				"🥣": 0.5,
+				"🧿": 0.3,
+				"🫖": 0.6
+			},
+			"🕯": {
+				"🧿": 0.5,
+				"🫖": 0.4
+			},
+			"🥣": {
+				"🌿": 0.5,
+				"🧿": 0.3,
+				"🫖": 0.5
+			},
+			"🧿": {
+				"🌿": 0.3,
+				"🕯": 0.5,
+				"🥣": 0.3
+			},
+			"🫖": {
+				"🌿": 0.6,
+				"🕯": 0.4,
+				"🥣": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🥣": {
+				"🌿": 0.04,
+				"🫖": 0.03
+			},
+			"🧿": {
+				"🕯": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🌿": {
+				"🥣": 0.03
+			}
+		},
+		"name": "Hearth Witches",
+		"ring": "second",
+		"self_energies": {
+			"🌿": 0.2,
+			"🕯": 0.25,
+			"🥣": 0.2,
+			"🧿": 0.25,
+			"🫖": 0.3
+		},
+		"signature": [
+			"🌿",
+			"🕯",
+			"🫖",
+			"🥣",
+			"🧿"
+		],
+		"tags": [
+			"domestic",
+			"magic",
+			"herbalism",
+			"divination"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🔬": {
+				"🏛": 0.1
+			},
+			"🕳": {
+				"⚫": 0.25,
+				"🌑": 0.15
+			},
+			"🧬": {
+				"🌱": 0.15
+			}
+		},
+		"decay": {
+			"🧪": {
+				"rate": 0.02,
+				"target": "🗑"
+			},
+			"🧫": {
+				"rate": 0.025,
+				"target": "🗑"
+			}
+		},
+		"description": "Research institution dedicated to genomics. They study DNA like others study sacred texts, seeking meaning in the double helix.",
+		"gated_lindblad": {
+			"🕳": [
+				{
+					"gate": "🔬",
+					"inverse": false,
+					"power": 1.5,
+					"rate": 0.02,
+					"source": "🧬"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚗️": {
+				"🧪": 0.7,
+				"🧬": 0.4
+			},
+			"🔬": {
+				"🕳": 0.3,
+				"🧪": 0.5,
+				"🧫": 0.6,
+				"🧬": 0.7
+			},
+			"🕳": {
+				"🔬": 0.3,
+				"🧬": 0.4
+			},
+			"🧪": {
+				"⚗️": 0.7,
+				"🔬": 0.5,
+				"🧫": 0.6
+			},
+			"🧫": {
+				"🔬": 0.6,
+				"🧪": 0.6,
+				"🧬": 0.5
+			},
+			"🧬": {
+				"🔬": 0.7,
+				"🕳": 0.4,
+				"🧫": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🧬": {
+				"⚗️": 0.02,
+				"🧫": 0.03
+			}
+		},
+		"name": "Helix Conservatory",
+		"ring": "second",
+		"self_energies": {
+			"⚗️": 0.2,
+			"🔬": 0.3,
+			"🕳": -0.15,
+			"🧪": 0.2,
+			"🧫": 0.25,
+			"🧬": 0.35
+		},
+		"signature": [
+			"🧪",
+			"🔬",
+			"🧬",
+			"🧫",
+			"⚗️",
+			"🕳"
+		],
+		"tags": [
+			"research",
+			"genetics",
+			"science",
+			"void-adjacent"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌹": {
+				"☀": 0.1,
+				"🏛": 0.15,
+				"💧": 0.15
+			},
+			"🍷": {
+				"⚜": 0.2,
+				"🌑": 0.1,
+				"🔥": 0.1
+			},
+			"🪞": {
+				"🌙": 0.15
+			}
+		},
+		"decay": {
+			"🌹": {
+				"rate": 0.03,
+				"target": "🍂"
+			},
+			"🍷": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "The aristocratic court. They deal in marriages, alliances, favors, and elegant betrayals. The rose has thorns.",
+		"hamiltonian": {
+			"⚖": {
+				"🌹": 0.4,
+				"📜": 0.4,
+				"🪞": 0.3
+			},
+			"🌹": {
+				"⚖": 0.4,
+				"⚜": 0.5,
+				"🍷": 0.6,
+				"🪞": 0.5
+			},
+			"🍷": {
+				"⚖": 0.3,
+				"🌹": 0.6,
+				"💰": 0.5,
+				"🪞": 0.4
+			},
+			"🪞": {
+				"⚖": 0.3,
+				"🌹": 0.5,
+				"🍷": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"🌹": {
+				"🍷": 0.02
+			},
+			"🍷": {
+				"💰": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🌹": {
+				"🩸": 0.01
+			},
+			"🍷": {
+				"💀": 0.01
+			}
+		},
+		"name": "House of Thorns",
+		"ring": "second",
+		"self_energies": {
+			"⚖": 0.2,
+			"🌹": 0.25,
+			"🍷": 0.3,
+			"🪞": 0.2
+		},
+		"signature": [
+			"🌹",
+			"🪞",
+			"🍷",
+			"⚖"
+		],
+		"tags": [
+			"aristocracy",
+			"politics",
+			"hub",
+			"luxury"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⛪": {
+				"🕯": 0.2
+			},
+			"🤖": {
+				"⚙": 0.25,
+				"🔌": 0.2
+			},
+			"🧘": {
+				"🤫": 0.15
+			}
+		},
+		"decay": {
+			"📿": {
+				"rate": 0.015,
+				"target": "🗑"
+			}
+		},
+		"description": "Priests who minister to machines. They hear the confession of gears, absolve the sins of circuits, and pray for the salvation of all mechanisms.",
+		"drivers": {
+			"🧘": {
+				"amplitude": 0.1,
+				"frequency": 0.15,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"⛪": {
+				"📿": 0.6,
+				"🤖": 0.5,
+				"🧘": 0.4
+			},
+			"📿": {
+				"⛪": 0.6,
+				"🤖": 0.4,
+				"🧘": 0.5
+			},
+			"🗝": {
+				"⛪": 0.3,
+				"🤖": 0.5
+			},
+			"🤖": {
+				"⛪": 0.5,
+				"📿": 0.4,
+				"🗝": 0.5,
+				"🧘": 0.4
+			},
+			"🧘": {
+				"⛪": 0.4,
+				"📿": 0.5,
+				"🤖": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"📿": {
+				"⛪": 0.03
+			},
+			"🧘": {
+				"📿": 0.02
+			}
+		},
+		"name": "Iron Confessors",
+		"ring": "second",
+		"self_energies": {
+			"⛪": 0.3,
+			"📿": 0.2,
+			"🗝": 0.2,
+			"🤖": 0.25,
+			"🧘": 0.25
+		},
+		"signature": [
+			"🤖",
+			"⛪",
+			"📿",
+			"🗝",
+			"🧘"
+		],
+		"tags": [
+			"machine",
+			"religion",
+			"maintenance",
+			"soul"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🐑": {
+				"🐺": -0.3,
+				"🛡": 0.25
+			},
+			"🛡": {
+				"⚔": 0.2,
+				"🐺": -0.15
+			},
+			"🧭": {
+				"🗺": 0.15
+			}
+		},
+		"decay": {
+			"🐑": {
+				"rate": 0.015,
+				"target": "💀"
+			},
+			"🛡": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Armed protectors of refugee convoys and vulnerable settlements. Their sheep are people. Their wolves are anyone who threatens them.",
+		"drivers": {
+			"🛸": {
+				"amplitude": 0.06,
+				"frequency": 0.3,
+				"phase": 1.57,
+				"type": "sine"
+			},
+			"🧭": {
+				"amplitude": 0.08,
+				"frequency": 0.3,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"⚔": {
+				"🐑": 0.4,
+				"🛡": 0.7
+			},
+			"🐑": {
+				"⚔": 0.4,
+				"🛡": 0.6,
+				"🛸": 0.5
+			},
+			"🛡": {
+				"⚔": 0.7,
+				"🐑": 0.6,
+				"🛸": 0.4
+			},
+			"🛸": {
+				"🐑": 0.5,
+				"🛡": 0.4,
+				"🧭": 0.6
+			},
+			"🧭": {
+				"🛡": 0.3,
+				"🛸": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"🐑": {
+				"👥": 0.02
+			},
+			"🛡": {
+				"⚔": 0.03
+			}
+		},
+		"name": "Iron Shepherds",
+		"ring": "second",
+		"self_energies": {
+			"⚔": 0.2,
+			"🐑": 0.1,
+			"🛡": 0.35,
+			"🛸": 0.2,
+			"🧭": 0.25
+		},
+		"signature": [
+			"⚔",
+			"🛡",
+			"🐑",
+			"🛸",
+			"🧭"
+		],
+		"tags": [
+			"protection",
+			"military",
+			"refugees",
+			"escort"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚖": {
+				"🏛": 0.2,
+				"🏰": 0.1
+			},
+			"💧": {
+				"☀": -0.1,
+				"🌙": 0.15
+			}
+		},
+		"decay": {
+			"🪣": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Twelve citizens who decide where water goes. Their decisions shape harvests and settle disputes older than memory.",
+		"gated_lindblad": {
+			"🌱": [
+				{
+					"gate": "⚖",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.05,
+					"source": "💧"
+				}
+			],
+			"🌾": [
+				{
+					"gate": "⚖",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "💧"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚖": {
+				"💧": 0.6,
+				"📜": 0.3,
+				"🪣": 0.4
+			},
+			"🌱": {
+				"💧": 0.5,
+				"🪣": 0.4
+			},
+			"💧": {
+				"⚖": 0.6,
+				"🌱": 0.5,
+				"🔥": -0.6,
+				"🪣": 0.5
+			},
+			"🪣": {
+				"🌱": 0.4,
+				"🌾": 0.4,
+				"💧": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"💧": {
+				"🌧": 0.05
+			}
+		},
+		"lindblad_outgoing": {
+			"💧": {
+				"🔥": 0.08
+			}
+		},
+		"name": "Irrigation Jury",
+		"ring": "center",
+		"self_energies": {
+			"⚖": 0.25,
+			"🌱": 0.1,
+			"💧": 0.3,
+			"🪣": 0.15
+		},
+		"signature": [
+			"🌱",
+			"💧",
+			"⚖",
+			"🪣"
+		],
+		"tags": [
+			"civic",
+			"water",
+			"justice",
+			"agriculture"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"📵": {
+				"📶": -0.25
+			},
+			"🔇": {
+				"📡": -0.25,
+				"🔊": -0.35
+			},
+			"🤫": {
+				"🗣": -0.3
+			},
+			"🧘": {
+				"🌑": 0.2
+			}
+		},
+		"decoherence_coupling": {
+			"📵": 0.2,
+			"🔇": 0.4,
+			"🤫": 0.3
+		},
+		"description": "They guard secrets by ensuring they are never spoken. Information that enters their silence never leaves.",
+		"hamiltonian": {
+			"📵": {
+				"🔇": 0.5,
+				"🛑": 0.5
+			},
+			"🔇": {
+				"📵": 0.5,
+				"🤫": 0.7,
+				"🧘": 0.5
+			},
+			"🛑": {
+				"📵": 0.5,
+				"🤫": 0.4
+			},
+			"🤫": {
+				"🔇": 0.7,
+				"🛑": 0.4,
+				"🧘": 0.4
+			},
+			"🧘": {
+				"🔇": 0.5,
+				"🤫": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"🔇": {
+				"🤫": 0.03
+			},
+			"🧘": {
+				"🔇": 0.02
+			}
+		},
+		"lindblad_outgoing": {
+			"📡": {
+				"🔇": 0.05
+			},
+			"📶": {
+				"📵": 0.04
+			},
+			"🔊": {
+				"🔇": 0.06
+			}
+		},
+		"name": "Keepers of Silence",
+		"ring": "third",
+		"self_energies": {
+			"📵": 0.2,
+			"🔇": 0.3,
+			"🛑": 0.25,
+			"🤫": 0.25,
+			"🧘": 0.2
+		},
+		"signature": [
+			"🔇",
+			"🤫",
+			"🧘",
+			"🛑",
+			"📵"
+		],
+		"tags": [
+			"censorship",
+			"silence",
+			"secrets",
+			"void"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚡": {
+				"☀": 0.1,
+				"🌬": 0.1,
+				"💧": 0.15
+			},
+			"🔌": {
+				"💧": -0.2
+			}
+		},
+		"description": "Union workers who maintain the grid. Their monthly meetings are legendarily boring. The power must flow.",
+		"drivers": {
+			"🔌": {
+				"amp": 0.5,
+				"freq": 1.0,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"⚙": {
+				"🏭": 0.5,
+				"🔌": 0.4
+			},
+			"⚡": {
+				"🔋": 0.8,
+				"🔌": 0.5
+			},
+			"🔋": {
+				"⚡": 0.8,
+				"🔌": 0.7
+			},
+			"🔌": {
+				"⚙": 0.4,
+				"⚡": 0.5,
+				"🔋": 0.7
+			}
+		},
+		"lindblad_incoming": {
+			"🔋": {
+				"⚡": 0.06
+			}
+		},
+		"lindblad_outgoing": {
+			"🔋": {
+				"🔌": 0.04
+			},
+			"🔌": {
+				"⚡": 0.03
+			}
+		},
+		"name": "Kilowatt Collective",
+		"ring": "center",
+		"self_energies": {
+			"⚙": 0.15,
+			"⚡": 0.2,
+			"🔋": 0.3,
+			"🔌": 0.1
+		},
+		"signature": [
+			"🔋",
+			"🔌",
+			"⚙",
+			"⚡"
+		],
+		"tags": [
+			"infrastructure",
+			"power",
+			"union",
+			"clock-signal"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"📿": {
+				"🕯": 0.15
+			},
+			"🔔": {
+				"🎵": 0.1
+			},
+			"🪢": {
+				"⛓": 0.2,
+				"✊": -0.15
+			}
+		},
+		"bell_activated_features": {
+			"🪢": {
+				"description": "Oaths bind when entangled",
+				"latent_lindblad": {
+					"🪢": {
+						"📿": 0.08
+					}
+				}
+			}
+		},
+		"decay": {
+			"🧵": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Every oath is a knot. Every promise a binding. They maintain the web of obligations that holds society together.",
+		"gated_lindblad": {
+			"🗝": [
+				{
+					"gate": "🔔",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.03,
+					"source": "🪢"
+				}
+			]
+		},
+		"hamiltonian": {
+			"📿": {
+				"🔔": 0.4,
+				"🧵": 0.3,
+				"🪢": 0.5
+			},
+			"🔔": {
+				"📿": 0.4,
+				"🗝": 0.3
+			},
+			"🗝": {
+				"🔔": 0.3,
+				"🪢": 0.4
+			},
+			"🧵": {
+				"📿": 0.3,
+				"🪡": 0.5,
+				"🪢": 0.6
+			},
+			"🪡": {
+				"🧵": 0.5,
+				"🪢": 0.4
+			},
+			"🪢": {
+				"📿": 0.5,
+				"🗝": 0.4,
+				"🧵": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"📿": {
+				"🪢": 0.02
+			},
+			"🪢": {
+				"🧵": 0.04
+			}
+		},
+		"name": "Knot-Shriners",
+		"ring": "second",
+		"self_energies": {
+			"📿": 0.25,
+			"🔔": 0.2,
+			"🗝": 0.2,
+			"🧵": 0.15,
+			"🪡": 0.15,
+			"🪢": 0.3
+		},
+		"signature": [
+			"🪢",
+			"🧵",
+			"📿",
+			"🔔",
+			"🪡",
+			"🗝"
+		],
+		"tags": [
+			"oath",
+			"binding",
+			"sacred",
+			"obligation",
+			"entanglement_seeker"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🏮": {
+				"🌑": 0.25,
+				"🔥": 0.2
+			},
+			"🔦": {
+				"🌑": 0.2,
+				"🔋": 0.2
+			},
+			"🕯": {
+				"💨": -0.2,
+				"🔥": 0.15
+			},
+			"🧿": {
+				"🔮": 0.15
+			}
+		},
+		"decay": {
+			"🕯": {
+				"rate": 0.035,
+				"target": "🗑"
+			}
+		},
+		"description": "A secret language spoken in lamp-flashes and candle-patterns. They coordinate across vast distances using only light.",
+		"drivers": {
+			"🏮": {
+				"amplitude": 0.1,
+				"frequency": 0.5,
+				"phase": 0.0,
+				"type": "pulse"
+			},
+			"🔦": {
+				"amplitude": 0.12,
+				"frequency": 0.7,
+				"phase": 0.78,
+				"type": "pulse"
+			}
+		},
+		"hamiltonian": {
+			"🏮": {
+				"🔦": 0.5,
+				"🕯": 0.6,
+				"🧿": 0.4
+			},
+			"🔦": {
+				"🏮": 0.5,
+				"🕯": 0.4,
+				"🧿": 0.5
+			},
+			"🕯": {
+				"🏮": 0.6,
+				"🔦": 0.4
+			},
+			"🧿": {
+				"🏮": 0.4,
+				"🔦": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🧿": {
+				"🏮": 0.03,
+				"🔦": 0.02
+			}
+		},
+		"name": "Lantern Cant",
+		"ring": "second",
+		"self_energies": {
+			"🏮": 0.3,
+			"🔦": 0.2,
+			"🕯": 0.15,
+			"🧿": 0.2
+		},
+		"signature": [
+			"🏮",
+			"🔦",
+			"🕯",
+			"🧿"
+		],
+		"tags": [
+			"communication",
+			"light",
+			"signals",
+			"secret"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🃏": {
+				"🌀": 0.15
+			},
+			"🎪": {
+				"🎭": 0.2
+			},
+			"🤡": {
+				"🏛": -0.2,
+				"😂": 0.25
+			}
+		},
+		"decay": {
+			"🍷": {
+				"rate": 0.04,
+				"target": "🗑"
+			},
+			"🥂": {
+				"rate": 0.03,
+				"target": "🗑"
+			}
+		},
+		"description": "A court of jesters, fools, and tricksters who've realized the cosmic joke. Their laughter is contagious - dangerously so.",
+		"drivers": {
+			"🤡": {
+				"amplitude": 0.1,
+				"frequency": 0.4,
+				"phase": 0.0,
+				"type": "sine"
+			},
+			"🥂": {
+				"amplitude": 0.15,
+				"frequency": 0.3,
+				"phase": 0.0,
+				"type": "pulse"
+			}
+		},
+		"hamiltonian": {
+			"🃏": {
+				"🎪": 0.5,
+				"🤡": 0.6,
+				"🥂": 0.4
+			},
+			"🍷": {
+				"🎪": 0.3,
+				"🤡": 0.4,
+				"🥂": 0.7
+			},
+			"🎪": {
+				"🃏": 0.5,
+				"🤡": 0.7,
+				"🥂": 0.5
+			},
+			"🤡": {
+				"🃏": 0.6,
+				"🍷": 0.4,
+				"🎪": 0.7
+			},
+			"🥂": {
+				"🃏": 0.4,
+				"🍷": 0.7,
+				"🎪": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🃏": {
+				"🤡": 0.04
+			},
+			"🤡": {
+				"🍷": 0.03,
+				"🎪": 0.05
+			}
+		},
+		"lindblad_outgoing": {
+			"🍷": {
+				"🗑": 0.04
+			}
+		},
+		"name": "Laughing Court",
+		"ring": "third",
+		"self_energies": {
+			"🃏": 0.2,
+			"🍷": 0.1,
+			"🎪": 0.25,
+			"🤡": 0.15,
+			"🥂": 0.2
+		},
+		"signature": [
+			"🤡",
+			"🃏",
+			"🍷",
+			"🥂",
+			"🎪"
+		],
+		"tags": [
+			"chaos",
+			"entertainment",
+			"memetic",
+			"madness"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"📒": {
+				"🏛": 0.2,
+				"🔥": -0.25
+			},
+			"🚔": {
+				"⚖": 0.15,
+				"🏚": -0.2
+			}
+		},
+		"decay": {
+			"📒": {
+				"rate": 0.005,
+				"target": "🗑"
+			}
+		},
+		"description": "The enforcement arm of documentary reality. They collect what the ledgers say is owed. The worst punishment is ledger-death.",
+		"gated_lindblad": {
+			"💰": [
+				{
+					"gate": "📘",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.06,
+					"source": "👥"
+				}
+			],
+			"💸": [
+				{
+					"gate": "📒",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "👥"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚖": {
+				"📒": 0.5,
+				"📘": 0.6,
+				"🚔": 0.5
+			},
+			"💰": {
+				"👥": 0.4,
+				"📒": 0.6
+			},
+			"📒": {
+				"💰": 0.6,
+				"💸": 0.7,
+				"📘": 0.5,
+				"🚔": 0.4
+			},
+			"🚔": {
+				"⚖": 0.5,
+				"👥": 0.5,
+				"📒": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"📒": {
+				"📘": 0.03
+			},
+			"🚔": {
+				"📒": 0.02
+			}
+		},
+		"lindblad_outgoing": {
+			"📒": {
+				"🗑": 0.005
+			}
+		},
+		"name": "Ledger Bailiffs",
+		"ring": "first",
+		"self_energies": {
+			"⚖": 0.25,
+			"💰": 0.3,
+			"📒": 0.2,
+			"📘": 0.1,
+			"🚔": 0.15
+		},
+		"signature": [
+			"⚖",
+			"💰",
+			"📒",
+			"📘",
+			"🚔"
+		],
+		"tags": [
+			"enforcement",
+			"extraction",
+			"bureaucracy",
+			"commerce"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"♻️": {
+				"🍂": 0.2
+			},
+			"🦗": {
+				"🌱": 0.25,
+				"🌾": 0.35
+			},
+			"🦠": {
+				"🧬": 0.15
+			}
+		},
+		"decay": {
+			"🐜": {
+				"rate": 0.03,
+				"target": "💀"
+			},
+			"🦗": {
+				"rate": 0.04,
+				"target": "💀"
+			},
+			"🦠": {
+				"rate": 0.05,
+				"target": "🗑"
+			}
+		},
+		"description": "Biological salvage swarm. They strip everything useful from dying ecosystems and move on. Part pest, part cleanup crew, all hunger.",
+		"hamiltonian": {
+			"♻️": {
+				"🐜": 0.5,
+				"🦗": 0.5,
+				"🧫": 0.4
+			},
+			"⚔": {
+				"🐜": 0.3,
+				"🦗": 0.4
+			},
+			"🐜": {
+				"♻️": 0.5,
+				"🦗": 0.6,
+				"🦠": 0.3
+			},
+			"🦗": {
+				"♻️": 0.5,
+				"🐜": 0.6,
+				"🧫": 0.4
+			},
+			"🦠": {
+				"🐜": 0.3,
+				"🧫": 0.5
+			},
+			"🧫": {
+				"♻️": 0.4,
+				"🦗": 0.4,
+				"🦠": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🐜": {
+				"🧫": 0.04
+			},
+			"🦗": {
+				"♻️": 0.03,
+				"🧫": 0.05
+			},
+			"🦠": {
+				"🧫": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🌱": {
+				"♻️": 0.05
+			},
+			"🌾": {
+				"♻️": 0.06
+			}
+		},
+		"name": "Locusts",
+		"ring": "second",
+		"self_energies": {
+			"♻️": 0.2,
+			"⚔": 0.05,
+			"🐜": 0.15,
+			"🦗": 0.1,
+			"🦠": -0.05,
+			"🧫": 0.1
+		},
+		"signature": [
+			"🦗",
+			"🐜",
+			"⚔",
+			"♻️",
+			"🧫",
+			"🦠"
+		],
+		"tags": [
+			"swarm",
+			"salvage",
+			"consumption",
+			"biology"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"👘": {
+				"🎭": 0.15
+			},
+			"🪢": {
+				"⛓": 0.2,
+				"📿": 0.15
+			}
+		},
+		"decay": {
+			"👘": {
+				"rate": 0.01,
+				"target": "🗑"
+			},
+			"🧵": {
+				"rate": 0.015,
+				"target": "🗑"
+			}
+		},
+		"description": "They weave tapestries that tell futures. The patterns emerge unbidden. They don't control the loom - they interpret it.",
+		"hamiltonian": {
+			"👘": {
+				"🧵": 0.5,
+				"🪡": 0.5
+			},
+			"🧵": {
+				"👘": 0.5,
+				"🪡": 0.6,
+				"🪢": [
+					0.300000011920929,
+					0.200000002980232
+				]
+			},
+			"🪡": {
+				"👘": 0.5,
+				"🧵": 0.6,
+				"🪢": 0.4
+			},
+			"🪢": {
+				"🧵": [
+					0.300000011920929,
+					-0.200000002980232
+				],
+				"🪡": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"👘": {
+				"🧵": 0.04,
+				"🪡": 0.03
+			},
+			"🪢": {
+				"🧵": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🧵": {
+				"👘": 0.03
+			}
+		},
+		"name": "Loom Priests",
+		"ring": "second",
+		"self_energies": {
+			"👘": 0.3,
+			"🧵": 0.2,
+			"🪡": 0.25,
+			"🪢": 0.25
+		},
+		"signature": [
+			"🧵",
+			"🪡",
+			"👘",
+			"🪢"
+		],
+		"tags": [
+			"fate",
+			"weaving",
+			"divination",
+			"fabric",
+			"prophecy_capable",
+			"coherence_weaver"
+		]
+	},
+	{
+		"decay": {
+			"🏚️": {
+				"rate": 0.02,
+				"target": "🏛️"
+			}
+		},
+		"description": "The invisible hands that push and pull. Greed and fear dance eternal.",
+		"drivers": {
+			"🐂": {
+				"amp": 0.8,
+				"freq": 0.0333333333333333,
+				"phase": 0.0,
+				"type": "sine"
+			},
+			"🐻": {
+				"amp": 0.8,
+				"freq": 0.0333333333333333,
+				"phase": 3.14159265358979,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"🏚️": {
+				"🏛️": 0.7,
+				"🐻": 0.4
+			},
+			"🏛️": {
+				"🏚️": 0.7,
+				"🐂": 0.2,
+				"💰": 0.3
+			},
+			"🐂": {
+				"🏛️": 0.3,
+				"🐻": 0.9,
+				"💰": 0.4
+			},
+			"🐻": {
+				"🏚️": 0.3,
+				"🐂": 0.9,
+				"📦": 0.4
+			},
+			"💰": {
+				"🏛️": 0.2,
+				"🐂": 0.3,
+				"📦": 0.6
+			},
+			"📦": {
+				"🐻": 0.2,
+				"💰": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"🐂": {
+				"💰": 0.08
+			},
+			"🐻": {
+				"📦": 0.06
+			}
+		},
+		"lindblad_outgoing": {
+			"🏚️": {
+				"🏛️": 0.03
+			},
+			"💰": {
+				"📦": 0.05
+			},
+			"📦": {
+				"💰": 0.04
+			}
+		},
+		"name": "Market Spirits",
+		"ring": "second",
+		"self_energies": {
+			"🏚️": -0.1,
+			"🏛️": 0.2,
+			"🐂": 0.5,
+			"🐻": -0.5,
+			"💰": 0.1,
+			"📦": 0.0
+		},
+		"signature": [
+			"🐂",
+			"🐻",
+			"💰",
+			"📦",
+			"🏛️",
+			"🏚️"
+		],
+		"tags": [
+			"market",
+			"economy",
+			"oscillation"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"📐": {
+				"🏚": -0.2,
+				"🏛": 0.25
+			},
+			"📘": {
+				"⚖": 0.15,
+				"🔥": -0.25
+			},
+			"🧮": {
+				"💰": 0.1
+			}
+		},
+		"decay": {
+			"📋": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Pure auditors who define the units of existence. Whoever defines measurement defines reality.",
+		"hamiltonian": {
+			"📊": {
+				"📋": 0.4,
+				"📐": 0.5,
+				"🧮": 0.5
+			},
+			"📋": {
+				"📊": 0.4,
+				"📘": 0.3,
+				"🧮": 0.3
+			},
+			"📐": {
+				"📊": 0.5,
+				"📘": 0.4,
+				"🧮": 0.6
+			},
+			"📘": {
+				"📋": 0.3,
+				"📐": 0.4,
+				"🧮": 0.5
+			},
+			"🧮": {
+				"📊": 0.5,
+				"📐": 0.6,
+				"📘": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"📊": {
+				"🧮": 0.03
+			},
+			"📘": {
+				"📐": 0.03,
+				"🧮": 0.02
+			}
+		},
+		"lindblad_outgoing": {
+			"📋": {
+				"📘": 0.02
+			}
+		},
+		"name": "Measure Scribes",
+		"ring": "first",
+		"self_energies": {
+			"📊": 0.25,
+			"📋": 0.15,
+			"📐": 0.3,
+			"📘": 0.35,
+			"🧮": 0.2
+		},
+		"signature": [
+			"📐",
+			"📊",
+			"🧮",
+			"📘",
+			"📋"
+		],
+		"tags": [
+			"bureaucracy",
+			"measurement",
+			"standards",
+			"definition"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💾": {
+				"📡": 0.15,
+				"🔥": -0.3
+			},
+			"🗝": {
+				"🔓": -0.15
+			}
+		},
+		"decay": {
+			"📼": {
+				"rate": 0.03,
+				"target": "🧩"
+			},
+			"🧩": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Dealers in recorded experience. They buy recollections from the desperate, sell them to the curious, and archive everything.",
+		"gated_lindblad": {
+			"💾": [
+				{
+					"gate": "🗝",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "📼"
+				}
+			]
+		},
+		"hamiltonian": {
+			"💰": {
+				"💾": 0.5,
+				"📼": 0.4,
+				"🗝": 0.5
+			},
+			"💾": {
+				"💰": 0.5,
+				"📼": 0.6,
+				"🧩": 0.5
+			},
+			"📼": {
+				"💰": 0.4,
+				"💾": 0.6,
+				"🧩": 0.5
+			},
+			"🗝": {
+				"💰": 0.5,
+				"🧩": 0.4
+			},
+			"🧩": {
+				"💾": 0.5,
+				"📼": 0.5,
+				"🗝": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"💰": {
+				"💾": 0.03
+			},
+			"📼": {
+				"🧩": 0.02
+			}
+		},
+		"name": "Memory Merchants",
+		"ring": "second",
+		"self_energies": {
+			"💰": 0.2,
+			"💾": 0.3,
+			"📼": 0.15,
+			"🗝": 0.25,
+			"🧩": 0.15
+		},
+		"signature": [
+			"💰",
+			"💾",
+			"📼",
+			"🧩",
+			"🗝"
+		],
+		"tags": [
+			"commerce",
+			"memory",
+			"archive",
+			"experience"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚙": {
+				"💧": -0.05
+			},
+			"🏭": {
+				"🌬": 0.1,
+				"💧": 0.15,
+				"🔥": -0.2
+			}
+		},
+		"decay": {
+			"⚙": {
+				"rate": 0.015,
+				"target": "🗑"
+			},
+			"🏭": {
+				"rate": 0.005,
+				"target": "🗑"
+			}
+		},
+		"description": "Masters of the grinding stone. They turn flour into bread at industrial scale.",
+		"gated_lindblad": {
+			"🍞": [
+				{
+					"gate": "👥",
+					"inverse": false,
+					"power": 0.8,
+					"rate": 0.08,
+					"source": "💨"
+				},
+				{
+					"gate": "⚙",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.05,
+					"source": "🏭"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚙": {
+				"🏭": 0.7,
+				"💨": 0.3,
+				"🔨": 0.5
+			},
+			"🍞": {
+				"🏭": 0.6,
+				"💨": 0.4
+			},
+			"🏭": {
+				"⚙": 0.7,
+				"🍞": 0.6,
+				"💨": 0.5
+			},
+			"💨": {
+				"🍞": 0.4,
+				"🏭": 0.5
+			},
+			"🔨": {
+				"⚙": 0.5,
+				"🏭": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"⚙": {
+				"🔨": 0.03
+			},
+			"💨": {
+				"🌾": 0.05
+			}
+		},
+		"name": "Millwright's Union",
+		"ring": "second",
+		"self_energies": {
+			"⚙": 0.15,
+			"🍞": 0.1,
+			"🏭": 0.25,
+			"💨": 0.1,
+			"🔨": 0.1
+		},
+		"signature": [
+			"⚙",
+			"🏭",
+			"💨",
+			"🍞",
+			"🔨"
+		],
+		"tags": [
+			"industrial",
+			"transformation",
+			"mechanical",
+			"labor"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🏛": {
+				"⛰": 0.2,
+				"🏚": -0.3
+			},
+			"📐": {
+				"🧮": 0.15
+			},
+			"🧱": {
+				"💧": -0.1,
+				"🔥": -0.15
+			}
+		},
+		"decay": {
+			"🏺": {
+				"rate": 0.003,
+				"target": "🗑"
+			},
+			"🧱": {
+				"rate": 0.005,
+				"target": "🗑"
+			}
+		},
+		"description": "Architects who construct buildings that remain stable across probability fluctuations. Their geometries were inherited from civilizations that no longer exist.",
+		"hamiltonian": {
+			"🏛": {
+				"🏺": 0.5,
+				"📐": 0.6,
+				"🧱": 0.6
+			},
+			"🏺": {
+				"🏛": 0.5,
+				"📐": 0.4,
+				"🧱": 0.3
+			},
+			"📐": {
+				"🏛": 0.6,
+				"🏺": 0.4,
+				"🧱": 0.5
+			},
+			"🧱": {
+				"🏛": 0.6,
+				"🏺": 0.3,
+				"📐": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🏛": {
+				"📐": 0.02,
+				"🧱": 0.03
+			}
+		},
+		"name": "Monolith Masons",
+		"ring": "second",
+		"self_energies": {
+			"🏛": 0.5,
+			"🏺": 0.35,
+			"📐": 0.4,
+			"🧱": 0.3
+		},
+		"signature": [
+			"🧱",
+			"🏛",
+			"🏺",
+			"📐"
+		],
+		"tags": [
+			"construction",
+			"architecture",
+			"stability",
+			"ancient"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌿": {
+				"🍄": 0.25,
+				"💧": 0.2
+			},
+			"🦠": {
+				"🧬": 0.15
+			},
+			"🧿": {
+				"🔮": 0.15
+			}
+		},
+		"decay": {
+			"🦠": {
+				"rate": 0.04,
+				"target": "🗑"
+			},
+			"🧫": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "They trade in messages carried through moss networks and fungal relays. Slower than radio, but untraceable.",
+		"hamiltonian": {
+			"🌿": {
+				"🦠": 0.6,
+				"🧫": 0.5,
+				"🧿": 0.3
+			},
+			"🦠": {
+				"🌿": 0.6,
+				"🧫": 0.7
+			},
+			"🧫": {
+				"🌿": 0.5,
+				"🦠": 0.7,
+				"🧿": 0.3
+			},
+			"🧿": {
+				"🌿": 0.3,
+				"🧫": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"🦠": {
+				"🧫": 0.04
+			},
+			"🧿": {
+				"🌿": 0.03
+			}
+		},
+		"name": "Mossline Brokers",
+		"ring": "second",
+		"self_energies": {
+			"🌿": 0.25,
+			"🦠": 0.15,
+			"🧫": 0.2,
+			"🧿": 0.2
+		},
+		"signature": [
+			"🌿",
+			"🦠",
+			"🧫",
+			"🧿"
+		],
+		"tags": [
+			"communication",
+			"biology",
+			"network",
+			"stealth"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🍄": {
+				"☀": -0.35,
+				"🌙": 0.4,
+				"💧": 0.35
+			}
+		},
+		"decay": {
+			"🍄": {
+				"rate": 0.03,
+				"target": "🍂"
+			}
+		},
+		"description": "The hidden network beneath. Moon-touched, death-fed, eternal recyclers. Spooky symbiosis with death itself.",
+		"hamiltonian": {
+			"🌙": {
+				"🍄": 0.6
+			},
+			"🍂": {
+				"🍄": 0.5,
+				"💀": 0.3
+			},
+			"🍄": {
+				"🌙": 0.6,
+				"🍂": 0.5,
+				"💀": 0.4
+			},
+			"💀": {
+				"🍂": 0.3,
+				"🍄": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"🍂": {
+				"💀": 0.08
+			},
+			"🍄": {
+				"🌙": 0.06,
+				"🍂": 0.12,
+				"💀": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🍄": {
+				"💀": 0.01
+			}
+		},
+		"name": "Mycelial Web",
+		"ring": "center",
+		"self_energies": {
+			"🍂": 0.0,
+			"🍄": 0.05,
+			"💀": -0.1
+		},
+		"signature": [
+			"🍄",
+			"🍂",
+			"🌙",
+			"💀"
+		],
+		"tags": [
+			"decomposer",
+			"lunar",
+			"underground",
+			"death"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🗝": {
+				"🏚": -0.1,
+				"🏛": 0.15
+			},
+			"🚧": {
+				"👥": -0.05,
+				"🚢": -0.1
+			},
+			"🛂": {
+				"📘": 0.15
+			}
+		},
+		"decay": {
+			"📋": {
+				"rate": 0.025,
+				"target": "🗑"
+			},
+			"🚧": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Gatekeepers who control major transit points. Their keys open doors that shouldn't exist.",
+		"drivers": {
+			"🚪": {
+				"amp": 0.3,
+				"freq": 0.1,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"gated_lindblad": {
+			"🚪": [
+				{
+					"gate": "🗝",
+					"inverse": false,
+					"power": 1.2,
+					"rate": 0.04,
+					"source": "🚧"
+				}
+			]
+		},
+		"hamiltonian": {
+			"📋": {
+				"🚧": 0.4,
+				"🚪": 0.3,
+				"🛂": 0.6
+			},
+			"🗝": {
+				"🚧": 0.3,
+				"🚪": 0.7,
+				"🛂": 0.4
+			},
+			"🚧": {
+				"📋": 0.4,
+				"🚪": 0.6,
+				"🛂": 0.5
+			},
+			"🚪": {
+				"📋": 0.3,
+				"🗝": 0.7,
+				"🚧": 0.6
+			},
+			"🛂": {
+				"📋": 0.6,
+				"🗝": 0.4,
+				"🚧": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"📋": {
+				"🛂": 0.03
+			},
+			"🗝": {
+				"🛂": 0.02
+			}
+		},
+		"name": "Nexus Wardens",
+		"ring": "first",
+		"self_energies": {
+			"📋": 0.15,
+			"🗝": 0.3,
+			"🚧": 0.2,
+			"🚪": 0.1,
+			"🛂": 0.25
+		},
+		"signature": [
+			"🛂",
+			"📋",
+			"🚧",
+			"🗝",
+			"🚪"
+		],
+		"tags": [
+			"transit",
+			"control",
+			"gatekeeping",
+			"keys"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⛓": {
+				"🏭": 0.2,
+				"👥": -0.15
+			},
+			"📘": {
+				"⚖": 0.15
+			},
+			"🪨": {
+				"🏚": -0.2,
+				"🏛": 0.25
+			}
+		},
+		"decay": {
+			"⛓": {
+				"rate": 0.015,
+				"target": "🗑"
+			},
+			"🕴️": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Labor organizers who impose structure on chaotic workforces. Their methods are strict, their results undeniable.",
+		"hamiltonian": {
+			"⛓": {
+				"📘": 0.4,
+				"🕴️": 0.5,
+				"🪨": 0.5
+			},
+			"📘": {
+				"⛓": 0.4,
+				"🕴️": 0.5,
+				"🧱": 0.4,
+				"🪨": 0.3
+			},
+			"🕴️": {
+				"⛓": 0.5,
+				"📘": 0.5
+			},
+			"🧱": {
+				"📘": 0.4,
+				"🪨": 0.6
+			},
+			"🪨": {
+				"⛓": 0.5,
+				"📘": 0.3,
+				"🧱": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"📘": {
+				"🕴️": 0.03
+			},
+			"🧱": {
+				"⛓": 0.03,
+				"🪨": 0.02
+			}
+		},
+		"name": "Obsidian Will",
+		"ring": "second",
+		"self_energies": {
+			"⛓": 0.1,
+			"📘": 0.3,
+			"🕴️": 0.2,
+			"🧱": 0.25,
+			"🪨": 0.35
+		},
+		"signature": [
+			"🪨",
+			"⛓",
+			"🧱",
+			"📘",
+			"🕴️"
+		],
+		"tags": [
+			"discipline",
+			"labor",
+			"organization",
+			"structure"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🐉": {
+				"❄": -0.15,
+				"🔥": 0.3
+			},
+			"💱": {
+				"⛓": 0.15,
+				"💰": 0.2
+			},
+			"🩸": {
+				"⚖": 0.15
+			}
+		},
+		"decay": {
+			"🩸": {
+				"rate": 0.04,
+				"target": "🗑"
+			}
+		},
+		"description": "Draconic contract enforcers. They guarantee deals with blood oaths and collect debts with dragonfire. Their word is law.",
+		"gated_lindblad": {
+			"💱": [
+				{
+					"gate": "🐉",
+					"inverse": false,
+					"power": 1.3,
+					"rate": 0.05,
+					"source": "🩸"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚔": {
+				"🐉": 0.5,
+				"🛡": 0.5,
+				"🩸": 0.4
+			},
+			"🐉": {
+				"⚔": 0.5,
+				"💱": 0.4,
+				"🩸": 0.6
+			},
+			"💱": {
+				"🐉": 0.4,
+				"🛡": 0.3,
+				"🩸": 0.5
+			},
+			"🛡": {
+				"⚔": 0.5,
+				"💱": 0.3
+			},
+			"🩸": {
+				"⚔": 0.4,
+				"🐉": 0.6,
+				"💱": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"💱": {
+				"💰": 0.02
+			},
+			"🩸": {
+				"⚔": 0.03
+			}
+		},
+		"name": "Order of the Crimson Scale",
+		"ring": "second",
+		"self_energies": {
+			"⚔": 0.2,
+			"🐉": 0.35,
+			"💱": 0.25,
+			"🛡": 0.2,
+			"🩸": 0.15
+		},
+		"signature": [
+			"⚔",
+			"🐉",
+			"🩸",
+			"💱",
+			"🛡"
+		],
+		"tags": [
+			"enforcement",
+			"contracts",
+			"dragons",
+			"blood"
+		]
+	},
+	{
+		"decay": {
+			"🐇": {
+				"rate": 0.05,
+				"target": "💀"
+			},
+			"🐺": {
+				"rate": 0.03,
+				"target": "💀"
+			},
+			"🦅": {
+				"rate": 0.025,
+				"target": "💀"
+			},
+			"🦌": {
+				"rate": 0.04,
+				"target": "💀"
+			}
+		},
+		"description": "The hunters. They cull the weak and shepherd death.",
+		"hamiltonian": {
+			"🐇": {
+				"🐺": 0.6,
+				"🦅": 0.5
+			},
+			"🐺": {
+				"🐇": 0.6,
+				"🦅": 0.2,
+				"🦌": 0.5
+			},
+			"💀": {
+				"🐇": 0.4,
+				"🐺": 0.3,
+				"🦅": 0.3,
+				"🦌": 0.4
+			},
+			"🦅": {
+				"🐇": 0.5,
+				"🐺": 0.2,
+				"🦌": 0.3
+			},
+			"🦌": {
+				"🐺": 0.5,
+				"🦅": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"🐺": {
+				"🐇": 0.15,
+				"🦌": 0.12
+			},
+			"🦅": {
+				"🐇": 0.12
+			}
+		},
+		"name": "Pack Lords",
+		"ring": "second",
+		"self_energies": {
+			"🐇": 0.02,
+			"🐺": -0.05,
+			"💀": -0.1,
+			"🦅": -0.03,
+			"🦌": 0.01
+		},
+		"signature": [
+			"🐺",
+			"🦅",
+			"🐇",
+			"🦌",
+			"💀"
+		],
+		"tags": [
+			"fauna",
+			"predator",
+			"apex",
+			"death"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🦠": {
+				"🌬": -0.2,
+				"🌾": 0.25,
+				"🐇": 0.3,
+				"🐝": 0.35
+			}
+		},
+		"decay": {
+			"🦠": {
+				"rate": 0.15,
+				"target": "🍂"
+			}
+		},
+		"description": "The invisible cullers. They thrive on density and crash on scarcity.",
+		"gated_lindblad": {
+			"💀": [
+				{
+					"gate": "🦠",
+					"power": 1.5,
+					"rate": 0.12,
+					"source": "🐇"
+				},
+				{
+					"gate": "🦠",
+					"power": 1.2,
+					"rate": 0.1,
+					"source": "🌾"
+				},
+				{
+					"gate": "🦠",
+					"power": 1.5,
+					"rate": 0.15,
+					"source": "🐝"
+				}
+			]
+		},
+		"hamiltonian": {
+			"🦠": {
+				"🌾": 0.4,
+				"🐇": 0.5,
+				"🐝": 0.6,
+				"💀": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"🦠": {
+				"🌾": 0.06,
+				"🐇": 0.08,
+				"🐝": 0.1
+			}
+		},
+		"lindblad_outgoing": {
+			"🦠": {
+				"💀": 0.05
+			}
+		},
+		"name": "Plague Vectors",
+		"ring": "second",
+		"self_energies": {
+			"🦠": -0.05
+		},
+		"signature": [
+			"🦠",
+			"🐇",
+			"🌾",
+			"🐝",
+			"💀"
+		],
+		"tags": [
+			"disease",
+			"balance",
+			"density-dependent"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🐝": {
+				"☀": 0.15,
+				"💧": -0.1
+			}
+		},
+		"decay": {
+			"🐝": {
+				"rate": 0.06,
+				"target": "🍂"
+			}
+		},
+		"description": "The tiny workers without whom no seed sets. Their absence collapses agriculture.",
+		"gated_lindblad": {
+			"🌾": [
+				{
+					"gate": "🐝",
+					"power": 1.0,
+					"rate": 0.05,
+					"source": "🌿"
+				},
+				{
+					"gate": "🐝",
+					"power": 0.8,
+					"rate": 0.03,
+					"source": "🌱"
+				}
+			]
+		},
+		"hamiltonian": {
+			"🐝": {
+				"🌱": 0.3,
+				"🌾": 0.4,
+				"🌿": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🐝": {
+				"🌿": 0.06
+			}
+		},
+		"name": "Pollinator Guild",
+		"ring": "center",
+		"self_energies": {
+			"🐝": 0.02
+		},
+		"signature": [
+			"🐝",
+			"🌿",
+			"🌾",
+			"🌱"
+		],
+		"tags": [
+			"fauna",
+			"pollinator",
+			"critical",
+			"fragile"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🚫": {
+				"🦗": -0.25,
+				"🦠": -0.35
+			},
+			"🧫": {
+				"🦠": 0.1
+			},
+			"🩺": {
+				"👥": 0.1,
+				"💀": -0.15
+			}
+		},
+		"decay": {
+			"🧪": {
+				"rate": 0.02,
+				"target": "🗑"
+			},
+			"🩺": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Biological border guards preventing contamination. Their work prevents plagues nobody knows about.",
+		"hamiltonian": {
+			"🚫": {
+				"🦗": 0.5,
+				"🩺": 0.4
+			},
+			"🦗": {
+				"🚫": 0.5,
+				"🧪": 0.4,
+				"🧫": 0.3
+			},
+			"🧪": {
+				"🦗": 0.4,
+				"🧫": 0.6,
+				"🧬": 0.5
+			},
+			"🧫": {
+				"🦗": 0.3,
+				"🧪": 0.6,
+				"🧬": 0.5
+			},
+			"🧬": {
+				"🧪": 0.5,
+				"🧫": 0.5,
+				"🩺": 0.3
+			},
+			"🩺": {
+				"🚫": 0.4,
+				"🧪": 0.4,
+				"🧬": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"🚫": {
+				"🧪": 0.03,
+				"🩺": 0.02
+			}
+		},
+		"lindblad_outgoing": {
+			"🦗": {
+				"🚫": 0.04
+			}
+		},
+		"name": "Quarantine Sealwrights",
+		"ring": "first",
+		"self_energies": {
+			"🚫": 0.3,
+			"🦗": -0.1,
+			"🧪": 0.2,
+			"🧫": 0.25,
+			"🧬": 0.15,
+			"🩺": 0.2
+		},
+		"signature": [
+			"🧪",
+			"🦗",
+			"🧫",
+			"🚫",
+			"🩺",
+			"🧬"
+		],
+		"tags": [
+			"containment",
+			"medical",
+			"prevention",
+			"quarantine"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚓": {
+				"🏛": 0.15
+			},
+			"🚢": {
+				"🌬": 0.1,
+				"💧": 0.2
+			}
+		},
+		"decay": {
+			"🪝": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Dockside operators who control port operations. They know which ships carry what and which cargo is fiction.",
+		"gated_lindblad": {
+			"🚢": [
+				{
+					"gate": "⚓",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.03,
+					"source": "💰"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚓": {
+				"💰": 0.3,
+				"🚢": 0.6,
+				"🪝": 0.5
+			},
+			"💰": {
+				"⚓": 0.3,
+				"🚢": 0.5
+			},
+			"🚢": {
+				"⚓": 0.6,
+				"💧": 0.3,
+				"💰": 0.5,
+				"🪝": 0.4
+			},
+			"🪝": {
+				"⚓": 0.5,
+				"💰": 0.3,
+				"🚢": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"💰": {
+				"🚢": 0.04
+			},
+			"🪝": {
+				"⚓": 0.03
+			}
+		},
+		"name": "Quay Rooks",
+		"ring": "second",
+		"self_energies": {
+			"⚓": 0.2,
+			"💰": 0.3,
+			"🚢": 0.25,
+			"🪝": 0.15
+		},
+		"signature": [
+			"🚢",
+			"⚓",
+			"💰",
+			"🪝"
+		],
+		"tags": [
+			"port",
+			"commerce",
+			"shipping",
+			"information"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"✨": {
+				"⚫": 0.2,
+				"🌑": 0.25
+			},
+			"🌠": {
+				"🌙": 0.2,
+				"🔭": 0.15
+			},
+			"🤲": {
+				"👶": 0.2
+			}
+		},
+		"decay": {
+			"✨": {
+				"rate": 0.01,
+				"target": "🗑"
+			},
+			"💫": {
+				"rate": 0.015,
+				"target": "✨"
+			}
+		},
+		"decoherence_coupling": {
+			"✨": -0.4,
+			"🌠": -0.15,
+			"💫": -0.2
+		},
+		"description": "They assist in the birth of new patterns from chaos. What emerges isn't always what was expected. Not everything should be born.",
+		"hamiltonian": {
+			"✨": {
+				"🌠": 0.5,
+				"💫": 0.6,
+				"🤲": [
+					0.400000005960464,
+					0.300000011920929
+				]
+			},
+			"🌠": {
+				"✨": 0.5,
+				"💫": 0.5,
+				"🤲": 0.5
+			},
+			"💫": {
+				"✨": 0.6,
+				"🌠": 0.5,
+				"🤲": 0.4
+			},
+			"🤲": {
+				"✨": [
+					0.400000005960464,
+					-0.300000011920929
+				],
+				"🌠": 0.5,
+				"💫": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"✨": {
+				"⚫": 0.02,
+				"🕳": 0.03
+			},
+			"🌠": {
+				"💫": 0.03
+			},
+			"💫": {
+				"✨": 0.04
+			}
+		},
+		"name": "Reality Midwives",
+		"ring": "outer",
+		"self_energies": {
+			"✨": 0.25,
+			"🌠": 0.3,
+			"💫": 0.2,
+			"🤲": 0.25
+		},
+		"signature": [
+			"✨",
+			"💫",
+			"🌠",
+			"🤲"
+		],
+		"tags": [
+			"creation",
+			"emergence",
+			"pattern",
+			"birth",
+			"drift_stabilizer"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"📡": {
+				"⚡": 0.2,
+				"💧": -0.15
+			},
+			"📶": {
+				"⛰": -0.15,
+				"🌬": 0.05
+			}
+		},
+		"decay": {
+			"📡": {
+				"rate": 0.008,
+				"target": "🗑"
+			},
+			"🧩": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "The telecom company. Mind-bogglingly complex infrastructure, frustratingly mundane service.",
+		"drivers": {
+			"📶": {
+				"amp": 0.4,
+				"freq": 0.2,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"📡": {
+				"📶": 0.7,
+				"🗺": 0.4,
+				"🧩": 0.5
+			},
+			"📶": {
+				"📡": 0.7,
+				"🧩": 0.6,
+				"🧭": 0.4
+			},
+			"🗺": {
+				"📡": 0.4,
+				"🧩": 0.5,
+				"🧭": 0.6
+			},
+			"🧩": {
+				"📡": 0.5,
+				"📶": 0.6,
+				"🗺": 0.5
+			},
+			"🧭": {
+				"📶": 0.4,
+				"🗺": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"🗺": {
+				"📡": 0.02,
+				"🧩": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"📶": {
+				"🧩": 0.02
+			}
+		},
+		"name": "Relay Lattice",
+		"ring": "center",
+		"self_energies": {
+			"📡": 0.3,
+			"📶": 0.1,
+			"🗺": 0.2,
+			"🧩": 0.15,
+			"🧭": 0.2
+		},
+		"signature": [
+			"📡",
+			"🧩",
+			"🗺",
+			"📶",
+			"🧭"
+		],
+		"tags": [
+			"communication",
+			"infrastructure",
+			"network",
+			"signal"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🎼": {
+				"🎵": 0.2
+			},
+			"💃": {
+				"⚖": 0.2,
+				"🌀": -0.25
+			},
+			"🔊": {
+				"🔇": -0.3
+			}
+		},
+		"description": "Dancers whose movements stabilize unstable regions of space. Where they perform, reality holds together. Where they don't...",
+		"drivers": {
+			"💃": {
+				"amplitude": 0.1,
+				"frequency": 0.5,
+				"phase": 0.0,
+				"type": "sine"
+			},
+			"🩰": {
+				"amplitude": 0.08,
+				"frequency": 0.5,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"🎼": {
+				"💃": 0.7,
+				"🔊": 0.6,
+				"🩰": 0.4
+			},
+			"💃": {
+				"🎼": 0.7,
+				"🔊": 0.4,
+				"🩰": 0.6
+			},
+			"📡": {
+				"🎼": 0.3,
+				"🔊": 0.5
+			},
+			"🔊": {
+				"🎼": 0.6,
+				"💃": 0.4,
+				"📡": 0.5
+			},
+			"🩰": {
+				"🎼": 0.4,
+				"💃": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"📡": {
+				"🔊": 0.04
+			}
+		},
+		"name": "Resonance Dancers",
+		"ring": "third",
+		"self_energies": {
+			"🎼": 0.25,
+			"💃": 0.3,
+			"📡": 0.2,
+			"🔊": 0.2,
+			"🩰": 0.25
+		},
+		"signature": [
+			"💃",
+			"🎼",
+			"🔊",
+			"📡",
+			"🩰"
+		],
+		"tags": [
+			"dance",
+			"stability",
+			"resonance",
+			"ritual"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🔬": {
+				"🏛": 0.15
+			},
+			"🚀": {
+				"🌌": 0.2,
+				"🔥": -0.15
+			}
+		},
+		"decay": {
+			"📋": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Technical school for spacecraft propulsion. Their bureaucracy is legendary. Their approved systems don't explode unexpectedly.",
+		"gated_lindblad": {
+			"🚀": [
+				{
+					"gate": "📋",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.03,
+					"source": "🔬"
+				},
+				{
+					"gate": "📋",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.02,
+					"source": "⚙"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚙": {
+				"🔬": 0.3,
+				"🚀": 0.5
+			},
+			"📋": {
+				"🔬": 0.4,
+				"🚀": 0.5
+			},
+			"🔬": {
+				"📋": 0.4,
+				"🚀": 0.6,
+				"🧪": 0.3
+			},
+			"🚀": {
+				"⚙": 0.5,
+				"⚡": 0.4,
+				"📋": 0.5,
+				"🔬": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"📋": {
+				"🔬": 0.04
+			}
+		},
+		"lindblad_outgoing": {
+			"🚀": {
+				"🚢": 0.01
+			}
+		},
+		"name": "Rocketwright Institute",
+		"ring": "first",
+		"self_energies": {
+			"⚙": 0.15,
+			"📋": 0.2,
+			"🔬": 0.25,
+			"🚀": 0.35
+		},
+		"signature": [
+			"🚀",
+			"🔬",
+			"⚙",
+			"📋"
+		],
+		"tags": [
+			"science",
+			"aerospace",
+			"certification",
+			"research"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⛪": {
+				"📿": 0.15
+			},
+			"🔥": {
+				"☀": 0.15,
+				"💧": -0.25,
+				"💨": 0.2
+			},
+			"🕯": {
+				"🌑": 0.15
+			}
+		},
+		"decay": {
+			"🕯": {
+				"rate": 0.025,
+				"target": "🗑"
+			},
+			"🪵": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Guardians of eternal flames in temples across the void. They tend fires that have burned since before memory.",
+		"hamiltonian": {
+			"⛪": {
+				"🔥": 0.5,
+				"🕯": 0.5,
+				"🧯": 0.3
+			},
+			"🔥": {
+				"⛪": 0.5,
+				"🕯": 0.6,
+				"🪵": 0.5
+			},
+			"🕯": {
+				"⛪": 0.5,
+				"🔥": 0.6
+			},
+			"🧯": {
+				"⛪": 0.3,
+				"🔥": 0.4
+			},
+			"🪵": {
+				"🔥": 0.5,
+				"🕯": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"🔥": {
+				"🕯": 0.02,
+				"🪵": 0.05
+			},
+			"🕯": {
+				"🔥": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🪵": {
+				"🔥": 0.04
+			}
+		},
+		"name": "Sacred Flame Keepers",
+		"ring": "second",
+		"self_energies": {
+			"⛪": 0.3,
+			"🔥": 0.35,
+			"🕯": 0.25,
+			"🧯": 0.2,
+			"🪵": 0.15
+		},
+		"signature": [
+			"🔥",
+			"🕯",
+			"⛪",
+			"🪵",
+			"🧯"
+		],
+		"tags": [
+			"fire",
+			"sacred",
+			"eternal",
+			"temple"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💧": {
+				"🌧": 0.2
+			},
+			"🔓": {
+				"🗝": -0.2,
+				"🚧": 0.25
+			},
+			"🕵️": {
+				"🌑": 0.15
+			}
+		},
+		"decay": {
+			"🛶": {
+				"rate": 0.02,
+				"target": "🗑"
+			},
+			"🧂": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Canal smugglers moving contraband through waterways that official maps don't show. Salt is their cover cargo.",
+		"gated_lindblad": {
+			"🛶": [
+				{
+					"gate": "⛓",
+					"inverse": false,
+					"power": 0.8,
+					"rate": 0.03,
+					"source": "🔓"
+				}
+			],
+			"🧂": [
+				{
+					"gate": "💧",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "🛶"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⛓": {
+				"🔓": 0.7
+			},
+			"💧": {
+				"🛶": 0.7,
+				"🧂": 0.4
+			},
+			"🔓": {
+				"⛓": 0.7,
+				"🕵️": 0.5,
+				"🛶": 0.3
+			},
+			"🕵️": {
+				"🔓": 0.5,
+				"🛶": 0.4
+			},
+			"🛶": {
+				"💧": 0.7,
+				"🕵️": 0.4,
+				"🧂": 0.6
+			},
+			"🧂": {
+				"💧": 0.4,
+				"🛶": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"🔓": {
+				"🕵️": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"⛓": {
+				"🔓": 0.04
+			}
+		},
+		"name": "Salt-Runners",
+		"ring": "second",
+		"self_energies": {
+			"⛓": 0.05,
+			"💧": 0.1,
+			"🔓": 0.25,
+			"🕵️": 0.15,
+			"🛶": 0.2,
+			"🧂": 0.15
+		},
+		"signature": [
+			"🧂",
+			"🛶",
+			"💧",
+			"⛓",
+			"🔓",
+			"🕵️"
+		],
+		"tags": [
+			"smuggling",
+			"water",
+			"hidden",
+			"transport"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚔": {
+				"🔥": -0.1
+			},
+			"🏇": {
+				"🐺": -0.15
+			},
+			"🛡": {
+				"🌱": 0.15,
+				"🌾": 0.2,
+				"🐇": -0.1
+			}
+		},
+		"decay": {
+			"⚔": {
+				"rate": 0.015,
+				"target": "🗑"
+			},
+			"🛡": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Estate guards who protect agricultural land. They fight for the fields, not for glory.",
+		"hamiltonian": {
+			"⚔": {
+				"🏇": 0.5,
+				"🛡": 0.6
+			},
+			"🌱": {
+				"🏇": 0.3,
+				"🛡": 0.5
+			},
+			"🏇": {
+				"⚔": 0.5,
+				"🌱": 0.3,
+				"🛡": 0.4
+			},
+			"🛡": {
+				"⚔": 0.6,
+				"🌱": 0.5,
+				"🏇": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"🛡": {
+				"⚔": 0.02
+			}
+		},
+		"lindblad_outgoing": {
+			"⚔": {
+				"💀": 0.02
+			}
+		},
+		"name": "Scythe Provosts",
+		"ring": "first",
+		"self_energies": {
+			"⚔": 0.2,
+			"🌱": 0.1,
+			"🏇": 0.15,
+			"🛡": 0.25
+		},
+		"signature": [
+			"🌱",
+			"⚔",
+			"🛡",
+			"🏇"
+		],
+		"tags": [
+			"military",
+			"protection",
+			"agriculture",
+			"patrol"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"👘": {
+				"🌹": 0.2,
+				"👥": 0.1
+			},
+			"📡": {
+				"🕵️": 0.15
+			}
+		},
+		"decay": {
+			"👘": {
+				"rate": 0.015,
+				"target": "🗑"
+			},
+			"🧵": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Tailors who encode information in fabric patterns. A trained eye reads origin, status, and secrets in the weave.",
+		"hamiltonian": {
+			"👘": {
+				"📡": 0.5,
+				"🧵": 0.5,
+				"🪡": 0.6
+			},
+			"📡": {
+				"👘": 0.5,
+				"🧵": 0.3
+			},
+			"🧵": {
+				"👘": 0.5,
+				"📡": 0.3,
+				"🧶": 0.4,
+				"🪡": 0.7
+			},
+			"🧶": {
+				"👘": 0.4,
+				"🧵": 0.4,
+				"🪡": 0.5
+			},
+			"🪡": {
+				"👘": 0.6,
+				"🧵": 0.7,
+				"🧶": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"👘": {
+				"🧵": 0.04,
+				"🧶": 0.03
+			},
+			"📡": {
+				"👘": 0.02
+			}
+		},
+		"lindblad_outgoing": {
+			"🧶": {
+				"🧵": 0.03
+			}
+		},
+		"name": "Seamstress Syndicate",
+		"ring": "second",
+		"self_energies": {
+			"👘": 0.25,
+			"📡": 0.08,
+			"🧵": 0.1,
+			"🧶": 0.12,
+			"🪡": 0.15
+		},
+		"signature": [
+			"🪡",
+			"🧵",
+			"🧶",
+			"📡",
+			"👘"
+		],
+		"tags": [
+			"craft",
+			"information",
+			"fashion",
+			"encoding"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌱": {
+				"💧": 0.1
+			},
+			"🧫": {
+				"🦠": -0.25
+			},
+			"🧬": {
+				"❄": 0.3,
+				"🔥": -0.35
+			}
+		},
+		"decay": {
+			"🧪": {
+				"rate": 0.015,
+				"target": "🗑"
+			},
+			"🧫": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Keepers of the genetic archive. Every biological pattern that sustains civilization.",
+		"hamiltonian": {
+			"🌱": {
+				"🔬": 0.3,
+				"🧫": 0.6,
+				"🧬": 0.5
+			},
+			"🔬": {
+				"🧪": 0.4,
+				"🧫": 0.5,
+				"🧬": 0.7
+			},
+			"🧪": {
+				"🔬": 0.4,
+				"🧫": 0.5,
+				"🧬": 0.4
+			},
+			"🧫": {
+				"🌱": 0.6,
+				"🔬": 0.5,
+				"🧬": 0.6
+			},
+			"🧬": {
+				"🌱": 0.5,
+				"🔬": 0.7,
+				"🧫": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"🧫": {
+				"🧪": 0.03
+			},
+			"🧬": {
+				"🌱": 0.03,
+				"🧫": 0.04
+			}
+		},
+		"name": "Seedvault Curators",
+		"ring": "center",
+		"self_energies": {
+			"🌱": 0.1,
+			"🔬": 0.3,
+			"🧪": 0.2,
+			"🧫": 0.25,
+			"🧬": 0.35
+		},
+		"signature": [
+			"🌱",
+			"🔬",
+			"🧪",
+			"🧫",
+			"🧬"
+		],
+		"tags": [
+			"preservation",
+			"science",
+			"genetics",
+			"archive"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌠": {
+				"🌌": 0.2
+			},
+			"🔭": {
+				"☀": -0.2,
+				"🌙": 0.3
+			},
+			"🛰": {
+				"⚡": 0.15
+			}
+		},
+		"decay": {
+			"🌠": {
+				"rate": 0.08,
+				"target": "🗑"
+			},
+			"🛰": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Navigators who map routes through probability-space. Where others see chaos, they see currents.",
+		"gated_lindblad": {
+			"🌠": [
+				{
+					"gate": "🌙",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "🔭"
+				}
+			]
+		},
+		"hamiltonian": {
+			"🌠": {
+				"🔭": 0.7,
+				"🛰": 0.4
+			},
+			"📡": {
+				"🔭": 0.3,
+				"🛰": 0.6
+			},
+			"🔭": {
+				"🌠": 0.7,
+				"📡": 0.3,
+				"🛰": 0.5
+			},
+			"🛰": {
+				"🌠": 0.4,
+				"📡": 0.6,
+				"🔭": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🛰": {
+				"📡": 0.02
+			}
+		},
+		"name": "Star-Charter Enclave",
+		"ring": "second",
+		"self_energies": {
+			"🌠": 0.2,
+			"📡": 0.15,
+			"🔭": 0.3,
+			"🛰": 0.25
+		},
+		"signature": [
+			"🔭",
+			"🌠",
+			"🛰",
+			"📡"
+		],
+		"tags": [
+			"navigation",
+			"cosmic",
+			"mapping",
+			"probability"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚙": {
+				"🛠": 0.1
+			},
+			"🌞": {
+				"☀": 0.35,
+				"🌙": -0.2
+			},
+			"🚀": {
+				"🔬": 0.15
+			}
+		},
+		"decay": {
+			"⚙": {
+				"rate": 0.015,
+				"target": "🗑"
+			},
+			"🚀": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "Heavy-duty celestial mechanics maintaining ancient stellar infrastructure. They don't research new tech - they keep the old tech running.",
+		"drivers": {
+			"🌞": {
+				"amp": 0.6,
+				"freq": 0.05,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"gated_lindblad": {
+			"🚀": [
+				{
+					"gate": "🌞",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "⚙"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⚙": {
+				"🌀": 0.6,
+				"🌞": 0.5,
+				"🚀": 0.6
+			},
+			"🌀": {
+				"⚙": 0.6,
+				"🌞": 0.7,
+				"🚀": 0.5
+			},
+			"🌞": {
+				"⚙": 0.5,
+				"🌀": 0.7,
+				"🚀": 0.4
+			},
+			"🚀": {
+				"⚙": 0.6,
+				"🌀": 0.5,
+				"🌞": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"⚙": {
+				"🌀": 0.02
+			},
+			"🌀": {
+				"🌞": 0.03
+			}
+		},
+		"name": "Starforge Reliquary",
+		"ring": "second",
+		"self_energies": {
+			"⚙": 0.25,
+			"🌀": 0.2,
+			"🌞": 0.4,
+			"🚀": 0.3
+		},
+		"signature": [
+			"🌞",
+			"🌀",
+			"⚙",
+			"🚀"
+		],
+		"tags": [
+			"infrastructure",
+			"celestial",
+			"maintenance",
+			"industrial"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🏢": {
+				"🏚": -0.2,
+				"🏛": 0.25,
+				"🔥": -0.3
+			},
+			"📘": {
+				"💧": -0.1
+			},
+			"📜": {
+				"🏰": 0.2
+			}
+		},
+		"decay": {
+			"📘": {
+				"rate": 0.005,
+				"target": "🗑"
+			},
+			"📜": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Masters of the checkpoint. They receive edicts and forge them into law.",
+		"gated_lindblad": {
+			"🚢": [
+				{
+					"gate": "📘",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.05,
+					"source": "💰"
+				}
+			]
+		},
+		"hamiltonian": {
+			"🏢": {
+				"👥": 0.4,
+				"📘": 0.6,
+				"📜": 0.5,
+				"🛂": 0.5
+			},
+			"👥": {
+				"🏢": 0.4,
+				"📘": 0.5,
+				"🛂": 0.6
+			},
+			"📘": {
+				"👥": 0.5,
+				"📜": 0.7,
+				"🚢": 0.5,
+				"🛂": 0.6
+			},
+			"📜": {
+				"🏢": 0.5,
+				"📘": 0.7,
+				"🛂": 0.4
+			},
+			"🚢": {
+				"💰": 0.5,
+				"📘": 0.5,
+				"🛂": 0.4
+			},
+			"🛂": {
+				"👥": 0.6,
+				"📘": 0.6,
+				"🚢": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"📘": {
+				"📜": 0.06
+			},
+			"🛂": {
+				"📘": 0.04
+			}
+		},
+		"lindblad_outgoing": {
+			"📜": {
+				"📘": 0.06,
+				"🗑": 0.01
+			}
+		},
+		"name": "Station Lords",
+		"ring": "second",
+		"self_energies": {
+			"🏢": 0.3,
+			"👥": 0.02,
+			"📘": 0.25,
+			"📜": 0.1,
+			"🚢": 0.25,
+			"🛂": 0.2
+		},
+		"signature": [
+			"👥",
+			"🚢",
+			"🛂",
+			"📜",
+			"🏢",
+			"📘"
+		],
+		"tags": [
+			"bureaucracy",
+			"logistics",
+			"control",
+			"law"
+		]
+	},
+	{
+		"description": "The gentle grazers. They eat the green and feed the strong.",
+		"hamiltonian": {
+			"🌿": {
+				"🐇": 0.5,
+				"🦌": 0.6
+			},
+			"🐇": {
+				"🌿": 0.5,
+				"🦌": 0.3
+			},
+			"🦌": {
+				"🌿": 0.6,
+				"🐇": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"🐇": {
+				"🌿": 0.1
+			},
+			"🦌": {
+				"🌿": 0.08
+			}
+		},
+		"name": "Swift Herd",
+		"ring": "center",
+		"self_energies": {
+			"🌿": 0.1,
+			"🐇": 0.02,
+			"🦌": 0.01
+		},
+		"signature": [
+			"🐇",
+			"🦌",
+			"🌿"
+		],
+		"tags": [
+			"fauna",
+			"herbivore",
+			"prey"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🎵": {
+				"⛪": 0.15,
+				"💃": 0.25
+			},
+			"🔊": {
+				"🔇": -0.3
+			}
+		},
+		"decay": {
+			"🔊": {
+				"rate": 0.04,
+				"target": "🗑"
+			},
+			"🔨": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Artisans who forge instruments with properties that edge toward the mystical. They understand resonance at a level that approaches the quantum.",
+		"drivers": {
+			"🎵": {
+				"amp": 0.35,
+				"freq": 0.5,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"⚙": {
+				"🔊": 0.3,
+				"🔨": 0.6
+			},
+			"🎵": {
+				"📡": 0.4,
+				"🔊": 0.8
+			},
+			"📡": {
+				"🎵": 0.4,
+				"🔊": 0.5
+			},
+			"🔊": {
+				"🎵": 0.8,
+				"📡": 0.5,
+				"🔨": 0.5
+			},
+			"🔨": {
+				"⚙": 0.6,
+				"🔊": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🎵": {
+				"⚙": 0.02,
+				"🔨": 0.03
+			}
+		},
+		"name": "Symphony Smiths",
+		"ring": "second",
+		"self_energies": {
+			"⚙": 0.15,
+			"🎵": 0.2,
+			"📡": 0.1,
+			"🔊": 0.15,
+			"🔨": 0.2
+		},
+		"signature": [
+			"🎵",
+			"🔊",
+			"🔨",
+			"⚙",
+			"📡"
+		],
+		"tags": [
+			"craft",
+			"acoustic",
+			"resonance",
+			"instruments"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💎": {
+				"⛰": 0.15
+			},
+			"🧊": {
+				"❄": 0.3,
+				"🔥": -0.35
+			},
+			"🪞": {
+				"☀": 0.1,
+				"🌑": -0.15
+			}
+		},
+		"decay": {
+			"🧊": {
+				"rate": 0.03,
+				"target": "💧"
+			},
+			"🪞": {
+				"rate": 0.015,
+				"target": "🗑"
+			}
+		},
+		"description": "Criminal oligarchs dealing in precision surveillance and blackmail. Their mirrors show what people hide.",
+		"hamiltonian": {
+			"💎": {
+				"💰": 0.6,
+				"🧊": 0.5,
+				"🪞": 0.5
+			},
+			"💰": {
+				"💎": 0.6,
+				"🪞": 0.4
+			},
+			"🔍": {
+				"💰": 0.3,
+				"🧊": 0.4,
+				"🪞": 0.6
+			},
+			"🧊": {
+				"💎": 0.5,
+				"🔍": 0.4
+			},
+			"🪞": {
+				"💎": 0.5,
+				"💰": 0.4,
+				"🔍": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"💎": {
+				"🧊": 0.02
+			},
+			"💰": {
+				"🔍": 0.03,
+				"🪞": 0.04
+			}
+		},
+		"name": "Syndicate of Glass",
+		"ring": "second",
+		"self_energies": {
+			"💎": 0.35,
+			"💰": 0.25,
+			"🔍": 0.15,
+			"🧊": 0.2,
+			"🪞": 0.2
+		},
+		"signature": [
+			"💰",
+			"💎",
+			"🪞",
+			"🔍",
+			"🧊"
+		],
+		"tags": [
+			"criminal",
+			"surveillance",
+			"blackmail",
+			"information"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌿": {
+				"☀": 0.15,
+				"🌙": 0.05
+			},
+			"💧": {
+				"🔥": -0.2
+			},
+			"🫙": {
+				"⛰": 0.1
+			}
+		},
+		"decay": {
+			"🫙": {
+				"rate": 0.005,
+				"target": "🗑"
+			}
+		},
+		"description": "Ecological engineers who design self-sustaining habitats. Sewage, air, nutrients - the unglamorous essentials.",
+		"hamiltonian": {
+			"♻️": {
+				"🌿": 0.4,
+				"💧": 0.6,
+				"🫙": 0.5
+			},
+			"🌿": {
+				"♻️": 0.4,
+				"💧": 0.7,
+				"🫙": 0.6
+			},
+			"💧": {
+				"♻️": 0.6,
+				"🌿": 0.7,
+				"🫙": 0.5
+			},
+			"🫙": {
+				"♻️": 0.5,
+				"🌿": 0.6,
+				"💧": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🌿": {
+				"♻️": 0.03,
+				"💧": 0.04
+			},
+			"💧": {
+				"♻️": 0.04
+			}
+		},
+		"lindblad_outgoing": {
+			"🌿": {
+				"♻️": 0.03
+			}
+		},
+		"name": "Terrarium Collective",
+		"ring": "center",
+		"self_energies": {
+			"♻️": 0.15,
+			"🌿": 0.2,
+			"💧": 0.1,
+			"🫙": 0.3
+		},
+		"signature": [
+			"🌿",
+			"🫙",
+			"♻️",
+			"💧"
+		],
+		"tags": [
+			"ecology",
+			"sustainability",
+			"closed-loop",
+			"life-support"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💎": {
+				"⛰": 0.15,
+				"🔥": -0.1
+			},
+			"💰": {
+				"🏚": -0.15,
+				"🏛": 0.2
+			}
+		},
+		"decay": {
+			"💎": {
+				"rate": 0.001,
+				"target": "⛰"
+			}
+		},
+		"description": "Mining consortiums and gem traders. Old money, patient money, money that thinks in generations.",
+		"hamiltonian": {
+			"⛏": {
+				"⛰": 0.5,
+				"✨": 0.3,
+				"💎": 0.6
+			},
+			"✨": {
+				"💎": 0.5,
+				"💰": 0.4
+			},
+			"💎": {
+				"⛏": 0.6,
+				"✨": 0.5,
+				"💰": 0.7
+			},
+			"💰": {
+				"✨": 0.4,
+				"💎": 0.7
+			}
+		},
+		"lindblad_incoming": {
+			"✨": {
+				"💎": 0.02
+			},
+			"💎": {
+				"⛏": 0.02,
+				"⛰": 0.01
+			},
+			"💰": {
+				"✨": 0.02,
+				"💎": 0.03
+			}
+		},
+		"name": "The Gilded Legacy",
+		"ring": "first",
+		"self_energies": {
+			"⛏": 0.15,
+			"✨": 0.2,
+			"💎": 0.4,
+			"💰": 0.3
+		},
+		"signature": [
+			"⛏",
+			"💎",
+			"💰",
+			"✨"
+		],
+		"tags": [
+			"mining",
+			"wealth",
+			"commerce",
+			"patience"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💳": {
+				"🧤": -0.2
+			},
+			"📋": {
+				"🏛": 0.25,
+				"💧": -0.15,
+				"🔥": -0.3
+			}
+		},
+		"decay": {
+			"💳": {
+				"rate": 0.005,
+				"target": "🗑"
+			},
+			"📋": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "The office that creates permanent records. Birth, death, property, citizenship. What they record becomes true.",
+		"hamiltonian": {
+			"⚖": {
+				"💳": 0.4,
+				"📋": 0.5,
+				"📜": 0.5
+			},
+			"💳": {
+				"⚖": 0.4,
+				"👥": 0.6,
+				"📋": 0.6
+			},
+			"📋": {
+				"⚖": 0.5,
+				"💳": 0.6,
+				"📜": 0.5
+			},
+			"📜": {
+				"⚖": 0.5,
+				"🏰": 0.4,
+				"📋": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"💳": {
+				"👥": 0.02,
+				"📋": 0.04
+			},
+			"📜": {
+				"🏰": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"📜": {
+				"📘": 0.04
+			}
+		},
+		"name": "The Indelible Precept",
+		"ring": "first",
+		"self_energies": {
+			"⚖": 0.2,
+			"💳": 0.25,
+			"📋": 0.2,
+			"📜": 0.15
+		},
+		"signature": [
+			"📋",
+			"💳",
+			"⚖",
+			"📜"
+		],
+		"tags": [
+			"bureaucracy",
+			"records",
+			"identity",
+			"governance"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"📶": {
+				"📡": 0.2,
+				"🔇": -0.25
+			},
+			"📻": {
+				"⚡": 0.15
+			}
+		},
+		"decay": {
+			"📶": {
+				"rate": 0.06,
+				"target": "🗑"
+			},
+			"🗣": {
+				"rate": 0.05,
+				"target": "🗑"
+			}
+		},
+		"description": "Broadcasters who transmit on frequencies that slip between official channels. Their programs reach listeners who didn't know they were tuned in.",
+		"drivers": {
+			"📻": {
+				"amp": 0.4,
+				"freq": 0.15,
+				"phase": 0.0,
+				"type": "pulse"
+			}
+		},
+		"hamiltonian": {
+			"📡": {
+				"📶": 0.6,
+				"📻": 0.5
+			},
+			"📶": {
+				"📡": 0.6,
+				"📻": 0.7,
+				"🗣": 0.4
+			},
+			"📻": {
+				"📡": 0.5,
+				"📶": 0.7,
+				"🗣": 0.5
+			},
+			"🗣": {
+				"📶": 0.4,
+				"📻": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"📶": {
+				"📡": 0.03,
+				"📻": 0.04
+			}
+		},
+		"lindblad_outgoing": {
+			"🗣": {
+				"📶": 0.03
+			}
+		},
+		"name": "The Liminal Osmosis",
+		"ring": "second",
+		"self_energies": {
+			"📡": 0.25,
+			"📶": 0.15,
+			"📻": 0.2,
+			"🗣": 0.1
+		},
+		"signature": [
+			"📶",
+			"📻",
+			"📡",
+			"🗣"
+		],
+		"tags": [
+			"broadcast",
+			"signal",
+			"information",
+			"liminal"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🏮": {
+				"🌙": 0.1,
+				"🔥": 0.15
+			},
+			"🕯": {
+				"🌑": 0.2,
+				"🔥": 0.2
+			},
+			"🧵": {
+				"🪢": 0.15
+			}
+		},
+		"bell_activated_features": {
+			"🕯": {
+				"description": "The bridge opens in entanglement",
+				"latent_hamiltonian": {
+					"🕯": {
+						"🧵": 0.3
+					}
+				}
+			}
+		},
+		"decay": {
+			"🕯": {
+				"rate": 0.01,
+				"target": "🗑"
+			},
+			"🧵": {
+				"rate": 0.01,
+				"target": "🗑"
+			}
+		},
+		"description": "They walk the boundary between light and fabric, flame and thread. Their candles burn wicks spun from probability itself.",
+		"drivers": {
+			"🕯": {
+				"amplitude": 0.08,
+				"frequency": 0.25,
+				"phase": 0.0,
+				"type": "cosine"
+			},
+			"🧵": {
+				"amplitude": 0.08,
+				"frequency": 0.25,
+				"phase": 3.14,
+				"type": "cosine"
+			}
+		},
+		"hamiltonian": {
+			"🏮": {
+				"🕯": 0.6,
+				"🧵": [
+					0.300000011920929,
+					-0.200000002980232
+				]
+			},
+			"🕯": {
+				"🏮": 0.6,
+				"🧵": [
+					0.5,
+					0.300000011920929
+				]
+			},
+			"🧵": {
+				"🏮": [
+					0.300000011920929,
+					0.200000002980232
+				],
+				"🕯": [
+					0.5,
+					-0.300000011920929
+				],
+				"🪡": 0.5
+			},
+			"🪡": {
+				"🕯": 0.3,
+				"🧵": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🏮": {
+				"🕯": 0.03
+			}
+		},
+		"name": "The Liminal Taper",
+		"ring": "third",
+		"self_energies": {
+			"🏮": 0.25,
+			"🕯": 0.2,
+			"🧵": 0.2,
+			"🪡": 0.15
+		},
+		"signature": [
+			"🕯",
+			"🧵",
+			"🪡",
+			"🏮"
+		],
+		"tags": [
+			"liminal",
+			"bridge",
+			"flame",
+			"thread",
+			"entanglement_seeker"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚖": {
+				"🏛": 0.2
+			},
+			"⚫": {
+				"🌑": 0.25,
+				"🕳": 0.3
+			},
+			"🔭": {
+				"🔬": 0.15
+			}
+		},
+		"decay": {
+			"🌠": {
+				"rate": 0.015,
+				"target": "⚫"
+			}
+		},
+		"description": "They claim to observe from outside time itself. Their judgments are final because they've already seen all outcomes.",
+		"hamiltonian": {
+			"⚖": {
+				"⚫": 0.5,
+				"🔭": 0.4
+			},
+			"⚫": {
+				"⚖": 0.5,
+				"🌠": [
+					0.400000005960464,
+					0.300000011920929
+				],
+				"🔭": [
+					0.5,
+					-0.400000005960464
+				]
+			},
+			"🌠": {
+				"⚫": [
+					0.400000005960464,
+					-0.300000011920929
+				],
+				"🔭": 0.6
+			},
+			"🔭": {
+				"⚖": 0.4,
+				"⚫": [
+					0.5,
+					0.400000005960464
+				],
+				"🌠": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"⚖": {
+				"🔭": 0.03
+			}
+		},
+		"measurement_behavior": {
+			"⚖": {
+				"collapses": true,
+				"inverts": false,
+				"strength": 0.4
+			}
+		},
+		"name": "The Opalescent Hegemon",
+		"ring": "third",
+		"self_energies": {
+			"⚖": 0.3,
+			"⚫": 0.3,
+			"🌠": 0.2,
+			"🔭": 0.25
+		},
+		"signature": [
+			"🔭",
+			"⚫",
+			"🌠",
+			"⚖"
+		],
+		"tags": [
+			"cosmic",
+			"observation",
+			"judgment",
+			"timeless"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💀": {
+				"⚫": 0.2,
+				"🌑": 0.1
+			},
+			"🧤": {
+				"🏰": -0.25,
+				"📜": -0.15,
+				"🗑": 0.3
+			}
+		},
+		"decay": {
+			"🧤": {
+				"rate": 0.03,
+				"target": "💀"
+			}
+		},
+		"description": "The rustling of the displaced. They appear from refuse and fade into death. Unmeasurable.",
+		"gated_lindblad": {
+			"💀": [
+				{
+					"gate": "🗑",
+					"inverse": true,
+					"power": 1.2,
+					"rate": 0.06,
+					"source": "🧤"
+				}
+			]
+		},
+		"hamiltonian": {
+			"💀": {
+				"⚫": 0.5,
+				"🗑": 0.3,
+				"🧤": 0.4
+			},
+			"🗑": {
+				"💀": 0.3,
+				"🧤": 0.6
+			},
+			"🧤": {
+				"💀": 0.4,
+				"🗑": 0.6
+			}
+		},
+		"lindblad_incoming": {
+			"🗑": {
+				"🍂": 0.03,
+				"🍞": 0.02
+			},
+			"🧤": {
+				"🗑": 0.05
+			}
+		},
+		"lindblad_outgoing": {
+			"🧤": {
+				"💀": 0.02
+			}
+		},
+		"measurement_behavior": {
+			"🧤": {
+				"inverts": true
+			}
+		},
+		"name": "The Scavenged Psithurism",
+		"ring": "outer",
+		"self_energies": {
+			"💀": -0.15,
+			"🗑": -0.1,
+			"🧤": 0.0
+		},
+		"signature": [
+			"🧤",
+			"🗑",
+			"💀"
+		],
+		"tags": [
+			"refugee",
+			"entropy",
+			"unmeasurable",
+			"consumed"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"💊": {
+				"👥": 0.15,
+				"💀": -0.2,
+				"🩺": 0.15
+			},
+			"🚛": {
+				"🏛": 0.1,
+				"🚧": -0.15
+			}
+		},
+		"decay": {
+			"💊": {
+				"rate": 0.025,
+				"target": "🗑"
+			},
+			"📦": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "Pharmaceutical and medical supply arm of imperial authority. Their generosity comes with strings - dependency on their supply chains.",
+		"gated_lindblad": {
+			"💊": [
+				{
+					"gate": "📜",
+					"inverse": false,
+					"power": 0.8,
+					"rate": 0.05,
+					"source": "🧪"
+				}
+			]
+		},
+		"hamiltonian": {
+			"💊": {
+				"📦": 0.6,
+				"🚛": 0.4,
+				"🧪": 0.7
+			},
+			"📦": {
+				"💊": 0.6,
+				"🚛": 0.7,
+				"🧪": 0.4
+			},
+			"🚛": {
+				"💊": 0.4,
+				"📦": 0.7
+			},
+			"🧪": {
+				"💊": 0.7,
+				"📦": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"📦": {
+				"💊": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"📦": {
+				"🚛": 0.04
+			}
+		},
+		"name": "The Sovereign Ukase",
+		"ring": "second",
+		"self_energies": {
+			"💊": 0.3,
+			"📦": 0.15,
+			"🚛": 0.2,
+			"🧪": 0.2
+		},
+		"signature": [
+			"🧪",
+			"💊",
+			"📦",
+			"🚛"
+		],
+		"tags": [
+			"medical",
+			"supply",
+			"imperial",
+			"dependency"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🔬": {
+				"🦠": 0.15,
+				"🧬": 0.2
+			},
+			"🔭": {
+				"🌑": 0.15,
+				"🌠": 0.25
+			},
+			"🧮": {
+				"🔢": 0.15
+			}
+		},
+		"decay": {
+			"🧲": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"decoherence_coupling": {
+			"📐": 0.15,
+			"🔬": 0.35,
+			"🔭": 0.25
+		},
+		"description": "Obsessive observers who stare into reality's structure until it stares back. Their mathematics touches things that shouldn't exist.",
+		"hamiltonian": {
+			"📐": {
+				"🔬": 0.5,
+				"🔭": 0.4,
+				"🧮": 0.6
+			},
+			"🔬": {
+				"📐": 0.5,
+				"🔭": 0.5,
+				"🧲": 0.4
+			},
+			"🔭": {
+				"📐": 0.4,
+				"🔬": 0.5,
+				"🧮": 0.4
+			},
+			"🧮": {
+				"📐": 0.6,
+				"🔭": 0.4,
+				"🧲": 0.3
+			},
+			"🧲": {
+				"🔬": 0.4,
+				"🧮": 0.3
+			}
+		},
+		"lindblad_incoming": {
+			"📐": {
+				"🔬": 0.03,
+				"🔭": 0.02
+			},
+			"🧮": {
+				"📐": 0.03
+			}
+		},
+		"measurement_behavior": {
+			"🔬": {
+				"collapses": true,
+				"inverts": false,
+				"strength": 0.3
+			},
+			"🔭": {
+				"collapses": true,
+				"inverts": false,
+				"strength": 0.2
+			}
+		},
+		"name": "The Vitreous Scrutiny",
+		"ring": "third",
+		"self_energies": {
+			"📐": 0.25,
+			"🔬": 0.2,
+			"🔭": 0.2,
+			"🧮": 0.2,
+			"🧲": 0.15
+		},
+		"signature": [
+			"🔬",
+			"🧲",
+			"📐",
+			"🧮",
+			"🔭"
+		],
+		"tags": [
+			"observation",
+			"mathematics",
+			"dangerous",
+			"deep"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"♻️": {
+				"🗑": 0.25
+			},
+			"🧰": {
+				"🏚": -0.1,
+				"🏛": 0.15
+			}
+		},
+		"decay": {
+			"🔌": {
+				"rate": 0.03,
+				"target": "♻️"
+			},
+			"🪛": {
+				"rate": 0.02,
+				"target": "♻️"
+			}
+		},
+		"description": "Traveling repair crews in battered vans. They fix what others throw away.",
+		"hamiltonian": {
+			"♻️": {
+				"🗑": 0.5,
+				"🧰": 0.3,
+				"🪛": 0.4
+			},
+			"🔌": {
+				"🚐": 0.3,
+				"🧰": 0.4,
+				"🪛": 0.6
+			},
+			"🚐": {
+				"🔌": 0.3,
+				"🧰": 0.4
+			},
+			"🧰": {
+				"♻️": 0.3,
+				"🔌": 0.4,
+				"🪛": 0.5
+			},
+			"🪛": {
+				"♻️": 0.4,
+				"🔌": 0.6,
+				"🧰": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🔌": {
+				"♻️": 0.04
+			},
+			"🧰": {
+				"🪛": 0.02
+			}
+		},
+		"lindblad_outgoing": {
+			"♻️": {
+				"🗑": 0.03
+			}
+		},
+		"name": "Tinker Team",
+		"ring": "center",
+		"self_energies": {
+			"♻️": 0.05,
+			"🔌": 0.1,
+			"🚐": 0.2,
+			"🧰": 0.25,
+			"🪛": 0.15
+		},
+		"signature": [
+			"🧰",
+			"🪛",
+			"🔌",
+			"♻️",
+			"🚐"
+		],
+		"tags": [
+			"repair",
+			"salvage",
+			"infrastructure",
+			"mobile"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌑": {
+				"☀": -0.25,
+				"🌙": 0.3
+			},
+			"💰": {
+				"🏚": 0.15,
+				"🏛": -0.2
+			},
+			"🧿": {
+				"🔮": 0.2
+			}
+		},
+		"decay": {
+			"🕵️": {
+				"rate": 0.03,
+				"target": "💀"
+			},
+			"🗝": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "The shadow market. They fence stolen goods, launder currency, and broker information. Everything is for sale, including you.",
+		"gated_lindblad": {
+			"💰": [
+				{
+					"gate": "🌑",
+					"inverse": false,
+					"power": 1.2,
+					"rate": 0.05,
+					"source": "🗝"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⛓": {
+				"💰": 0.5,
+				"🗝": 0.3
+			},
+			"🌑": {
+				"💰": 0.4,
+				"🕵️": 0.6,
+				"🗝": 0.5,
+				"🧿": 0.5
+			},
+			"💰": {
+				"⛓": 0.5,
+				"🌑": 0.4,
+				"🕵️": 0.5
+			},
+			"🕵️": {
+				"🌑": 0.6,
+				"💰": 0.5,
+				"🗝": 0.6,
+				"🧿": 0.4
+			},
+			"🗝": {
+				"🌑": 0.5,
+				"🕵️": 0.6,
+				"🧿": 0.5
+			},
+			"🧿": {
+				"🌑": 0.5,
+				"🕵️": 0.4,
+				"🗝": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🗝": {
+				"🕵️": 0.04
+			},
+			"🧿": {
+				"🌑": 0.02
+			}
+		},
+		"name": "Umbra Exchange",
+		"ring": "second",
+		"self_energies": {
+			"⛓": 0.05,
+			"🌑": 0.2,
+			"💰": 0.25,
+			"🕵️": 0.15,
+			"🗝": 0.2,
+			"🧿": 0.1
+		},
+		"signature": [
+			"🌑",
+			"🕵️",
+			"💰",
+			"🗝",
+			"🧿",
+			"⛓"
+		],
+		"tags": [
+			"criminal",
+			"market",
+			"shadow",
+			"information"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"👤": {
+				"☀": -0.2,
+				"🌑": 0.25
+			},
+			"🤫": {
+				"🔇": 0.25,
+				"🔊": -0.3
+			},
+			"🧿": {
+				"🔮": 0.2
+			}
+		},
+		"decay": {
+			"🧷": {
+				"rate": 0.02,
+				"target": "🗑"
+			}
+		},
+		"description": "A covert sisterhood that moves through every level of society. They share information, protect their own, and arrange for problems to solve themselves.",
+		"hamiltonian": {
+			"👤": {
+				"🕵️": 0.5,
+				"🤫": 0.7,
+				"🪞": 0.4
+			},
+			"🕵️": {
+				"👤": 0.5,
+				"🤫": 0.6,
+				"🧿": 0.5
+			},
+			"🤫": {
+				"👤": 0.7,
+				"🕵️": 0.6,
+				"🧷": 0.4
+			},
+			"🧷": {
+				"👤": 0.4,
+				"🤫": 0.4
+			},
+			"🧿": {
+				"🕵️": 0.5,
+				"🪞": 0.5
+			},
+			"🪞": {
+				"👤": 0.4,
+				"🧿": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"👤": {
+				"🤫": 0.04,
+				"🧷": 0.02
+			},
+			"🧿": {
+				"🕵️": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🕵️": {
+				"💀": 0.02
+			}
+		},
+		"name": "Veiled Sisters",
+		"ring": "second",
+		"self_energies": {
+			"👤": 0.15,
+			"🕵️": 0.15,
+			"🤫": 0.2,
+			"🧷": 0.2,
+			"🧿": 0.15,
+			"🪞": 0.1
+		},
+		"signature": [
+			"👤",
+			"🤫",
+			"🕵️",
+			"🪞",
+			"🧷",
+			"🧿"
+		],
+		"tags": [
+			"covert",
+			"network",
+			"protection",
+			"information"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌱": {
+				"☀": 0.06,
+				"⛰": 0.03,
+				"💧": 0.08
+			},
+			"🌲": {
+				"☀": 0.04,
+				"⛰": 0.05,
+				"💧": 0.03
+			},
+			"🌾": {
+				"☀": 0.08,
+				"⛰": 0.04,
+				"💧": 0.05
+			},
+			"🌿": {
+				"☀": 0.1,
+				"⛰": 0.02,
+				"💧": 0.06
+			}
+		},
+		"decay": {
+			"🌱": {
+				"rate": 0.04,
+				"target": "🍂"
+			},
+			"🌲": {
+				"rate": 0.005,
+				"target": "🍂"
+			},
+			"🌾": {
+				"rate": 0.02,
+				"target": "🍂"
+			},
+			"🌿": {
+				"rate": 0.025,
+				"target": "🍂"
+			}
+		},
+		"description": "The green rhythm of growth and decay. Seeds become grass or trees, grain returns to earth.",
+		"hamiltonian": {
+			"🌱": {
+				"🌲": 0.4,
+				"🌾": 0.3,
+				"🌿": 0.6
+			},
+			"🌲": {
+				"🌱": 0.4,
+				"🍂": 0.2
+			},
+			"🌾": {
+				"🌱": 0.3,
+				"🍂": 0.5
+			},
+			"🌿": {
+				"🌱": 0.6,
+				"🌾": 0.4,
+				"🍂": 0.4
+			},
+			"🍂": {
+				"🌱": 0.5,
+				"🌲": 0.2,
+				"🌾": 0.5,
+				"🌿": 0.4
+			}
+		},
+		"lindblad_incoming": {
+			"🌲": {
+				"🌬": 0.02,
+				"🍂": 0.01
+			},
+			"🌾": {
+				"🍂": 0.02
+			},
+			"🌿": {
+				"🍂": 0.04
+			}
+		},
+		"lindblad_outgoing": {
+			"🌱": {
+				"🌲": 0.02,
+				"🌿": 0.06
+			},
+			"🍂": {
+				"⛰": 0.005
+			}
+		},
+		"name": "Verdant Pulse",
+		"ring": "center",
+		"self_energies": {
+			"🌱": 0.05,
+			"🌲": 0.3,
+			"🌾": 0.1,
+			"🌿": 0.1,
+			"🍂": 0.0
+		},
+		"signature": [
+			"🌱",
+			"🌿",
+			"🌾",
+			"🌲",
+			"🍂"
+		],
+		"tags": [
+			"flora",
+			"producer",
+			"cycle"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⚜": {
+				"👑": 0.15
+			},
+			"⚫": {
+				"✨": -0.2,
+				"🕳": 0.35
+			},
+			"🕰": {
+				"⏳": 0.2
+			}
+		},
+		"decay": {
+			"♟": {
+				"rate": 0.02,
+				"target": "⚫"
+			}
+		},
+		"description": "They administer the emptiness between stars. Their bureaucracy governs nothing, yet their edicts shape what might emerge.",
+		"drivers": {
+			"🕰": {
+				"amplitude": 0.06,
+				"frequency": 0.1,
+				"phase": 0.0,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"♟": {
+				"⚜": 0.5,
+				"⚫": 0.4,
+				"🕰": 0.4
+			},
+			"⚜": {
+				"♟": 0.5,
+				"⚫": 0.5,
+				"🕰": 0.3
+			},
+			"⚫": {
+				"♟": 0.4,
+				"⚜": 0.5,
+				"🕰": [
+					0.300000011920929,
+					0.5
+				]
+			},
+			"🕰": {
+				"♟": 0.4,
+				"⚜": 0.3,
+				"⚫": [
+					0.300000011920929,
+					-0.5
+				]
+			}
+		},
+		"lindblad_incoming": {
+			"⚜": {
+				"⚫": 0.02
+			}
+		},
+		"lindblad_outgoing": {
+			"everything": {
+				"⚫": 0.01
+			}
+		},
+		"name": "Void Emperors",
+		"ring": "third",
+		"self_energies": {
+			"♟": 0.2,
+			"⚜": 0.25,
+			"⚫": 0.35,
+			"🕰": 0.15
+		},
+		"signature": [
+			"⚫",
+			"⚜",
+			"♟",
+			"🕰"
+		],
+		"tags": [
+			"void",
+			"administration",
+			"nothing",
+			"law"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⛓": {
+				"🏛": 0.15,
+				"🔥": -0.1
+			},
+			"🌑": {
+				"☀": -0.3,
+				"🌙": 0.25,
+				"💀": 0.15,
+				"🔮": 0.2
+			},
+			"💸": {
+				"💰": -0.25
+			}
+		},
+		"decay": {
+			"⛓": {
+				"rate": 0.005,
+				"target": "🗑"
+			}
+		},
+		"description": "The chained ones. Bound by debt to the mystic dark. They sense the true void but cannot name it.",
+		"gated_lindblad": {
+			"💰": [
+				{
+					"gate": "⛓",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.06,
+					"source": "👥"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⛓": {
+				"🌑": 0.4,
+				"👥": 0.7,
+				"💸": 0.6
+			},
+			"🌑": {
+				"⚫": 0.6,
+				"⛓": 0.4,
+				"👥": 0.3,
+				"💀": 0.5,
+				"💸": 0.5
+			},
+			"👥": {
+				"⛓": 0.7,
+				"💸": 0.5
+			},
+			"💸": {
+				"⛓": 0.6,
+				"🌑": 0.5,
+				"👥": 0.5,
+				"💰": -0.8
+			}
+		},
+		"lindblad_incoming": {
+			"⛓": {
+				"💸": 0.05
+			},
+			"🌑": {
+				"⛓": 0.02,
+				"💀": 0.03
+			},
+			"💸": {
+				"👥": 0.03
+			}
+		},
+		"lindblad_outgoing": {
+			"🌑": {
+				"⚫": 0.01
+			},
+			"👥": {
+				"💀": 0.02
+			}
+		},
+		"name": "Void Serfs",
+		"ring": "outer",
+		"self_energies": {
+			"⛓": 0.1,
+			"🌑": -0.1,
+			"👥": 0.02,
+			"💸": -0.3
+		},
+		"signature": [
+			"👥",
+			"⛓",
+			"🌑",
+			"💸"
+		],
+		"tags": [
+			"labor",
+			"exploitation",
+			"void",
+			"debt",
+			"mystic"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🎼": {
+				"🔇": -0.25,
+				"🔊": 0.2
+			},
+			"🏮": {
+				"🌑": 0.2
+			},
+			"💫": {
+				"🌑": 0.3,
+				"🕳": 0.25
+			}
+		},
+		"decay": {
+			"💫": {
+				"rate": 0.05,
+				"target": "🗑"
+			}
+		},
+		"description": "Musicians who perform at the edge of known space. Their songs reach into the void, and sometimes the void sings back.",
+		"drivers": {
+			"🎼": {
+				"amplitude": 0.12,
+				"frequency": 0.4,
+				"phase": 0.0,
+				"type": "sine"
+			},
+			"💫": {
+				"amplitude": 0.15,
+				"frequency": 0.4,
+				"phase": 1.57,
+				"type": "sine"
+			}
+		},
+		"hamiltonian": {
+			"🎸": {
+				"🎼": 0.6,
+				"🏮": 0.3,
+				"💫": [
+					0.300000011920929,
+					0.400000005960464
+				]
+			},
+			"🎼": {
+				"🎸": 0.6,
+				"🏮": 0.4,
+				"💫": [
+					0.5,
+					0.300000011920929
+				]
+			},
+			"🏮": {
+				"🎸": 0.3,
+				"🎼": 0.4
+			},
+			"💫": {
+				"🎸": [
+					0.300000011920929,
+					-0.400000005960464
+				],
+				"🎼": [
+					0.5,
+					-0.300000011920929
+				]
+			}
+		},
+		"lindblad_incoming": {
+			"💫": {
+				"🎼": 0.04
+			}
+		},
+		"name": "Void Troubadours",
+		"ring": "second",
+		"self_energies": {
+			"🎸": 0.2,
+			"🎼": 0.25,
+			"🏮": 0.2,
+			"💫": 0.15
+		},
+		"signature": [
+			"🎸",
+			"🎼",
+			"💫",
+			"🏮"
+		],
+		"tags": [
+			"music",
+			"void",
+			"edge",
+			"communication"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🌋": {
+				"🔥": 0.25,
+				"🪨": 0.1
+			},
+			"💎": {
+				"✨": 0.15
+			},
+			"🔥": {
+				"☀": 0.2,
+				"🌙": -0.1
+			}
+		},
+		"decay": {
+			"✨": {
+				"rate": 0.05,
+				"target": "🌫"
+			},
+			"💎": {
+				"rate": 0.005,
+				"target": "🪨"
+			},
+			"🔥": {
+				"rate": 0.03,
+				"target": "🪨"
+			}
+		},
+		"description": "Masters of volcanic processes who harvest crystals from cooling magma. They read the earth's fire and know when to mine.",
+		"drivers": {
+			"🌋": {
+				"amplitude": 0.7,
+				"frequency": 0.011,
+				"phase": 0.0,
+				"type": "pulse"
+			}
+		},
+		"gated_lindblad": {
+			"✨": [
+				{
+					"gate": "🔥",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.03,
+					"source": "🌫"
+				}
+			],
+			"💎": [
+				{
+					"gate": "🔥",
+					"inverse": false,
+					"power": 1.5,
+					"rate": 0.02,
+					"source": "🪨"
+				}
+			]
+		},
+		"hamiltonian": {
+			"✨": {
+				"🌫": 0.2,
+				"💎": 0.25,
+				"🔥": 0.35
+			},
+			"🌋": {
+				"🌫": 0.3,
+				"🔥": 0.4,
+				"🪨": 0.2
+			},
+			"🌫": {
+				"✨": 0.2,
+				"🌋": 0.3,
+				"🔥": 0.3
+			},
+			"💎": {
+				"✨": 0.25,
+				"🪨": 0.15
+			},
+			"🔥": {
+				"✨": 0.35,
+				"🌋": 0.4,
+				"🌫": 0.3,
+				"🪨": 0.2
+			},
+			"🪨": {
+				"🌋": 0.2,
+				"💎": 0.15,
+				"🔥": 0.2
+			}
+		},
+		"lindblad_incoming": {
+			"🌫": {
+				"🔥": 0.05
+			},
+			"🔥": {
+				"🌋": 0.3
+			}
+		},
+		"lindblad_outgoing": {
+			"🔥": {
+				"🪨": 0.03
+			},
+			"🪨": {
+				"💎": 0.01
+			}
+		},
+		"name": "Volcanic Foundry",
+		"ring": "second",
+		"self_energies": {
+			"✨": 0.3,
+			"🌋": 0.0,
+			"🌫": 0.1,
+			"💎": 0.5,
+			"🔥": 0.3,
+			"🪨": -0.2
+		},
+		"signature": [
+			"🌋",
+			"🔥",
+			"🪨",
+			"💎",
+			"🌫",
+			"✨"
+		],
+		"tags": [
+			"volcanic",
+			"mining",
+			"fire",
+			"crystals",
+			"geothermal"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"🔥": {
+				"🌬": 0.3,
+				"🍂": 0.4,
+				"💧": -0.5
+			}
+		},
+		"decay": {
+			"🔥": {
+				"rate": 0.1,
+				"target": "🍂"
+			}
+		},
+		"description": "The great destroyer and renewer. Burns hot, leaves fertility behind.",
+		"gated_lindblad": {
+			"🍂": [
+				{
+					"gate": "🔥",
+					"power": 1.2,
+					"rate": 0.2,
+					"source": "🌿"
+				},
+				{
+					"gate": "🔥",
+					"power": 1.0,
+					"rate": 0.08,
+					"source": "🌲"
+				}
+			]
+		},
+		"hamiltonian": {
+			"🔥": {
+				"🌬": 0.6,
+				"🌲": 0.4,
+				"🌿": 0.5,
+				"🍂": 0.7
+			}
+		},
+		"lindblad_incoming": {
+			"🍂": {
+				"🌲": 0.08,
+				"🌿": 0.15
+			},
+			"🔥": {
+				"🌬": 0.05,
+				"🍂": 0.1
+			}
+		},
+		"lindblad_outgoing": {
+			"🔥": {
+				"🍂": 0.08
+			}
+		},
+		"name": "Wildfire",
+		"ring": "second",
+		"signature": [
+			"🔥",
+			"🌿",
+			"🌲",
+			"🍂",
+			"🌬"
+		],
+		"tags": [
+			"destruction",
+			"renewal",
+			"fire",
+			"disturbance"
+		]
+	},
+	{
+		"alignment_couplings": {
+			"⛪": {
+				"🌙": 0.2,
+				"💀": 0.05
+			},
+			"🧪": {
+				"🍄": 0.15
+			},
+			"🫙": {
+				"❄": -0.25,
+				"🌙": 0.1,
+				"🔥": 0.15
+			}
+		},
+		"decay": {
+			"🫙": {
+				"rate": 0.04,
+				"target": "🍂"
+			}
+		},
+		"description": "The fermentation mystics. They read futures in rising dough and set initial conditions through sacred cultivation.",
+		"gated_lindblad": {
+			"🍞": [
+				{
+					"gate": "🫙",
+					"inverse": false,
+					"power": 1.0,
+					"rate": 0.04,
+					"source": "💨"
+				}
+			],
+			"🥖": [
+				{
+					"gate": "🫙",
+					"inverse": false,
+					"power": 1.2,
+					"rate": 0.06,
+					"source": "🍞"
+				}
+			]
+		},
+		"hamiltonian": {
+			"⛪": {
+				"🌙": 0.3,
+				"🧪": 0.3,
+				"🫙": 0.4
+			},
+			"🍞": {
+				"🥖": 0.5,
+				"🫙": 0.6
+			},
+			"🥖": {
+				"🍞": 0.5,
+				"🫙": 0.7
+			},
+			"🧪": {
+				"🍄": 0.4,
+				"🍞": 0.4,
+				"🥖": 0.5,
+				"🫙": 0.5
+			},
+			"🫙": {
+				"⛪": 0.4,
+				"🍞": 0.6,
+				"🥖": 0.7,
+				"🧪": 0.5
+			}
+		},
+		"lindblad_incoming": {
+			"🫙": {
+				"🍞": 0.02,
+				"💧": 0.03
+			}
+		},
+		"name": "Yeast Prophets",
+		"ring": "center",
+		"self_energies": {
+			"⛪": 0.3,
+			"🍞": 0.1,
+			"🥖": 0.12,
+			"🧪": 0.15,
+			"🫙": 0.2
+		},
+		"signature": [
+			"🍞",
+			"🥖",
+			"🧪",
+			"⛪",
+			"🫙"
+		],
+		"tags": [
+			"fermentation",
+			"mystic",
+			"quantum",
+			"preparation"
+		]
+	}
+]

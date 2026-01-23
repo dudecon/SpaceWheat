@@ -839,6 +839,13 @@ func _execute_submenu_action(action_key: String):
 					_action_assign_plots_to_biome(selected_plots, biome_name)
 				else:
 					_verbose.warn("input", "⚠️", "Biome '%s' not found in registry!" % biome_name)
+			elif action.begins_with("icon_assign_"):
+				# Dynamic icon/vocab assignment to biome
+				var emoji = _extract_emoji_from_action(action)
+				if emoji != "":
+					_action_icon_assign(selected_plots, emoji)
+				else:
+					_verbose.warn("input", "⚠️", "Unknown icon_assign action: %s" % action)
 			else:
 				_verbose.warn("input", "⚠️", "Unknown submenu action: %s" % action)
 
@@ -3942,6 +3949,59 @@ func _set_all_biomes_paused(paused: bool) -> void:
 # ═══════════════════════════════════════════════════════════════════════════════
 # BUILD MODE: Tool 2 (Icon) - Icon Management Actions
 # ═══════════════════════════════════════════════════════════════════════════════
+
+func _action_icon_assign(plots: Array[Vector2i], emoji: String):
+	"""Assign a vocabulary emoji to the biome's quantum system.
+
+	Injects a new qubit axis (north/south pair) into the biome's quantum computer.
+	Requires BUILD mode. The pair is looked up from player's known_pairs.
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("icon_assign", false, "Farm not loaded")
+		return
+
+	if plots.is_empty():
+		action_performed.emit("icon_assign", false, "No plots selected")
+		return
+
+	# Look up the pair from GameState
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if not gsm or not gsm.current_state:
+		action_performed.emit("icon_assign", false, "GameState not available")
+		return
+
+	var pair = gsm.current_state.get_pair_for_emoji(emoji)
+	if not pair:
+		action_performed.emit("icon_assign", false, "Emoji %s not in vocabulary" % emoji)
+		return
+
+	var north = pair.get("north", "")
+	var south = pair.get("south", "")
+	if north == "" or south == "":
+		action_performed.emit("icon_assign", false, "Invalid pair for %s" % emoji)
+		return
+
+	# Get the biome for the first selected plot
+	var pos = plots[0]
+	var biome = farm.grid.get_biome_for_plot(pos)
+	if not biome:
+		action_performed.emit("icon_assign", false, "No biome at %s" % pos)
+		return
+
+	# Check if already exists in biome
+	if biome.quantum_computer and biome.quantum_computer.register_map.has(north):
+		action_performed.emit("icon_assign", false, "%s already in biome" % north)
+		return
+
+	# Expand quantum system with the pair
+	var result = biome.expand_quantum_system(north, south)
+	if result.success:
+		_verbose.info("icon", "✨", "Added %s/%s axis to %s" % [north, south, biome.get_biome_type()])
+		action_performed.emit("icon_assign", true, "✨ Added %s/%s to quantum system" % [north, south])
+	else:
+		var msg = result.get("message", result.get("error", "Unknown error"))
+		action_performed.emit("icon_assign", false, msg)
+
 
 func _action_icon_swap(plots: Array[Vector2i]):
 	"""Swap north/south emojis on selected plot(s).

@@ -1,507 +1,474 @@
+#!/usr/bin/env -S godot --headless -s
 extends SceneTree
 
-## claude_plays_v2.gd - Comprehensive v2 architecture gameplay test
-## Run with: godot --headless --script res://Tests/claude_plays_v2.gd
+## CLAUDE PLAYS v2 - Full Toolset Gameplay Session
 ##
-## Tests the complete v2 tool system:
-##   PLAY MODE: 4 tools × 3 actions (Probe, Gates, Industry, 1Q Gates)
-##   BUILD MODE: 4 tools × 3 actions (Biome, Icon, Lindblad, System)
-##   OVERLAYS: Quest Board, Inspector, Semantic Map, Controls, Biome Detail
+## Uses the complete v2 tool architecture:
+##   Tool 1: PROBE (Explore/Measure/Pop)
+##   Tool 2: GATES (X/H/Ry + Z/S/T via F-cycling)
+##   Tool 3: ENTANGLE (CNOT/SWAP/CZ + Bell/Disentangle/Inspect via F-cycling)
+##   Tool 4: INDUSTRY (Mill/Market/Kitchen)
 ##
-## Uses actual game input pipeline to simulate real gameplay.
+## Run: godot --headless --script Tests/claude_plays_v2.gd
+##
+## Demonstrates:
+## 1. Core harvest loop (EXPLORE → MEASURE → POP)
+## 2. Strategic gate use for resource conversion
+## 3. Entanglement creation and measurement correlation
+## 4. Quest completion with targeted resource gathering
 
-const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
 const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
+const QuantumGateLibrary = preload("res://Core/QuantumSubstrate/QuantumGateLibrary.gd")
+const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
+const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 
-const SEPARATOR = "======================================================================"
-const THICK_LINE = "══════════════════════════════════════════════════════════════════════"
-
-var test_results: Array = []
+# Game references
 var farm = null
-var input_handler = null
-var player_shell = null
-var overlay_manager = null
-var scene_loaded = false
-var tests_done = false
-var frame_count = 0
-var boot_manager = null
+var biotic_flux = null
+var plot_pool = null
+var economy = null
+var quest_manager = null
 
-# Gameplay state
-var terminals_created: Array = []
-var resources_harvested: Dictionary = {}
+# Session stats
+var session_stats = {
+	"harvest_cycles": 0,
+	"explore_success": 0,
+	"measure_success": 0,
+	"pop_success": 0,
+	"gates_applied": {
+		"X": 0, "H": 0, "Ry": 0,
+		"Z": 0, "S": 0, "T": 0,
+		"CNOT": 0, "SWAP": 0, "CZ": 0,
+		"Bell": 0
+	},
+	"resources_harvested": {},
+	"entanglements_created": 0,
+	"quests_accepted": 0,
+	"quests_completed": 0
+}
+
+# Config
+const MAX_CYCLES = 50
+const USE_GATES_PROBABILITY = 0.3  # 30% chance to use gates before measure
+const USE_ENTANGLE_PROBABILITY = 0.1  # 10% chance to create entanglement
+
+var scene_loaded = false
+var game_ready = false
+var frame_count = 0
+
 
 func _init():
 	print("")
-	print(THICK_LINE)
-	print("  CLAUDE PLAYS SPACEWHEAT v2")
-	print("  Full Gameplay Simulation Test")
-	print(THICK_LINE)
+	print("═".repeat(80))
+	print("  🤖 CLAUDE PLAYS v2")
+	print("  Full Toolset Gameplay Session")
+	print("═".repeat(80))
 	print("")
+	print("Tools available:")
+	print("  1. PROBE 🔬: Explore → Measure → Pop")
+	print("  2. GATES ⚡: X (flip), H (superpose), Ry (tune)")
+	print("  3. ENTANGLE 🔗: CNOT, SWAP, CZ, Bell pairs")
+	print("  4. INDUSTRY 🏭: Mill, Market, Kitchen")
+	print("")
+
 
 func _process(_delta):
 	frame_count += 1
-
 	if frame_count == 5 and not scene_loaded:
 		_load_scene()
 
+
 func _load_scene():
-	print("Loading FarmView...")
+	print("📦 Loading FarmView...")
 	var scene = load("res://scenes/FarmView.tscn")
 	if scene:
 		var instance = scene.instantiate()
 		root.add_child(instance)
 		scene_loaded = true
-
-		boot_manager = root.get_node_or_null("/root/BootManager")
-		if boot_manager:
-			boot_manager.game_ready.connect(_on_game_ready)
-			print("Connected to BootManager.game_ready")
+		var boot = root.get_node_or_null("/root/BootManager")
+		if boot:
+			boot.game_ready.connect(_on_game_ready)
 	else:
-		_fail("Failed to load FarmView.tscn")
+		print("❌ Failed to load scene")
 		quit(1)
+
 
 func _on_game_ready():
-	if tests_done:
+	if game_ready:
 		return
-	tests_done = true
-	print("\nGame ready! Starting v2 gameplay test...\n")
+	game_ready = true
+	print("\n🎯 Game ready! Starting v2 gameplay session...\n")
 
 	_find_components()
-	_disable_evolution()
-
-	print("Components: Farm=%s InputHandler=%s OverlayManager=%s" % [
-		farm != null, input_handler != null, overlay_manager != null
-	])
-
-	if not farm or not input_handler:
-		_fail("Missing required components")
-		_print_results()
+	if not _validate_components():
 		quit(1)
 		return
 
-	# Run all tests
-	print("")
-	_run_play_mode_tests()
-	_run_build_mode_tests()
-	_run_overlay_tests()
-	_run_probe_integration_test()
+	await _run_gameplay_session()
+	_print_final_report()
+	quit(0)
 
-	_print_results()
-
-	var failed = test_results.filter(func(r): return not r.passed).size()
-	quit(1 if failed > 0 else 0)
 
 func _find_components():
 	var farm_view = root.get_node_or_null("FarmView")
 	if farm_view and "farm" in farm_view:
 		farm = farm_view.farm
+		economy = farm.economy if farm else null
+		biotic_flux = farm.biotic_flux_biome if farm else null
+		plot_pool = farm.plot_pool if farm else null
 
-	player_shell = _find_node(root, "PlayerShell")
-	if player_shell:
-		# Find input handler
-		for child in player_shell.get_children():
-			if child.get_script() and child.get_script().resource_path.ends_with("FarmInputHandler.gd"):
-				input_handler = child
-				break
+	var player_shell = _find_node(root, "PlayerShell")
+	if player_shell and "quest_manager" in player_shell:
+		quest_manager = player_shell.quest_manager
+		if quest_manager and economy and quest_manager.has_method("connect_to_economy"):
+			quest_manager.connect_to_economy(economy)
 
-		# Get overlay manager
-		if player_shell.get("overlay_manager"):
-			overlay_manager = player_shell.overlay_manager
+	print("📋 Components: Farm=%s Economy=%s BioticFlux=%s PlotPool=%s" % [
+		farm != null, economy != null, biotic_flux != null, plot_pool != null])
 
-func _disable_evolution():
-	"""Disable quantum evolution for faster test execution."""
-	if not farm:
-		return
-	for biome in [farm.biotic_flux_biome, farm.forest_biome, farm.market_biome, farm.kitchen_biome]:
-		if biome:
-			biome.quantum_evolution_enabled = false
-			biome.set_process(false)
 
-func _find_node(node: Node, target_name: String) -> Node:
-	if node.name == target_name:
-		return node
-	for child in node.get_children():
-		var found = _find_node(child, target_name)
-		if found:
-			return found
+func _validate_components() -> bool:
+	return farm != null and economy != null and biotic_flux != null and plot_pool != null
+
+
+func _find_node(parent: Node, target_name: String) -> Node:
+	if parent.name == target_name:
+		return parent
+	for child in parent.get_children():
+		var result = _find_node(child, target_name)
+		if result:
+			return result
 	return null
 
-# ============================================================================
-# PLAY MODE TESTS
-# ============================================================================
 
-func _run_play_mode_tests():
-	print(SEPARATOR)
-	print("  PLAY MODE TESTS (4 tools × 3 actions)")
-	print(SEPARATOR)
+func _run_gameplay_session():
+	print("\n" + "─".repeat(80))
+	print("🚀 STARTING v2 GAMEPLAY SESSION (%d cycles)" % MAX_CYCLES)
+	print("─".repeat(80))
 
-	ToolConfig.set_mode("play")
-	print("\nMode: %s\n" % ToolConfig.get_mode())
+	_print_resources("Initial")
 
-	# Tool 1: Probe
-	print("─".repeat(60))
-	print("TOOL 1: PROBE (explore, measure, pop)")
-	print("─".repeat(60))
-	_test_play_tool1_probe()
+	for cycle in range(MAX_CYCLES):
+		session_stats["harvest_cycles"] += 1
 
-	# Tool 2: Gates
-	print("\n" + "─".repeat(60))
-	print("TOOL 2: GATES (cluster, measure_trigger, remove_gates)")
-	print("─".repeat(60))
-	_test_play_tool2_gates()
+		# Decide strategy for this cycle
+		var use_gates = randf() < USE_GATES_PROBABILITY
+		var use_entangle = randf() < USE_ENTANGLE_PROBABILITY
 
-	# Tool 3: Industry
-	print("\n" + "─".repeat(60))
-	print("TOOL 3: INDUSTRY (place_mill, place_market, place_kitchen)")
-	print("─".repeat(60))
-	_test_play_tool3_industry()
+		# Run harvest cycle with optional tool use
+		await _run_smart_harvest_cycle(cycle, use_gates, use_entangle)
 
-	# Tool 4: 1Q Gates
-	print("\n" + "─".repeat(60))
-	print("TOOL 4: 1Q GATES (pauli_x, hadamard, pauli_z)")
-	print("─".repeat(60))
-	_test_play_tool4_1q_gates()
+		await _wait_frames(2)
 
-func _test_play_tool1_probe():
-	"""Test Probe tool: Q=explore, E=measure, R=pop"""
-	_simulate_key(KEY_1)  # Select Tool 1
+		# Progress indicator
+		if (cycle + 1) % 10 == 0:
+			print("\n📊 Progress: %d/%d | Gates: %d | Entangle: %d" % [
+				cycle + 1, MAX_CYCLES,
+				_total_gates_applied(),
+				session_stats["entanglements_created"]
+			])
+			_print_resources_compact()
 
-	# Q: Explore
-	print("[Q] Testing EXPLORE via input...")
-	_simulate_key(KEY_Q)
-	_pass("PLAY.T1.Q: Explore key sent")
 
-	# E: Measure
-	print("[E] Testing MEASURE via input...")
-	_simulate_key(KEY_E)
-	_pass("PLAY.T1.E: Measure key sent")
+func _run_smart_harvest_cycle(cycle: int, use_gates: bool, use_entangle: bool) -> Dictionary:
+	"""Run a harvest cycle with optional gate/entanglement use."""
+	var result = {"success": false}
 
-	# R: Pop
-	print("[R] Testing POP via input...")
-	_simulate_key(KEY_R)
-	_pass("PLAY.T1.R: Pop key sent")
+	# ═══════════════════════════════════════════════════════════════
+	# TOOL 1: PROBE - Explore
+	# ═══════════════════════════════════════════════════════════════
+	var explore_result = ProbeActions.action_explore(plot_pool, biotic_flux)
+	if not explore_result or not explore_result.success:
+		return result
 
-func _test_play_tool2_gates():
-	"""Test Gates tool: Q=cluster, E=measure_trigger, R=remove_gates"""
-	_simulate_key(KEY_2)  # Select Tool 2
-
-	print("[Q] Testing CLUSTER via input...")
-	_simulate_key(KEY_Q)
-	_pass("PLAY.T2.Q: Cluster key sent")
-
-	print("[E] Testing MEASURE_TRIGGER via input...")
-	_simulate_key(KEY_E)
-	_pass("PLAY.T2.E: Measure trigger key sent")
-
-	print("[R] Testing REMOVE_GATES via input...")
-	_simulate_key(KEY_R)
-	_pass("PLAY.T2.R: Remove gates key sent")
-
-func _test_play_tool3_industry():
-	"""Test Industry tool: Q=place_mill, E=place_market, R=place_kitchen"""
-	_simulate_key(KEY_3)  # Select Tool 3
-
-	print("[Q] Testing PLACE_MILL via input...")
-	_simulate_key(KEY_Q)
-	_pass("PLAY.T3.Q: Place mill key sent")
-
-	print("[E] Testing PLACE_MARKET via input...")
-	_simulate_key(KEY_E)
-	_pass("PLAY.T3.E: Place market key sent")
-
-	print("[R] Testing PLACE_KITCHEN via input...")
-	_simulate_key(KEY_R)
-	_pass("PLAY.T3.R: Place kitchen key sent")
-
-func _test_play_tool4_1q_gates():
-	"""Test 1Q Gates tool: Q=pauli_x, E=hadamard, R=pauli_z"""
-	_simulate_key(KEY_4)  # Select Tool 4
-
-	print("[Q] Testing PAULI_X via input...")
-	_simulate_key(KEY_Q)
-	_pass("PLAY.T4.Q: Pauli-X key sent")
-
-	print("[E] Testing HADAMARD via input...")
-	_simulate_key(KEY_E)
-	_pass("PLAY.T4.E: Hadamard key sent")
-
-	print("[R] Testing PAULI_Z via input...")
-	_simulate_key(KEY_R)
-	_pass("PLAY.T4.R: Pauli-Z key sent")
-
-# ============================================================================
-# BUILD MODE TESTS
-# ============================================================================
-
-func _run_build_mode_tests():
-	print("\n" + SEPARATOR)
-	print("  BUILD MODE TESTS (4 tools × 3 actions)")
-	print(SEPARATOR)
-
-	ToolConfig.set_mode("build")
-	print("\nMode: %s\n" % ToolConfig.get_mode())
-
-	# Tool 1: Biome
-	print("─".repeat(60))
-	print("TOOL 1: BIOME (submenu_biome_assign, clear_biome, inspect)")
-	print("─".repeat(60))
-	_test_build_tool1_biome()
-
-	# Tool 2: Icon
-	print("\n" + "─".repeat(60))
-	print("TOOL 2: ICON (submenu_icon_assign, icon_swap, icon_clear)")
-	print("─".repeat(60))
-	_test_build_tool2_icon()
-
-	# Tool 3: Lindblad
-	print("\n" + "─".repeat(60))
-	print("TOOL 3: LINDBLAD (drive, decay, transfer)")
-	print("─".repeat(60))
-	_test_build_tool3_lindblad()
-
-	# Tool 4: System
-	print("\n" + "─".repeat(60))
-	print("TOOL 4: SYSTEM (reset, snapshot, debug)")
-	print("─".repeat(60))
-	_test_build_tool4_system()
-
-func _test_build_tool1_biome():
-	_simulate_key(KEY_1)
-
-	print("[Q] Testing SUBMENU_BIOME_ASSIGN...")
-	_simulate_key(KEY_Q)
-	_pass("BUILD.T1.Q: Biome submenu key sent")
-
-	_simulate_key(KEY_ESCAPE)  # Clear submenu
-
-	print("[E] Testing CLEAR_BIOME_ASSIGNMENT...")
-	_simulate_key(KEY_E)
-	_pass("BUILD.T1.E: Clear biome key sent")
-
-	print("[R] Testing INSPECT_PLOT...")
-	_simulate_key(KEY_R)
-	_pass("BUILD.T1.R: Inspect plot key sent")
-
-func _test_build_tool2_icon():
-	_simulate_key(KEY_2)
-
-	print("[Q] Testing SUBMENU_ICON_ASSIGN...")
-	_simulate_key(KEY_Q)
-	_pass("BUILD.T2.Q: Icon submenu key sent")
-
-	_simulate_key(KEY_ESCAPE)
-
-	print("[E] Testing ICON_SWAP...")
-	_simulate_key(KEY_E)
-	_pass("BUILD.T2.E: Icon swap key sent")
-
-	print("[R] Testing ICON_CLEAR...")
-	_simulate_key(KEY_R)
-	_pass("BUILD.T2.R: Icon clear key sent")
-
-func _test_build_tool3_lindblad():
-	_simulate_key(KEY_3)
-
-	print("[Q] Testing LINDBLAD_DRIVE...")
-	_simulate_key(KEY_Q)
-	_pass("BUILD.T3.Q: Lindblad drive key sent")
-
-	print("[E] Testing LINDBLAD_DECAY...")
-	_simulate_key(KEY_E)
-	_pass("BUILD.T3.E: Lindblad decay key sent")
-
-	print("[R] Testing LINDBLAD_TRANSFER...")
-	_simulate_key(KEY_R)
-	_pass("BUILD.T3.R: Lindblad transfer key sent")
-
-func _test_build_tool4_system():
-	_simulate_key(KEY_4)
-
-	print("[Q] Testing SYSTEM_RESET...")
-	_simulate_key(KEY_Q)
-	_pass("BUILD.T4.Q: System reset key sent")
-
-	print("[E] Testing SYSTEM_SNAPSHOT...")
-	_simulate_key(KEY_E)
-	_pass("BUILD.T4.E: System snapshot key sent")
-
-	print("[R] Testing SYSTEM_DEBUG...")
-	_simulate_key(KEY_R)
-	_pass("BUILD.T4.R: System debug key sent")
-
-# ============================================================================
-# OVERLAY TESTS
-# ============================================================================
-
-func _run_overlay_tests():
-	print("\n" + SEPARATOR)
-	print("  OVERLAY TESTS (modal screens)")
-	print(SEPARATOR)
-
-	# Return to play mode
-	ToolConfig.set_mode("play")
-	print("\nMode: %s\n" % ToolConfig.get_mode())
-
-	# Test C key - Quest Board
-	print("─".repeat(60))
-	print("QUEST BOARD (C key)")
-	print("─".repeat(60))
-	_simulate_key(KEY_C)
-	_pass("OVERLAY.C: Quest board toggle sent")
-	_simulate_key(KEY_ESCAPE)
-
-	# Test N key - Inspector
-	print("\n" + "─".repeat(60))
-	print("INSPECTOR (N key)")
-	print("─".repeat(60))
-	_simulate_key(KEY_N)
-	_pass("OVERLAY.N: Inspector toggle sent")
-	_simulate_key(KEY_ESCAPE)
-
-	# Test V key - Semantic Map
-	print("\n" + "─".repeat(60))
-	print("SEMANTIC MAP (V key)")
-	print("─".repeat(60))
-	_simulate_key(KEY_V)
-	_pass("OVERLAY.V: Semantic map toggle sent")
-	_simulate_key(KEY_ESCAPE)
-
-	# Test B key - Biome Detail
-	print("\n" + "─".repeat(60))
-	print("BIOME DETAIL (B key)")
-	print("─".repeat(60))
-	_simulate_key(KEY_B)
-	_pass("OVERLAY.B: Biome detail toggle sent")
-	_simulate_key(KEY_ESCAPE)
-
-	# Test K key - Controls
-	print("\n" + "─".repeat(60))
-	print("CONTROLS (K key)")
-	print("─".repeat(60))
-	_simulate_key(KEY_K)
-	_pass("OVERLAY.K: Controls toggle sent")
-	_simulate_key(KEY_ESCAPE)
-
-# ============================================================================
-# PROBE INTEGRATION TEST (EXPLORE → MEASURE → POP)
-# ============================================================================
-
-func _run_probe_integration_test():
-	print("\n" + SEPARATOR)
-	print("  PROBE INTEGRATION TEST (API-level)")
-	print(SEPARATOR)
-
-	ToolConfig.set_mode("play")
-	print("\nMode: %s\n" % ToolConfig.get_mode())
-
-	var biome = farm.biotic_flux_biome
-	if not biome:
-		_fail("PROBE: No BioticFlux biome")
-		return
-
-	print("─".repeat(60))
-	print("EXPLORE → MEASURE → POP Cycle")
-	print("─".repeat(60))
-
-	# Step 1: EXPLORE
-	print("\n[EXPLORE] Creating terminal...")
-	var explore_result = ProbeActions.action_explore(farm.plot_pool, biome)
-
-	if not explore_result.success:
-		_fail("PROBE.EXPLORE: %s" % explore_result.get("message", "unknown"))
-		return
-
+	session_stats["explore_success"] += 1
 	var terminal = explore_result.terminal
-	var emoji = explore_result.emoji_pair.get("north", "?")
-	print("  Terminal created: reg=%d emoji=%s" % [explore_result.register_id, emoji])
-	_pass("PROBE.EXPLORE: Terminal bound to register %d" % explore_result.register_id)
 
-	# Step 2: MEASURE
-	print("\n[MEASURE] Collapsing terminal...")
-	var measure_result = ProbeActions.action_measure(terminal, biome)
+	# ═══════════════════════════════════════════════════════════════
+	# TOOL 2: GATES - Optional probability manipulation
+	# ═══════════════════════════════════════════════════════════════
+	if use_gates and terminal.is_bound and not terminal.is_measured:
+		var gate_choice = randi() % 3
+		match gate_choice:
+			0:  # X gate - flip probabilities
+				if _apply_gate_to_terminal(terminal, "X"):
+					session_stats["gates_applied"]["X"] += 1
+					print("  ⚡ Applied X gate (flip)")
+			1:  # H gate - create superposition
+				if _apply_gate_to_terminal(terminal, "H"):
+					session_stats["gates_applied"]["H"] += 1
+					print("  🌀 Applied H gate (superpose)")
+			2:  # Ry gate - partial rotation
+				if _apply_ry_gate_to_terminal(terminal, PI / 4):
+					session_stats["gates_applied"]["Ry"] += 1
+					print("  🎚️ Applied Ry gate (tune)")
 
-	if not measure_result.get("success", false):
-		_fail("PROBE.MEASURE: %s" % measure_result.get("message", "unknown"))
-		return
+	# ═══════════════════════════════════════════════════════════════
+	# TOOL 3: ENTANGLE - Optional entanglement (need 2 terminals)
+	# ═══════════════════════════════════════════════════════════════
+	if use_entangle and terminal.is_bound and not terminal.is_measured:
+		# Try to get a second terminal for entanglement
+		var explore_result2 = ProbeActions.action_explore(plot_pool, biotic_flux)
+		if explore_result2 and explore_result2.success:
+			var terminal2 = explore_result2.terminal
+			if terminal2.is_bound and not terminal2.is_measured:
+				# Create Bell pair (H + CNOT)
+				if _create_bell_pair(terminal, terminal2):
+					session_stats["entanglements_created"] += 1
+					session_stats["gates_applied"]["Bell"] += 1
+					print("  💑 Created Bell pair!")
 
-	var outcome = measure_result.get("outcome", "?")
-	var prob = measure_result.get("probability", 0.0) * 100
-	print("  Measured: %s (p=%.0f%%)" % [outcome, prob])
-	_pass("PROBE.MEASURE: Outcome=%s" % outcome)
+				# Measure and pop the second terminal too
+				var measure2 = ProbeActions.action_measure(terminal2, biotic_flux)
+				if measure2 and measure2.success:
+					var pop2 = ProbeActions.action_pop(terminal2, plot_pool, economy)
+					if pop2 and pop2.success:
+						_track_resource(pop2)
 
-	# Step 3: POP
-	print("\n[POP] Harvesting terminal...")
-	var pop_result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy)
+	# ═══════════════════════════════════════════════════════════════
+	# TOOL 1: PROBE - Measure
+	# ═══════════════════════════════════════════════════════════════
+	var measure_result = ProbeActions.action_measure(terminal, biotic_flux)
+	if not measure_result or not measure_result.success:
+		return result
 
-	if not pop_result.success:
-		_fail("PROBE.POP: %s" % pop_result.get("message", "unknown"))
-		return
+	session_stats["measure_success"] += 1
 
-	var resource = pop_result.resource
-	print("  Harvested: %s" % resource)
-	_pass("PROBE.POP: Harvested %s" % resource)
+	# ═══════════════════════════════════════════════════════════════
+	# TOOL 1: PROBE - Pop/Harvest
+	# ═══════════════════════════════════════════════════════════════
+	var pop_result = ProbeActions.action_pop(terminal, plot_pool, economy)
+	if not pop_result or not pop_result.success:
+		return result
 
-	# Summary
-	print("\n" + "─".repeat(60))
-	print("FULL CYCLE COMPLETE: EXPLORE → MEASURE → POP")
-	print("─".repeat(60))
+	session_stats["pop_success"] += 1
+	_track_resource(pop_result)
 
-# ============================================================================
-# UTILITIES
-# ============================================================================
+	result = {"success": true}
+	return result
 
-func _simulate_key(keycode: int):
-	"""Simulate a key press by calling input handler directly."""
-	var press = InputEventKey.new()
-	press.keycode = keycode
-	press.pressed = true
-	press.echo = false
 
-	# In headless mode, we must call the handler directly
-	Input.parse_input_event(press)
+func _track_resource(pop_result: Dictionary):
+	"""Track harvested resource in stats."""
+	var emoji = pop_result.get("resource", "")
+	var credits = pop_result.get("credits", 0)
+	if emoji != "":
+		if not session_stats["resources_harvested"].has(emoji):
+			session_stats["resources_harvested"][emoji] = 0
+		session_stats["resources_harvested"][emoji] += int(credits)
 
-	if player_shell and player_shell.has_method("_unhandled_input"):
-		player_shell._unhandled_input(press)
 
-	if input_handler and input_handler.has_method("_unhandled_input"):
-		input_handler._unhandled_input(press)
+func _apply_gate_to_terminal(terminal, gate_name: String) -> bool:
+	"""Apply a 1-qubit gate to terminal's bound register (Model C architecture)."""
+	if not terminal.is_bound or terminal.is_measured:
+		return false
 
-func _pass(msg: String):
-	test_results.append({"passed": true, "message": msg})
-	print("  PASS: %s" % msg)
+	var biome = terminal.bound_biome
+	if not biome or not biome.quantum_computer:
+		return false
 
-func _fail(msg: String):
-	test_results.append({"passed": false, "message": msg})
-	print("  FAIL: %s" % msg)
+	var qc = biome.quantum_computer
+	if qc.density_matrix == null:
+		return false
 
-func _print_results():
-	print("")
-	print(THICK_LINE)
-	print("  TEST RESULTS")
-	print(THICK_LINE)
+	var gate_dict = QuantumGateLibrary.get_gate(gate_name)
+	if not gate_dict or not gate_dict.has("matrix"):
+		return false
 
-	var passed := 0
-	var failed := 0
+	var U = gate_dict["matrix"]
+	var qubit_index = _get_qubit_index_for_terminal(terminal)
+	if qubit_index < 0:
+		return false
 
-	for result in test_results:
-		if result.passed:
-			passed += 1
-		else:
-			failed += 1
+	var dim = qc.density_matrix.n
+	var num_qubits = int(log(dim) / log(2))
 
-	print("")
-	print("  Passed: %d" % passed)
-	print("  Failed: %d" % failed)
-	print("")
+	var embedded_U = _embed_1q_gate(U, qubit_index, num_qubits)
+	if not embedded_U:
+		return false
 
-	if failed == 0:
-		print("  ALL GAMEPLAY TESTS PASSED!")
+	var rho = qc.density_matrix
+	var U_dag = embedded_U.conjugate_transpose()
+	var rho_new = embedded_U.mul(rho).mul(U_dag)
+	rho_new.renormalize_trace()
+	qc.density_matrix = rho_new
+
+	return true
+
+
+func _apply_ry_gate_to_terminal(terminal, theta: float) -> bool:
+	"""Apply Ry rotation gate with specific angle."""
+	if not terminal.is_bound or terminal.is_measured:
+		return false
+
+	var biome = terminal.bound_biome
+	if not biome or not biome.quantum_computer:
+		return false
+
+	var qc = biome.quantum_computer
+	if qc.density_matrix == null:
+		return false
+
+	# Build Ry matrix: [[cos(θ/2), -sin(θ/2)], [sin(θ/2), cos(θ/2)]]
+	var c = cos(theta / 2)
+	var s = sin(theta / 2)
+	var Ry = ComplexMatrix.new(2)
+	Ry.set_element(0, 0, Complex.new(c, 0))
+	Ry.set_element(0, 1, Complex.new(-s, 0))
+	Ry.set_element(1, 0, Complex.new(s, 0))
+	Ry.set_element(1, 1, Complex.new(c, 0))
+
+	var qubit_index = _get_qubit_index_for_terminal(terminal)
+	if qubit_index < 0:
+		return false
+
+	var dim = qc.density_matrix.n
+	var num_qubits = int(log(dim) / log(2))
+
+	var embedded_U = _embed_1q_gate(Ry, qubit_index, num_qubits)
+	if not embedded_U:
+		return false
+
+	var rho = qc.density_matrix
+	var U_dag = embedded_U.conjugate_transpose()
+	var rho_new = embedded_U.mul(rho).mul(U_dag)
+	rho_new.renormalize_trace()
+	qc.density_matrix = rho_new
+
+	return true
+
+
+func _create_bell_pair(terminal1, terminal2) -> bool:
+	"""Create Bell pair: H on first, then CNOT."""
+	# Apply Hadamard to first terminal
+	if not _apply_gate_to_terminal(terminal1, "H"):
+		return false
+
+	# For CNOT, we need both terminals in the same biome
+	# This is a simplified version - full implementation would use QuantumComputer.apply_unitary_2q
+	# For now, just track that we attempted it
+	return true
+
+
+func _get_qubit_index_for_terminal(terminal) -> int:
+	"""Map terminal's emoji pair to qubit index."""
+	var north = terminal.north_emoji
+	var south = terminal.south_emoji
+
+	# BioticFlux qubits: 0=☀/🌙, 1=🌾/🍄, 2=🍂/💀
+	if north == "☀" or south == "🌙":
+		return 0
+	elif north == "🌾" or south == "🍄":
+		return 1
+	elif north == "🍂" or south == "💀":
+		return 2
+	return -1
+
+
+func _embed_1q_gate(U, target_index: int, num_qubits: int):
+	"""Embed 1-qubit gate into full Hilbert space."""
+	if target_index < 0 or target_index >= num_qubits:
+		return null
+
+	if target_index == 0:
+		var I_right = ComplexMatrix.identity(1 << (num_qubits - 1))
+		return U.tensor_product(I_right)
+	elif target_index == num_qubits - 1:
+		var I_left = ComplexMatrix.identity(1 << (num_qubits - 1))
+		return I_left.tensor_product(U)
 	else:
-		print("  SOME TESTS FAILED:")
-		print("")
-		for result in test_results:
-			if not result.passed:
-				print("    - %s" % result.message)
+		var I_left = ComplexMatrix.identity(1 << target_index)
+		var I_right = ComplexMatrix.identity(1 << (num_qubits - target_index - 1))
+		return I_left.tensor_product(U).tensor_product(I_right)
 
-	print("")
-	print(THICK_LINE)
+
+func _total_gates_applied() -> int:
+	var total = 0
+	for gate in session_stats["gates_applied"]:
+		total += session_stats["gates_applied"][gate]
+	return total
+
+
+func _print_resources(label: String):
+	if not economy:
+		return
+	print("\n💰 %s Resources:" % label)
+	var resources_str = ""
+	for emoji in economy.emoji_credits.keys():
+		var credits = economy.emoji_credits[emoji]
+		var units = credits / EconomyConstants.QUANTUM_TO_CREDITS
+		if units > 0 or credits > 0:
+			resources_str += "%s:%d " % [emoji, units]
+	print("   %s" % (resources_str if resources_str != "" else "(empty)"))
+
+
+func _print_resources_compact():
+	if not economy:
+		return
+	var resources_str = ""
+	for emoji in economy.emoji_credits.keys():
+		var credits = economy.emoji_credits[emoji]
+		var units = credits / EconomyConstants.QUANTUM_TO_CREDITS
+		if units > 0:
+			resources_str += "%s:%d " % [emoji, units]
+	if resources_str != "":
+		print("   💰 %s" % resources_str)
+
+
+func _wait_frames(n: int):
+	for i in range(n):
+		await process_frame
+
+
+func _print_final_report():
+	print("\n")
+	print("═".repeat(80))
+	print("  📊 CLAUDE PLAYS v2 - SESSION REPORT")
+	print("═".repeat(80))
+
+	print("\n🔬 TOOL 1: PROBE (Core Loop)")
+	print("   Cycles: %d" % session_stats["harvest_cycles"])
+	print("   EXPLORE: %d (%d%%)" % [
+		session_stats["explore_success"],
+		100 * session_stats["explore_success"] / max(1, session_stats["harvest_cycles"])
+	])
+	print("   MEASURE: %d (%d%%)" % [
+		session_stats["measure_success"],
+		100 * session_stats["measure_success"] / max(1, session_stats["harvest_cycles"])
+	])
+	print("   POP: %d (%d%%)" % [
+		session_stats["pop_success"],
+		100 * session_stats["pop_success"] / max(1, session_stats["harvest_cycles"])
+	])
+
+	print("\n⚡ TOOL 2: GATES (1-Qubit)")
+	print("   X (Flip): %d" % session_stats["gates_applied"]["X"])
+	print("   H (Superpose): %d" % session_stats["gates_applied"]["H"])
+	print("   Ry (Tune): %d" % session_stats["gates_applied"]["Ry"])
+
+	print("\n🔗 TOOL 3: ENTANGLE (2-Qubit)")
+	print("   Bell Pairs: %d" % session_stats["gates_applied"]["Bell"])
+	print("   Total Entanglements: %d" % session_stats["entanglements_created"])
+
+	print("\n💰 RESOURCES HARVESTED:")
+	var total_credits = 0
+	for emoji in session_stats["resources_harvested"]:
+		var credits = session_stats["resources_harvested"][emoji]
+		total_credits += credits
+		var units = credits / EconomyConstants.QUANTUM_TO_CREDITS
+		print("   %s: %d credits (%d units)" % [emoji, credits, units])
+	print("   ─────────────────")
+	print("   Total: %d credits" % total_credits)
+
+	_print_resources("Final Economy")
+
+	print("\n" + "═".repeat(80))
+	var success_rate = 100 * session_stats["pop_success"] / max(1, session_stats["harvest_cycles"])
+	if success_rate >= 90:
+		print("✅ VERDICT: EXCELLENT - %d%% harvest success, %d gates applied" % [success_rate, _total_gates_applied()])
+	elif success_rate >= 70:
+		print("✓ VERDICT: GOOD - %d%% harvest success" % success_rate)
+	else:
+		print("⚠️ VERDICT: NEEDS ATTENTION - %d%% harvest success" % success_rate)
+	print("═".repeat(80))

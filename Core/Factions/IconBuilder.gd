@@ -17,9 +17,29 @@ extends RefCounted
 ##   var icons = IconBuilder.build_icons_for_factions(biome_factions)
 
 const Faction = preload("res://Core/Factions/Faction.gd")
-const CoreFactions = preload("res://Core/Factions/CoreFactions.gd")
-const CivilizationFactions = preload("res://Core/Factions/CivilizationFactions.gd")
+const FactionRegistry = preload("res://Core/Factions/FactionRegistry.gd")
 const IconScript = preload("res://Core/QuantumSubstrate/Icon.gd")
+
+# Cached registry instance for biome presets
+static var _registry: FactionRegistry = null
+
+## Get or create registry instance
+static func _get_registry() -> FactionRegistry:
+	if _registry == null:
+		_registry = FactionRegistry.new()
+	return _registry
+
+## Helper to get factions by names from registry
+static func _get_factions_by_names(names: Array) -> Array:
+	var registry = _get_registry()
+	var factions: Array = []
+	for name in names:
+		var faction = registry.get_by_name(name)
+		if faction:
+			factions.append(faction)
+		else:
+			push_warning("IconBuilder: Faction not found: %s" % name)
+	return factions
 
 #region Pre-Indexed Faction Lookup (Performance Optimization)
 
@@ -310,16 +330,16 @@ static func build_biome_icons(factions: Array, cross_couplings: Array = []) -> D
 ## Forest Biome: The complete forest ecosystem
 ## Celestial + Verdant + Mycelial + Swift + Pack + Pollinators + Plague + Wildfire
 static func build_forest_biome() -> Dictionary:
-	var factions = [
-		CoreFactions.create_celestial_archons(),
-		CoreFactions.create_verdant_pulse(),
-		CoreFactions.create_mycelial_web(),
-		CoreFactions.create_swift_herd(),
-		CoreFactions.create_pack_lords(),
-		CoreFactions.create_pollinator_guild(),
-		CoreFactions.create_plague_vectors(),
-		CoreFactions.create_wildfire_dynamics(),
-	]
+	var factions = _get_factions_by_names([
+		"Celestial Archons",
+		"Verdant Pulse",
+		"Mycelial Web",
+		"Swift Herd",
+		"Pack Lords",
+		"Pollinator Guild",
+		"Plague Vectors",
+		"Wildfire",
+	])
 	
 	# Cross-faction couplings (where faction boundaries interact)
 	var cross = [
@@ -375,10 +395,10 @@ static func build_forest_biome() -> Dictionary:
 
 ## Kitchen Biome: Hearth Keepers (+ Verdant for 🌾 input)
 static func build_kitchen_biome() -> Dictionary:
-	var factions = [
-		CoreFactions.create_hearth_keepers(),
-		CoreFactions.create_verdant_pulse(),  # For 🌾
-	]
+	var factions = _get_factions_by_names([
+		"Hearth Keepers",
+		"Verdant Pulse",  # For 🌾
+	])
 	
 	# Cross-faction couplings
 	var cross = [
@@ -390,10 +410,10 @@ static func build_kitchen_biome() -> Dictionary:
 
 ## Market Biome: Market Spirits (standalone for now)
 static func build_market_biome() -> Dictionary:
-	var factions = [
-		CoreFactions.create_market_spirits(),
-	]
-	
+	var factions = _get_factions_by_names([
+		"Market Spirits",
+	])
+
 	return build_biome_icons(factions, [])
 
 
@@ -404,10 +424,10 @@ static func build_market_biome() -> Dictionary:
 ## Starter Biome: Minimal 🍞👥 starting point
 ## Just Hearth + one civilization faction
 static func build_starter_biome() -> Dictionary:
-	var factions = [
-		CoreFactions.create_hearth_keepers(),
-		CivilizationFactions.create_granary_guilds(),
-	]
+	var factions = _get_factions_by_names([
+		"Hearth Keepers",
+		"Granary Guilds",
+	])
 	
 	var cross = [
 		# Basic bread-to-storage
@@ -420,14 +440,14 @@ static func build_starter_biome() -> Dictionary:
 ## Village Biome: Early civilization expansion
 ## Hearth + Granary + Millwrights + basic Verdant
 static func build_village_biome() -> Dictionary:
-	var factions = [
-		CoreFactions.create_celestial_archons(),
-		CoreFactions.create_verdant_pulse(),
-		CoreFactions.create_hearth_keepers(),
-		CivilizationFactions.create_granary_guilds(),
-		CivilizationFactions.create_millwrights_union(),
-		CivilizationFactions.create_yeast_prophets(),
-	]
+	var factions = _get_factions_by_names([
+		"Celestial Archons",
+		"Verdant Pulse",
+		"Hearth Keepers",
+		"Granary Guilds",
+		"Millwright's Union",
+		"Yeast Prophets",
+	])
 	
 	var cross = [
 		# Celestial → Verdant (sun/water)
@@ -457,14 +477,14 @@ static func build_village_biome() -> Dictionary:
 
 ## Imperial Biome: Full civilization with extraction
 static func build_imperial_biome() -> Dictionary:
-	var factions = [
-		CoreFactions.create_market_spirits(),
-		CivilizationFactions.create_granary_guilds(),
-		CivilizationFactions.create_millwrights_union(),
-		CivilizationFactions.create_station_lords(),
-		CivilizationFactions.create_void_serfs(),
-		CivilizationFactions.create_carrion_throne(),
-	]
+	var factions = _get_factions_by_names([
+		"Market Spirits",
+		"Granary Guilds",
+		"Millwright's Union",
+		"Station Lords",
+		"Void Serfs",
+		"Carrion Throne",
+	])
 	
 	var cross = [
 		# Market ↔ Granary (trade flows)
@@ -493,11 +513,11 @@ static func build_imperial_biome() -> Dictionary:
 
 ## Scavenger Biome: Waste economy
 static func build_scavenger_biome() -> Dictionary:
-	var factions = [
-		CoreFactions.create_hearth_keepers(),
-		CivilizationFactions.create_scavenged_psithurism(),
-		CivilizationFactions.create_millwrights_union(),
-	]
+	var factions = _get_factions_by_names([
+		"Hearth Keepers",
+		"Scavenged Psithurism",
+		"Millwright's Union",
+	])
 	
 	var cross = [
 		# Waste accumulation

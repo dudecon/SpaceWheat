@@ -99,41 +99,9 @@ func grow(delta: float, biome = null, territory_manager = null, icon_network = n
 	return 0.0
 
 
-func process_energy_tap(delta: float, biome = null) -> void:
-	"""Process energy tap drain and accumulate resources
-
-	Energy taps drain target emojis via Lindblad operators to sink state.
-	This method reads the sink flux from the bath and converts it to harvestable resources.
-
-	Manifest Section 4.1: Energy taps use L_e = |sink⟩⟨e| drain operators.
-	Flux is tracked during bath evolution in QuantumBath.sink_flux_per_emoji.
-
-	Args:
-		delta: Time step in seconds
-		biome: BiomeBase reference for accessing bath
-	"""
-	# PHASE 5 (PARAMETRIC): Check plot_type_name instead of enum
-	if plot_type_name != "energy_tap" or not tap_target_emoji:
-		return
-
-	if not biome or not biome.bath:
-		return
-
-	# Read flux from bath (Manifest Section 4.1)
-	var flux = biome.bath.get_sink_flux(tap_target_emoji)
-
-	if flux > 0.0:
-		# Convert flux to classical resource (1 flux = 10 resource units)
-		var resource_gain = flux * 10.0
-
-		tap_accumulated_resource += resource_gain
-		tap_last_flux_check = biome.bath.bath_time
-
-		# Debug output (can be removed in production)
-		if resource_gain > 0.01:
-			print("   ⚡ Tap %s: drained %.4f flux from %s → +%.2f resource (total: %.2f)" % [
-				plot_id, flux, tap_target_emoji, resource_gain, tap_accumulated_resource
-			])
+func process_energy_tap(_delta: float, _biome = null) -> void:
+	"""DEPRECATED: Energy tap system disabled (requires bath which was removed)."""
+	pass
 
 
 ## Entanglement

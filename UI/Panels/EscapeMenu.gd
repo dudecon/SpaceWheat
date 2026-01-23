@@ -44,38 +44,33 @@ func _init():
 	background.layout_mode = 1
 	add_child(background)
 
-	# Menu box - Fixed size, positioned near top (reduced top margin)
-	# Sized to fit 960x540 screen with minimal top margin
+	# Menu box - Compact size to fit 960x540 viewport
 	var menu_panel = PanelContainer.new()
-	menu_panel.custom_minimum_size = Vector2(400, 440)
-	# Anchor to horizontal center, but higher up vertically
+	menu_panel.custom_minimum_size = Vector2(360, 380)
+	# Anchor to center of screen
 	menu_panel.anchor_left = 0.5
 	menu_panel.anchor_right = 0.5
-	menu_panel.anchor_top = 0.0
-	menu_panel.anchor_bottom = 0.0
-	# Position: 16px from top (was 50px - reduced to 1/3)
-	menu_panel.offset_left = -200
-	menu_panel.offset_right = 200
-	menu_panel.offset_top = 16
-	menu_panel.offset_bottom = 456  # 16 + 440 height
+	menu_panel.anchor_top = 0.5
+	menu_panel.anchor_bottom = 0.5
+	# Center the panel
+	menu_panel.offset_left = -180
+	menu_panel.offset_right = 180
+	menu_panel.offset_top = -190
+	menu_panel.offset_bottom = 190
 	menu_panel.layout_mode = 1
 	add_child(menu_panel)
 
 	menu_vbox = VBoxContainer.new()
 	menu_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	menu_vbox.add_theme_constant_override("separation", 20)
+	menu_vbox.add_theme_constant_override("separation", 8)
 	menu_panel.add_child(menu_vbox)
 
 	# Title
 	var title = Label.new()
 	title.text = "⚙️ PAUSED ⚙️"
-	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_font_size_override("font_size", 28)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	menu_vbox.add_child(title)
-
-	var spacer1 = Control.new()
-	spacer1.custom_minimum_size = Vector2(0, 20)
-	menu_vbox.add_child(spacer1)
 
 	# Resume button
 	var resume_btn = _create_menu_button("Resume [ESC]", Color(0.3, 0.6, 0.3))
@@ -126,26 +121,26 @@ func _init():
 func _create_menu_button(text: String, color: Color) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	# Fixed size for 960×540 base resolution (compact for 7 buttons)
-	btn.custom_minimum_size = Vector2(340, 45)
-	btn.add_theme_font_size_override("font_size", 20)
+	# Compact size for 960×540 base resolution (7 buttons must fit)
+	btn.custom_minimum_size = Vector2(300, 36)
+	btn.add_theme_font_size_override("font_size", 16)
 
-	# FLASH GAME STYLE - Chunky borders matching quest board
+	# Clean style with subtle borders
 	var style = StyleBoxFlat.new()
 	style.bg_color = color
-	style.border_color = Color(0.7, 0.7, 0.7, 0.8)  # Brighter border
-	style.border_width_left = 4  # THICKER borders!
-	style.border_width_right = 4
-	style.border_width_top = 4
-	style.border_width_bottom = 4
-	style.corner_radius_top_left = 12  # Rounder corners
-	style.corner_radius_top_right = 12
-	style.corner_radius_bottom_left = 12
-	style.corner_radius_bottom_right = 12
-	style.content_margin_left = 20  # MORE PADDING!
-	style.content_margin_right = 20
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
+	style.border_color = Color(0.7, 0.7, 0.7, 0.8)
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
 	btn.add_theme_stylebox_override("normal", style)
 
 	var style_hover = StyleBoxFlat.new()

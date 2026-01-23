@@ -29,9 +29,11 @@ extends Resource
 
 ## Quantum Energy Economy - All resources are emoji-quantum currencies
 ## Starting with minimal amounts forces strategic gameplay
+##
+## LEGACY fields (kept for backward compatibility with old saves):
 @export var wheat_inventory: int = 2          # 🌾 Quantum energy (primary harvest)
 @export var labor_inventory: int = 1          # 👥 Quantum energy (labor/people)
-@export var flour_inventory: int = 0          # 🍞 Quantum energy (processed grain)
+@export var flour_inventory: int = 0          # 💨 Quantum energy (processed grain)
 @export var flower_inventory: int = 0         # 🌻 Quantum energy (rare yields)
 @export var mushroom_inventory: int = 1       # 🍄 Quantum energy (nocturnal)
 @export var detritus_inventory: int = 1       # 🍂 Quantum energy (compost)
@@ -40,20 +42,45 @@ extends Resource
 @export var tributes_paid: int = 0
 @export var tributes_failed: int = 0
 
-## Player Vocabulary - Emojis the player has discovered
-## This determines which factions are accessible and what quests they can receive
-## Default: Two starter pairs that seed faction access:
-##   🌾/🍂 (wheat/detritus - farming cycle)
-##   👥/💸 (people/money - labor economy)
-@export var known_emojis: Array = ["🌾", "🍂", "👥", "💸"]
+## NEW: Complete emoji credits dictionary (saves ALL resources)
+## Format: {"emoji": credits_amount, ...}
+## This replaces the individual inventory fields above for full persistence
+@export var all_emoji_credits: Dictionary = {}
 
-## Known Pairs - Plantable qubit axes the player has learned
+## Known Pairs - SOURCE OF TRUTH for player vocabulary
 ## Each pair is {north: String, south: String}
-## These are the actual plantable combinations
+## These are the actual plantable qubit axes the player has learned
+## Starter pair: 🌾/👥 (wheat/people - the farming foundation)
 @export var known_pairs: Array = [
-	{"north": "🌾", "south": "🍂"},
-	{"north": "👥", "south": "💸"}
+	{"north": "🌾", "south": "👥"}
 ]
+
+## DERIVED: known_emojis is computed from known_pairs (for backward compatibility)
+## Use get_known_emojis() to access the derived list
+## This field is still exported for save file compatibility with old saves
+@export var known_emojis: Array = []
+
+
+## Get known emojis (derived from known_pairs)
+## This is the canonical way to get the player's vocabulary
+func get_known_emojis() -> Array:
+	var emojis = []
+	for pair in known_pairs:
+		var north = pair.get("north", "")
+		var south = pair.get("south", "")
+		if north and north not in emojis:
+			emojis.append(north)
+		if south and south not in emojis:
+			emojis.append(south)
+	return emojis
+
+
+## Get the pair containing a given emoji (returns null if not found)
+func get_pair_for_emoji(emoji: String) -> Variant:
+	for pair in known_pairs:
+		if pair.get("north", "") == emoji or pair.get("south", "") == emoji:
+			return pair
+	return null
 
 ## Quest Slots - 4 persistent quest slots (UIOP)
 ## Each slot can be empty (null) or contain quest data

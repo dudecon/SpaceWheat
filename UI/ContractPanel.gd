@@ -76,11 +76,15 @@ func set_faction_manager(manager):
 	"""Set the faction manager reference"""
 	faction_manager = manager
 	if faction_manager:
-		# Connect signals
-		faction_manager.contract_offered.connect(_on_contract_offered)
-		faction_manager.contract_completed.connect(_on_contract_completed)
-		faction_manager.reputation_changed.connect(_on_reputation_changed)
-		faction_manager.faction_relationship_changed.connect(_on_relationship_changed)
+		# Connect signals (check if not already connected)
+		if not faction_manager.contract_offered.is_connected(_on_contract_offered):
+			faction_manager.contract_offered.connect(_on_contract_offered)
+		if not faction_manager.contract_completed.is_connected(_on_contract_completed):
+			faction_manager.contract_completed.connect(_on_contract_completed)
+		if not faction_manager.reputation_changed.is_connected(_on_reputation_changed):
+			faction_manager.reputation_changed.connect(_on_reputation_changed)
+		if not faction_manager.faction_relationship_changed.is_connected(_on_relationship_changed):
+			faction_manager.faction_relationship_changed.connect(_on_relationship_changed)
 	refresh_display()
 
 

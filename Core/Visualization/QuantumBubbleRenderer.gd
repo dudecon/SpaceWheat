@@ -1,0 +1,463 @@
+class_name QuantumBubbleRenderer
+extends RefCounted
+
+## Quantum Bubble Renderer
+##
+## Renders individual quantum bubbles with physics-grounded visual encoding:
+##
+## VISUAL CHANNEL → PHYSICS DATA
+## - Emoji opacity: P(n)/mass, P(s)/mass (measurement probability)
+## - Color hue: arg(ρ_01) (coherence phase)
+## - Color saturation: |ρ_01| (coherence magnitude)
+## - Glow intensity: Tr(ρ²) (purity)
+## - Pulse rate: |ρ_01| + berry_phase (stability indicator)
+## - Inner purity ring: Individual Tr(ρ²) (local purity vs biome)
+## - Outer probability ring: P(n)+P(s) globally (total probability mass)
+## - Measurement uncertainty ring: 2×√(p_n×p_s) (outcome spread)
+## - Sink flux particles: sink_flux_per_emoji (decoherence rate)
+## - Measured halo: is_measured flag (collapsed state)
+
+# Debug mode
+var DEBUG_MODE: bool = false
+
+
+func draw(graph: Node2D, ctx: Dictionary) -> void:
+	"""Draw all quantum bubbles.
+
+	Args:
+	    graph: The QuantumForceGraph node (for drawing calls)
+	    ctx: Context with {quantum_nodes, biomes, time_accumulator, plot_pool, etc.}
+	"""
+	var quantum_nodes = ctx.get("quantum_nodes", [])
+	var biomes = ctx.get("biomes", {})
+	var time_accumulator = ctx.get("time_accumulator", 0.0)
+	var plot_pool = ctx.get("plot_pool")
+	var frame_count = ctx.get("frame_count", 0)
+
+	for node in quantum_nodes:
+		# Skip hidden nodes (single-biome view)
+		if not node.visible:
+			continue
+
+		# v2: Terminal bubbles may have null plot but valid emoji data
+		if not node.plot and node.emoji_north.is_empty():
+			continue
+
+		# NOTE: Plot nodes are already updated by QuantumNodeManager.update_node_visuals()
+		# Only terminal bubbles need update here (they're skipped by QuantumNodeManager)
+		if node.is_terminal_bubble and node.terminal and node.terminal.is_bound:
+			node.update_from_quantum_state()
+
+		# Draw the bubble
+		_draw_quantum_bubble(graph, node, biomes, time_accumulator, plot_pool, false)
+
+
+func draw_sun_qubit(graph: Node2D, ctx: Dictionary) -> void:
+	"""Draw the sun/moon qubit node with celestial styling.
+
+	Args:
+	    graph: The QuantumForceGraph node
+	    ctx: Context dictionary
+	"""
+	var sun_qubit_node = ctx.get("sun_qubit_node")
+	var biotic_flux_biome = ctx.get("biotic_flux_biome")
+	var biomes = ctx.get("biomes", {})
+	var time_accumulator = ctx.get("time_accumulator", 0.0)
+	var plot_pool = ctx.get("plot_pool")
+
+	if not sun_qubit_node:
+		return
+
+	# Ensure full visibility
+	sun_qubit_node.visual_scale = 1.0
+	sun_qubit_node.visual_alpha = 1.0
+
+	# Draw pulsing energy aura
+	if biotic_flux_biome:
+		var sun_vis = biotic_flux_biome.get_sun_visualization()
+		var energy_strength = abs(cos(sun_vis["theta"]))
+
+		var aura_radius = sun_qubit_node.radius * (1.5 + energy_strength * 0.5)
+		var aura_color = sun_vis["color"]
+		aura_color.a = energy_strength * 0.3
+		graph.draw_circle(sun_qubit_node.position, aura_radius, aura_color)
+
+		# Sun rays
+		if energy_strength > 0.3:
+			for i in range(8):
+				var angle = (TAU / 8.0) * i
+				var ray_start = sun_qubit_node.position + Vector2(cos(angle), sin(angle)) * sun_qubit_node.radius
+				var ray_end = sun_qubit_node.position + Vector2(cos(angle), sin(angle)) * (sun_qubit_node.radius + 15.0 * energy_strength)
+				var ray_color = aura_color
+				ray_color.a = energy_strength * 0.6
+				graph.draw_line(ray_start, ray_end, ray_color, 1.5, true)
+
+	# Draw with celestial styling
+	_draw_quantum_bubble(graph, sun_qubit_node, biomes, time_accumulator, plot_pool, true)
+
+	# Celestial label
+	var font = ThemeDB.fallback_font
+	var label_color = Color(1.0, 0.85, 0.3, 0.7)
+	var label_pos = sun_qubit_node.position + Vector2(0, sun_qubit_node.radius + 25)
+	graph.draw_string(font, label_pos, "Celestial", HORIZONTAL_ALIGNMENT_CENTER, -1, 10, label_color)
+
+
+func _draw_quantum_bubble(graph: Node2D, node, biomes: Dictionary, time_accumulator: float, plot_pool, is_celestial: bool) -> void:
+	"""Draw a single quantum bubble with all visual encodings."""
+	var anim_scale = node.visual_scale
+	var anim_alpha = node.visual_alpha
+
+	if anim_scale <= 0.0:
+		return
+
+	# Check if measured
+	var is_measured = _is_node_measured(node, plot_pool)
+
+	# Pulse animation
+	var pulse_rate = node.get_pulse_rate()
+	var pulse_phase = sin(time_accumulator * pulse_rate * TAU) * 0.5 + 0.5
+	var pulse_scale = 1.0 + pulse_phase * 0.08
+
+	# Color scheme
+	var base_color: Color
+	var glow_tint: Color
+
+	if is_celestial:
+		base_color = Color(1.0, 0.8, 0.2)
+		glow_tint = base_color
+	else:
+		base_color = node.color
+		glow_tint = Color.from_hsv(
+			fmod(node.color.h + 0.5, 1.0),
+			min(node.color.s * 1.3, 1.0),
+			max(node.color.v * 0.6, 0.3)
+		)
+
+	# Glow based on purity
+	var glow_alpha = (node.energy * 0.5 + 0.3) * anim_alpha
+	var effective_radius = node.radius * anim_scale * pulse_scale
+
+	# === LAYER 1-2: OUTER GLOWS ===
+	if is_measured and not is_celestial:
+		_draw_measured_glow(graph, node, anim_scale, anim_alpha, time_accumulator)
+	else:
+		_draw_unmeasured_glow(graph, node, effective_radius, glow_tint, glow_alpha, is_celestial)
+
+	# === LAYER 3: Dark background ===
+	var dark_bg = Color(0.1, 0.1, 0.15, 0.85)
+	var bg_mult = 1.12 if is_celestial else 1.08
+	graph.draw_circle(node.position, effective_radius * bg_mult, dark_bg)
+
+	# === LAYER 4: Main bubble ===
+	var main_color = base_color.lightened(0.15 if not is_celestial else 0.1)
+	main_color.s = min(main_color.s * 1.2, 1.0)
+	main_color.a = 0.75 * anim_alpha
+	graph.draw_circle(node.position, effective_radius, main_color)
+
+	# === LAYER 5: Glossy center ===
+	var bright_center = base_color.lightened(0.6)
+	bright_center.a = 0.8 * anim_alpha
+	var spot_size = 0.4 if is_celestial else 0.5
+	graph.draw_circle(
+		node.position + Vector2(-effective_radius * 0.25, -effective_radius * 0.25),
+		effective_radius * spot_size,
+		bright_center
+	)
+
+	# === LAYER 6: Outline ===
+	if is_measured and not is_celestial:
+		_draw_measured_outline(graph, node, anim_scale, anim_alpha, time_accumulator)
+	else:
+		_draw_unmeasured_outline(graph, node, effective_radius, is_celestial, anim_alpha)
+
+	# === LAYER 6b: Individual purity ring ===
+	if not is_celestial and node.biome_name != "":
+		_draw_purity_ring(graph, node, biomes, effective_radius, anim_alpha)
+
+	# === LAYER 6c: Global probability outer ring ===
+	if not is_celestial and node.biome_name != "":
+		_draw_probability_ring(graph, node, biomes, effective_radius, anim_alpha)
+
+	# === LAYER 6d: Measurement uncertainty ring ===
+	# Ring thickness = 2 × √(p_n × p_s) - Maximum at 50/50, zero when collapsed
+	if not is_celestial and node.biome_name != "":
+		_draw_measurement_uncertainty_ring(graph, node, biomes, effective_radius, anim_alpha)
+
+	# === LAYER 6e: Sink flux particles ===
+	if not is_celestial and node.biome_name != "":
+		_draw_sink_flux_particles(graph, node, biomes, effective_radius, anim_alpha, time_accumulator)
+
+	# === LAYER 7: Dual emoji system ===
+	_draw_emojis(graph, node, is_celestial)
+
+
+func _draw_measured_glow(graph: Node2D, node, anim_scale: float, anim_alpha: float, time: float) -> void:
+	"""Draw pronounced glow for measured (ready to harvest) nodes."""
+	var measured_pulse = 0.5 + 0.5 * sin(time * 4.0)
+
+	var outer_ring = Color(0.0, 1.0, 1.0)
+	outer_ring.a = (0.4 + 0.3 * measured_pulse) * anim_alpha
+	graph.draw_circle(node.position, node.radius * (2.2 + 0.3 * measured_pulse) * anim_scale, outer_ring)
+
+	var measured_glow = Color(0.2, 0.95, 1.0)
+	measured_glow.a = 0.8 * anim_alpha
+	graph.draw_circle(node.position, node.radius * 1.6 * anim_scale, measured_glow)
+
+	var inner_glow = Color(0.8, 1.0, 1.0)
+	inner_glow.a = 0.95 * anim_alpha
+	graph.draw_circle(node.position, node.radius * 1.3 * anim_scale, inner_glow)
+
+
+func _draw_unmeasured_glow(graph: Node2D, node, effective_radius: float, glow_tint: Color, glow_alpha: float, is_celestial: bool) -> void:
+	"""Draw complementary/golden glow for unmeasured nodes."""
+	var outer_glow = glow_tint
+	outer_glow.a = glow_alpha * 0.4
+
+	var outer_mult = 2.2 if is_celestial else 1.6
+	graph.draw_circle(node.position, effective_radius * outer_mult, outer_glow)
+
+	var mid_glow = glow_tint
+	mid_glow.a = glow_alpha * 0.6
+	var mid_mult = 1.8 if is_celestial else 1.3
+	graph.draw_circle(node.position, effective_radius * mid_mult, mid_glow)
+
+	if is_celestial and glow_alpha > 0:
+		var inner_glow = glow_tint.lightened(0.2)
+		inner_glow.a = glow_alpha * 0.8
+		graph.draw_circle(node.position, effective_radius * 1.4, inner_glow)
+
+
+func _draw_measured_outline(graph: Node2D, node, anim_scale: float, anim_alpha: float, time: float) -> void:
+	"""Draw thick pulsing outline for measured nodes."""
+	var measured_pulse = 0.5 + 0.5 * sin(time * 4.0)
+
+	var measured_outline = Color(0.0, 1.0, 1.0)
+	measured_outline.a = (0.85 + 0.15 * measured_pulse) * anim_alpha
+	graph.draw_arc(node.position, node.radius * 1.08 * anim_scale, 0, TAU, 64, measured_outline, 5.0, true)
+
+	var inner_outline = Color.WHITE
+	inner_outline.a = 0.95 * anim_alpha
+	graph.draw_arc(node.position, node.radius * 1.0 * anim_scale, 0, TAU, 64, inner_outline, 3.0, true)
+
+	# Checkmark indicator
+	var check_pos = node.position + Vector2(node.radius * 0.7, -node.radius * 0.7) * anim_scale
+	var check_color = Color(0.2, 1.0, 0.4, 0.95 * anim_alpha)
+	graph.draw_circle(check_pos, 6.0 * anim_scale, check_color)
+
+
+func _draw_unmeasured_outline(graph: Node2D, node, effective_radius: float, is_celestial: bool, anim_alpha: float) -> void:
+	"""Draw subtle outline for unmeasured nodes."""
+	var outline_color: Color
+	var outline_width: float
+
+	if is_celestial:
+		outline_color = Color(1.0, 0.9, 0.3)
+		outline_width = 3.0
+	else:
+		outline_color = Color.WHITE
+		outline_width = 2.5
+
+	outline_color.a = 0.95 * anim_alpha
+	graph.draw_arc(node.position, effective_radius * 1.02, 0, TAU, 64, outline_color, outline_width, true)
+
+
+func _draw_purity_ring(graph: Node2D, node, biomes: Dictionary, effective_radius: float, anim_alpha: float) -> void:
+	"""Draw inner ring showing individual purity vs biome average."""
+	var biome = biomes.get(node.biome_name)
+	if not biome or not biome.quantum_computer:
+		return
+
+	var qc = biome.quantum_computer
+	var biome_purity = qc.get_purity() if qc.has_method("get_purity") else 0.5
+
+	# Calculate individual purity
+	var individual_purity = 0.5
+	if node.plot and node.plot.parent_biome and node.plot.parent_biome.quantum_computer:
+		var qc_local = node.plot.parent_biome.quantum_computer
+		var p_n = qc_local.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
+		var p_s = qc_local.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
+		var coh = qc_local.get_coherence(node.emoji_north, node.emoji_south) if qc_local.has_method("get_coherence") else null
+		var coh_mag_sq = coh.abs() * coh.abs() if coh else 0.0
+		var mass = p_n + p_s
+		if mass > 0.001:
+			var p_n_norm = p_n / mass
+			var p_s_norm = p_s / mass
+			var coh_norm_sq = coh_mag_sq / (mass * mass)
+			individual_purity = p_n_norm * p_n_norm + p_s_norm * p_s_norm + 2.0 * coh_norm_sq
+	elif node.has_farm_tether:
+		individual_purity = node.energy
+
+	# Color based on comparison
+	var purity_color: Color
+	if individual_purity > biome_purity + 0.05:
+		purity_color = Color(0.4, 0.9, 1.0, 0.6)  # Cyan: purer
+	elif individual_purity < biome_purity - 0.05:
+		purity_color = Color(1.0, 0.4, 0.8, 0.6)  # Magenta: more mixed
+	else:
+		purity_color = Color(0.9, 0.9, 0.9, 0.4)  # White: average
+
+	purity_color.a *= anim_alpha
+
+	var purity_ring_radius = effective_radius * 0.6
+	var purity_extent = individual_purity * TAU
+
+	if individual_purity > 0.01:
+		graph.draw_arc(node.position, purity_ring_radius, -PI/2, -PI/2 + purity_extent, 24, purity_color, 2.0, true)
+
+
+func _draw_probability_ring(graph: Node2D, node, biomes: Dictionary, effective_radius: float, anim_alpha: float) -> void:
+	"""Draw outer ring showing global probability mass."""
+	var global_prob = 0.0
+	var biome = biomes.get(node.biome_name)
+	if biome and biome.quantum_computer:
+		var qc = biome.quantum_computer
+		var p_north = qc.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
+		var p_south = qc.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
+		global_prob = p_north + p_south
+
+	if global_prob > 0.01:
+		var arc_color = Color(1.0, 1.0, 1.0, 0.4 * anim_alpha)
+		var arc_radius = effective_radius * 1.25
+		var arc_extent = global_prob * TAU
+		graph.draw_arc(node.position, arc_radius, -PI/2, -PI/2 + arc_extent, 32, arc_color, 2.0, true)
+
+		if global_prob > 0.05:
+			var prob_font = ThemeDB.fallback_font
+			var prob_text = "%d%%" % int(global_prob * 100)
+			var prob_pos = node.position + Vector2(effective_radius * 0.9, -effective_radius * 0.9)
+			graph.draw_string(prob_font, prob_pos, prob_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.5 * anim_alpha))
+
+
+func _draw_measurement_uncertainty_ring(graph: Node2D, node, biomes: Dictionary, effective_radius: float, anim_alpha: float) -> void:
+	"""Draw ring showing measurement outcome uncertainty.
+
+	Physics: Ring thickness = 2 × √(p_n × p_s)
+	- Maximum at 50/50 superposition (thickness = 1.0)
+	- Zero when collapsed to either pole (thickness = 0)
+	- Shows measurement outcome spread at a glance
+
+	This helps players identify which bubbles have high measurement uncertainty
+	(good candidates for quantum operations) vs which are nearly classical.
+	"""
+	var biome = biomes.get(node.biome_name)
+	if not biome or not biome.quantum_computer:
+		return
+
+	var qc = biome.quantum_computer
+
+	# Get normalized probabilities for this qubit's axis
+	var p_north = qc.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
+	var p_south = qc.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
+	var mass = p_north + p_south
+
+	if mass < 0.001:
+		return
+
+	# Normalize to this qubit's subspace
+	var p_n = p_north / mass
+	var p_s = p_south / mass
+
+	# Measurement uncertainty: 2 × √(p_n × p_s)
+	# Maximum = 1.0 at 50/50 (p_n = p_s = 0.5 → 2 × √0.25 = 1.0)
+	# Minimum = 0.0 when collapsed (p_n = 0 or p_s = 0)
+	var uncertainty = 2.0 * sqrt(p_n * p_s)
+
+	if uncertainty < 0.05:
+		return  # Nearly collapsed - no ring needed
+
+	# Draw uncertainty ring with thickness proportional to uncertainty
+	var ring_radius = effective_radius * 1.15  # Slightly outside bubble
+	var max_thickness = 6.0  # Maximum ring thickness at 50/50
+	var thickness = max_thickness * uncertainty
+
+	# Color: gradient from blue (low uncertainty) to magenta (high uncertainty)
+	var hue = 0.75 - uncertainty * 0.15  # Blue→Magenta
+	var ring_color = Color.from_hsv(hue, 0.7, 0.9, 0.6 * anim_alpha * uncertainty)
+
+	# Draw as thick arc (full circle)
+	graph.draw_arc(node.position, ring_radius, 0, TAU, 32, ring_color, thickness, true)
+
+	# Inner glow for emphasis at high uncertainty
+	if uncertainty > 0.7:
+		var glow_color = ring_color
+		glow_color.a = 0.3 * anim_alpha
+		graph.draw_arc(node.position, ring_radius, 0, TAU, 32, glow_color, thickness * 2.0, true)
+
+
+func _draw_sink_flux_particles(graph: Node2D, node, biomes: Dictionary, effective_radius: float, anim_alpha: float, time: float) -> void:
+	"""Draw particles showing decoherence rate."""
+	var biome = biomes.get(node.biome_name)
+	if not biome or not biome.quantum_computer:
+		return
+
+	var qc = biome.quantum_computer
+	var sink_flux = qc.get_sink_flux(node.emoji_north) if node.emoji_north != "" and qc.has_method("get_sink_flux") else 0.0
+
+	if sink_flux > 0.001:
+		var particle_count = int(clampf(sink_flux * 20, 1, 6))
+		for i in range(particle_count):
+			var particle_time = time * 0.5 + float(i) * 0.3
+			var particle_phase = fmod(particle_time, 1.0)
+
+			var angle = (float(i) / float(particle_count)) * TAU + particle_time * 2.0
+			var dist = effective_radius * (1.2 + particle_phase * 0.8)
+
+			var particle_pos = node.position + Vector2(cos(angle), sin(angle)) * dist
+			var particle_alpha = (1.0 - particle_phase) * 0.6 * anim_alpha
+			var particle_color = Color(0.8, 0.4, 0.2, particle_alpha)
+			var particle_size = 3.0 * (1.0 - particle_phase * 0.5)
+
+			graph.draw_circle(particle_pos, particle_size, particle_color)
+
+
+func _draw_emojis(graph: Node2D, node, is_celestial: bool) -> void:
+	"""Draw dual emoji overlay with quantum opacity."""
+	var font = ThemeDB.fallback_font
+	var font_size = int(node.radius * (1.1 if is_celestial else 1.0))
+	var text_pos = node.position - Vector2(font_size * 0.4, -font_size * 0.25)
+
+	# South emoji (behind)
+	if node.emoji_south != "" and node.emoji_south_opacity > 0.01:
+		var south_opacity = node.emoji_south_opacity * (0.9 if is_celestial else 1.0)
+		_draw_emoji_with_opacity(graph, font, text_pos, node.emoji_south, font_size, south_opacity)
+
+	# North emoji (front)
+	if node.emoji_north != "" and node.emoji_north_opacity > 0.01:
+		_draw_emoji_with_opacity(graph, font, text_pos, node.emoji_north, font_size, node.emoji_north_opacity)
+
+
+func _draw_emoji_with_opacity(graph: Node2D, font, text_pos: Vector2, emoji: String, font_size: int, opacity: float) -> void:
+	"""Draw emoji with shadow and opacity."""
+	# Shadow
+	var shadow_color = Color(0, 0, 0, 0.7 * opacity)
+	graph.draw_string(font, text_pos + Vector2(2, 2), emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, shadow_color)
+
+	# Outline
+	var outline_color = Color(0, 0, 0, 0.5 * opacity)
+	graph.draw_string(font, text_pos + Vector2(1, 1), emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, outline_color)
+
+	# Main
+	var main_color = Color(1, 1, 1, opacity)
+	graph.draw_string(font, text_pos, emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, main_color)
+
+
+func _is_node_measured(node, plot_pool) -> bool:
+	"""Check if node has been measured."""
+	if not node:
+		return false
+
+	# Check plot-based measurement (v1)
+	if node.plot != null and node.plot.has_been_measured:
+		return true
+
+	# Check terminal directly on node (v2 - preferred)
+	if node.terminal and node.terminal.is_measured:
+		return true
+
+	# Fallback: lookup terminal from plot_pool by grid position
+	if plot_pool and node.grid_position != Vector2i(-1, -1):
+		var terminal = plot_pool.get_terminal_at_grid_pos(node.grid_position) if plot_pool.has_method("get_terminal_at_grid_pos") else null
+		if terminal and terminal.is_measured:
+			return true
+
+	return false

@@ -9,11 +9,13 @@ extends Control
 const Farm = preload("res://Core/Farm.gd")
 const BathQuantumViz = preload("res://Core/Visualization/BathQuantumVisualizationController.gd")
 const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
+const BiomeBackgroundClass = preload("res://Core/Visualization/BiomeBackground.gd")
 # BootManager is an autoload singleton - no need to preload
 
 var shell = null  # PlayerShell (from scene)
 var farm: Node = null
 var quantum_viz: BathQuantumViz = null
+var biome_background: Control = null  # BiomeBackground for full-screen biome art
 
 # Helpers to access autoloads safely (avoids compile-time errors in tests)
 @onready var _verbose = get_node("/root/VerboseConfig")
@@ -29,6 +31,20 @@ func _ready():
 	_verbose.debug("ui", "📏", "FarmView size: %.0f × %.0f" % [size.x, size.y])
 	_verbose.debug("ui", "", "FarmView anchors: L%.1f T%.1f R%.1f B%.1f" % [anchor_left, anchor_top, anchor_right, anchor_bottom])
 	_verbose.debug("ui", "", "Viewport: %.0f × %.0f" % [get_viewport_rect().size.x, get_viewport_rect().size.y])
+
+	# ═══════════════════════════════════════════════════════════════════════
+	# BIOME BACKGROUND - Full-screen biome art (behind everything)
+	# ═══════════════════════════════════════════════════════════════════════
+	_verbose.debug("ui", "🖼️", "Creating biome background layer...")
+	var bg_layer = CanvasLayer.new()
+	bg_layer.layer = -1  # Behind layer 0 (all other UI)
+	bg_layer.name = "BiomeBackgroundLayer"
+	add_child(bg_layer)
+
+	biome_background = BiomeBackgroundClass.new()
+	biome_background.name = "BiomeBackground"
+	bg_layer.add_child(biome_background)
+	_verbose.info("ui", "✅", "Biome background created (CanvasLayer -1)")
 
 	# Load PlayerShell scene
 	_verbose.debug("ui", "🎪", "Loading player shell scene...")
@@ -79,12 +95,12 @@ func _ready():
 	if farm.biome_enabled:
 		if farm.biotic_flux_biome:
 			quantum_viz.add_biome("BioticFlux", farm.biotic_flux_biome)
-		if farm.forest_biome:
-			quantum_viz.add_biome("Forest", farm.forest_biome)
-		if farm.market_biome:
-			quantum_viz.add_biome("Market", farm.market_biome)
-		if farm.kitchen_biome:
-			quantum_viz.add_biome("Kitchen", farm.kitchen_biome)
+		if farm.stellar_forges_biome:
+			quantum_viz.add_biome("StellarForges", farm.stellar_forges_biome)
+		if farm.fungal_networks_biome:
+			quantum_viz.add_biome("FungalNetworks", farm.fungal_networks_biome)
+		if farm.volcanic_worlds_biome:
+			quantum_viz.add_biome("VolcanicWorlds", farm.volcanic_worlds_biome)
 
 	# ═══════════════════════════════════════════════════════════════════════
 	# PRE-BOOT: Signal connections needed before game starts

@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3 uid="uid://farm_view_main"]
+[gd_scene load_steps=2 format=3 uid="uid://b25v4xd2a3j1w"]
 
-[ext_resource type="Script" path="res://UI/FarmView.gd" id="1"]
+[ext_resource type="Script" uid="uid://b7mocd2g0uxg3" path="res://UI/FarmView.gd" id="1"]
 
 [node name="FarmView" type="Control"]
 layout_mode = 3

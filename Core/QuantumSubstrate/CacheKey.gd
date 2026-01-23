@@ -58,7 +58,14 @@ static func _collect_icon_configs(biome_name: String, icon_registry) -> Dictiona
 static func _get_biome_emojis(biome_name: String) -> Array:
 	match biome_name:
 		"BioticFluxBiome":
-			return ["☀️", "🌙", "🌾", "🏰", "🍄", "🐰", "🐺", "🍂", "🌲", "🌿"]
+			return ["☀", "🌙", "🌾", "🏰", "🍄", "🐰", "🐺", "🍂", "🌲", "🌿", "💀"]
+		"StellarForgesBiome":
+			return ["⚡", "🔋", "⚙", "🔩", "🚀", "🛸"]
+		"FungalNetworksBiome":
+			return ["🦗", "🐜", "🍄", "🦠", "🧫", "🍂", "🌙", "☀"]
+		"VolcanicWorldsBiome":
+			return ["🔥", "🪨", "💎", "⛏", "🌫", "✨"]
+		# Legacy biomes (kept for cache compatibility)
 		"MarketBiome":
 			return ["⚖️", "💰", "🌾", "🍄", "🐰", "🐺", "🏰"]
 		"QuantumKitchen_Biome":

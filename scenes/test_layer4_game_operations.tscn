@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://clmyj1wt9l7e"]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://tests/test_layer4_game_operations.gd" id="1_layer4"]
 

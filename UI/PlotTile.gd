@@ -37,13 +37,13 @@ var center_state_indicator: Control  # Small indicator showing quantum state at 
 var entanglement_indicator: Control  # Visual ring showing entanglement status
 var entanglement_counter: Label  # Shows number of entangled connections
 
-# Colors
-const COLOR_EMPTY = Color(0.15, 0.15, 0.15)
-const COLOR_SELECTED = Color(0.3, 0.6, 0.8)
-const COLOR_HOVER = Color(0.25, 0.25, 0.25)
-const COLOR_NATURAL = Color(0.2, 0.8, 0.2)  # Green (🌾)
-const COLOR_LABOR = Color(0.2, 0.4, 0.8)    # Blue (👥)
-const COLOR_MATURE = Color(0.9, 0.7, 0.2)   # Golden
+# Colors (backgrounds at 60% transparency = 0.4 alpha, text stays opaque)
+const COLOR_EMPTY = Color(0.15, 0.15, 0.15, 0.4)
+const COLOR_SELECTED = Color(0.3, 0.6, 0.8, 0.5)  # Slightly more visible when selected
+const COLOR_HOVER = Color(0.25, 0.25, 0.25, 0.4)
+const COLOR_NATURAL = Color(0.2, 0.8, 0.2, 0.4)  # Green (🌾)
+const COLOR_LABOR = Color(0.2, 0.4, 0.8, 0.4)    # Blue (👥)
+const COLOR_MATURE = Color(0.9, 0.7, 0.2, 0.4)   # Golden
 
 # Icon territory colors
 const COLOR_BIOTIC = Color(0.3, 1.0, 0.3, 0.6)     # Green glow

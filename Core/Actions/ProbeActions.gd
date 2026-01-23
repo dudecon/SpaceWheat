@@ -399,14 +399,12 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 	var register_id = terminal.bound_register_id
 	var biome = terminal.bound_biome
 
-	# 3. Convert probability to credits
+	# 3. Convert probability to credits (10x probability)
 	var credits = recorded_prob * EconomyConstants.QUANTUM_TO_CREDITS
 
 	# 4. Add resource to economy - use the MEASURED EMOJI as the resource type
-	# The "credits" value represents the quantum energy extracted (probability × conversion)
 	# Each emoji type becomes its own classical resource (🌾, 🍄, etc.)
 	if economy:
-		# Resource type = measured emoji, amount = quantum energy converted to units
 		var resource_amount = int(credits)
 		if resource_amount < 1:
 			resource_amount = 1  # Minimum 1 unit per harvest
@@ -417,7 +415,7 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 	plot_pool.unbind_terminal(terminal)
 	print("📤 Register %d released in %s" % [register_id, biome.get_biome_type() if biome.has_method("get_biome_type") else "biome"])
 
-	# Calculate the actual resource amount that was added
+	# Calculate the resource amount that was added
 	var resource_amount = int(credits)
 	if resource_amount < 1:
 		resource_amount = 1
@@ -425,9 +423,9 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 	return {
 		"success": true,
 		"resource": resource,  # The emoji that was harvested (🌾, 🍄, etc.)
-		"amount": resource_amount,  # Amount of this emoji-resource added
+		"amount": resource_amount,  # Credits added (10x probability)
 		"recorded_probability": recorded_prob,
-		"credits": credits,  # Raw quantum energy value (backward compat)
+		"credits": credits,
 		"terminal_id": terminal_id,
 		"register_id": register_id
 	}
@@ -484,7 +482,7 @@ static func action_harvest_global(biome, plot_pool = null, economy = null) -> Di
 			var prob = biome.get_register_probability(reg_id) if biome.has_method("get_register_probability") else 0.5
 			probabilities[reg_id] = prob
 
-	# 2. Convert each register to credits
+	# 2. Convert each register to credits (10x probability)
 	for reg_id in probabilities:
 		var prob = probabilities[reg_id]
 		var credits = prob * EconomyConstants.QUANTUM_TO_CREDITS

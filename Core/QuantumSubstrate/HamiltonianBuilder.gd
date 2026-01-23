@@ -15,13 +15,14 @@ const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 const RegisterMap = preload("res://Core/QuantumSubstrate/RegisterMap.gd")
 
 
-static func build(icons: Dictionary, register_map: RegisterMap, verbose = null) -> ComplexMatrix:
+static func build(icons: Dictionary, register_map: RegisterMap, verbose = null, time: float = 0.0) -> ComplexMatrix:
 	"""Build Hamiltonian matrix from Icons dictionary.
 
 	Args:
 	    icons: Dictionary[emoji] → Icon (containing hamiltonian_couplings)
 	    register_map: This biome's RegisterMap
 	    verbose: Optional VerboseConfig for logging (default: print to console)
+	    time: Current simulation time for time-dependent drivers (default: 0.0)
 
 	Returns:
 	    Hermitian matrix H of dimension 2^(num_qubits)
@@ -53,15 +54,16 @@ static func build(icons: Dictionary, register_map: RegisterMap, verbose = null) 
 		var source_p = register_map.pole(source_emoji)
 
 		# --- Self-energy: diagonal term ---
-		# Icon.self_energy is a float, convert to Complex for matrix operations
-		if icon.self_energy != null and abs(icon.self_energy) > 1e-10:
-			var energy_complex = Complex.new(icon.self_energy, 0.0)
+		# Use time-dependent get_self_energy(time) to support driver oscillations
+		var energy = icon.get_self_energy(time)
+		if abs(energy) > 1e-10:
+			var energy_complex = Complex.new(energy, 0.0)
 			_add_self_energy(H, source_q, source_p, energy_complex, num_qubits)
 			stats.self_energies_added += 1
 			if verbose:
-				verbose.debug("quantum-build", "✓", "%s self-energy: %.3f" % [source_emoji, icon.self_energy])
+				verbose.debug("quantum-build", "✓", "%s self-energy: %.3f" % [source_emoji, energy])
 			else:
-				print("  ✓ %s self-energy: %.3f" % [source_emoji, icon.self_energy])
+				print("  ✓ %s self-energy: %.3f" % [source_emoji, energy])
 
 		# --- Couplings: emoji → float (coupling strength) ---
 		if icon.hamiltonian_couplings:
@@ -175,3 +177,39 @@ static func _hermitianize(H: ComplexMatrix) -> ComplexMatrix:
 	"""
 	var H_dag = H.conjugate_transpose()
 	return H.add(H_dag).scale_real(0.5)
+
+
+static func get_driven_icons(icons: Dictionary, register_map: RegisterMap) -> Array:
+	"""Extract icons with time-dependent drivers for efficient updates.
+
+	Returns an array of dictionaries with the info needed to update
+	Hamiltonian diagonal terms without full rebuild:
+	[{emoji, qubit, pole, icon_ref, driver_type, base_energy}, ...]
+
+	This enables efficient time-dependent evolution by updating only
+	the driven diagonal terms instead of rebuilding the full Hamiltonian.
+	"""
+	var driven = []
+
+	for source_emoji in icons:
+		var icon = icons[source_emoji]
+
+		# Skip if source not in this biome
+		if not register_map.has(source_emoji):
+			continue
+
+		# Check if this icon has a time-dependent driver
+		if icon.self_energy_driver == "" or icon.self_energy_driver == null:
+			continue
+
+		# This icon has a driver - store its config
+		driven.append({
+			"emoji": source_emoji,
+			"qubit": register_map.qubit(source_emoji),
+			"pole": register_map.pole(source_emoji),
+			"icon_ref": icon,  # Reference to Icon for get_self_energy(time)
+			"driver_type": icon.self_energy_driver,
+			"base_energy": icon.self_energy
+		})
+
+	return driven
