@@ -48,10 +48,6 @@ var quantum_computer = null  # QuantumComputer type
 ## Plot register mapping: Vector2i → QuantumRegister
 var plot_registers: Dictionary = {}  # Vector2i → QuantumRegister (metadata only)
 
-## DEPRECATED: bath is kept as null for compile compatibility
-## All biomes should use quantum_computer exclusively
-var bath = null  # DEPRECATED - kept for compile compatibility only
-
 ## Active projections (legacy - to be removed)
 var active_projections: Dictionary = {}
 
@@ -98,11 +94,14 @@ var planting_capabilities: Array[PlantingCapability] = []  # Registered plant ty
 signal qubit_created(position: Vector2i, qubit: Resource)
 signal qubit_measured(position: Vector2i, outcome: String)
 signal qubit_evolved(position: Vector2i)
+signal coupling_updated(emoji_a: String, emoji_b: String, strength: float)
 signal bell_gate_created(positions: Array)  # New: emitted when plots are entangled
 signal resource_registered(emoji: String, is_producible: bool, is_consumable: bool)
 
 # HAUNTED UI FIX: Prevent double-initialization when _ready() called multiple times
 var _is_initialized: bool = false
+var _qc_recovery_attempted: bool = false
+var _qc_missing_warned: bool = false
 
 # Performance: Control quantum evolution frequency
 var quantum_evolution_accumulator: float = 0.0
@@ -189,7 +188,7 @@ func advance_simulation(dt: float) -> void:
 			quantum_evolution_accumulator = 0.0
 
 			# Model C: QuantumComputer-based evolution (unified architecture)
-			if quantum_computer:
+			if _ensure_quantum_computer():
 				_update_quantum_substrate(actual_dt)
 
 				# Track quantum state evolution for dynamics calculation (lazy init)
@@ -198,10 +197,30 @@ func advance_simulation(dt: float) -> void:
 				if dynamics_tracker:
 					_track_dynamics()
 			else:
-				push_warning("Biome %s has no quantum_computer - evolution disabled" % get_biome_type())
+				# Warning already emitted in _ensure_quantum_computer()
+				pass
 	else:
 		# Evolution disabled (for debugging/testing)
 		pass
+
+
+func _ensure_quantum_computer() -> bool:
+	"""Ensure quantum_computer exists, with a one-time recovery attempt."""
+	if quantum_computer:
+		_qc_recovery_attempted = false
+		_qc_missing_warned = false
+		return true
+
+	if not _qc_recovery_attempted:
+		_qc_recovery_attempted = true
+		quantum_computer = QuantumComputer.new(get_biome_type())
+		_initialize_bath()
+
+	if not quantum_computer and not _qc_missing_warned:
+		push_warning("Biome %s has no quantum_computer - evolution disabled" % get_biome_type())
+		_qc_missing_warned = true
+
+	return quantum_computer != null
 
 
 func _update_quantum_substrate(dt: float) -> void:
@@ -513,6 +532,10 @@ func expand_quantum_system(north_emoji: String, south_emoji: String) -> Dictiona
 	quantum_computer.lindblad_operators = lindblad_result.get("operators", [])
 	quantum_computer.gated_lindblad_configs = lindblad_result.get("gated_configs", [])
 
+	# 9b. Extract and set time-dependent driver configurations
+	var driven_configs = HamBuilder.get_driven_icons(all_icons, quantum_computer.register_map)
+	quantum_computer.set_driven_icons(driven_configs)
+
 	# 10. Set up native evolution engine
 	quantum_computer.setup_native_evolution()
 
@@ -530,6 +553,46 @@ func expand_quantum_system(north_emoji: String, south_emoji: String) -> Dictiona
 		"north_emoji": north_emoji,
 		"south_emoji": south_emoji
 	}
+
+
+func inject_coupling(emoji_a: String, emoji_b: String, strength: float) -> Dictionary:
+	"""Inject a Hamiltonian coupling between two existing axes.
+
+	Unlike expand_quantum_system(), this does NOT add new qubits.
+	It modifies the Hamiltonian to create ZZ dynamics between existing axes.
+
+	Args:
+		emoji_a: First emoji (must exist in register_map)
+		emoji_b: Second emoji (must exist in register_map)
+		strength: Coupling strength J (ZZ interaction term)
+
+	Returns:
+		Dictionary with success/error keys
+	"""
+	if not quantum_computer:
+		return {"success": false, "error": "no_quantum_computer"}
+
+	var rm = quantum_computer.register_map
+	if not rm.has(emoji_a):
+		return {"success": false, "error": "missing_emoji", "emoji": emoji_a}
+	if not rm.has(emoji_b):
+		return {"success": false, "error": "missing_emoji", "emoji": emoji_b}
+
+	# Get qubit indices for the emojis
+	var qubit_a = rm.qubit(emoji_a)
+	var qubit_b = rm.qubit(emoji_b)
+
+	if qubit_a == -1 or qubit_b == -1:
+		return {"success": false, "error": "qubit_lookup_failed"}
+
+	# Add coupling to Hamiltonian via QuantumComputer
+	var result = quantum_computer.add_coupling(qubit_a, qubit_b, strength)
+
+	if result.success:
+		coupling_updated.emit(emoji_a, emoji_b, strength)
+		print("🔗 Injected coupling: %s ↔ %s (J=%.3f)" % [emoji_a, emoji_b, strength])
+
+	return result
 
 
 # ============================================================================
@@ -615,8 +678,8 @@ func get_register_for_plot(position: Vector2i) -> QuantumRegister:
 	"""Get the QuantumRegister metadata for a plot."""
 	return plot_registers.get(position, null)
 
-func get_component_for_plot(position: Vector2i) -> Resource:  # Actually QuantumComponent
-	"""Get the connected component containing this plot's register."""
+func get_component_for_plot(position: Vector2i) -> Resource:  # Returns ComponentView
+	"""Get the connected component containing this plot's register (Model C: lightweight view)."""
 	var reg = get_register_for_plot(position)
 	if not reg:
 		return null
@@ -702,261 +765,47 @@ func clear_qubit(position: Vector2i) -> void:
 	clear_register_for_plot(position)
 
 # ============================================================================
-# PHASE 4: Biome Evolution Control (Icon Modification API)
+# PHASE 4: Biome Evolution Control (DEPRECATED - Icon API requires bath)
 # ============================================================================
 
-func boost_coupling(emoji: String, target_emoji: String, factor: float = 1.5) -> bool:
-	"""Increase Hamiltonian coupling between two emoji states (Model B)
-
-	Modifies the Icon's hamiltonian_couplings dictionary to scale coupling strength.
-	Rebuilds Hamiltonian for next evolution step.
-
-	Args:
-		emoji: Source emoji
-		target_emoji: Target emoji
-		factor: Multiplication factor (1.5 = 50% increase, 2.0 = double, 0.5 = halve)
-
-	Returns:
-		true if successful, false if Icons not found
-	"""
-	if not bath or not bath.active_icons:
-		push_error("Biome %s has no active Icons!" % get_biome_type())
-		return false
-
-	var source_icon: Icon = null
-	for icon in bath.active_icons:
-		if icon.emoji == emoji:
-			source_icon = icon
-			break
-
-	if not source_icon:
-		push_warning("Icon for %s not found in biome %s" % [emoji, get_biome_type()])
-		return false
-
-	# Modify coupling: scale existing coupling or set to default
-	var current_coupling = source_icon.hamiltonian_couplings.get(target_emoji, 0.5)
-	var new_coupling = current_coupling * factor
-	source_icon.hamiltonian_couplings[target_emoji] = new_coupling
-
-	# Rebuild Hamiltonian with new coupling
-	bath.build_hamiltonian_from_icons(bath.active_icons)
-	_verbose_log("info","biome", "✅", "Boosted coupling %s → %s by %.1f× (%.3f → %.3f)" %
-		[emoji, target_emoji, factor, current_coupling, new_coupling])
-
-	return true
+func boost_coupling(_emoji: String, _target_emoji: String, _factor: float = 1.5) -> bool:
+	"""DEPRECATED: Icon modification API requires bath which was removed."""
+	push_warning("boost_coupling is deprecated - Icon API disabled")
+	return false
 
 
-func tune_decoherence(emoji: String, factor: float = 1.5) -> bool:
-	"""Tune Lindblad decoherence rates for an emoji (Model B)
-
-	Modifies the Icon's lindblad_outgoing rates to scale decoherence strength.
-	Rebuilds Lindblad operators for next evolution step.
-
-	Args:
-		emoji: Target emoji
-		factor: Multiplication factor (1.5 = 50% faster decay, 0.5 = slower decay)
-
-	Returns:
-		true if successful, false if Icon not found
-	"""
-	if not bath or not bath.active_icons:
-		push_error("Biome %s has no active Icons!" % get_biome_type())
-		return false
-
-	var target_icon: Icon = null
-	for icon in bath.active_icons:
-		if icon.emoji == emoji:
-			target_icon = icon
-			break
-
-	if not target_icon:
-		push_warning("Icon for %s not found in biome %s" % [emoji, get_biome_type()])
-		return false
-
-	# Modify all outgoing Lindblad rates for this emoji
-	var old_rates = {}
-	for target_emoji in target_icon.lindblad_outgoing:
-		old_rates[target_emoji] = target_icon.lindblad_outgoing[target_emoji]
-		target_icon.lindblad_outgoing[target_emoji] *= factor
-
-	# Also scale decay rate
-	target_icon.decay_rate *= factor
-
-	# Rebuild Lindblad with new rates
-	bath.build_lindblad_from_icons(bath.active_icons)
-	_verbose_log("info","biome", "✅", "Tuned decoherence for %s by %.1f× (decay: %.4f)" %
-		[emoji, factor, target_icon.decay_rate])
-
-	return true
+func tune_decoherence(_emoji: String, _factor: float = 1.5) -> bool:
+	"""DEPRECATED: Icon modification API requires bath which was removed."""
+	push_warning("tune_decoherence is deprecated - Icon API disabled")
+	return false
 
 
-func add_time_dependent_driver(emoji: String, driver_type: String = "cosine", frequency: float = 1.0, amplitude: float = 1.0) -> bool:
-	"""Add time-dependent driving field to emoji (Model B - Phase 4)
-
-	Enables oscillating Hamiltonian term, e.g., for day/night cycles or external fields.
-	Updates Icon and rebuilds time-dependent Hamiltonian.
-
-	Args:
-		emoji: Target emoji
-		driver_type: "cosine", "sine", "pulse", or "" (disable)
-		frequency: Oscillation frequency in Hz
-		amplitude: Amplitude multiplier for self-energy
-
-	Returns:
-		true if successful
-	"""
-	if not bath or not bath.active_icons:
-		push_error("Biome %s has no active Icons!" % get_biome_type())
-		return false
-
-	var target_icon: Icon = null
-	for icon in bath.active_icons:
-		if icon.emoji == emoji:
-			target_icon = icon
-			break
-
-	if not target_icon:
-		push_warning("Icon for %s not found in biome %s" % [emoji, get_biome_type()])
-		return false
-
-	# Set driving parameters
-	target_icon.self_energy_driver = driver_type
-	target_icon.driver_frequency = frequency
-	target_icon.driver_amplitude = amplitude
-
-	# Rebuild Hamiltonian with time-dependent terms
-	bath.build_hamiltonian_from_icons(bath.active_icons)
-	_verbose_log("info","biome", "✅", "Added %s driver to %s (freq: %.1f Hz, amp: %.1f)" %
-		[driver_type, emoji, frequency, amplitude])
-
-	return true
+func add_time_dependent_driver(_emoji: String, _driver_type: String = "cosine", _frequency: float = 1.0, _amplitude: float = 1.0) -> bool:
+	"""DEPRECATED: Icon modification API requires bath which was removed."""
+	push_warning("add_time_dependent_driver is deprecated - Icon API disabled")
+	return false
 
 
 # ============================================================================
-# PHASE 4: Lindblad Channel Operations (Pump/Reset)
+# PHASE 4: Lindblad Channel Operations (DEPRECATED - requires bath)
 # ============================================================================
 
-func pump_to_emoji(source_emoji: String, target_emoji: String, pump_rate: float = 0.01) -> bool:
-	"""Pump population from source to target via Lindblad pump operator (Model B)
-
-	Creates/modifies a Lindblad pump channel: L_pump = √Γ |target⟩⟨source|
-	This gradually transfers population from source to target emoji.
-
-	Args:
-		source_emoji: Source emoji to pump from
-		target_emoji: Target emoji to pump to
-		pump_rate: Pump rate Γ (typical: 0.01-0.1 per second)
-
-	Returns:
-		true if successful
-	"""
-	if not bath or not bath.active_icons:
-		push_error("Biome %s has no active Icons!" % get_biome_type())
-		return false
-
-	var source_icon: Icon = null
-	for icon in bath.active_icons:
-		if icon.emoji == source_emoji:
-			source_icon = icon
-			break
-
-	if not source_icon:
-		push_warning("Source icon %s not found in biome %s" % [source_emoji, get_biome_type()])
-		return false
-
-	# Add incoming transfer: source loses population to target
-	if not source_icon.lindblad_outgoing.has(target_emoji):
-		source_icon.lindblad_outgoing[target_emoji] = 0.0
-
-	var old_rate = source_icon.lindblad_outgoing[target_emoji]
-	source_icon.lindblad_outgoing[target_emoji] += pump_rate
-
-	# Rebuild Lindblad with new pump channel
-	bath.build_lindblad_from_icons(bath.active_icons)
-	_verbose_log("info","biome", "✅", "Added pump %s → %s (rate: %.4f, total: %.4f)" %
-		[source_emoji, target_emoji, pump_rate, source_icon.lindblad_outgoing[target_emoji]])
-
-	return true
+func pump_to_emoji(_source_emoji: String, _target_emoji: String, _pump_rate: float = 0.01) -> bool:
+	"""DEPRECATED: Lindblad channel API requires bath which was removed."""
+	push_warning("pump_to_emoji is deprecated - Lindblad API disabled")
+	return false
 
 
-func reset_to_pure_state(emoji: String, reset_rate: float = 0.1) -> bool:
-	"""Reset emoji to pure |0⟩ state via Lindblad reset channel (Model B)
-
-	Creates a Lindblad reset channel that mixes state toward |0⟩⟨0|.
-	Parameter: ρ ← (1-α)ρ + α|0⟩⟨0| where α = reset_rate × dt
-
-	Args:
-		emoji: Target emoji
-		reset_rate: Reset strength per second (typical: 0.05-0.5)
-
-	Returns:
-		true if successful
-	"""
-	if not bath or not bath.active_icons:
-		push_error("Biome %s has no active Icons!" % get_biome_type())
-		return false
-
-	var target_icon: Icon = null
-	for icon in bath.active_icons:
-		if icon.emoji == emoji:
-			target_icon = icon
-			break
-
-	if not target_icon:
-		push_warning("Icon %s not found in biome %s" % [emoji, get_biome_type()])
-		return false
-
-	# Store reset target in icon metadata (custom property)
-	if not target_icon.has_meta("reset_target"):
-		target_icon.set_meta("reset_target", "0")
-	if not target_icon.has_meta("reset_rate"):
-		target_icon.set_meta("reset_rate", reset_rate)
-	else:
-		var old_rate = target_icon.get_meta("reset_rate")
-		target_icon.set_meta("reset_rate", old_rate + reset_rate)
-
-	_verbose_log("info","biome", "✅", "Set reset for %s to pure state (rate: %.3f)" % [emoji, reset_rate])
-	return true
+func reset_to_pure_state(_emoji: String, _reset_rate: float = 0.1) -> bool:
+	"""DEPRECATED: Lindblad channel API requires bath which was removed."""
+	push_warning("reset_to_pure_state is deprecated - Lindblad API disabled")
+	return false
 
 
-func reset_to_mixed_state(emoji: String, reset_rate: float = 0.1) -> bool:
-	"""Reset emoji to maximally mixed state via Lindblad reset channel (Model B)
-
-	Creates a Lindblad reset channel that mixes state toward I/N.
-	Parameter: ρ ← (1-α)ρ + α(I/N) where α = reset_rate × dt
-
-	Args:
-		emoji: Target emoji
-		reset_rate: Reset strength per second (typical: 0.05-0.5)
-
-	Returns:
-		true if successful
-	"""
-	if not bath or not bath.active_icons:
-		push_error("Biome %s has no active Icons!" % get_biome_type())
-		return false
-
-	var target_icon: Icon = null
-	for icon in bath.active_icons:
-		if icon.emoji == emoji:
-			target_icon = icon
-			break
-
-	if not target_icon:
-		push_warning("Icon %s not found in biome %s" % [emoji, get_biome_type()])
-		return false
-
-	# Store reset target in icon metadata (custom property)
-	if not target_icon.has_meta("reset_target"):
-		target_icon.set_meta("reset_target", "mixed")
-	if not target_icon.has_meta("reset_rate"):
-		target_icon.set_meta("reset_rate", reset_rate)
-	else:
-		var old_rate = target_icon.get_meta("reset_rate")
-		target_icon.set_meta("reset_rate", old_rate + reset_rate)
-
-	_verbose_log("info","biome", "✅", "Set reset for %s to mixed state (rate: %.3f)" % [emoji, reset_rate])
-	return true
+func reset_to_mixed_state(_emoji: String, _reset_rate: float = 0.1) -> bool:
+	"""DEPRECATED: Lindblad channel API requires bath which was removed."""
+	push_warning("reset_to_mixed_state is deprecated - Lindblad API disabled")
+	return false
 
 
 # ============================================================================
@@ -1126,78 +975,19 @@ func batch_entangle(positions: Array[Vector2i]) -> bool:
 
 
 # ============================================================================
-# PHASE 4: Energy Tap System (Sink State with Lindblad Drain)
+# PHASE 4: Energy Tap System (DEPRECATED - bath removed)
 # ============================================================================
 
 func initialize_energy_tap_system() -> void:
-	"""Initialize sink state infrastructure in bath if not already present"""
-	if not bath or not bath.active_icons:
-		return
-
-	# Check if sink emoji already exists
-	for icon in bath.active_icons:
-		if icon.emoji == "⬇️":
-			return  # Already initialized
-
-	# Create sink state icon if needed (passive, no outgoing transfer)
-	var sink_icon = Icon.new()
-	sink_icon.emoji = "⬇️"
-	sink_icon.display_name = "Sink"
-	sink_icon.description = "Energy dissipation sink state"
-	sink_icon.self_energy = 0.0
-	sink_icon.hamiltonian_couplings = {}
-	sink_icon.lindblad_outgoing = {}
-
-	bath.active_icons.append(sink_icon)
-	_verbose_log("info","biome", "✅", "Energy tap system initialized with sink state")
+	"""DEPRECATED: Energy tap system disabled (requires bath which was removed)."""
+	pass
 
 
-func place_energy_tap(target_emoji: String, drain_rate: float = 0.05) -> bool:
-	"""Place energy drain tap on emoji (Model B - Phase 4)
-
-	Creates Lindblad drain operator: L_drain = √κ |sink⟩⟨target|
-	Population from target_emoji drains to sink state ⬇️.
-
-	Args:
-		target_emoji: Emoji to tap energy from
-		drain_rate: Drain rate κ (typical: 0.01-0.1 per second)
-
-	Returns:
-		true if tap successfully placed
-	"""
-	if not bath or not bath.active_icons:
-		push_error("Biome %s has no active Icons!" % get_biome_type())
-		return false
-
-	# Initialize tap system if needed
-	initialize_energy_tap_system()
-
-	var target_icon: Icon = null
-	for icon in bath.active_icons:
-		if icon.emoji == target_emoji:
-			target_icon = icon
-			break
-
-	if not target_icon:
-		push_warning("Target icon %s not found in biome %s" % [target_emoji, get_biome_type()])
-		return false
-
-	# Add drain operator: target → sink
-	# Store in lindblad_outgoing as if target is losing to sink
-	var sink_emoji = "⬇️"
-	if not target_icon.lindblad_outgoing.has(sink_emoji):
-		target_icon.lindblad_outgoing[sink_emoji] = 0.0
-
-	var old_rate = target_icon.lindblad_outgoing[sink_emoji]
-	target_icon.lindblad_outgoing[sink_emoji] += drain_rate
-
-	# Rebuild Lindblad with new drain operator
-	bath.build_lindblad_from_icons(bath.active_icons)
-
-	_verbose_log("info","biome", "✅", "Energy tap placed on %s (rate: %.4f → sink)" %
-		[target_emoji, target_icon.lindblad_outgoing[sink_emoji]])
-
-	return true
+func place_energy_tap(_target_emoji: String, _drain_rate: float = 0.05) -> bool:
+	"""DEPRECATED: Energy tap system disabled (requires bath which was removed).
+	Returns false. Use alternative resource collection methods."""
+	push_warning("place_energy_tap is deprecated - energy tap system disabled")
+	return false
 
 
 func get_tap_flux(emoji: String) -> float:
@@ -1435,18 +1225,18 @@ func _initialize_bath() -> void:
 
 
 func rebuild_quantum_operators() -> void:
-	"""Rebuild Hamiltonian and Lindblad operators (call after IconRegistry is ready)
+	"""Rebuild Hamiltonian operators (call after IconRegistry is ready)
 
 	This is needed when biomes initialize before IconRegistry is available.
 	Child classes can override to implement custom rebuild logic.
 	"""
-	if bath:
-		# Always rebuild if bath exists - icons may be incomplete from partial IconRegistry init
-		_rebuild_bath_operators()
+	if quantum_computer:
+		# Rebuild if quantum_computer exists
+		_rebuild_quantum_operators_impl()
 
 
-func _rebuild_bath_operators() -> void:
-	"""Attempt to rebuild bath operators from IconRegistry (override in child classes)"""
+func _rebuild_quantum_operators_impl() -> void:
+	"""Attempt to rebuild quantum operators (override in child classes)"""
 	pass
 
 
@@ -1488,66 +1278,11 @@ func initialize_bath_from_emojis(_emojis: Array[String], _initial_weights: Dicti
 	push_error("❌ initialize_bath_from_emojis() is DEPRECATED. Use quantum_computer architecture.")
 
 
-func hot_drop_emoji(emoji: String, initial_amplitude: Complex = null) -> bool:
-	"""Dynamically inject an emoji into a running biome bath
-
-	This "hot drops" an emoji into the ecosystem at runtime, bringing
-	its full Icon physics (Hamiltonian + Lindblad operators).
-
-	Args:
-		emoji: The emoji to inject
-		initial_amplitude: Starting amplitude (default: Complex.zero())
-
-	Returns:
-		true if successful, false if failed
-
-	Example:
-		# Drop a new predator into the ecosystem
-		biome.hot_drop_emoji("🐺", Complex.new(0.1, 0.0))
-	"""
-	if not bath:
-		push_error("No bath to hot drop into!")
-		return false
-
-	# Check if already exists
-	if bath.emoji_to_index.has(emoji):
-		push_warning("Emoji %s already in bath" % emoji)
-		return false
-
-	# Get Icon from registry
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		push_error("IconRegistry not available for hot drop!")
-		return false
-
-	var icon = icon_registry.get_icon(emoji)
-	if not icon:
-		push_error("No Icon found for emoji: %s" % emoji)
-		return false
-
-	# Default amplitude
-	if initial_amplitude == null:
-		initial_amplitude = Complex.zero()
-
-	# Inject into bath
-	bath.inject_emoji(emoji, icon, initial_amplitude)
-
-	# Rebuild operators to include new emoji's physics
-	var all_icons: Array[Icon] = []
-	for e in bath.emoji_list:
-		var e_icon = icon_registry.get_icon(e)
-		if e_icon:
-			all_icons.append(e_icon)
-
-	bath.active_icons = all_icons
-	bath.build_hamiltonian_from_icons(all_icons)
-	bath.build_lindblad_from_icons(all_icons)
-
-	# Renormalize after injection
-	bath.normalize()
-
-	_verbose_log("info","biome", "🚁", "Hot dropped %s into %s biome (now %d emojis)" % [emoji, get_biome_type(), bath.emoji_list.size()])
-	return true
+func hot_drop_emoji(_emoji: String, _initial_amplitude: Complex = null) -> bool:
+	"""DEPRECATED: Hot drop requires bath which was removed.
+	Use quantum_computer.allocate_register() for adding new qubits."""
+	push_warning("hot_drop_emoji is deprecated - use quantum_computer.allocate_register()")
+	return false
 
 
 # ============================================================================
@@ -1562,238 +1297,33 @@ func hot_drop_emoji(emoji: String, initial_amplitude: Complex = null) -> bool:
 # This is how real quantum control works in laboratories!
 # ============================================================================
 
-func boost_hamiltonian_coupling(emoji_a: String, emoji_b: String, boost_factor: float) -> bool:
-	"""Increase Hamiltonian coupling between two emojis
-
-	Physics: Modifies H[i,j] coupling strength → faster coherent oscillations
-
-	Args:
-		emoji_a: First emoji (source of coupling)
-		emoji_b: Second emoji (target of coupling)
-		boost_factor: Multiplicative factor (e.g., 1.5 = 50% faster, 0.5 = 50% slower)
-
-	Returns:
-		true if successful, false if emoji or icon not found
-
-	Example:
-		# Make wheat → bread conversion 2x faster
-		biome.boost_hamiltonian_coupling("🌾", "🍞", 2.0)
-	"""
-	if not bath:
-		push_error("No bath to control!")
-		return false
-
-	# Get IconRegistry
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		push_error("IconRegistry not available")
-		return false
-
-	# Get icon for emoji_a
-	var icon_a = icon_registry.get_icon(emoji_a)
-	if not icon_a:
-		push_warning("No Icon for %s - cannot boost coupling" % emoji_a)
-		return false
-
-	# Check if coupling exists
-	if not icon_a.hamiltonian_couplings.has(emoji_b):
-		push_warning("%s has no Hamiltonian coupling to %s" % [emoji_a, emoji_b])
-		return false
-
-	# Modify coupling strength
-	var old_coupling = icon_a.hamiltonian_couplings[emoji_b]
-	icon_a.hamiltonian_couplings[emoji_b] = old_coupling * boost_factor
-
-	# Rebuild Hamiltonian with new coupling
-	bath.build_hamiltonian_from_icons(bath.active_icons)
-
-	_verbose_log("info","biome", "⚡", "Boosted coupling %s ↔ %s: %.3f → %.3f (×%.2f)" %
-		[emoji_a, emoji_b, old_coupling, icon_a.hamiltonian_couplings[emoji_b], boost_factor])
-
-	return true
+func boost_hamiltonian_coupling(_emoji_a: String, _emoji_b: String, _boost_factor: float) -> bool:
+	"""DEPRECATED: Evolution control API requires bath which was removed."""
+	push_warning("boost_hamiltonian_coupling is deprecated - Evolution control disabled")
+	return false
 
 
-func tune_lindblad_rate(source: String, target: String, rate_factor: float) -> bool:
-	"""Modify Lindblad dissipation rate between emojis
-
-	Physics: Changes γ in the Lindblad term L = √γ |target⟩⟨source|
-	Controls decoherence/transfer speed
-
-	Args:
-		source: Source emoji (decays FROM this state)
-		target: Target emoji (decays TO this state)
-		rate_factor: Multiplicative factor for rate
-
-	Returns:
-		true if successful, false if not found
-
-	Example:
-		# Reduce decoherence (maintain purity)
-		biome.tune_lindblad_rate("🌾", "💀", 0.5)  # Half decay rate
-
-		# Speed up transfer
-		biome.tune_lindblad_rate("🍄", "🍂", 2.0)  # Double composting rate
-	"""
-	if not bath:
-		push_error("No bath to control!")
-		return false
-
-	# Get IconRegistry
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		push_error("IconRegistry not available")
-		return false
-
-	# Get icon for source emoji
-	var icon_source = icon_registry.get_icon(source)
-	if not icon_source:
-		push_warning("No Icon for %s - cannot tune Lindblad" % source)
-		return false
-
-	# Check if Lindblad term exists
-	if not icon_source.lindblad_outgoing.has(target):
-		push_warning("%s has no Lindblad outgoing to %s" % [source, target])
-		return false
-
-	# Modify rate
-	var old_rate = icon_source.lindblad_outgoing[target]
-	icon_source.lindblad_outgoing[target] = old_rate * rate_factor
-
-	# Rebuild Lindblad operators with new rate
-	bath.build_lindblad_from_icons(bath.active_icons)
-
-	_verbose_log("info","biome", "🌊", "Tuned Lindblad %s → %s: γ=%.4f → %.4f (×%.2f)" %
-		[source, target, old_rate, icon_source.lindblad_outgoing[target], rate_factor])
-
-	return true
+func tune_lindblad_rate(_source: String, _target: String, _rate_factor: float) -> bool:
+	"""DEPRECATED: Evolution control API requires bath which was removed."""
+	push_warning("tune_lindblad_rate is deprecated - Evolution control disabled")
+	return false
 
 
-func add_time_driver(emoji: String, frequency: float, amplitude: float, phase: float = 0.0) -> bool:
-	"""Add time-dependent driving field to an emoji
-
-	Physics: Adds H_drive(t) = A·cos(ωt + φ) to self-energy
-	Creates resonant driving (like AC voltage in qubits)
-
-	Args:
-		emoji: Target emoji to drive
-		frequency: Angular frequency ω (rad/s)
-		amplitude: Drive amplitude A (energy units)
-		phase: Initial phase φ (radians)
-
-	Returns:
-		true if successful, false if not found
-
-	Example:
-		# Resonantly drive wheat at natural frequency
-		biome.add_time_driver("🌾", 0.5, 0.1, 0.0)
-
-		# Remove driver (amplitude = 0)
-		biome.add_time_driver("🌾", 0.0, 0.0, 0.0)
-	"""
-	if not bath:
-		push_error("No bath to control!")
-		return false
-
-	# Get IconRegistry
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		push_error("IconRegistry not available")
-		return false
-
-	# Get icon
-	var icon = icon_registry.get_icon(emoji)
-	if not icon:
-		push_warning("No Icon for %s - cannot add driver" % emoji)
-		return false
-
-	# Set driver parameters
-	icon.self_energy_driver = "cosine" if amplitude > 0.0 else "none"
-	icon.driver_frequency = frequency
-	icon.driver_amplitude = amplitude
-	icon.driver_phase = phase
-
-	# Rebuild Hamiltonian with time-dependent term
-	bath.build_hamiltonian_from_icons(bath.active_icons)
-
-	if amplitude > 0.0:
-		_verbose_log("info","biome", "📡", "Added driver to %s: ω=%.3f, A=%.3f, φ=%.2f" %
-			[emoji, frequency, amplitude, phase])
-	else:
-		_verbose_log("info","biome", "📡", "Removed driver from %s" % emoji)
-
-	return true
+func add_time_driver(_emoji: String, _frequency: float, _amplitude: float, _phase: float = 0.0) -> bool:
+	"""DEPRECATED: Evolution control API requires bath which was removed."""
+	push_warning("add_time_driver is deprecated - Evolution control disabled")
+	return false
 
 
 func create_projection(position: Vector2i, north: String, south: String) -> Resource:
-	"""Create a projection of the bath onto a north/south axis
+	"""Create a projection using quantum_computer (replaces bath projection)
 
-	In bath mode, this doesn't create a new quantum state - it creates
-	a WINDOW into the existing bath state. Multiple projections can
-	overlap (e.g., both 🌾/💀 and 🌾/🍂 can exist simultaneously).
-
-	Args:
-		position: Grid position for this projection
-		north: North pole emoji
-		south: South pole emoji
-
-	Returns:
-		DualEmojiQubit that reflects the current bath projection
+	Creates a DualEmojiQubit that represents a measurement axis.
+	Uses quantum_computer for state management.
 	"""
-	if not bath:
-		push_error("Biome %s has no bath - cannot create projection!" % get_biome_type())
-		return null
-
-	# ========================================================================
-	# INJECTION PHASE: Ensure both emojis exist in bath
-	# This enables cross-biome planting - plots specify axial pairs, and
-	# missing emojis are injected dynamically with their Icons
-	# ========================================================================
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if icon_registry:
-		var injected = false
-
-		# Inject north if missing
-		if not bath.emoji_to_index.has(north):
-			var north_icon = icon_registry.get_icon(north)
-			if north_icon:
-				# Start with zero amplitude (will adjust after south check)
-				bath.inject_emoji(north, north_icon, Complex.zero())
-				injected = true
-				_verbose_log("debug","biome", "💉", "Injected %s into %s bath" % [north, get_biome_type()])
-			else:
-				push_warning("  ⚠️  No Icon for %s in IconRegistry" % north)
-
-		# Inject south if missing (use north's amplitude for 50/50 split)
-		if not bath.emoji_to_index.has(south):
-			var south_icon = icon_registry.get_icon(south)
-			if south_icon:
-				# For 50/50 split: give south same amplitude as north
-				# This ensures theta = π/2 (equal superposition)
-				var north_amp = bath.get_amplitude(north)
-				bath.inject_emoji(south, south_icon, north_amp)
-				injected = true
-				_verbose_log("debug","biome", "💉", "Injected %s into %s bath (amplitude matched to %s)" % [south, get_biome_type(), north])
-			else:
-				push_warning("  ⚠️  No Icon for %s in IconRegistry" % south)
-
-		if injected:
-			# Normalize bath to maintain total probability = 1.0
-			bath.normalize()
-			_verbose_log("info","biome", "✅", "Bath now has %d emojis: %s" % [bath.emoji_list.size(), str(bath.emoji_list)])
-
-	# ========================================================================
-	# PROJECTION PHASE: Both emojis guaranteed to exist (or warnings issued)
-	# ========================================================================
-
-	# PHASE 3: Simplified - create live-coupled qubit (no manual computation)
-	# Theta/phi/radius will be computed automatically from bath via getters
-	var qubit = DualEmojiQubit.new(north, south, PI/2.0, bath)
+	# Create qubit without bath reference
+	var qubit = DualEmojiQubit.new(north, south, PI/2.0, null)
 	qubit.plot_position = position
-
-	# No need to set theta/phi/radius - they're computed from bath!
-	# The qubit is now a live viewport into the bath state
-
-	_verbose_log("debug","biome", "🔭", "Created live projection %s↔%s at %s (θ=%.2f from bath)" % [north, south, position, qubit.theta])
 
 	# Store projection metadata
 	active_projections[position] = {
@@ -1802,29 +1332,12 @@ func create_projection(position: Vector2i, north: String, south: String) -> Reso
 		"south": south
 	}
 
-	# Model B: Quantum state is owned by quantum_computer, not stored in plots
 	qubit_created.emit(position, qubit)
-
 	return qubit
 
 
 func update_projections(_dt: float = 0.016) -> void:
-	"""Update all projections to reflect current bath state
-
-	Called after bath.evolve() to sync all plot visuals with the bath.
-	Now uses proper density matrix formalism - qubits are pure projections,
-	no manual theta/phi/radius updates needed.
-
-	Args:
-		_dt: Time delta (unused - bath evolution handles all dynamics)
-	"""
-	if not bath:
-		return
-
-	# Qubits are now stateless projections - they automatically compute
-	# theta/phi/radius from the bath's density matrix.
-	# No manual updates needed - just emit the signal for UI refresh.
-
+	"""Update all projections - emit signals for UI refresh"""
 	for position in active_projections:
 		qubit_evolved.emit(position)
 
@@ -1841,14 +1354,14 @@ func evaluate_energy_coupling(_emoji: String, _bath_observables: Dictionary = {}
 
 
 func _query_bath_observables() -> Dictionary:
-	"""Query all bath observable probabilities
+	"""Query all quantum observable probabilities
 
 	Returns dictionary mapping emoji → probability
 	"""
 	var obs = {}
-	if bath and bath.has_method("get_probability"):
-		for emoji in bath.emoji_list:
-			obs[emoji] = bath.get_probability(emoji)
+	if quantum_computer and quantum_computer.has_method("get_population"):
+		for emoji in quantum_computer.register_map.keys():
+			obs[emoji] = quantum_computer.get_population(emoji)
 	return obs
 
 
@@ -1864,10 +1377,7 @@ func _get_lindblad_growth_rate(_emoji: String) -> float:
 
 
 func measure_projection(position: Vector2i) -> String:
-	"""Measure a projection, causing bath backaction
-
-	In bath mode, measurement collapses the bath (partial collapse),
-	which affects ALL projections.
+	"""Measure a projection using quantum_computer
 
 	Args:
 		position: Grid position to measure
@@ -1875,10 +1385,6 @@ func measure_projection(position: Vector2i) -> String:
 	Returns:
 		Outcome emoji (north or south)
 	"""
-	if not bath:
-		push_error("Biome %s has no bath - cannot measure projection!" % get_biome_type())
-		return ""
-
 	if not active_projections.has(position):
 		return ""
 
@@ -1886,12 +1392,15 @@ func measure_projection(position: Vector2i) -> String:
 	var north: String = data.north
 	var south: String = data.south
 
-	# Measure the bath (causes partial collapse)
-	var outcome = bath.measure_axis(north, south, 0.5)
+	# Measure using quantum_computer
+	var outcome = ""
+	if quantum_computer:
+		outcome = quantum_computer.measure_axis(north, south)
+	else:
+		# Fallback: random choice
+		outcome = north if randf() < 0.5 else south
 
-	# Update all projections to reflect the collapsed bath
 	update_projections()
-
 	qubit_measured.emit(position, outcome)
 	return outcome
 
@@ -1931,32 +1440,30 @@ func get_observable_theta(north: String, south: String) -> float:
 	Returns:
 		Polar angle in radians [0, π], or π/2 if projection doesn't exist
 	"""
-	if bath:
-		# Project bath and read theta
-		var proj = bath.project_onto_axis(north, south)
-		return proj.theta if proj.valid else PI/2
-	# Model B: bath always exists
+	if quantum_computer and quantum_computer.has_method("get_population"):
+		var p_north = quantum_computer.get_population(north)
+		var p_south = quantum_computer.get_population(south)
+		var mass = p_north + p_south
+		if mass > 0.001:
+			# theta = 2 * acos(sqrt(p_north / mass))
+			return 2.0 * acos(sqrt(p_north / mass))
 	return PI/2
 
 
-func get_observable_phi(north: String, south: String) -> float:
+func get_observable_phi(_north: String, _south: String) -> float:
 	"""Get azimuthal phase φ for projection [0, 2π]
 
 	Physical meaning: relative quantum phase between north and south states
-	This is genuine quantum information that affects interference patterns.
+	Note: Phase information not available from populations alone, return 0.
 
 	Args:
 		north: North pole emoji
 		south: South pole emoji
 
 	Returns:
-		Azimuthal angle in radians [0, 2π], or 0.0 if projection doesn't exist
+		Azimuthal angle in radians [0, 2π], or 0.0 if unavailable
 	"""
-	if bath:
-		# Project bath and read phi
-		var proj = bath.project_onto_axis(north, south)
-		return proj.phi if proj.valid else 0.0
-	# Model B: bath always exists
+	# Phase requires off-diagonal elements which aren't easily accessible
 	return 0.0
 
 
@@ -1982,62 +1489,31 @@ func get_observable_radius(north: String, south: String) -> float:
 
 	Physical meaning: How much "spirit" lives in this north/south axis
 	radius = √(|α_north|² + |α_south|²)
-
-	Args:
-		north: North pole emoji
-		south: South pole emoji
-
-	Returns:
-		Radius [0, 1], or 0.0 if projection doesn't exist
 	"""
-	if bath:
-		# Project bath and read radius
-		var proj = bath.project_onto_axis(north, south)
-		return proj.radius if proj.valid else 0.0
-	# Model B: bath always exists
+	if quantum_computer and quantum_computer.has_method("get_population"):
+		var p_north = quantum_computer.get_population(north)
+		var p_south = quantum_computer.get_population(south)
+		return sqrt(p_north + p_south)
 	return 0.0
 
 
 func get_observable_amplitude(emoji: String) -> float:
-	"""Get amplitude |α| of specific emoji in the bath [0, 1]
+	"""Get probability of specific emoji in quantum_computer [0, 1]
 
-	Physical meaning: Probability amplitude for this emoji state
-	Only meaningful in bath mode. Returns 0.0 in legacy mode.
-
-	Args:
-		emoji: The emoji to query (e.g., "🌾")
-
-	Returns:
-		Amplitude magnitude [0, 1]
+	Returns sqrt of population as amplitude proxy.
 	"""
-	if bath:
-		# get_amplitude returns Complex, extract magnitude
-		var complex_amp = bath.get_amplitude(emoji)
-		return complex_amp.abs()
-	else:
-		# No bath: no bath-wide amplitudes
-		return 0.0
+	if quantum_computer and quantum_computer.has_method("get_population"):
+		return sqrt(quantum_computer.get_population(emoji))
+	return 0.0
 
 
-func get_observable_phase(emoji: String) -> float:
-	"""Get phase arg(α) of specific emoji in the bath [-π, π]
+func get_observable_phase(_emoji: String) -> float:
+	"""Get phase of specific emoji [-π, π]
 
-	Physical meaning: Complex phase of this emoji's amplitude
-	Only meaningful in bath mode. Returns 0.0 in legacy mode.
-
-	Args:
-		emoji: The emoji to query
-
-	Returns:
-		Phase in radians [-π, π]
+	Phase information not directly available from quantum_computer populations.
+	Returns 0.0.
 	"""
-	if bath:
-		# get_amplitude returns Complex, extract phase
-		var complex_amp = bath.get_amplitude(emoji)
-		return complex_amp.arg()
-	else:
-		# No bath: no bath-wide phases
-		return 0.0
+	return 0.0
 
 
 # ============================================================================
@@ -2200,20 +1676,7 @@ func supports_emoji_pair(north: String, south: String) -> bool:
 	if emoji_pairings.has(north) and emoji_pairings[north] == south:
 		return true
 
-	# Check bath emoji list (Model B biomes)
-	if bath and bath.emoji_list:
-		# Both emojis must be represented in bath states
-		var has_north = false
-		var has_south = false
-		for state in bath.emoji_list:
-			if north in state:
-				has_north = true
-			if south in state:
-				has_south = true
-		if has_north and has_south:
-			return true
-
-	# Check quantum_computer register_map (Model C biomes)
+	# Check quantum_computer register_map
 	if quantum_computer and quantum_computer.has_method("has_emoji"):
 		if quantum_computer.has_emoji(north) and quantum_computer.has_emoji(south):
 			return true
@@ -2332,11 +1795,9 @@ func bell_gate_count() -> int:
 
 func get_status() -> Dictionary:
 	"""Get current biome status (override to add custom fields)"""
-	# Get quantum system size (works for both bath and quantum_computer)
+	# Get quantum system size from quantum_computer
 	var quantum_size = 0
-	if bath and bath.emoji_list:
-		quantum_size = bath.emoji_list.size()
-	elif quantum_computer and quantum_computer.register_map:
+	if quantum_computer and quantum_computer.register_map:
 		quantum_size = quantum_computer.register_map.num_qubits
 
 	return BiomeUtilities.create_status_dict({
@@ -2451,13 +1912,13 @@ func get_plot_positions_in_oval(plot_count: int, center: Vector2, viewport_scale
 
 func _track_dynamics() -> void:
 	"""Record current quantum observables for dynamics tracking"""
-	if not bath or not dynamics_tracker:
+	if not quantum_computer or not dynamics_tracker:
 		return
 
 	# Calculate current observables
-	var purity = bath.get_purity()
-	var entropy = _calculate_bath_entropy()
-	var coherence = _calculate_bath_coherence()
+	var purity = quantum_computer.get_purity() if quantum_computer.has_method("get_purity") else 0.5
+	var entropy = _calculate_quantum_entropy()
+	var coherence = _calculate_quantum_coherence()
 
 	# Record snapshot
 	dynamics_tracker.add_snapshot({
@@ -2467,13 +1928,13 @@ func _track_dynamics() -> void:
 	})
 
 
-func _calculate_bath_entropy() -> float:
-	"""Calculate normalized entropy of bath state"""
-	if not bath or not bath._density_matrix:
+func _calculate_quantum_entropy() -> float:
+	"""Calculate normalized entropy of quantum state"""
+	if not quantum_computer or not quantum_computer.density_matrix:
 		return 0.5
 
-	var purity = bath.get_purity()
-	var dim = bath._density_matrix.dimension()
+	var purity = quantum_computer.get_purity() if quantum_computer.has_method("get_purity") else 0.5
+	var dim = quantum_computer.density_matrix.dimension() if quantum_computer.density_matrix.has_method("dimension") else 1
 
 	if purity <= 0 or dim <= 1:
 		return 0.0
@@ -2485,16 +1946,17 @@ func _calculate_bath_entropy() -> float:
 	return clamp(-log(purity) / max_entropy, 0.0, 1.0)
 
 
-func _calculate_bath_coherence() -> float:
+func _calculate_quantum_coherence() -> float:
 	"""Calculate total off-diagonal magnitude squared"""
-	if not bath or not bath._density_matrix:
+	if not quantum_computer or not quantum_computer.density_matrix:
 		return 0.0
 
-	var dim = bath._density_matrix.dimension()
+	var dm = quantum_computer.density_matrix
+	var dim = dm.dimension() if dm.has_method("dimension") else 0
 	if dim < 2:
 		return 0.0
 
-	var mat = bath._density_matrix.get_matrix()
+	var mat = dm.get_matrix() if dm.has_method("get_matrix") else null
 	if not mat:
 		return 0.0
 
@@ -2545,16 +2007,11 @@ func _select_key_emojis_for_attractor() -> Array[String]:
 	"""
 	var emojis: Array[String] = []
 
-	# Try to get from quantum_computer (Model C)
+	# Get from quantum_computer
 	if quantum_computer and quantum_computer.register_map:
 		var emoji_list = quantum_computer.register_map.coordinates.keys()
 		for i in range(min(3, emoji_list.size())):
 			emojis.append(emoji_list[i])
-
-	# Fallback: try bath (legacy compatibility)
-	elif bath and bath.emoji_list.size() >= 3:
-		for i in range(3):
-			emojis.append(bath.emoji_list[i])
 
 	return emojis
 
@@ -2572,11 +2029,6 @@ func _record_attractor_snapshot() -> void:
 
 	if quantum_computer and quantum_computer.density_matrix:
 		observables = quantum_computer.get_all_populations()
-	elif bath:
-		# Fallback to bath (legacy compatibility)
-		for emoji in bath.emoji_list:
-			var prob = bath.get_probability(emoji)
-			observables[emoji] = prob
 
 	# Record snapshot
 	if not observables.is_empty():
@@ -2612,144 +2064,17 @@ func _reset_custom() -> void:
 # Gozinta Operations (Input Channels - Manifest Section 3)
 # ============================================================================
 
-func pump_emoji(rest_emoji: String, target_emoji: String, pump_rate: float, duration: float) -> float:
-	"""Reservoir pumping: transfer amplitude from rest state to target state
-
-	Manifest Section 3.1: L_t = √Γ |t⟩⟨r| (Lindblad incoming operator)
-	Physical interpretation: Amplitude flows from rest reservoir into target.
-
-	Args:
-		rest_emoji: Source emoji (rest state/reservoir)
-		target_emoji: Target emoji to pump amplitude into
-		pump_rate: Pump rate Γ in amplitude/sec
-		duration: Duration of pumping in seconds
-
-	Returns: Amount of amplitude pumped (≈ pump_rate * duration)
-	"""
-	if not bath:
-		push_error("pump_emoji(): No bath available")
-		return 0.0
-
-	# Ensure both emojis are in the bath
-	if not bath.has_emoji(rest_emoji):
-		_verbose_log("debug","biome", "ℹ️", "Injecting %s into bath for pumping" % rest_emoji)
-		var rest_icon = Icon.new()
-		rest_icon.emoji = rest_emoji
-		rest_icon.display_name = rest_emoji
-		bath.inject_emoji(rest_emoji, rest_icon)
-
-	if not bath.has_emoji(target_emoji):
-		_verbose_log("debug","biome", "ℹ️", "Injecting %s into bath for pumping" % target_emoji)
-		var target_icon = Icon.new()
-		target_icon.emoji = target_emoji
-		target_icon.display_name = target_emoji
-		bath.inject_emoji(target_emoji, target_icon)
-
-	# Create temporary pump icon with Lindblad incoming
-	# This will be added to active_icons for evolution
-	var pump_icon = Icon.new()
-	pump_icon.emoji = rest_emoji
-	pump_icon.display_name = "Pump(%s→%s)" % [rest_emoji, target_emoji]
-
-	# Add Lindblad incoming: target gains from rest
-	# L = √Γ |target⟩⟨rest|
-	pump_icon.lindblad_incoming[target_emoji] = pump_rate
-
-	# Rebuild operators to include pump
-	var original_icons = bath.active_icons.duplicate()
-	bath.active_icons.append(pump_icon)
-	bath.build_hamiltonian_from_icons(bath.active_icons)
-	bath.build_lindblad_from_icons(bath.active_icons)
-
-	# Evolve with pump for specified duration
-	var dt = 0.016  # 60 FPS timestep
-	var steps = int(duration / dt)
-	var total_amplitude_pumped = 0.0
-
-	_verbose_log("debug","biome", "💧", "Pumping %s → %s at rate %.3f/sec for %.2f sec (%d steps)" % [
-		rest_emoji, target_emoji, pump_rate, duration, steps
-	])
-
-	for i in range(steps):
-		bath.evolve(dt)
-		# Track approximate amplitude transfer per step
-		total_amplitude_pumped += pump_rate * dt
-
-	# Restore original operators (remove pump)
-	bath.active_icons = original_icons
-	bath.build_hamiltonian_from_icons(bath.active_icons)
-	bath.build_lindblad_from_icons(bath.active_icons)
-
-	var p_target = bath.get_probability(target_emoji)
-	_verbose_log("info","biome", "✅", "Pump complete: %s now at P=%.3f" % [target_emoji, p_target])
-
-	return total_amplitude_pumped
+func pump_emoji(_rest_emoji: String, _target_emoji: String, _pump_rate: float, _duration: float) -> float:
+	"""DEPRECATED: Reservoir pumping requires bath which was removed.
+	Returns 0.0. Use quantum_computer operations instead."""
+	push_warning("pump_emoji is deprecated - bath was removed")
+	return 0.0
 
 
-func apply_reset(alpha: float, ref_state: String = "pure") -> void:
-	"""Reset channel: mix density matrix with reference state
-
-	Manifest Section 3.4: ρ ← (1-α)ρ + α ρ_ref
-	Physical interpretation: Partial reset toward reference state.
-
-	Args:
-		alpha: Mix strength in [0, 1]. α=0 (no reset), α=1 (full reset)
-		ref_state: Reference state to reset toward:
-			- "pure": Pure state in each qubit's north emoji
-			- "maximally_mixed": Maximally mixed state I/N
-			- specific emoji name: Pure state |emoji⟩⟨emoji|
-	"""
-	if not bath:
-		push_error("apply_reset(): No bath available")
-		return
-
-	var dim = bath._density_matrix.dimension()
-	if dim == 0:
-		return
-
-	var rho_current = bath._density_matrix.get_matrix()
-
-	# Create reference density matrix
-	var rho_ref = ComplexMatrix.new(dim)
-
-	match ref_state:
-		"pure":
-			# Pure state in first emoji (north pole of each qubit)
-			var amps: Array = []
-			amps.append(Complex.one())
-			for i in range(1, dim):
-				amps.append(Complex.zero())
-			var pure_rho = DensityMatrix.new()
-			pure_rho.initialize_with_emojis(bath._density_matrix.emoji_list)
-			pure_rho.set_pure_state(amps)
-			rho_ref = pure_rho.get_matrix()
-
-		"maximally_mixed":
-			# I/N: all diagonal elements = 1/N
-			var one_over_n = 1.0 / float(dim)
-			for i in range(dim):
-				rho_ref.set_element(i, i, Complex.new(one_over_n, 0.0))
-
-		_:
-			# Specific emoji: pure state |emoji⟩⟨emoji|
-			var emoji_idx = bath._density_matrix.emoji_to_index.get(ref_state, -1)
-			if emoji_idx >= 0:
-				rho_ref.set_element(emoji_idx, emoji_idx, Complex.one())
-			else:
-				push_warning("apply_reset(): Unknown reference state '%s'" % ref_state)
-				return
-
-	# Apply reset: ρ ← (1-α)ρ + α ρ_ref
-	var alpha_complex = Complex.new(alpha, 0.0)
-	var one_minus_alpha = Complex.new(1.0 - alpha, 0.0)
-
-	var rho_reset = rho_current.scale(one_minus_alpha).add(rho_ref.scale(alpha_complex))
-
-	bath._density_matrix.set_matrix(rho_reset)
-	bath._density_matrix._enforce_trace_one()
-
-	var trace = bath._density_matrix.get_trace()
-	_verbose_log("debug","biome", "🔄", "Reset applied: α=%.3f, ref='%s', Tr(ρ)=%.6f" % [alpha, ref_state, trace])
+func apply_reset(_alpha: float, _ref_state: String = "pure") -> void:
+	"""DEPRECATED: Reset channel requires bath which was removed.
+	No-op function. Use quantum_computer operations instead."""
+	push_warning("apply_reset is deprecated - bath was removed")
 
 
 # ============================================================================
@@ -2829,68 +2154,11 @@ func process_energy_taps(delta: float = 0.016) -> Dictionary:
 	return fluxes
 
 
-func setup_energy_tap(target_emoji: String, drain_rate: float = 0.1) -> bool:
-	"""
-	Configure energy tap drain operators for a target emoji.
-
-	This ensures that the target emoji has Lindblad drain operators configured
-	to flow probability to the sink state. Called when energy tap is planted.
-
-	Manifest Section 4.1: Lindblad drain operators L_e = |sink⟩⟨e| with rate κ.
-
-	Args:
-		target_emoji: The emoji to tap (must already be in bath)
-		drain_rate: Drain rate κ in probability/sec
-
-	Returns:
-		true if setup succeeded
-	"""
-	if not bath:
-		push_error("Cannot setup energy tap: no bath in biome %s" % get_biome_type())
-		return false
-
-	# Get or create Icon for target emoji
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		push_error("Cannot setup energy tap: IconRegistry not found")
-		return false
-
-	var target_icon = icon_registry.get_icon(target_emoji)
-	if not target_icon:
-		push_error("Cannot setup energy tap: Icon not found for %s" % target_emoji)
-		return false
-
-	# Configure Icon as drain target
-	target_icon.is_drain_target = true
-	target_icon.drain_to_sink_rate = drain_rate
-
-	# Ensure target emoji is in bath
-	if not bath.has_emoji(target_emoji):
-		var injected = bath.inject_emoji(target_emoji, target_icon)
-		if not injected:
-			push_error("Cannot setup energy tap: Failed to inject %s into bath" % target_emoji)
-			return false
-
-	# Ensure sink state is in bath
-	if not bath.has_emoji(bath.sink_emoji):
-		var sink_icon = Icon.new()
-		sink_icon.emoji = bath.sink_emoji
-		sink_icon.display_name = "Sink"
-		sink_icon.is_eternal = true  # Sink never decays
-		var sink_injected = bath.inject_emoji(bath.sink_emoji, sink_icon)
-		if not sink_injected:
-			push_error("Cannot setup energy tap: Failed to inject sink state into bath")
-			return false
-
-	# Rebuild Lindblad operators to include drain channels
-	bath.build_hamiltonian_from_icons(bath.active_icons)
-	bath.build_lindblad_from_icons(bath.active_icons)
-
-	_verbose_log("info","biome", "⚡", "Setup energy tap drain for %s (κ=%.3f/sec) in %s" % [
-		target_emoji, drain_rate, get_biome_type()
-	])
-
-	return true
+func setup_energy_tap(_target_emoji: String, _drain_rate: float = 0.1) -> bool:
+	"""DEPRECATED: Energy tap system disabled (requires bath which was removed).
+	Returns false. Use alternative resource collection methods."""
+	push_warning("setup_energy_tap is deprecated - energy tap system disabled")
+	return false
 
 
 # ============================================================================
@@ -2945,6 +2213,11 @@ func build_operators_cached(biome_name: String, icons: Dictionary) -> void:
 		quantum_computer.hamiltonian = cached_ops.hamiltonian
 		quantum_computer.lindblad_operators = cached_ops.lindblad_operators
 
+		# Set up time-dependent drivers (not cached - must always be extracted from icons)
+		var HamBuilder = load("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
+		var driven_configs = HamBuilder.get_driven_icons(icons, quantum_computer.register_map)
+		quantum_computer.set_driven_icons(driven_configs)
+
 		# CRITICAL: Set up native evolution engine for batched performance
 		# (This is normally done by set_lindblad_operators, which is bypassed when loading from cache)
 		quantum_computer.setup_native_evolution()
@@ -2973,12 +2246,19 @@ func build_operators_cached(biome_name: String, icons: Dictionary) -> void:
 		quantum_computer.lindblad_operators = lindblad_result.get("operators", [])
 		quantum_computer.gated_lindblad_configs = lindblad_result.get("gated_configs", [])
 
+		# Set up time-dependent drivers for oscillating self-energies
+		var driven_configs = HamBuilder.get_driven_icons(icons, quantum_computer.register_map)
+		quantum_computer.set_driven_icons(driven_configs)
+
 		var elapsed = Time.get_ticks_msec() - start_time
 		if verbose:
 			verbose.info("cache", "💾", "Built in %d ms - saving to cache for next boot" % elapsed)
 
 		# Save to cache for next time
 		cache.save(biome_name, cache_key, quantum_computer.hamiltonian, quantum_computer.lindblad_operators)
+
+		# CRITICAL: Set up native evolution engine (same as cache HIT path)
+		quantum_computer.setup_native_evolution()
 
 
 func _format_positions(positions: Array) -> String:

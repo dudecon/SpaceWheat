@@ -4,11 +4,12 @@ extends Resource
 const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 
-## DualEmojiQubit - Stateless Projection Lens (Model B - Physics Correct)
+## DualEmojiQubit - Stateless Projection Lens
 ##
-## Model B: This is a read-only view into a QuantumComponent's subspace.
+## DEPRECATED: Model B component-based queries. Prefer direct QuantumComputer.get_*() for Model C.
+##
+## This is a read-only view providing measurement basis labels and computed properties.
 ## All quantum state lives in the parent biome's QuantumComputer.
-## This class only provides measurement basis labels and view properties.
 ##
 ## Key properties:
 ## - No stored quantum state - all computed from parent quantum computer
@@ -38,17 +39,45 @@ var plot_position: Vector2i = Vector2i.ZERO
 ## Computed Properties (Model B - from quantum computer)
 ## ========================================
 
-## Helper: Get probability marginal from quantum computer (Model B)
+## Helper: Get probability marginal from quantum computer
 func _get_marginal_from_computer() -> Dictionary:
-	"""Query marginal density matrix from parent biome's quantum computer."""
-	if not parent_biome or register_id < 0:
+	"""Query marginal from parent biome's quantum computer.
+
+	Model C: Uses get_population() and get_coherence() directly.
+	Falls back to Model B component queries if Model C not available.
+	"""
+	if not parent_biome:
 		return {}
 
-	var comp = parent_biome.quantum_computer.get_component_containing(register_id)
+	var qc = parent_biome.quantum_computer
+	if not qc:
+		return {}
+
+	# Model C: Use RegisterMap-based queries if available
+	if qc.density_matrix != null and north_emoji != "" and south_emoji != "":
+		var p0 = qc.get_population(north_emoji) if qc.has_method("get_population") else 0.5
+		var p1 = qc.get_population(south_emoji) if qc.has_method("get_population") else 0.5
+		var coh = qc.get_coherence(north_emoji, south_emoji) if qc.has_method("get_coherence") else Complex.zero()
+
+		return {
+			"p_north": p0,
+			"p_south": p1,
+			"coherence": coh if coh else Complex.zero(),
+			"p_subspace": p0 + p1
+		}
+
+	# Model B fallback: Component-based query (deprecated)
+	if register_id < 0:
+		return {}
+
+	if not qc.has_method("get_component_containing"):
+		return {}
+
+	var comp = qc.get_component_containing(register_id)
 	if not comp:
 		return {}
 
-	var marginal = parent_biome.quantum_computer.get_marginal_density_matrix(comp, register_id)
+	var marginal = qc.get_marginal_density_matrix(comp, register_id) if qc.has_method("get_marginal_density_matrix") else null
 	if not marginal:
 		return {}
 

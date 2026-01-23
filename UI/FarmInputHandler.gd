@@ -24,6 +24,7 @@ const QuantumAlgorithms = preload("res://Core/QuantumSubstrate/QuantumAlgorithms
 const QuantumGateLibrary = preload("res://Core/QuantumSubstrate/QuantumGateLibrary.gd")
 const Farm = preload("res://Core/Farm.gd")
 const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
+const QuantumMill = preload("res://Core/GameMechanics/QuantumMill.gd")
 
 # Tool actions from shared config (single source of truth)
 const TOOL_ACTIONS = ToolConfig.TOOL_ACTIONS
@@ -42,6 +43,10 @@ var input_enable_frame_count: int = 0  # Counter to enable input after N frames
 
 # v2 Architecture State
 var evolution_paused: bool = false  # Spacebar toggle for quantum evolution
+
+# Mill two-stage selection state
+var mill_selection_stage: int = 0  # 0=none, 1=power selected, waiting for conversion
+var mill_selected_power: String = ""  # "Q", "E", or "R" for power source
 
 # Config (deprecated - now read from GridConfig)
 var grid_width: int = 6
@@ -71,26 +76,43 @@ func _get_plot_south_emoji(plot) -> String:
 # ═══════════════════════════════════════════════════════════════
 
 func _apply_single_qubit_gate(position: Vector2i, gate_name: String) -> bool:
-	"""Apply a single-qubit gate via quantum_computer (Model B)
+	"""Apply a single-qubit gate via quantum_computer
+
+	Supports both v2 terminal-based and v1 plot-based models.
 
 	Args:
-		position: Grid position of plot
-		gate_name: Gate name ("X", "Z", "H", "Y", "S", "T")
+		position: Grid position of plot/terminal
+		gate_name: Gate name ("X", "Z", "H", "Y", "S", "T", "Rx", "Ry", "Rz")
 
 	Returns:
 		true if gate applied successfully
 	"""
-	if not farm or not farm.grid:
+	if not farm:
 		return false
 
-	var plot = farm.grid.get_plot(position)
-	if not plot or not plot.is_planted:
-		return false
+	var biome = null
+	var register_id: int = -1
 
-	var biome = farm.grid.get_biome_for_plot(position)
-	var register_id = farm.grid.get_register_for_plot(position)
+	# V2 MODEL: Try terminal-based approach first (EXPLORE → MEASURE → POP)
+	if farm.plot_pool:
+		var terminal = farm.plot_pool.get_terminal_at_grid_pos(position)
+		if terminal and terminal.is_bound and not terminal.is_measured:
+			biome = terminal.bound_biome
+			register_id = terminal.bound_register_id
+			_verbose.debug("gate", "⚡", "Gate %s via v2 terminal at %s (reg=%d)" % [gate_name, position, register_id])
 
+	# V1 MODEL: Fall back to plot-based approach if no terminal
+	if register_id < 0 and farm.grid:
+		var plot = farm.grid.get_plot(position)
+		if plot and plot.is_planted:
+			biome = farm.grid.get_biome_for_plot(position)
+			register_id = farm.grid.get_register_for_plot(position)
+			if register_id >= 0:
+				_verbose.debug("gate", "⚡", "Gate %s via v1 plot at %s (reg=%d)" % [gate_name, position, register_id])
+
+	# Validate we have valid biome and register
 	if not biome or not biome.quantum_computer or register_id < 0:
+		_verbose.warn("gate", "⚠️", "Cannot apply gate %s at %s - no valid quantum state" % [gate_name, position])
 		return false
 
 	# Get gate matrix from library
@@ -103,44 +125,82 @@ func _apply_single_qubit_gate(position: Vector2i, gate_name: String) -> bool:
 	if not gate_matrix:
 		return false
 
-	# Get component for this register
-	var comp = biome.quantum_computer.get_component_containing(register_id)
-	if not comp:
+	var success = false
+
+	# MODEL C only: Use apply_gate for top-level density_matrix
+	# register_id IS the qubit index in RegisterMap
+	if biome.quantum_computer.density_matrix == null:
+		_verbose.warn("gate", "⚠️", "Density matrix not initialized for biome")
 		return false
 
-	# Apply the gate
-	return biome.quantum_computer.apply_unitary_1q(comp, register_id, gate_matrix)
+	success = biome.quantum_computer.apply_gate(register_id, gate_matrix)
+	if success:
+		_verbose.info("gate", "✅", "Applied %s gate at %s (qubit=%d)" % [gate_name, position, register_id])
+
+	return success
 
 func _apply_two_qubit_gate(position_a: Vector2i, position_b: Vector2i, gate_name: String) -> bool:
-	"""Apply a two-qubit gate via quantum_computer (Model B)
+	"""Apply a two-qubit gate via quantum_computer
+
+	Supports both v2 terminal-based and v1 plot-based models.
 
 	Args:
-		position_a: Grid position of first plot
-		position_b: Grid position of second plot
+		position_a: Grid position of first plot/terminal
+		position_b: Grid position of second plot/terminal
 		gate_name: Gate name ("CNOT", "CZ", "SWAP")
 
 	Returns:
 		true if gate applied successfully
 	"""
-	if not farm or not farm.grid:
+	if not farm:
 		return false
 
-	var plot_a = farm.grid.get_plot(position_a)
-	var plot_b = farm.grid.get_plot(position_b)
+	var biome_a = null
+	var biome_b = null
+	var reg_a: int = -1
+	var reg_b: int = -1
 
-	if not plot_a or not plot_b or not plot_a.is_planted or not plot_b.is_planted:
-		return false
+	# V2 MODEL: Try terminal-based approach first
+	if farm.plot_pool:
+		var terminal_a = farm.plot_pool.get_terminal_at_grid_pos(position_a)
+		var terminal_b = farm.plot_pool.get_terminal_at_grid_pos(position_b)
 
-	var biome_a = farm.grid.get_biome_for_plot(position_a)
-	var biome_b = farm.grid.get_biome_for_plot(position_b)
-	var reg_a = farm.grid.get_register_for_plot(position_a)
-	var reg_b = farm.grid.get_register_for_plot(position_b)
+		if terminal_a and terminal_a.is_bound and not terminal_a.is_measured:
+			biome_a = terminal_a.bound_biome
+			reg_a = terminal_a.bound_register_id
 
-	# Plots must be in same biome for 2Q gates
+		if terminal_b and terminal_b.is_bound and not terminal_b.is_measured:
+			biome_b = terminal_b.bound_biome
+			reg_b = terminal_b.bound_register_id
+
+		if reg_a >= 0 and reg_b >= 0:
+			_verbose.debug("gate", "⚡", "2Q gate %s via v2 terminals at %s/%s (reg=%d/%d)" % [gate_name, position_a, position_b, reg_a, reg_b])
+
+	# V1 MODEL: Fall back to plot-based approach if no terminals
+	if (reg_a < 0 or reg_b < 0) and farm.grid:
+		var plot_a = farm.grid.get_plot(position_a)
+		var plot_b = farm.grid.get_plot(position_b)
+
+		if plot_a and plot_a.is_planted:
+			if reg_a < 0:
+				biome_a = farm.grid.get_biome_for_plot(position_a)
+				reg_a = farm.grid.get_register_for_plot(position_a)
+
+		if plot_b and plot_b.is_planted:
+			if reg_b < 0:
+				biome_b = farm.grid.get_biome_for_plot(position_b)
+				reg_b = farm.grid.get_register_for_plot(position_b)
+
+		if reg_a >= 0 and reg_b >= 0:
+			_verbose.debug("gate", "⚡", "2Q gate %s via v1 plots at %s/%s (reg=%d/%d)" % [gate_name, position_a, position_b, reg_a, reg_b])
+
+	# Both positions must have valid registers in the SAME biome
 	if biome_a != biome_b or not biome_a or not biome_a.quantum_computer:
+		_verbose.warn("gate", "⚠️", "2Q gate %s requires both plots in same biome" % gate_name)
 		return false
 
 	if reg_a < 0 or reg_b < 0:
+		_verbose.warn("gate", "⚠️", "Cannot apply 2Q gate - missing valid quantum states")
 		return false
 
 	# Get gate matrix from library
@@ -153,16 +213,19 @@ func _apply_two_qubit_gate(position_a: Vector2i, position_b: Vector2i, gate_name
 	if not gate_matrix:
 		return false
 
-	# Get component containing both registers
-	var comp_a = biome_a.quantum_computer.get_component_containing(reg_a)
-	var comp_b = biome_a.quantum_computer.get_component_containing(reg_b)
+	var success = false
 
-	if not comp_a or comp_a != comp_b:
-		# Registers not in same component - must entangle first
+	# MODEL C only: Use apply_gate_2q for top-level density_matrix
+	# reg_a and reg_b are qubit indices in RegisterMap
+	if biome_a.quantum_computer.density_matrix == null:
+		_verbose.warn("gate", "⚠️", "Density matrix not initialized for biome")
 		return false
 
-	# Apply the gate
-	return biome_a.quantum_computer.apply_unitary_2q(comp_a, reg_a, reg_b, gate_matrix)
+	success = biome_a.quantum_computer.apply_gate_2q(reg_a, reg_b, gate_matrix)
+	if success:
+		_verbose.info("gate", "✅", "Applied 2Q %s gate at %s/%s (qubits=%d/%d)" % [gate_name, position_a, position_b, reg_a, reg_b])
+
+	return success
 
 # ═══════════════════════════════════════════════════════════════
 
@@ -189,7 +252,39 @@ func _ready():
 	# CRITICAL: Enable _unhandled_input() processing (not _input()!)
 	set_process_unhandled_input(true)
 	_verbose.info("input", "✅", "Unhandled input processing enabled (no deferred delays)")
+
+	# Connect to ActiveBiomeManager for biome change handling
+	_connect_to_biome_manager()
+
 	_print_help()
+
+
+func _connect_to_biome_manager() -> void:
+	"""Connect to ActiveBiomeManager to reset cursor on biome change"""
+	var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+	if biome_mgr and biome_mgr.has_signal("active_biome_changed"):
+		if not biome_mgr.active_biome_changed.is_connected(_on_active_biome_changed):
+			biome_mgr.active_biome_changed.connect(_on_active_biome_changed)
+			_verbose.info("input", "📡", "FarmInputHandler connected to ActiveBiomeManager")
+
+
+func _on_active_biome_changed(new_biome: String, _old_biome: String) -> void:
+	"""Reset cursor and selection when biome changes"""
+	_verbose.debug("input", "🔄", "FarmInputHandler: Biome changed to %s - resetting cursor" % new_biome)
+
+	# Reset cursor to first plot of new biome
+	if farm and farm.has_method("get_plot_position_for_active_biome"):
+		current_selection = farm.get_plot_position_for_active_biome(0)
+		_verbose.debug("input", "📍", "Cursor reset to %s" % current_selection)
+
+	# Clear any multi-select checkboxes (handled by PlotGridDisplay, but ensure it's called)
+	if plot_grid_display and plot_grid_display.has_method("clear_all_selection"):
+		plot_grid_display.clear_all_selection()
+
+	# Exit any active submenu
+	if current_submenu != "":
+		_exit_submenu()
+		_verbose.debug("input", "📋", "Exited submenu on biome change")
 
 
 func _enable_input_processing() -> void:
@@ -279,42 +374,49 @@ func _unhandled_input(event: InputEvent):
 			return
 
 	# Location quick-select (dynamic from GridConfig, or default mapping) - MULTI-SELECT: Toggle plots with checkboxes
+	# TYUIOP keys select plots 0-5 within the ACTIVE BIOME (determined by ActiveBiomeManager)
 	if grid_config:
 		for action in grid_config.keyboard_layout.get_all_actions():
 			if event.is_action_pressed(action):
 				if VERBOSE:
 					_verbose.debug("input", "📍", "GridConfig action detected: %s" % action)
-				var pos = grid_config.keyboard_layout.get_position_for_action(action)
-				if pos != Vector2i(-1, -1) and grid_config.is_position_valid(pos):
-					_toggle_plot_selection(pos)
-					get_viewport().set_input_as_handled()
-					return
+				var base_pos = grid_config.keyboard_layout.get_position_for_action(action)
+				if base_pos != Vector2i(-1, -1):
+					# Remap x-coordinate to active biome's row using Farm helper
+					var pos = base_pos
+					if farm and farm.has_method("get_plot_position_for_active_biome"):
+						pos = farm.get_plot_position_for_active_biome(base_pos.x)
+					if grid_config.is_position_valid(pos):
+						_toggle_plot_selection(pos)
+						get_viewport().set_input_as_handled()
+						return
 	else:
 		_verbose.warn("input", "⚠️", "grid_config is NULL at input time - falling back to hardcoded actions")
-		# Fallback: default 6x2 keyboard layout
-		# Row 0: TYUIOP left-to-right
-		# Row 1: 7890 left-to-right
-		var default_keys = {
-			"select_plot_t": Vector2i(0, 0),
-			"select_plot_y": Vector2i(1, 0),
-			"select_plot_u": Vector2i(2, 0),
-			"select_plot_i": Vector2i(3, 0),
-			"select_plot_o": Vector2i(4, 0),
-			"select_plot_p": Vector2i(5, 0),
-			"select_plot_7": Vector2i(0, 1),
-			"select_plot_8": Vector2i(1, 1),
-			"select_plot_9": Vector2i(2, 1),
-			"select_plot_0": Vector2i(3, 1),
+		# Fallback: default 6x1 keyboard layout (single-biome view)
+		# TYUIOP = 6 plots per biome (x=0-5), remapped to active biome's row
+		# 7890 = biome selection (handled separately by ActiveBiomeManager)
+		var default_plot_indices = {
+			"select_plot_t": 0,
+			"select_plot_y": 1,
+			"select_plot_u": 2,
+			"select_plot_i": 3,
+			"select_plot_o": 4,
+			"select_plot_p": 5,
 		}
-		for action in default_keys.keys():
+		for action in default_plot_indices.keys():
 			if event.is_action_pressed(action):
+				var plot_index = default_plot_indices[action]
+				# Remap to active biome's row
+				var pos = Vector2i(plot_index, 0)
+				if farm and farm.has_method("get_plot_position_for_active_biome"):
+					pos = farm.get_plot_position_for_active_biome(plot_index)
 				if VERBOSE:
-					_verbose.debug("input", "📍", "Fallback action detected: %s → %s" % [action, default_keys[action]])
-				_toggle_plot_selection(default_keys[action])
+					_verbose.debug("input", "📍", "Fallback action detected: %s → %s" % [action, pos])
+				_toggle_plot_selection(pos)
 				get_viewport().set_input_as_handled()
 				return
 
-	# Selection management: [ = clear all, ] = restore previous
+	# Selection management: [ = clear all, ] = select all (in active biome)
 	# Check for raw keyboard events since InputMap actions don't exist for these keys
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_BRACKETLEFT:  # [ key
@@ -322,7 +424,7 @@ func _unhandled_input(event: InputEvent):
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == KEY_BRACKETRIGHT:  # ] key
-			_restore_previous_selection()
+			_select_all_plots()
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == KEY_BACKSPACE:  # Backspace - Remove Gates (only with Tool 5)
@@ -336,6 +438,20 @@ func _unhandled_input(event: InputEvent):
 					_action_remove_gates(selected_plots)
 					get_viewport().set_input_as_handled()
 					return
+
+		# ═══════════════════════════════════════════════════════════════════════
+		# BIOME SELECTION - 7890 for direct selection, ,. for cycling
+		# ═══════════════════════════════════════════════════════════════════════
+		var _biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+		if _biome_mgr:
+			# Direct biome selection (7, 8, 9, 0)
+			if _biome_mgr.select_biome_by_key(event.keycode):
+				get_viewport().set_input_as_handled()
+				return
+			# Biome cycling (, and .)
+			if _biome_mgr.handle_cycle_input(event.keycode):
+				get_viewport().set_input_as_handled()
+				return
 
 	# Movement (WASD or D-Pad or Left Stick) - Phase 7: Use InputMap actions
 	if event.is_action_pressed("move_up"):
@@ -441,21 +557,26 @@ func _enter_submenu(submenu_name: String):
 		push_error("Submenu '%s' not found" % submenu_name)
 		return
 
+	# Get plot position for context-aware menus
+	var menu_position = current_selection
+	var checked_plots: Array[Vector2i] = []
+	if plot_grid_display and plot_grid_display.has_method("get_selected_plots"):
+		checked_plots = plot_grid_display.get_selected_plots()
+	if not checked_plots.is_empty():
+		menu_position = checked_plots[0]
+
 	# Check if submenu is dynamic - generate runtime actions
 	if submenu.get("dynamic", false):
-		# For dynamic menus, determine which plot position to use for generation
-		var menu_position = current_selection
-
-		# If checkboxes are active, use first checked plot instead of current_selection
-		# This allows users to checkbox a plot and get the correct biome menu
-		var checked_plots: Array[Vector2i] = []
-		if plot_grid_display and plot_grid_display.has_method("get_selected_plots"):
-			checked_plots = plot_grid_display.get_selected_plots()
-
-		if not checked_plots.is_empty():
-			menu_position = checked_plots[0]
-
 		submenu = ToolConfig.get_dynamic_submenu(submenu_name, farm, menu_position)
+
+	# Special handling for mill_power submenu: inject availability
+	if submenu_name == "mill_power":
+		submenu = submenu.duplicate(true)  # Make copy to add availability
+		var biome = farm.grid.get_biome_for_plot(menu_position) if farm and farm.grid else null
+		var availability = QuantumMill.check_power_availability(biome)
+		submenu["_availability"] = availability
+		mill_selection_stage = 0  # Reset mill state when entering power submenu
+		mill_selected_power = ""
 
 	current_submenu = submenu_name
 
@@ -587,13 +708,40 @@ func _execute_submenu_action(action_key: String):
 		"plant_bread":
 			_action_batch_plant("bread", selected_plots)
 
-		# Industry submenu
+		# Industry submenu (legacy - direct placement)
 		"place_mill":
 			_action_batch_build("mill", selected_plots)
 		"place_market":
 			_action_batch_build("market", selected_plots)
 		"place_kitchen":
 			_action_place_kitchen(selected_plots)
+
+		# Mill two-stage selection: Power sources (stage 1)
+		"mill_select_power_water":
+			_action_mill_select_power("Q", selected_plots)
+			return  # Don't exit submenu - proceed to stage 2
+		"mill_select_power_wind":
+			_action_mill_select_power("E", selected_plots)
+			return  # Don't exit submenu - proceed to stage 2
+		"mill_select_power_fire":
+			_action_mill_select_power("R", selected_plots)
+			return  # Don't exit submenu - proceed to stage 2
+
+		# Mill two-stage selection: Conversions (stage 2)
+		"mill_convert_flour":
+			_action_mill_convert("Q", selected_plots)
+		"mill_convert_lumber":
+			_action_mill_convert("E", selected_plots)
+		"mill_convert_energy":
+			_action_mill_convert("R", selected_plots)
+
+		# Industry building operations submenu
+		"harvest_flour":
+			_action_harvest_flour(selected_plots)
+		"market_sell":
+			_action_market_sell(selected_plots)
+		"bake_bread":
+			_action_bake_bread(selected_plots)
 
 		# Single-qubit gate submenu
 		"apply_pauli_x":
@@ -820,6 +968,14 @@ func _execute_tool_action(action_key: String):
 		"place_kitchen":
 			_action_place_kitchen(selected_plots)
 
+		# Tool 3: INDUSTRY - Quantum building operations
+		"harvest_flour":
+			_action_harvest_flour(selected_plots)
+		"market_sell":
+			_action_market_sell(selected_plots)
+		"bake_bread":
+			_action_bake_bread(selected_plots)
+
 		# Tool 4: ENERGY - Energy management
 		"inject_energy":
 			_action_inject_energy(selected_plots)
@@ -828,15 +984,31 @@ func _execute_tool_action(action_key: String):
 		"place_energy_tap":
 			_action_place_energy_tap(selected_plots)
 
-		# Tool 5: GATES - Instantaneous single-qubit gates
+		# Tool 2: GATES (1-qubit) - Probability control
 		"apply_pauli_x":
 			_action_apply_pauli_x(selected_plots)
 		"apply_hadamard":
 			_action_apply_hadamard(selected_plots)
 		"apply_pauli_z":
 			_action_apply_pauli_z(selected_plots)
+		"apply_ry":
+			_action_apply_ry_gate(selected_plots)
 
-		# Tool 5: Measure (R action)
+		# Tool 3: ENTANGLE (2-qubit) - Entanglement gates
+		"apply_cnot":
+			_action_apply_cnot(selected_plots)
+		"apply_swap":
+			_action_apply_swap(selected_plots)
+		"apply_cz":
+			_action_apply_cz(selected_plots)
+		"create_bell_pair":
+			_action_create_bell_pair(selected_plots)
+		"disentangle":
+			_action_disentangle(selected_plots)
+		"inspect_entanglement":
+			_action_inspect_entanglement(selected_plots)
+
+		# Legacy: Measure batch (R action)
 		"measure_batch":
 			_action_batch_measure(selected_plots)
 
@@ -963,13 +1135,13 @@ func _clear_all_selection():
 	plot_grid_display.clear_all_selection()
 
 
-func _restore_previous_selection():
-	"""Restore previous selection state (] key)"""
+func _select_all_plots():
+	"""Select all plots in the active biome (] key)"""
 	if not plot_grid_display:
 		_verbose.error("input", "❌", "ERROR: PlotGridDisplay not wired to FarmInputHandler!")
 		return
 
-	plot_grid_display.restore_previous_selection()
+	plot_grid_display.select_all_plots()
 
 
 ## Action Implementations - Batch Operations (NEW)
@@ -1057,13 +1229,13 @@ func _action_batch_plant(plant_type: String, positions: Array[Vector2i]):
 
 
 func _action_batch_measure(positions: Array[Vector2i]):
-	"""Measure quantum state of multiple plots via quantum_computer (Model B)
+	"""Measure quantum state of multiple plots via quantum_computer (Model C)
 
 	Collapses the quantum state of selected plots and reports outcomes.
-	Uses the refactored measure_plot() which is fully Model B compatible.
+	Uses measure_axis() for Model C density matrix projection.
 
-	Enhanced: When measuring an entangled plot, shows outcomes for ALL
-	registers in the entangled component (batch component measurement).
+	Entanglement is handled automatically by the density matrix - measuring
+	one entangled qubit collapses the correlated state appropriately.
 	"""
 	if not farm or not farm.grid:
 		action_performed.emit("measure", false, "Farm not loaded yet")
@@ -1073,11 +1245,11 @@ func _action_batch_measure(positions: Array[Vector2i]):
 		action_performed.emit("measure", false, "No plots selected")
 		return
 
-	_verbose.info("farm", "📊", "Measuring %d plots (with component expansion)..." % positions.size())
+	_verbose.info("farm", "📊", "Measuring %d plots (Model C)..." % positions.size())
 
 	var success_count = 0
 	var outcomes = {}
-	var measured_components: Array[int] = []  # Track which components we've measured
+	var measured_qubits: Array[int] = []  # Track which qubits we've measured
 
 	for pos in positions:
 		var plot = farm.grid.get_plot(pos)
@@ -1093,53 +1265,39 @@ func _action_batch_measure(positions: Array[Vector2i]):
 				outcomes[outcome_emoji] = outcomes.get(outcome_emoji, 0) + 1
 			continue
 
-		var emoji = plot.north_emoji if plot.north_emoji else "🌾"
+		var north_emoji = plot.north_emoji if plot.north_emoji else "🌾"
+		var south_emoji = plot.south_emoji if plot.south_emoji else "🍂"
 		var qc = biome.quantum_computer
 
-		# Get register for this emoji
-		if not qc.register_map.coordinates.has(emoji):
-			continue
-
-		var reg_id = qc.register_map.coordinates[emoji]
-		var comp = qc.get_component_containing(reg_id)
-
-		if not comp:
-			# No component - measure normally
+		# Model C: Get qubit index for this emoji axis
+		var qubit_idx = qc.get_qubit_for_emoji(north_emoji)
+		if qubit_idx < 0:
+			# Emoji not registered - fallback
 			var outcome_emoji = farm.grid.measure_plot(pos)
 			if outcome_emoji and outcome_emoji != "":
 				success_count += 1
 				outcomes[outcome_emoji] = outcomes.get(outcome_emoji, 0) + 1
 			continue
 
-		# Check if we've already measured this component
-		if comp.component_id in measured_components:
+		# Skip if we've already measured this qubit
+		if qubit_idx in measured_qubits:
 			continue
 
-		measured_components.append(comp.component_id)
+		measured_qubits.append(qubit_idx)
 
-		# Measure ALL registers in the component (batch component measurement)
-		_verbose.info("farm", "🔗", "Measuring entangled component %d with %d registers" % [comp.component_id, comp.register_ids.size()])
-
-		for comp_reg_id in comp.register_ids:
-			# Find the emoji for this register
-			var reg_emoji = _get_emoji_for_register(qc, comp_reg_id)
-			if reg_emoji == "":
-				continue
-
-			# Measure this register in the component
-			var outcome = qc.measure_register(comp, comp_reg_id)
-			if outcome != "":
-				success_count += 1
-				outcomes[outcome] = outcomes.get(outcome, 0) + 1
-				_verbose.debug("farm", "📍", "Component %d: %s → %s" % [comp.component_id, reg_emoji, outcome])
+		# Model C: Measure using measure_axis (samples + projects density matrix)
+		var outcome_emoji = qc.measure_axis(north_emoji, south_emoji)
+		if outcome_emoji != "":
+			success_count += 1
+			outcomes[outcome_emoji] = outcomes.get(outcome_emoji, 0) + 1
+			_verbose.debug("farm", "📍", "Qubit %d: %s/%s → %s" % [qubit_idx, north_emoji, south_emoji, outcome_emoji])
 
 	var summary = ""
 	for emoji in outcomes.keys():
 		summary += "%s×%d " % [emoji, outcomes[emoji]]
 
-	var component_note = " (%d components)" % measured_components.size() if measured_components.size() > 0 else ""
 	action_performed.emit("measure", success_count > 0,
-		"%s Measured %d outcomes%s | %s" % ["✅" if success_count > 0 else "❌", success_count, component_note, summary])
+		"%s Measured %d outcomes | %s" % ["✅" if success_count > 0 else "❌", success_count, summary])
 
 
 func _get_emoji_for_register(qc, reg_id: int) -> String:
@@ -1238,6 +1396,286 @@ func _action_place_kitchen(positions: Array[Vector2i]):
 		action_performed.emit("place_kitchen", false, "❌ Failed to create kitchen (plots may need to be planted first)")
 
 
+## ═══════════════════════════════════════════════════════════════════════════
+## QUANTUM BUILDING ACTIONS - Mill Harvest, Market Sell, Kitchen Bake
+## ═══════════════════════════════════════════════════════════════════════════
+
+func _action_harvest_flour(positions: Array[Vector2i]):
+	"""Harvest flour from mill when P(💨) is high.
+
+	Mill creates 💨 ↔ 🌾 Hamiltonian coupling - populations oscillate.
+	Player harvests when P(💨) is high to maximize flour yield.
+	Flour probability determines harvest amount.
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("harvest_flour", false, "⚠️  Farm not loaded yet")
+		return
+
+	if positions.is_empty():
+		action_performed.emit("harvest_flour", false, "⚠️  No plots selected")
+		return
+
+	_verbose.info("farm", "🏭", "Harvesting flour from %d positions..." % positions.size())
+
+	var total_flour = 0
+	var harvested_count = 0
+
+	for pos in positions:
+		# Check if there's a mill at this position
+		var mill = farm.grid.quantum_mills.get(pos)
+		if not mill or not mill.is_active:
+			_verbose.debug("farm", "⚠️", "No active mill at %s" % pos)
+			continue
+
+		# Get flour probability from biome
+		var biome = farm.grid.get_biome_for_plot(pos)
+		if not biome or not biome.quantum_computer:
+			continue
+
+		var flour_prob = biome.quantum_computer.get_emoji_probability("💨")
+
+		# Harvest based on probability (threshold: 30%)
+		if flour_prob > 0.3:
+			var yield_amount = int(flour_prob * 100)
+			total_flour += yield_amount
+			harvested_count += 1
+
+			# Add to economy
+			if farm.economy:
+				farm.economy.add_resource("💨", yield_amount, "mill_harvest")
+
+			_verbose.info("farm", "💨", "Mill at %s: P(💨)=%.2f → %d flour" % [pos, flour_prob, yield_amount])
+		else:
+			_verbose.debug("farm", "⏳", "Mill at %s: P(💨)=%.2f (too low, wait)" % [pos, flour_prob])
+
+	if harvested_count > 0:
+		action_performed.emit("harvest_flour", true, "💨 Harvested %d flour from %d mills" % [total_flour, harvested_count])
+	else:
+		action_performed.emit("harvest_flour", false, "⏳ P(💨) too low - wait for oscillation")
+
+
+func _action_market_sell(positions: Array[Vector2i]):
+	"""Sell resources via market's quantum X ↔ 💰 pairing.
+
+	Market pairs a target emoji with 💰 in superposition.
+	Measurement collapses to determine credits:
+	  - Collapse to 💰: Full sale
+	  - Collapse to X: Partial sale
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("market_sell", false, "⚠️  Farm not loaded yet")
+		return
+
+	if positions.is_empty():
+		action_performed.emit("market_sell", false, "⚠️  No plots selected")
+		return
+
+	_verbose.info("farm", "🏪", "Selling at %d market positions..." % positions.size())
+
+	var total_credits = 0
+	var sold_count = 0
+	var outcomes: Array[String] = []
+
+	for pos in positions:
+		# Check if there's a market at this position
+		var market = farm.grid.quantum_markets.get(pos)
+		if not market or not market.is_active:
+			_verbose.debug("farm", "⚠️", "No active market at %s" % pos)
+			continue
+
+		# Perform quantum sale
+		var result = market.measure_for_sale()
+		if result.success:
+			total_credits += result.credits
+			sold_count += 1
+
+			if result.got_money:
+				outcomes.append("💰%d" % result.credits)
+			else:
+				outcomes.append("📦%d" % result.credits)
+
+			# Add credits to economy
+			if farm.economy:
+				farm.economy.add_resource("💰", result.credits, "market_sale")
+
+	if sold_count > 0:
+		var outcome_str = ", ".join(outcomes) if outcomes.size() <= 3 else "%d sales" % sold_count
+		action_performed.emit("market_sell", true, "🏪 Sold %s (+%d💰)" % [outcome_str, total_credits])
+	else:
+		action_performed.emit("market_sell", false, "⚠️  No active markets at selected positions")
+
+
+func _action_bake_bread(positions: Array[Vector2i]):
+	"""Bake bread using kitchen triplet entanglement.
+
+	Requires 3 plots with 💧 (water), 🔥 (fire), 💨 (flour).
+	Uses GHZ triplet state - measurement collapses to bread or ingredients.
+	High coherence → bread, decoherence → ingredients returned.
+	"""
+	if not farm or not farm.grid:
+		action_performed.emit("bake_bread", false, "⚠️  Farm not loaded yet")
+		return
+
+	if positions.size() != 3:
+		action_performed.emit("bake_bread", false, "⚠️  Select 3 kitchen plots (💧🔥💨)")
+		return
+
+	_verbose.info("farm", "🍳", "Attempting to bake bread with triplet at %s..." % [positions])
+
+	# Validate required ingredients
+	var has_water = false
+	var has_fire = false
+	var has_flour = false
+
+	for pos in positions:
+		var plot = farm.grid.get_plot(pos)
+		if not plot or not plot.is_planted:
+			action_performed.emit("bake_bread", false, "⚠️  Plot %s not planted" % pos)
+			return
+
+		match plot.north_emoji:
+			"💧": has_water = true
+			"🔥": has_fire = true
+			"💨": has_flour = true
+
+	if not (has_water and has_fire and has_flour):
+		action_performed.emit("bake_bread", false, "⚠️  Need 💧+🔥+💨 (got %s%s%s)" % [
+			"💧" if has_water else "?",
+			"🔥" if has_fire else "?",
+			"💨" if has_flour else "?"
+		])
+		return
+
+	# Get biome and check bread probability
+	var biome = farm.grid.get_biome_for_plot(positions[0])
+	if not biome or not biome.quantum_computer:
+		action_performed.emit("bake_bread", false, "⚠️  No quantum system in biome")
+		return
+
+	# Get P(🍞) if bread axis exists, otherwise use coherence
+	var bread_prob = 0.5
+	if biome.quantum_computer.register_map.has("🍞"):
+		bread_prob = biome.quantum_computer.get_emoji_probability("🍞")
+	else:
+		# Use overall coherence as proxy
+		bread_prob = biome.quantum_computer.get_purity()
+
+	# Attempt baking (Born rule)
+	if randf() < bread_prob:
+		var bread_yield = int(bread_prob * 100)
+
+		if farm.economy:
+			farm.economy.add_resource("🍞", bread_yield, "kitchen_bake")
+
+		_verbose.info("farm", "🍞", "BREAD BAKED! P(🍞)=%.2f → %d bread" % [bread_prob, bread_yield])
+		action_performed.emit("bake_bread", true, "🍞 Baked bread! (+%d🍞)" % bread_yield)
+	else:
+		_verbose.info("farm", "📦", "Collapsed to ingredients. P(🍞)=%.2f" % bread_prob)
+		action_performed.emit("bake_bread", false, "📦 Collapsed to ingredients (try again)")
+
+
+# ============================================================================
+# MILL TWO-STAGE SELECTION (Coupling Injector)
+# ============================================================================
+
+func _action_mill_select_power(power_key: String, positions: Array[Vector2i]):
+	"""Handle power source selection (mill stage 1).
+
+	Saves selected power and transitions to stage 2 (conversion selection).
+	"""
+	if positions.is_empty():
+		action_performed.emit("mill_power", false, "⚠️ Select a plot first")
+		return
+
+	var biome = farm.grid.get_biome_for_plot(positions[0])
+	if not biome:
+		action_performed.emit("mill_power", false, "⚠️ No biome at selected position")
+		return
+
+	# Verify power is available
+	var availability = QuantumMill.check_power_availability(biome)
+	if not availability.get(power_key, false):
+		var power_info = QuantumMill.POWER_SOURCES.get(power_key, {})
+		var emoji = power_info.get("emoji", "?")
+		action_performed.emit("mill_power", false, "⚠️ %s not available in biome" % emoji)
+		return
+
+	# Save selection and move to stage 2
+	mill_selected_power = power_key
+	mill_selection_stage = 1
+
+	var power_info = QuantumMill.POWER_SOURCES.get(power_key, {})
+	_verbose.info("mill", "⚡", "Mill power selected: %s %s" % [
+		power_info.get("emoji", "?"), power_info.get("label", "?")])
+
+	# Get conversion availability for stage 2
+	var conv_availability = QuantumMill.check_conversion_availability(biome)
+
+	# Enter conversion submenu with availability
+	var submenu = ToolConfig.SUBMENUS.get("mill_conversion", {}).duplicate(true)
+	submenu["_availability"] = conv_availability
+	current_submenu = "mill_conversion"
+	_cached_submenu = submenu
+	submenu_changed.emit("mill_conversion", submenu)
+
+
+func _action_mill_convert(conversion_key: String, positions: Array[Vector2i]):
+	"""Handle conversion selection (mill stage 2) and place the mill.
+
+	Completes two-stage selection and creates the mill with coupling.
+	"""
+	if positions.is_empty():
+		action_performed.emit("mill_place", false, "⚠️ Select a plot first")
+		_reset_mill_state()
+		return
+
+	if mill_selection_stage != 1:
+		action_performed.emit("mill_place", false, "⚠️ Select power source first")
+		_reset_mill_state()
+		return
+
+	var pos = positions[0]
+	var biome = farm.grid.get_biome_for_plot(pos)
+	if not biome:
+		action_performed.emit("mill_place", false, "⚠️ No biome at selected position")
+		_reset_mill_state()
+		return
+
+	# Verify conversion is available
+	var conv_availability = QuantumMill.check_conversion_availability(biome)
+	if not conv_availability.get(conversion_key, false):
+		var conv_info = QuantumMill.CONVERSIONS.get(conversion_key, {})
+		var source = conv_info.get("source", "?")
+		var product = conv_info.get("product", "?")
+		action_performed.emit("mill_place", false, "⚠️ %s→%s not available (need both emojis in biome)" % [source, product])
+		_reset_mill_state()
+		return
+
+	# Create and configure mill
+	var mill = QuantumMill.new()
+	mill.grid_position = pos
+	farm.grid.add_child(mill)
+
+	var result = mill.configure(biome, mill_selected_power, conversion_key)
+
+	if result.success:
+		farm.grid.quantum_mills[pos] = mill
+		action_performed.emit("mill_place", true, "🏭 %s" % mill.get_status())
+		_verbose.info("mill", "🏭", "Mill placed: %s" % mill.get_status())
+	else:
+		mill.queue_free()
+		action_performed.emit("mill_place", false, "⚠️ Mill failed: %s" % result.get("error", "unknown"))
+
+	# Reset mill state
+	_reset_mill_state()
+
+
+func _reset_mill_state():
+	"""Reset mill selection state."""
+	mill_selection_stage = 0
+	mill_selected_power = ""
+
+
 func _action_batch_boost_energy(positions: Array[Vector2i]):
 	"""Boost quantum energy in selected plots (DEPRECATED - Model A only)
 
@@ -1333,15 +1771,16 @@ func _check_kitchen_bread_state(positions: Array[Vector2i], outcomes: Dictionary
 	if positions.size() != 3:
 		return false
 
-	# Check if all plots are in Kitchen biome
-	var all_kitchen = true
+	# Check if all plots are in VolcanicWorlds biome
+	# Note: VolcanicWorlds no longer has GHZ/bread mechanics, this will always return false
+	var all_volcanic = true
 	for pos in positions:
 		var biome_name = farm.grid.plot_biome_assignments.get(pos, "")
-		if biome_name != "Kitchen":
-			all_kitchen = false
+		if biome_name != "VolcanicWorlds":
+			all_volcanic = false
 			break
 
-	if not all_kitchen:
+	if not all_volcanic:
 		return false
 
 	# Check if all 3 plots measured to their north/|0⟩ states
@@ -1631,28 +2070,19 @@ func _action_plant_batch(positions: Array[Vector2i]):
 	var plant_type = "wheat"  # Default
 
 	match biome_name:
-		"Kitchen":
-			# Kitchen: cycle through fire, water, flour based on plot position
-			# Plot (3,1) = fire, Plot (4,1) = water, Plot (5,1) = flour
-			if first_pos.x == 3:
-				plant_type = "fire"
-			elif first_pos.x == 4:
-				plant_type = "water"
-			elif first_pos.x == 5:
-				plant_type = "flour"
-			else:
-				plant_type = "fire"  # Fallback
+		"VolcanicWorlds":
+			# Volcanic: mine crystals or ore
+			plant_type = "crystal"
 
 		"BioticFlux":
 			plant_type = "wheat"
 
-		"Forest":
+		"FungalNetworks":
 			plant_type = "mushroom"
 
-		"Market":
-			# Can't plant on market plots
-			action_performed.emit("plant_batch", false, "⚠️  Cannot plant on Market plots")
-			return
+		"StellarForges":
+			# Stellar Forges: build rockets or saucers
+			plant_type = "rocket"
 
 		_:
 			plant_type = "wheat"  # Default fallback
@@ -2339,6 +2769,102 @@ func _action_apply_swap(positions: Array[Vector2i]):
 		"✅ Applied SWAP to %d qubit pairs" % success_count if success_count > 0 else "❌ No gates applied")
 
 
+func _action_create_bell_pair(positions: Array[Vector2i]):
+	"""Create Bell pair (H + CNOT) - maximally entangled state.
+
+	Requires exactly 2 positions selected. Applies:
+	1. Hadamard to first qubit (creates superposition)
+	2. CNOT with first as control, second as target
+
+	Result: |Φ+⟩ = (|00⟩ + |11⟩) / √2
+	"""
+	if positions.size() < 2:
+		action_performed.emit("create_bell_pair", false, "⚠️  Select 2 plots to create Bell pair")
+		return
+
+	var pos_a = positions[0]
+	var pos_b = positions[1]
+
+	# Step 1: Apply Hadamard to first qubit
+	var h_success = _apply_single_qubit_gate(pos_a, "H")
+	if not h_success:
+		action_performed.emit("create_bell_pair", false, "❌ Failed to apply Hadamard")
+		return
+
+	# Step 2: Apply CNOT (control=a, target=b)
+	var cnot_success = _apply_two_qubit_gate(pos_a, pos_b, "CNOT")
+	if not cnot_success:
+		action_performed.emit("create_bell_pair", false, "❌ Failed to apply CNOT")
+		return
+
+	action_performed.emit("create_bell_pair", true, "💑 Created Bell pair |Φ+⟩ = (|00⟩+|11⟩)/√2")
+
+
+func _action_disentangle(positions: Array[Vector2i]):
+	"""Break entanglement between qubits by measuring and resetting.
+
+	For each selected position, performs a measurement to collapse
+	the entangled state, then optionally resets to |0⟩.
+	"""
+	if positions.is_empty():
+		action_performed.emit("disentangle", false, "⚠️  No plots selected")
+		return
+
+	var success_count = 0
+	for pos in positions:
+		var biome = farm.grid.get_biome_for_plot(pos)
+		if not biome:
+			continue
+
+		var reg = biome.get_register_for_plot(pos)
+		if not reg:
+			continue
+
+		# Measure to collapse entanglement (measurement breaks superposition)
+		var measure_result = biome.measure_register(reg.register_id)
+		if measure_result != null:
+			success_count += 1
+
+	action_performed.emit("disentangle", success_count > 0,
+		"✂️ Disentangled %d qubits via measurement" % success_count if success_count > 0 else "❌ No qubits disentangled")
+
+
+func _action_inspect_entanglement(positions: Array[Vector2i]):
+	"""Show entanglement information for selected qubits.
+
+	Displays which qubits are entangled with the selected ones.
+	"""
+	if positions.is_empty():
+		action_performed.emit("inspect_entanglement", false, "⚠️  No plots selected")
+		return
+
+	var info_lines = []
+	for pos in positions:
+		var biome = farm.grid.get_biome_for_plot(pos)
+		if not biome or not biome.quantum_computer:
+			continue
+
+		var reg = biome.get_register_for_plot(pos)
+		if not reg:
+			continue
+
+		var qc = biome.quantum_computer
+		var entangled = qc.get_entangled_component(reg.register_id)
+
+		if entangled.size() > 1:
+			var partner_ids = []
+			for r_id in entangled:
+				if r_id != reg.register_id:
+					partner_ids.append(str(r_id))
+			info_lines.append("Plot %s: entangled with registers [%s]" % [pos, ", ".join(partner_ids)])
+		else:
+			info_lines.append("Plot %s: not entangled" % pos)
+
+	var message = "\n".join(info_lines) if info_lines.size() > 0 else "No entanglement info"
+	print("🔍 Entanglement Inspection:\n%s" % message)
+	action_performed.emit("inspect_entanglement", true, "🔍 " + info_lines[0] if info_lines.size() > 0 else message)
+
+
 func _extract_emoji_from_action(action: String) -> String:
 	"""Extract target emoji from dynamic tap action
 
@@ -2404,10 +2930,10 @@ func _print_help():
 	else:
 		_verbose.info("input", "⚡", "  (No tool currently selected)")
 
-	_verbose.info("input", "📍", "\nMULTI-SELECT PLOTS (NEW):")
+	_verbose.info("input", "📍", "\nMULTI-SELECT PLOTS:")
 	_verbose.info("input", "📍", "  T/Y/U/I/O/P = Toggle checkbox on plots 1-6")
 	_verbose.info("input", "📍", "  [ = Deselect all plots")
-	_verbose.info("input", "📍", "  ] = Restore previous selection state")
+	_verbose.info("input", "📍", "  ] = Select all plots (in active biome)")
 	_verbose.info("input", "📍", "  Q/E/R = Apply current tool action to ALL selected plots")
 
 	_verbose.info("input", "🎮", "\nMOVEMENT (Legacy - for focus/cursor):")
@@ -2545,14 +3071,14 @@ func _action_inspect_plot(plots: Array[Vector2i]):
 			_verbose.debug("farm", "🌱", "      Has been measured: %s" % ("YES" if plot.has_been_measured else "NO"))
 
 			# Quantum state info (Model C)
-			if plot.parent_biome and plot.bath_subplot_id >= 0:
+			if plot.parent_biome and plot.register_id >= 0:
 				var north = plot.north_emoji
 				var south = plot.south_emoji
-				# Get purity from bath
+				# Get purity from quantum_computer
 				var biome = plot.parent_biome
 				var purity = 0.5
-				if biome.bath:
-					purity = biome.bath.get_purity()
+				if biome.quantum_computer:
+					purity = biome.quantum_computer.get_purity()
 				_verbose.debug("quantum", "⚛️", "      State: %s ↔ %s | Purity: %.3f" % [north, south, purity])
 		else:
 			_verbose.info("farm", "🌱", "   Planted: NO")
@@ -2979,21 +3505,29 @@ func _can_execute_tool_action(action_key: String) -> bool:
 			return _can_execute_pop(selected_plots)  # Pass selected plots for Issue #4 fix
 
 		# ═══════════════════════════════════════════════════════════════
-		# v2 ENTANGLE Tool (Tool 2)
+		# v2 GATES Tool (Tool 2) - 1-qubit gates
 		# ═══════════════════════════════════════════════════════════════
+		"apply_pauli_x", "apply_hadamard", "apply_pauli_z", "apply_ry":
+			return true  # Available if plots selected
+
+		# ═══════════════════════════════════════════════════════════════
+		# v2 ENTANGLE Tool (Tool 3) - 2-qubit gates
+		# ═══════════════════════════════════════════════════════════════
+		"apply_cnot", "apply_swap", "apply_cz":
+			return selected_plots.size() >= 2  # Need 2 plots for 2-qubit gates
+		"create_bell_pair":
+			return selected_plots.size() >= 2  # Need 2 plots for Bell pair
+		"disentangle", "inspect_entanglement":
+			return true  # Available if any plots selected
+
+		# Legacy entangle actions (kept for compatibility)
 		"cluster", "measure_trigger", "remove_gates":
 			return true  # Available if plots selected
 
 		# ═══════════════════════════════════════════════════════════════
-		# v2 INDUSTRY Tool (Tool 3)
+		# v2 INDUSTRY Tool (Tool 4)
 		# ═══════════════════════════════════════════════════════════════
 		"place_mill", "place_market", "place_kitchen":
-			return true  # Available if plots selected
-
-		# ═══════════════════════════════════════════════════════════════
-		# v2 UNITARY Tool (Tool 4)
-		# ═══════════════════════════════════════════════════════════════
-		"apply_pauli_x", "apply_hadamard", "apply_pauli_z":
 			return true  # Available if plots selected
 
 		# ═══════════════════════════════════════════════════════════════

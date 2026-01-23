@@ -31,10 +31,10 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 const WheatPlot = preload("res://Core/GameMechanics/WheatPlot.gd")
 const BiomeBase = preload("res://Core/Environment/BiomeBase.gd")
 const BioticFluxBiome = preload("res://Core/Environment/BioticFluxBiome.gd")
-const QuantumKitchen_Biome = preload("res://Core/Environment/QuantumKitchen_Biome.gd")
 # const Biome = preload("res://Core/Environment/Biome.gd")  # Legacy - REMOVED: file no longer exists
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 const QuantumMill = preload("res://Core/GameMechanics/QuantumMill.gd")
+const QuantumMarket = preload("res://Core/GameMechanics/QuantumMarket.gd")
 const FlowRateCalculator = preload("res://Core/GameMechanics/FlowRateCalculator.gd")
 const TopologyAnalyzer = preload("res://Core/QuantumSubstrate/TopologyAnalyzer.gd")
 const EntangledPair = preload("res://Core/QuantumSubstrate/EntangledPair.gd")
@@ -56,6 +56,9 @@ var entangled_clusters: Array = []  # Array of EntangledCluster objects
 
 # Quantum Mills (for non-destructive measurement)
 var quantum_mills: Dictionary = {}  # Vector2i -> QuantumMill
+
+# Quantum Markets (for X ↔ 💰 pairing and sales)
+var quantum_markets: Dictionary = {}  # Vector2i -> QuantumMarket
 
 # Conspiracy network (for tomato growth)
 var conspiracy_network = null
@@ -245,10 +248,12 @@ func get_biome_for_plot(position: Vector2i):
 	return biome
 
 
-## MODEL B: REGISTER ALLOCATION (Phase 0.5)
+## MODEL B: REGISTER ALLOCATION (Phase 0.5) - DEPRECATED
 
 func allocate_register_for_plot(position: Vector2i, north_emoji: String, south_emoji: String) -> int:
 	"""Allocate a quantum register for a plot in its biome's quantum computer
+
+	DEPRECATED: Model B register allocation. Use Terminal + ProbeActions for v2.
 
 	Model B: Each plot gets a logical qubit RegisterId in the parent biome's QuantumComputer.
 	Called by BasePlot.plant() during planting.
@@ -261,6 +266,7 @@ func allocate_register_for_plot(position: Vector2i, north_emoji: String, south_e
 	Returns:
 		Register ID (int) if successful, -1 if failed
 	"""
+	push_warning("DEPRECATED: allocate_register_for_plot() uses Model B. Use Terminal + ProbeActions for v2.")
 	# Get biome for this plot
 	var plot_biome = get_biome_for_plot(position)
 	if not plot_biome or not plot_biome.has_method("allocate_register_for_plot"):
@@ -284,17 +290,23 @@ func allocate_register_for_plot(position: Vector2i, north_emoji: String, south_e
 func get_register_for_plot(position: Vector2i) -> int:
 	"""Get the RegisterId for a plot
 
+	DEPRECATED: Model B register lookup. Use get_qubit_for_emoji() on QuantumComputer.
+
 	Returns:
 		Register ID (int) if plot is planted, -1 if not found
 	"""
+	push_warning("DEPRECATED: get_register_for_plot() uses Model B. Use QuantumComputer.get_qubit_for_emoji().")
 	return plot_register_mapping.get(position, -1)
 
 
 func clear_register_for_plot(position: Vector2i) -> void:
 	"""Clear register allocation for a plot (called after harvest)
 
+	DEPRECATED: Model B register cleanup. Fixed bath architecture doesn't deallocate qubits.
+
 	Model B: Removes register from biome's quantum computer and clears FarmGrid tracking.
 	"""
+	push_warning("DEPRECATED: clear_register_for_plot() uses Model B. Fixed bath doesn't deallocate.")
 	var register_id = plot_register_mapping.get(position, -1)
 	if register_id < 0:
 		return
@@ -500,55 +512,22 @@ func process_mill_flour(flour_amount: int) -> void:
 	])
 
 
-func _process_markets(delta: float) -> void:
-	"""Process market buildings each frame - quantum commodity injection.
+func _process_markets(_delta: float) -> void:
+	"""DEPRECATED: Market biome has been replaced by StellarForges.
 
-	Called from _process() to handle market dynamics via emoji injection.
-	Each market building injects accumulated resources into the market biome's
-	quantum bath, where they become dynamically coupled to sentiment (🐂/🐻).
-
-	Market pricing emerges from quantum coupling dynamics, not fixed rates.
+	This function is kept as a stub for API compatibility but does nothing.
+	Market commodity dynamics are no longer part of the game design.
 	"""
-	if not farm_economy or plots.is_empty():
-		return
-
-	# Get Market biome
-	var market_biome = biomes.get("Market")
-	if not market_biome or not market_biome.has_method("inject_commodity"):
-		return
-
-	for position in plots.keys():
-		var plot = plots[position]
-		if plot.plot_type != FarmPlot.PlotType.MARKET or not plot.is_planted:
-			continue
-
-		# Check if any flour is available for market injection
-		var flour_available = farm_economy.get_resource("💨")
-		if flour_available <= 0:
-			continue
-
-		# Inject flour as tradeable commodity into market quantum bath
-		# Flour pairs with 💰 (money) and couples to sentiment (🐂/🐻)
-		var flour_units = int(flour_available / 10.0)
-		if flour_units > 0:
-			market_biome.inject_commodity("💨", flour_units)
-			# Flour is now part of market dynamics - no classical "sale" occurs
-			# Instead, price emerges from quantum coupling between sentiment and commodity
-			_verbose.info("economy", "💨", "Market at %s: injected %d flour units into quantum bath" % [
-				plot.plot_id, flour_units
-			])
+	# Market biome no longer exists - replaced by StellarForges
+	pass
 
 
-func _process_kitchens(delta: float) -> void:
-	"""Process kitchen buildings each frame - Analog Model C.
+func _process_kitchens(_delta: float) -> void:
+	"""DEPRECATED: Kitchen biome has been replaced by VolcanicWorlds.
 
-	Kitchen evolution happens automatically in QuantumKitchen_Biome._process().
-	This method is now empty - player manually triggers:
-	  - kitchen_add_resource() to spend credits → activate drives
-	  - kitchen_harvest() to measure → get bread
+	This function is kept as a stub for API compatibility but does nothing.
 	"""
-	# Kitchen physics runs in its own _process()
-	# Player actions are handled by kitchen_add_resource() and kitchen_harvest()
+	# Kitchen biome no longer exists - replaced by VolcanicWorlds
 	pass
 
 
@@ -564,45 +543,17 @@ func kitchen_add_resource(emoji: String, credits: int) -> bool:
 
 	Example: Player clicks "Add Fire" button with 50 credits
 	"""
-	if not farm_economy:
-		return false
-
-	# Get Kitchen biome
-	var kitchen_biome = biomes.get("Kitchen") as QuantumKitchen_Biome
-	if not kitchen_biome:
-		push_error("Kitchen biome not found!")
-		return false
-
-	# Validate player has credits
-	if farm_economy.get_resource(emoji) < credits:
-		_verbose.warn("economy", "❌", "Not enough %s credits! (have %d, need %d)" % [
-			emoji, farm_economy.get_resource(emoji), credits])
-		return false
-
-	# Consume credits FIRST (spend → drive workflow)
-	farm_economy.remove_resource(emoji, credits, "kitchen_drive")
-
-	# Convert credits to resource amount (for drive duration)
-	var amount = credits / float(EconomyConstants.QUANTUM_TO_CREDITS)
-
-	# Activate drive in kitchen
-	match emoji:
-		"🔥":
-			kitchen_biome.add_fire(amount)
-		"💧":
-			kitchen_biome.add_water(amount)
-		"💨":
-			kitchen_biome.add_flour(amount)
-		_:
-			push_error("Unknown kitchen resource: %s" % emoji)
-			return false
-
-	_verbose.info("farm", "🍳", "Kitchen: Spent %d %s credits → drive activated" % [credits, emoji])
-	return true
+	# NOTE: Kitchen biome has been replaced by VolcanicWorlds
+	# This function is deprecated and will always return false
+	push_warning("kitchen_add_resource: Kitchen biome no longer exists (replaced by VolcanicWorlds)")
+	return false
 
 
 func kitchen_harvest() -> Dictionary:
 	"""Player harvests the kitchen. Performs projective measurement.
+
+	NOTE: Kitchen biome has been replaced by VolcanicWorlds.
+	This function is deprecated and will always return failure.
 
 	Returns:
 	    {
@@ -612,29 +563,10 @@ func kitchen_harvest() -> Dictionary:
 	        collapsed_to: int   # Basis state (0-7)
 	    }
 	"""
-	if not farm_economy:
-		return {"success": false, "got_bread": false, "yield": 0, "collapsed_to": -1}
-
-	# Get Kitchen biome
-	var kitchen_biome = biomes.get("Kitchen") as QuantumKitchen_Biome
-	if not kitchen_biome:
-		push_error("Kitchen biome not found!")
-		return {"success": false, "got_bread": false, "yield": 0, "collapsed_to": -1}
-
-	# Perform measurement
-	var result = kitchen_biome.harvest()
-
-	# Add bread to economy if successful
-	if result["got_bread"]:
-		var bread_credits = result["yield"] * EconomyConstants.QUANTUM_TO_CREDITS
-		farm_economy.add_resource("🍞", bread_credits, "kitchen_harvest")
-		_verbose.info("farm", "🍳", "Kitchen harvest: %s → %d 🍞 credits" % [
-			result["outcome"], bread_credits])
-	else:
-		_verbose.warn("farm", "🍳", "Kitchen harvest failed: %s (state |%d⟩)" % [
-			result["outcome"], result["collapsed_to"]])
-
-	return result
+	# NOTE: Kitchen biome has been replaced by VolcanicWorlds
+	# This function is deprecated and will always return failure
+	push_warning("kitchen_harvest: Kitchen biome no longer exists (replaced by VolcanicWorlds)")
+	return {"success": false, "got_bread": false, "yield": 0, "collapsed_to": -1}
 
 
 ## Plot Management
@@ -858,96 +790,19 @@ func plant(position: Vector2i, plant_type: String, quantum_state: Resource = nul
 # Use plant(position, "wheat"|"tomato"|"mushroom") instead
 
 
-func plant_energy_tap(position: Vector2i, target_emoji: String, drain_rate: float = 0.1) -> bool:
-	"""Plant an energy tap plot configured to drain a specific emoji
-
-	Energy taps continuously pull energy from target emojis using Lindblad drain operators.
-	The tapped energy flows to sink state and accumulates as classical resources.
-
-	PROGRESSION: Energy taps can only target emojis from discovered vocabulary. This restricts
-	tap availability to emojis the player has encountered through the vocabulary evolution system.
-
-	Manifest Section 4.1: Energy taps use L_e = |sink⟩⟨e| drain operators.
-
-	Args:
-		position: Grid position to plant the tap at
-		target_emoji: The emoji to tap (must be in discovered vocabulary)
-		drain_rate: Drain rate κ in probability/sec (default: 0.1)
-
-	Returns: true if planting succeeded, false otherwise
-	"""
-	var plot = get_plot(position)
-	if plot == null or plot.is_planted:
-		return false
-
-	# VALIDATION: Check if emoji is in discovered vocabulary
-	var available_emojis = get_available_tap_emojis()
-	if not available_emojis.has(target_emoji):
-		_verbose.warn("farm", "⚠️", "Cannot plant tap: %s not in discovered vocabulary" % target_emoji)
-		return false
-
-	# Get biome for this plot
-	var plot_biome = get_biome_for_plot(position)
-	if not plot_biome or not plot_biome.bath:
-		push_error("⚠️  Cannot plant tap: No bath available for plot %s" % position)
-		return false
-
-	# Get Icon for target emoji from IconRegistry
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		push_error("⚠️  Cannot plant tap: IconRegistry not found")
-		return false
-
-	var target_icon = icon_registry.get_icon(target_emoji)
-	if not target_icon:
-		push_error("⚠️  Cannot plant tap: Icon not found for %s" % target_emoji)
-		return false
-
-	# Configure Icon as drain target (Manifest Section 4.1)
-	target_icon.is_drain_target = true
-	target_icon.drain_to_sink_rate = drain_rate
-
-	# Ensure target emoji is in bath
-	var bath = plot_biome.bath
-	if not bath.has_emoji(target_emoji):
-		_verbose.info("energy", "ℹ️", "Injecting %s into bath for energy tap" % target_emoji)
-		bath.inject_emoji(target_emoji, target_icon)
-
-	# Ensure sink state is in bath
-	if not bath.has_emoji(bath.sink_emoji):
-		_verbose.info("energy", "ℹ️", "Injecting sink state %s into bath" % bath.sink_emoji)
-		var sink_icon = Icon.new()
-		sink_icon.emoji = bath.sink_emoji
-		sink_icon.display_name = "Sink"
-		sink_icon.is_eternal = true  # Sink never decays
-		bath.inject_emoji(bath.sink_emoji, sink_icon)
-
-	# Rebuild operators to include drain (Manifest Section 4.1)
-	bath.build_hamiltonian_from_icons(bath.active_icons)
-	bath.build_lindblad_from_icons(bath.active_icons)
-
-	# Configure plot as energy tap
-	plot.plot_type = FarmPlot.PlotType.ENERGY_TAP
-	plot.tap_target_emoji = target_emoji
-	plot.tap_accumulated_resource = 0.0
-	plot.tap_drain_rate = drain_rate
-	plot.tap_last_flux_check = 0.0
-
-	plot.is_planted = true
-	total_plots_planted += 1
-
-	# Note: structure_built signal is emitted by Farm.build() - don't emit plot_planted here
-	_verbose.info("farm", "⚡", "Planted energy tap at %s targeting %s (κ=%.3f/sec, sink-based drain)" % [
-		plot.plot_id, target_emoji, drain_rate
-	])
-	return true
+func plant_energy_tap(_position: Vector2i, _target_emoji: String, _drain_rate: float = 0.1) -> bool:
+	"""DEPRECATED: Energy tap system disabled (requires bath which was removed).
+	Returns false. Use alternative resource collection methods."""
+	push_warning("plant_energy_tap is deprecated - energy tap system disabled")
+	return false
 
 
 func place_mill(position: Vector2i) -> bool:
-	"""Place quantum mill building - non-destructive measurement via ancilla
+	"""Place quantum mill building - injects flour dynamics into parent biome
 
-	Creates a QuantumMill that couples to adjacent wheat qubits via
-	controlled operations. Measures ancilla periodically to produce flour.
+	Creates a QuantumMill that activates flour (💨) ↔ wheat (🌾) Hamiltonian
+	coupling in the parent biome's quantum computer. Flour populations oscillate
+	with wheat populations - harvest when P(💨) is high.
 	"""
 	var plot = get_plot(position)
 	if plot == null or plot.is_planted:
@@ -962,6 +817,17 @@ func place_mill(position: Vector2i) -> bool:
 	var mill = QuantumMill.new()
 	mill.grid_position = position
 	add_child(mill)
+
+	# NEW: Activate mill with parent biome (injects flour dynamics)
+	var biome = get_biome_for_plot(position)
+	if biome:
+		var success = mill.activate(biome)
+		if success:
+			_verbose.info("farm", "🏭", "Mill activated: 💨↔🌾 dynamics enabled at %s" % plot.plot_id)
+		else:
+			_verbose.warn("farm", "⚠️", "Mill placed but flour dynamics not activated at %s" % plot.plot_id)
+	else:
+		_verbose.warn("farm", "⚠️", "Mill placed but no biome found at %s" % plot.plot_id)
 
 	# Track mill
 	quantum_mills[position] = mill
@@ -994,8 +860,17 @@ func _get_adjacent_wheat(position: Vector2i) -> Array:
 	return adjacent
 
 
-func place_market(position: Vector2i) -> bool:
-	"""Place market building - sells flour for credits"""
+func place_market(position: Vector2i, target_emoji: String = "🌾") -> bool:
+	"""Place market building - creates X ↔ 💰 quantum pairing for sales
+
+	Creates a QuantumMarket that pairs a target emoji with 💰 (money) in
+	superposition. Player measures to "sell" - the collapse determines credits.
+	Higher P(💰) = more likely to get money.
+
+	Args:
+	    position: Grid position for market
+	    target_emoji: Emoji to pair with 💰 (default: 🌾 wheat)
+	"""
 	var plot = get_plot(position)
 	if plot == null or plot.is_planted:
 		return false
@@ -1005,8 +880,27 @@ func place_market(position: Vector2i) -> bool:
 	plot.conspiracy_node_id = "market"  # Entangle with market node
 	plot.is_planted = true
 
+	# Create QuantumMarket
+	var market = QuantumMarket.new()
+	market.grid_position = position
+	add_child(market)
+
+	# Activate market with parent biome (injects 💰 dynamics)
+	var biome = get_biome_for_plot(position)
+	if biome:
+		var success = market.activate(biome, target_emoji)
+		if success:
+			_verbose.info("farm", "🏪", "Market activated: %s ↔ 💰 pairing enabled at %s" % [target_emoji, plot.plot_id])
+		else:
+			_verbose.warn("farm", "⚠️", "Market placed but trading not activated at %s" % plot.plot_id)
+	else:
+		_verbose.warn("farm", "⚠️", "Market placed but no biome found at %s" % plot.plot_id)
+
+	# Track market
+	quantum_markets[position] = market
+
 	# Note: structure_built signal is emitted by Farm.build() - don't emit here
-	_verbose.info("farm", "💰", "Placed market at %s → entangled with 💰→📈 market node (value fluctuation)" % plot.plot_id)
+	_verbose.info("farm", "💰", "Placed market at %s → %s ↔ 💰 pairing (value fluctuation)" % [plot.plot_id, target_emoji])
 	return true
 
 
@@ -1020,6 +914,7 @@ func place_kitchen(position: Vector2i) -> bool:
 	4. Measure to collapse to bread outcome
 
 	The Kitchen is connected to QuantumKitchen_Biome which manages the quantum state.
+	Also injects 🍞 (bread) axis into the biome for harvesting.
 	"""
 	var plot = get_plot(position)
 	if plot == null or plot.is_planted:
@@ -1029,9 +924,80 @@ func place_kitchen(position: Vector2i) -> bool:
 	plot.plot_type = FarmPlot.PlotType.KITCHEN
 	plot.is_planted = true
 
+	# Inject bread axis into biome's quantum system
+	var biome = get_biome_for_plot(position)
+	if biome and biome.quantum_computer:
+		if not biome.quantum_computer.register_map.has("🍞"):
+			if biome.has_method("expand_quantum_system"):
+				# Expand quantum system to include bread (coupled to flour)
+				var result = biome.expand_quantum_system("🍞", "💨")
+				if result.success or result.get("already_exists", false):
+					_verbose.info("farm", "🍳", "Kitchen injected 🍞 axis into quantum system")
+				else:
+					_verbose.warn("farm", "⚠️", "Kitchen could not inject bread axis: %s" % result.get("message", "unknown"))
+					_verbose.warn("farm", "⚠️", "Try pressing TAB to enter BUILD mode first")
+			else:
+				_verbose.warn("farm", "⚠️", "Kitchen biome doesn't support quantum expansion")
+		else:
+			_verbose.info("farm", "🍳", "Kitchen: 🍞 axis already exists in biome")
+
 	# Note: structure_built signal is emitted by Farm.build() - don't emit here
 	_verbose.info("farm", "🍳", "Placed kitchen at %s - ready for Bell state baking!" % position)
 	return true
+
+
+func place_kitchen_triplet(positions: Array[Vector2i]) -> bool:
+	"""Place kitchen with triplet entanglement (advanced multi-plot kitchen)
+
+	Validates required ingredients (💧, 🔥, 💨) and creates GHZ triplet state.
+	Injects 🍞 (bread) as entangled outcome.
+
+	Args:
+	    positions: Array of exactly 3 plot positions with 💧, 🔥, 💨
+
+	Returns:
+	    true if triplet kitchen created successfully
+	"""
+	if positions.size() != 3:
+		_verbose.warn("farm", "❌", "Kitchen triplet requires exactly 3 positions")
+		return false
+
+	# Validate required ingredients (any order)
+	var required = {"💧": false, "🔥": false, "💨": false}
+	for pos in positions:
+		var plot = get_plot(pos)
+		if not plot or not plot.is_planted:
+			_verbose.warn("farm", "❌", "Plot %s must be planted for kitchen triplet" % pos)
+			return false
+		if plot.north_emoji in required:
+			required[plot.north_emoji] = true
+
+	# Check all ingredients present
+	for emoji in required:
+		if not required[emoji]:
+			_verbose.warn("farm", "❌", "Kitchen missing ingredient: %s" % emoji)
+			return false
+
+	# All ingredients present - create triplet entanglement
+	var success = create_triplet_entanglement(positions[0], positions[1], positions[2])
+
+	if success:
+		# Inject bread superposition into biome
+		var biome = get_biome_for_plot(positions[0])
+		if biome and biome.has_method("expand_quantum_system"):
+			if not biome.quantum_computer.register_map.has("🍞"):
+				var result = biome.expand_quantum_system("🍞", "💨")
+				if result.success or result.get("already_exists", false):
+					_verbose.info("farm", "🍳", "Kitchen triplet: 🍞 axis injected")
+
+		# Mark center plot as kitchen
+		var center_plot = get_plot(positions[1])
+		if center_plot:
+			center_plot.plot_type = FarmPlot.PlotType.KITCHEN
+
+		_verbose.info("farm", "🍳", "Kitchen triplet created: %s ↔ %s ↔ %s → 🍞" % positions)
+
+	return success
 
 
 func harvest_wheat(position: Vector2i) -> Dictionary:
@@ -1042,10 +1008,9 @@ func harvest_wheat(position: Vector2i) -> Dictionary:
 
 	var yield_data = plot.harvest()
 	if yield_data["success"]:
-		# MODEL B: Clear register allocation (Phase 0.5)
 		clear_register_for_plot(position)
 
-		# Remove projection from biome (clears bath tracking)
+		# Remove projection from biome
 		var plot_biome = get_biome_for_plot(position)
 		if plot_biome and plot_biome.has_method("remove_projection"):
 			plot_biome.remove_projection(position)
@@ -1060,53 +1025,11 @@ func harvest_wheat(position: Vector2i) -> Dictionary:
 	return yield_data
 
 
-func harvest_energy_tap(position: Vector2i) -> Dictionary:
-	"""Harvest accumulated resources from energy tap plot
-
-	Extracts accumulated energy and converts to classical resources.
-	The target emoji resource is returned, quantity based on accumulated energy.
-
-	Args:
-		position: Grid position of the energy tap
-
-	Returns: Dictionary with:
-		- success: true if harvest succeeded
-		- emoji: The resource emoji that was tapped
-		- amount: Quantity of resource obtained
-		- error: Error message if failed
-	"""
-	var plot = get_plot(position)
-	if plot == null or not plot.is_planted:
-		return {"success": false, "error": "Plot not planted"}
-
-	if plot.plot_type != FarmPlot.PlotType.ENERGY_TAP:
-		return {"success": false, "error": "Not an energy tap"}
-
-	var accumulated = plot.tap_accumulated_resource
-	if accumulated < 0.01:
-		return {"success": false, "error": "Nothing accumulated"}
-
-	# Convert energy to resource units (1 energy = 1 resource)
-	var resource_amount = floor(accumulated)
-	var target_emoji = plot.tap_target_emoji
-
-	# Reset accumulator (keep fractional part for next accumulation)
-	plot.tap_accumulated_resource = accumulated - resource_amount
-
-
-	plot_harvested.emit(position, {
-		"success": true,
-		"emoji": target_emoji,
-		"amount": resource_amount
-	})
-
-	_verbose.info("farm", "⚡", "Harvested %d × %s from energy tap at %s" % [resource_amount, target_emoji, plot.plot_id])
-
-	return {
-		"success": true,
-		"emoji": target_emoji,
-		"amount": resource_amount
-	}
+func harvest_energy_tap(_position: Vector2i) -> Dictionary:
+	"""DEPRECATED: Energy tap system disabled (requires bath which was removed).
+	Returns failure. Use alternative resource collection methods."""
+	push_warning("harvest_energy_tap is deprecated - energy tap system disabled")
+	return {"success": false, "error": "Energy tap system disabled"}
 
 
 func get_available_tap_emojis() -> Array[String]:
@@ -1139,35 +1062,8 @@ func get_available_tap_emojis() -> Array[String]:
 
 
 func _count_active_energy_taps() -> Dictionary:
-	"""Count active energy taps and their accumulated energy
-
-	Scans all plots to find active energy taps and sum their accumulated resources.
-	Used to calculate mutation pressure boost from active taps.
-
-	Returns:
-		Dictionary with:
-		- "count": int - Number of active energy taps
-		- "total_energy": float - Sum of accumulated energy across all taps
-		- "target_emojis": Array[String] - List of unique emojis being tapped
-	"""
-	var active_count = 0
-	var total_energy = 0.0
-	var target_set = {}
-
-	for position in plots.keys():
-		var plot = plots[position]
-		if plot.plot_type == FarmPlot.PlotType.ENERGY_TAP and plot.is_planted:
-			active_count += 1
-			total_energy += plot.tap_accumulated_resource
-
-			if plot.tap_target_emoji != "":
-				target_set[plot.tap_target_emoji] = true
-
-	return {
-		"count": active_count,
-		"total_energy": total_energy,
-		"target_emojis": target_set.keys()
-	}
+	"""DEPRECATED: Energy tap system disabled. Always returns zeros."""
+	return {"count": 0, "total_energy": 0.0, "target_emojis": []}
 
 
 func get_tap_mutation_pressure_boost() -> float:
@@ -1274,44 +1170,29 @@ func harvest_with_topology(position: Vector2i, local_radius: int = 2) -> Diction
 	# 2. Analyze local topology
 	var local_topology = topology_analyzer.analyze_entanglement_network(local_plots)
 
-	# 3. Check coherence (Model B/C Hybrid: supports both quantum_computer and bath)
+	# 3. Check coherence from quantum_computer
 	var coherence = 1.0
 	var biome = get_biome_for_plot(position)
 
-	# MODEL C: Try bath first
-	if biome and "bath" in biome and biome.bath:
-		# Bath-based coherence (approximate from purity)
-		coherence = biome.bath.get_purity()
-		coherence = clamp(coherence, 0.0, 1.0)
-	# MODEL B: Fall back to quantum_computer
-	elif biome and biome.quantum_computer:
-		var register_id = plot_register_mapping.get(position, -1)
-		if register_id >= 0:
-			var comp = biome.quantum_computer.get_component_containing(register_id)
+	if biome and biome.quantum_computer:
+		var reg_id = plot_register_mapping.get(position, -1)
+		if reg_id >= 0:
+			var comp = biome.quantum_computer.get_component_containing(reg_id)
 			if comp:
-				coherence = biome.quantum_computer.get_marginal_coherence(comp, register_id)
+				coherence = biome.quantum_computer.get_marginal_coherence(comp, reg_id)
 				coherence = clamp(coherence, 0.0, 1.0)
 
-	# 4. Measure quantum state (Model B/C Hybrid: supports both quantum_computer and bath)
+	# 4. Measure quantum state
 	var measurement_result = ""
 
-	# MODEL C: Try bath measurement first
-	if biome and "bath" in biome and biome.bath:
-		# Use bath marginal measurement - sums over states containing emoji
-		measurement_result = biome.bath.measure_marginal_axis(plot.north_emoji, plot.south_emoji)
-		if measurement_result != "":
-			_verbose.debug("farm", "📊", "Harvest measurement (bath) at %s: outcome = %s" % [position, measurement_result])
-	# MODEL B: Fall back to quantum_computer measurement
-	elif biome and biome.quantum_computer:
-		var register_id = plot_register_mapping.get(position, -1)
-		if register_id >= 0:
-			var comp = biome.quantum_computer.get_component_containing(register_id)
+	if biome and biome.quantum_computer:
+		var reg_id = plot_register_mapping.get(position, -1)
+		if reg_id >= 0:
+			var comp = biome.quantum_computer.get_component_containing(reg_id)
 			if comp:
-				# Unified measurement - returns "north" or "south" basis label
-				var basis_outcome = biome.quantum_computer.measure_register(comp, register_id)
-				# Map basis outcome to emoji
+				var basis_outcome = biome.quantum_computer.measure_register(comp, reg_id)
 				measurement_result = plot.north_emoji if basis_outcome == "north" else plot.south_emoji
-				_verbose.debug("farm", "📊", "Harvest measurement (quantum_computer) at %s: outcome = %s" % [position, measurement_result])
+				_verbose.debug("farm", "📊", "Harvest measurement at %s: outcome = %s" % [position, measurement_result])
 			else:
 				# Register not in any component - unentangled single qubit
 				measurement_result = plot.north_emoji  # Default to north state
@@ -1401,8 +1282,7 @@ func harvest_with_topology(position: Vector2i, local_radius: int = 2) -> Diction
 func measure_plot(position: Vector2i) -> String:
 	"""Measure quantum state (observer effect). Entanglement means measuring one collapses entire network!
 
-	Model B/C Hybrid: Supports both quantum_computer (digital) and bath (analog).
-	Tries bath first (Model C), falls back to quantum_computer (Model B).
+	Uses biome's quantum_computer for register-based measurement.
 	"""
 	var plot = get_plot(position)
 	if plot == null or not plot.is_planted:
@@ -1416,25 +1296,17 @@ func measure_plot(position: Vector2i) -> String:
 
 	var result = ""
 
-	# MODEL C: quantum_computer register-based measurement (migrated from bath)
 	var register_id = plot_register_mapping.get(position, -1)
 
 	if not biome.quantum_computer or register_id < 0:
-		# No quantum system available
 		_verbose.warn("farm", "⚠️", "No quantum system for plot at %s - no register allocated" % position)
 		return plot.north_emoji  # Default fallback
 
 	var comp = biome.quantum_computer.get_component_containing(register_id)
 	if not comp:
-		# Unentangled single qubit - shouldn't happen but handle gracefully
 		return plot.north_emoji
 
-	# Model B: Single unified measurement call handles ALL cascading
-	# quantum_computer automatically:
-	# 1. Measures primary register
-	# 2. Collapses entire component (all entangled qubits)
-	# 3. Updates all register states
-	# 4. Returns basis outcome ("north" or "south")
+	# Single unified measurement call handles ALL cascading (entangled qubits collapse together)
 	var basis_outcome = biome.quantum_computer.measure_register(comp, register_id)
 	# Map basis outcome to emoji
 	result = plot.north_emoji if basis_outcome == "north" else plot.south_emoji
@@ -1663,14 +1535,8 @@ func _auto_apply_persistent_gates(position: Vector2i) -> void:
 	if not plot or not plot.is_planted:
 		return
 
-	# MODEL B/C Hybrid: Check for either bath_subplot_id or register_id
-	var has_quantum_state = false
-	if "bath_subplot_id" in plot and plot.bath_subplot_id >= 0:
-		has_quantum_state = true
-	elif "register_id" in plot and plot.register_id >= 0:
-		has_quantum_state = true
-
-	if not has_quantum_state:
+	# Check if plot has quantum state via register_id
+	if plot.register_id < 0:
 		return
 
 	var active_gates = plot.get_active_gates()
