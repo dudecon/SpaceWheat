@@ -162,58 +162,80 @@ const BUILD_TOOLS = {
 	1: {  # BIOME - Ecosystem management
 		"name": "Biome",
 		"emoji": "🌍",
+		"icon": "res://Assets/UI/Biome/Biome.svg",
 		"description": "Assign plots to biomes, configure ecosystems",
 		"has_f_cycling": false,
 		"actions": {
-			"Q": {"action": "submenu_biome_assign", "label": "Assign Biome ▸", "emoji": "🔄", "submenu": "biome_assign"},
-			"E": {"action": "clear_biome_assignment", "label": "Clear Assignment", "emoji": "❌"},
-			"R": {"action": "inspect_plot", "label": "Inspect Plot", "emoji": "🔍"}
+			"Q": {"action": "submenu_biome_assign", "label": "Assign Biome ▸", "emoji": "🔄",
+				  "icon": "res://Assets/UI/Biome/BiomeAssign.svg", "submenu": "biome_assign"},
+			"E": {"action": "clear_biome_assignment", "label": "Clear Assignment", "emoji": "❌",
+				  "icon": "res://Assets/UI/Biome/BiomeClear.svg"},
+			"R": {"action": "inspect_plot", "label": "Inspect Plot", "emoji": "🔍",
+				  "icon": "res://Assets/UI/Biome/BiomeInspect.svg"}
 		}
 	},
 	2: {  # ICON - Icon/emoji configuration
 		"name": "Icon",
 		"emoji": "⚙️",
+		"icon": "res://Assets/UI/Icon/Icon.svg",
 		"description": "Configure icons and emoji associations",
 		"has_f_cycling": false,
 		"actions": {
-			"Q": {"action": "submenu_icon_assign", "label": "Assign Icon ▸", "emoji": "🎨", "submenu": "icon_assign"},
-			"E": {"action": "icon_swap", "label": "Swap N/S", "emoji": "🔃"},
-			"R": {"action": "icon_clear", "label": "Clear Icon", "emoji": "⬜"}
+			"Q": {"action": "submenu_icon_assign", "label": "Assign Icon ▸", "emoji": "🎨",
+				  "icon": "res://Assets/UI/Icon/Assign.svg", "submenu": "icon_assign"},
+			"E": {"action": "icon_swap", "label": "Swap N/S", "emoji": "🔃",
+				  "icon": "res://Assets/UI/Icon/Swap.svg"},
+			"R": {"action": "icon_clear", "label": "Clear Icon", "emoji": "⬜",
+				  "icon": "res://Assets/UI/Icon/Clear.svg"}
 		}
 	},
 	3: {  # LINDBLAD - Dissipation control
 		"name": "Lindblad",
 		"emoji": "🔬",
+		"icon": "res://Assets/UI/Tools/Lindblad/Lindblad.svg",
 		"description": "Configure Lindblad operators and dissipation",
 		"has_f_cycling": false,
 		"actions": {
-			"Q": {"action": "lindblad_drive", "label": "Drive (+pop)", "emoji": "📈"},
-			"E": {"action": "lindblad_decay", "label": "Decay (-pop)", "emoji": "📉"},
-			"R": {"action": "lindblad_transfer", "label": "Transfer", "emoji": "↔️"}
+			"Q": {"action": "lindblad_drive", "label": "Drive (+pop)", "emoji": "📈",
+				  "icon": "res://Assets/UI/Tools/Lindblad/Drive.svg"},
+			"E": {"action": "lindblad_decay", "label": "Decay (-pop)", "emoji": "📉",
+				  "icon": "res://Assets/UI/Tools/Lindblad/Decay.svg"},
+			"R": {"action": "lindblad_transfer", "label": "Transfer", "emoji": "↔️",
+				  "icon": "res://Assets/UI/Tools/Lindblad/Transfer.svg"}
 		}
 	},
 	4: {  # QUANTUM - System control + Gate configuration (F-cycles)
 		"name": "Quantum",
 		"emoji": "⚛️",
+		"icon": "res://Assets/UI/Tools/Quantum/Quantum.svg",
 		"description": "System control and gate configuration",
 		"has_f_cycling": true,
 		"modes": ["system", "phase", "rotation"],
 		"mode_labels": ["System", "Phase Gates", "Rotation"],
 		"actions": {
 			"system": {  # Mode 0: System control
-				"Q": {"action": "system_reset", "label": "Reset Bath", "emoji": "🔄"},
-				"E": {"action": "system_snapshot", "label": "Snapshot", "emoji": "📸"},
-				"R": {"action": "system_debug", "label": "Debug View", "emoji": "🐛"}
+				"Q": {"action": "system_reset", "label": "Reset Bath", "emoji": "🔄",
+					  "icon": "res://Assets/UI/Tools/Quantum/Reset Bath.svg"},
+				"E": {"action": "system_snapshot", "label": "Snapshot", "emoji": "📸",
+					  "icon": "res://Assets/UI/Tools/Quantum/Snapshot.svg"},
+				"R": {"action": "system_debug", "label": "Debug View", "emoji": "🐛",
+					  "icon": "res://Assets/UI/Tools/Quantum/Debug.svg"}
 			},
 			"phase": {  # Mode 1: Phase gates (S, T, S†)
-				"Q": {"action": "apply_s_gate", "label": "S (π/2)", "emoji": "🌙"},
-				"E": {"action": "apply_t_gate", "label": "T (π/4)", "emoji": "✨"},
-				"R": {"action": "apply_sdg_gate", "label": "S† (-π/2)", "emoji": "🌑"}
+				"Q": {"action": "apply_s_gate", "label": "S (π/2)", "emoji": "🌙",
+					  "icon": "res://Assets/UI/Tools/Quantum/S.svg"},
+				"E": {"action": "apply_t_gate", "label": "T (π/4)", "emoji": "✨",
+					  "icon": "res://Assets/UI/Tools/Quantum/T.svg"},
+				"R": {"action": "apply_sdg_gate", "label": "S† (-π/2)", "emoji": "🌑",
+					  "icon": "res://Assets/UI/Tools/Quantum/ST-.svg"}
 			},
 			"rotation": {  # Mode 2: Rotation gates
-				"Q": {"action": "apply_rx_gate", "label": "Rx (θ)", "emoji": "↔️"},
-				"E": {"action": "apply_ry_gate", "label": "Ry (θ)", "emoji": "↕️"},
-				"R": {"action": "apply_rz_gate", "label": "Rz (θ)", "emoji": "🔄"}
+				"Q": {"action": "apply_rx_gate", "label": "Rx (θ)", "emoji": "↔️",
+					  "icon": "res://Assets/UI/Tools/Quantum/RX.svg"},
+				"E": {"action": "apply_ry_gate", "label": "Ry (θ)", "emoji": "↕️",
+					  "icon": "res://Assets/UI/Tools/Quantum/RY.svg"},
+				"R": {"action": "apply_rz_gate", "label": "Rz (θ)", "emoji": "🔄",
+					  "icon": "res://Assets/UI/Tools/Quantum/RZ.svg"}
 			}
 		}
 	}
@@ -227,10 +249,11 @@ const SUBMENUS = {
 	"biome_assign": {
 		"name": "Assign to Biome",
 		"emoji": "🔄",
+		"icon": "res://Assets/UI/Biome/BiomeAssign.svg",
 		"parent_tool": 1,
 		"parent_mode": "build",
 		"dynamic": true,
-		# Fallback definitions
+		# Fallback definitions (icons added dynamically from biome data)
 		"Q": {"action": "assign_to_BioticFlux", "label": "BioticFlux", "emoji": "🌾"},
 		"E": {"action": "assign_to_Market", "label": "Market", "emoji": "🏪"},
 		"R": {"action": "assign_to_Forest", "label": "Forest", "emoji": "🌲"},
@@ -238,6 +261,7 @@ const SUBMENUS = {
 	"icon_assign": {
 		"name": "Assign Icon",
 		"emoji": "🎨",
+		"icon": "res://Assets/UI/Icon/Assign.svg",
 		"parent_tool": 2,
 		"parent_mode": "build",
 		"dynamic": true,
@@ -249,6 +273,7 @@ const SUBMENUS = {
 	"mill_power": {
 		"name": "Mill Power",
 		"emoji": "⚡",
+		"icon": "res://Assets/UI/Industry/Mill.svg",
 		"parent_tool": 4,
 		"parent_mode": "play",
 		"dynamic": false,
@@ -259,6 +284,7 @@ const SUBMENUS = {
 	"mill_conversion": {
 		"name": "Mill Conversion",
 		"emoji": "⚙️",
+		"icon": "res://Assets/UI/Industry/Mill.svg",
 		"parent_tool": 4,
 		"parent_mode": "play",
 		"dynamic": false,
@@ -554,22 +580,29 @@ static func _generate_icon_assign_submenu(base: Dictionary, farm, current_select
 		return generated
 
 	# Use player vocabulary (what they've learned from quests)
+	# Need to show pairs, so get the known_pairs directly
+	var known_pairs: Array = []
+	if gsm and gsm.current_state:
+		known_pairs = gsm.current_state.known_pairs
+
 	var keys = ["Q", "E", "R"]
 
-	for i in range(min(3, player_vocab.size())):
-		var emoji = player_vocab[i]
+	for i in range(min(3, known_pairs.size())):
+		var pair = known_pairs[i]
+		var north = pair.get("north", "?")
+		var south = pair.get("south", "?")
 		generated[keys[i]] = {
-			"action": "icon_assign_%s" % emoji,
-			"label": emoji,
-			"emoji": emoji
+			"action": "icon_assign_%s" % north,
+			"label": "%s/%s" % [north, south],
+			"emoji": north
 		}
 
-	for i in range(player_vocab.size(), 3):
+	for i in range(known_pairs.size(), 3):
 		generated[keys[i]] = {"action": "", "label": "Empty", "emoji": "⬜"}
 
-	# Store full vocab for F-cycling if more than 3
-	if player_vocab.size() > 3:
-		generated["_extra_vocab"] = player_vocab.slice(3)
+	# Store full pairs for F-cycling if more than 3
+	if known_pairs.size() > 3:
+		generated["_extra_pairs"] = known_pairs.slice(3)
 
 	return generated
 

@@ -75,6 +75,10 @@ func run_all_tests():
 
 	ToolConfig.set_mode("play")
 
+	# Pause evolution for deterministic gate tests
+	for biome in farm.grid.biomes.values():
+		biome.evolution_paused = true
+
 	await test_play_tool_1_probe()
 	await test_play_tool_2_gates()
 	await test_play_tool_3_entangle()
@@ -177,10 +181,14 @@ func test_play_tool_2_gates():
 		skip_test("gate_Ry_R", "No quantum computer")
 		return
 
-	var plot = farm.grid.get_plot(test_pos)
-	var emoji = plot.north_emoji if plot else ""
+	# Get emoji from terminal (not plot) - terminal is bound during EXPLORE
+	var terminal = farm.plot_pool.get_terminal_at_grid_pos(test_pos) if farm.plot_pool else null
+	var emoji = ""
+	if terminal and terminal.is_bound and terminal.has_method("get_emoji_pair"):
+		var pair = terminal.get_emoji_pair()
+		emoji = pair.get("north", "")
 	if emoji == "" or not biome.quantum_computer.register_map.has(emoji):
-		skip_test("gate_X_Q", "No emoji in register")
+		skip_test("gate_X_Q", "No emoji in register (terminal not bound correctly)")
 		skip_test("gate_H_E", "No emoji in register")
 		skip_test("gate_Ry_R", "No emoji in register")
 		return
@@ -331,9 +339,25 @@ func test_build_tool_2_icon():
 	await frames(3)
 	if input_handler.current_submenu == "icon_assign":
 		pass_test("icon_assign_Q", "Icon assign submenu opened")
-		input_handler._exit_submenu()
+
+		# Now test clicking Q in the submenu to actually assign an icon
+		var biome = farm.grid.get_biome_for_plot(test_pos)
+		var qc = biome.quantum_computer if biome else null
+		var qubits_before = qc.register_map.num_qubits if qc and qc.register_map else 0
+
+		input_handler.execute_action("Q")  # Click Q in submenu to assign first vocab pair
+		await frames(5)
+
+		var qubits_after = qc.register_map.num_qubits if qc and qc.register_map else 0
+		if qubits_after > qubits_before:
+			pass_test("icon_assign_action", "Icon assigned to biome (qubits: %d→%d)" % [qubits_before, qubits_after])
+		elif qubits_after == qubits_before and qubits_before > 0:
+			pass_test("icon_assign_action", "Icon already in biome (qubits: %d)" % qubits_after)
+		else:
+			fail_test("icon_assign_action", "Icon not assigned (qubits: %d→%d)" % [qubits_before, qubits_after])
 	else:
 		fail_test("icon_assign_Q", "Icon assign submenu didn't open (got: '%s', tool=%d)" % [input_handler.current_submenu, input_handler.current_tool])
+		skip_test("icon_assign_action", "Submenu didn't open")
 
 	# E = swap
 	var plot = farm.grid.get_plot(test_pos)

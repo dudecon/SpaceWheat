@@ -4130,26 +4130,14 @@ func _action_system_snapshot(plots: Array[Vector2i]):
 		action_performed.emit("system_snapshot", false, "No density matrix to snapshot")
 		return
 
-	# Store snapshot in GameStateManager (if available)
-	var gsm = get_node_or_null("/root/GameStateManager")
-	if gsm:
-		if not gsm.has("quantum_snapshots"):
-			gsm.quantum_snapshots = []
+	# Log snapshot info (future: persist to GameState)
+	var trace_val = 1.0
+	if rho.has_method("trace"):
+		var trace_result = rho.trace()
+		trace_val = trace_result.re if trace_result else 1.0
 
-		var snapshot = {
-			"biome": biome_name,
-			"timestamp": Time.get_unix_time_from_system(),
-			"dimension": rho.n,
-			"trace": rho.trace().re if rho.has_method("trace") else 1.0
-		}
-		gsm.quantum_snapshots.append(snapshot)
-
-		_verbose.info("system", "📸", "Snapshot saved for %s (dim=%d)" % [biome_name, rho.n])
-		action_performed.emit("system_snapshot", true, "📸 Snapshot saved for %s" % biome_name)
-	else:
-		# Fallback: just log it
-		_verbose.info("system", "📸", "Snapshot (no GSM): %s dim=%d" % [biome_name, rho.n])
-		action_performed.emit("system_snapshot", true, "📸 Snapshot logged for %s" % biome_name)
+	_verbose.info("system", "📸", "Snapshot for %s: dim=%d, Tr(ρ)=%.4f" % [biome_name, rho.n, trace_val])
+	action_performed.emit("system_snapshot", true, "📸 Snapshot: %s (dim=%d)" % [biome_name, rho.n])
 
 
 func _action_system_debug(plots: Array[Vector2i]):
@@ -4161,13 +4149,13 @@ func _action_system_debug(plots: Array[Vector2i]):
 	var new_state := false
 
 	if _verbose:
-		# Toggle between info and debug levels
-		var current_level = _verbose.get_level() if _verbose.has_method("get_level") else 1
+		# Toggle quantum category between info and debug levels
+		var current_level = _verbose.get_category_level("quantum") if _verbose.has_method("get_category_level") else 1
 		if current_level >= 2:  # Already debug
-			_verbose.set_level(1)  # Back to info
+			_verbose.set_category_level("quantum", 1)  # Back to info
 			new_state = false
 		else:
-			_verbose.set_level(2)  # Enable debug
+			_verbose.set_category_level("quantum", 2)  # Enable debug
 			new_state = true
 
 		_verbose.info("system", "🐛", "Debug mode: %s" % ("ON" if new_state else "OFF"))
