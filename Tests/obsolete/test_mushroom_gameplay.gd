@@ -1,4 +1,4 @@
-extends Node
+extends SceneTree
 
 ## Simple mushroom economy gameplay test
 ## No manual time simulation - just test the mechanics

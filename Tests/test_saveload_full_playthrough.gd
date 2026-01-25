@@ -324,14 +324,14 @@ func compare_comprehensive_states(pre: Dictionary, post: Dictionary) -> bool:
 	var diffs = []
 
 	# Economy
-	if pre["economy"]["credits != post["economy"]["credits:
-		diffs.append("Credits: %d → %d" % [pre["economy"]["credits, post["economy"]["credits])
-	if pre["economy"]["wheat != post["economy"]["wheat:
-		diffs.append("Wheat: %d → %d" % [pre["economy"]["wheat, post["economy"]["wheat])
-	if pre["economy"]["mushroom != post["economy"]["mushroom:
-		diffs.append("Mushroom: %d → %d" % [pre["economy"]["mushroom, post["economy"]["mushroom])
-	if pre["economy"]["flour != post["economy"]["flour:
-		diffs.append("Flour: %d → %d" % [pre["economy"]["flour, post["economy"]["flour])
+	if pre["economy"]["credits"] != post["economy"]["credits"]:
+		diffs.append("Credits: %d → %d" % [pre["economy"]["credits"], post["economy"]["credits"]])
+	if pre["economy"]["wheat"] != post["economy"]["wheat"]:
+		diffs.append("Wheat: %d → %d" % [pre["economy"]["wheat"], post["economy"]["wheat"]])
+	if pre["economy"]["mushroom"] != post["economy"]["mushroom"]:
+		diffs.append("Mushroom: %d → %d" % [pre["economy"]["mushroom"], post["economy"]["mushroom"]])
+	if pre["economy"]["flour"] != post["economy"]["flour"]:
+		diffs.append("Flour: %d → %d" % [pre["economy"]["flour"], post["economy"]["flour"]])
 
 	# Grid
 	if pre["grid_width"] != post["grid_width"] or pre["grid_height"] != post["grid_height"]:

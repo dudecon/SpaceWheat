@@ -19,7 +19,7 @@ var market: MarketQubit
 var starting_wheat: int = 100
 var starting_credits: int = 50
 
-func _initialize():
+func _init():
 	print("\n" + print_line("=", 80))
 	print("🌾💰 INTEGRATED MARKET GAMEPLAY FLOW")
 	print("Farming → Milling → Market Measurement → Trading → Credits")
