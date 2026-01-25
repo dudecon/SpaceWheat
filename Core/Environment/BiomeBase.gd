@@ -453,13 +453,13 @@ func clear_register_for_plot(position: Vector2i) -> void:
 	_register_manager.clear_register_for_plot(position)
 
 func get_unbound_registers(plot_pool = null) -> Array[int]:
-	return _register_manager.get_unbound_registers(plot_pool)
+	return _register_manager.get_unbound_registers(plot_pool, self)
 
 func get_register_probability(register_id: int) -> float:
 	return _quantum_observer.get_register_probability(register_id)
 
 func get_register_probabilities(plot_pool = null) -> Dictionary:
-	return _register_manager.get_register_probabilities(plot_pool, _quantum_observer)
+	return _register_manager.get_register_probabilities(plot_pool, _quantum_observer, self)
 
 func get_total_register_count() -> int:
 	return _register_manager.get_total_register_count()

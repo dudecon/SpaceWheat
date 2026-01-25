@@ -22,7 +22,7 @@ var biome_type: String = "Base"
 
 
 func set_quantum_computer(qc, biome_name: String) -> void:
-	"""Set the quantum computer reference and biome type"""
+	"""Set the quantum computer reference and biome type."""
 	quantum_computer = qc
 	biome_type = biome_name
 
@@ -118,7 +118,7 @@ func get_all_plot_positions() -> Array:
 # V2 Architecture: Register Binding Tracking
 # ============================================================================
 
-func get_unbound_registers(plot_pool = null) -> Array[int]:
+func get_unbound_registers(plot_pool, biome) -> Array[int]:
 	"""Get all register IDs not currently bound to a terminal.
 
 	Used by EXPLORE action for probability-weighted discovery.
@@ -129,6 +129,7 @@ func get_unbound_registers(plot_pool = null) -> Array[int]:
 
 	Args:
 		plot_pool: PlotPool instance (needed to query Terminal binding state)
+		biome: BiomeBase instance (for PlotPool register identity check)
 	"""
 	if not quantum_computer or not quantum_computer.register_map:
 		return []
@@ -139,13 +140,13 @@ func get_unbound_registers(plot_pool = null) -> Array[int]:
 
 	for reg_id in range(num_qubits):
 		# Query PlotPool to check if register is bound to ANY terminal
-		if not plot_pool or not plot_pool.is_register_bound(reg_id, self):
+		if not plot_pool or not plot_pool.is_register_bound(reg_id, biome):
 			unbound.append(reg_id)
 
 	return unbound
 
 
-func get_register_probabilities(plot_pool = null, observer = null) -> Dictionary:
+func get_register_probabilities(plot_pool, observer, biome) -> Dictionary:
 	"""Get probability distribution over all unbound registers.
 
 	Returns: {register_id: probability} for unbound registers only.
@@ -154,9 +155,10 @@ func get_register_probabilities(plot_pool = null, observer = null) -> Dictionary
 	Args:
 		plot_pool: PlotPool instance (needed to query Terminal binding state)
 		observer: BiomeQuantumObserver for probability calculations
+		biome: BiomeBase instance (passed through to get_unbound_registers)
 	"""
 	var probs: Dictionary = {}
-	var unbound = get_unbound_registers(plot_pool)
+	var unbound = get_unbound_registers(plot_pool, biome)
 
 	for reg_id in unbound:
 		if observer:
