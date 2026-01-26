@@ -18,6 +18,9 @@ const QuantumNode = preload("res://Core/Visualization/QuantumNode.gd")
 const FarmPlot = preload("res://Core/GameMechanics/FarmPlot.gd")
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 
+# Logging - access autoload safely
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 # Graph engine
 var graph: Node2D = null
 
@@ -79,7 +82,8 @@ func add_biome(biome_name: String, biome_ref) -> void:
 		return
 
 	biomes[biome_name] = biome_ref
-	print("🛁 BathQuantumViz: Added biome '%s' with %d qubits (Model C)" % [biome_name, biome_ref.quantum_computer.register_map.num_qubits])
+	if _verbose:
+		_verbose.debug("viz", "🛁", "BathQuantumViz: Added biome '%s' with %d qubits (Model C)" % [biome_name, biome_ref.quantum_computer.register_map.num_qubits])
 
 
 func initialize() -> void:
@@ -92,7 +96,8 @@ func initialize() -> void:
 		push_error("BathQuantumViz: No biomes registered before initialize()")
 		return
 
-	print("🛁 BathQuantumViz: Initializing with %d biomes..." % biomes.size())
+	if _verbose:
+		_verbose.debug("viz", "🛁", "BathQuantumViz: Initializing with %d biomes..." % biomes.size())
 
 	# Create graph engine
 	graph = QuantumForceGraph.new()
@@ -124,11 +129,12 @@ func initialize() -> void:
 
 	graph.set_process(true)
 
-	print("✅ BathQuantumViz: Ready (plot-driven mode - bubbles will spawn on demand)")
-	print("   📍 Position: %s" % position)
-	print("   📊 QuantumForceGraph exists: %s" % (graph != null))
-	if graph:
-		print("   📊 QuantumForceGraph center: %s, radius: %.1f" % [graph.center_position, graph.graph_radius])
+	if _verbose:
+		_verbose.debug("viz", "✅", "BathQuantumViz: Ready (plot-driven mode - bubbles will spawn on demand)")
+		_verbose.debug("viz", "📍", "Position: %s" % position)
+		_verbose.debug("viz", "📊", "QuantumForceGraph exists: %s" % (graph != null))
+		if graph:
+			_verbose.debug("viz", "📊", "QuantumForceGraph center: %s, radius: %.1f" % [graph.center_position, graph.graph_radius])
 
 
 func _connect_to_biome_manager() -> void:
@@ -141,13 +147,15 @@ func _connect_to_biome_manager() -> void:
 	if biome_mgr and biome_mgr.has_signal("active_biome_changed"):
 		if not biome_mgr.active_biome_changed.is_connected(_on_active_biome_changed):
 			biome_mgr.active_biome_changed.connect(_on_active_biome_changed)
-			print("   📡 BathQuantumViz connected to ActiveBiomeManager")
+			if _verbose:
+				_verbose.debug("viz", "📡", "BathQuantumViz connected to ActiveBiomeManager")
 
 			# Apply initial biome filter
 			var initial_biome = biome_mgr.get_active_biome()
 			if graph and initial_biome != "":
 				graph.set_active_biome(initial_biome)
-				print("   🔄 Initial biome filter applied: %s" % initial_biome)
+				if _verbose:
+					_verbose.debug("viz", "🔄", "Initial biome filter applied: %s" % initial_biome)
 	else:
 		push_warning("BathQuantumViz: ActiveBiomeManager not found - bubbles won't filter on biome switch")
 
@@ -156,7 +164,8 @@ func _on_active_biome_changed(new_biome: String, _old_biome: String) -> void:
 	"""Handle biome change - filter bubbles to show only active biome."""
 	if graph:
 		graph.set_active_biome(new_biome)
-		print("🔄 BathQuantumViz: Biome changed to %s - bubbles filtered" % new_biome)
+		if _verbose:
+			_verbose.debug("viz", "🔄", "BathQuantumViz: Biome changed to %s - bubbles filtered" % new_biome)
 
 
 func connect_to_farm(farm) -> void:
@@ -175,24 +184,28 @@ func connect_to_farm(farm) -> void:
 	# CRITICAL: Pass plot_pool to graph for v2 terminal measurement state lookup
 	if graph and "plot_pool" in farm and farm.plot_pool:
 		graph.plot_pool = farm.plot_pool
-		print("   📡 Passed plot_pool to QuantumForceGraph for measured state detection")
+		if _verbose:
+			_verbose.debug("viz", "📡", "Passed plot_pool to QuantumForceGraph for measured state detection")
 
 	# Connect to terminal lifecycle signals (EXPLORE/MEASURE/POP)
 	if farm.has_signal("terminal_bound"):
 		farm.terminal_bound.connect(_on_terminal_bound)
-		print("   📡 Connected to farm.terminal_bound for bubble spawn")
+		if _verbose:
+			_verbose.debug("viz", "📡", "Connected to farm.terminal_bound for bubble spawn")
 	else:
 		push_warning("BathQuantumViz: farm has no terminal_bound signal")
 
 	if farm.has_signal("terminal_measured"):
 		farm.terminal_measured.connect(_on_terminal_measured)
-		print("   📡 Connected to farm.terminal_measured for bubble state update")
+		if _verbose:
+			_verbose.debug("viz", "📡", "Connected to farm.terminal_measured for bubble state update")
 	else:
 		push_warning("BathQuantumViz: farm has no terminal_measured signal")
 
 	if farm.has_signal("terminal_released"):
 		farm.terminal_released.connect(_on_terminal_released)
-		print("   📡 Connected to farm.terminal_released for bubble despawn")
+		if _verbose:
+			_verbose.debug("viz", "📡", "Connected to farm.terminal_released for bubble despawn")
 	else:
 		push_warning("BathQuantumViz: farm has no terminal_released signal")
 
@@ -209,19 +222,23 @@ func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dic
 	"""
 	var north_emoji = emoji_pair.get("north", "?")
 	var south_emoji = emoji_pair.get("south", "?")
-	print("🔔 BathQuantumViz: Terminal %s bound at %s (%s/%s)" % [terminal_id, position, north_emoji, south_emoji])
+	if _verbose:
+		_verbose.debug("viz", "🔔", "Terminal %s bound at %s (%s/%s)" % [terminal_id, position, north_emoji, south_emoji])
 
 	# Get plot's biome assignment from stored farm reference
 	if not farm_ref or not farm_ref.grid:
-		print("   ⚠️  No farm reference or grid found")
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "No farm reference or grid found")
 		return
 
 	var biome_name = farm_ref.grid.plot_biome_assignments.get(position, "")
 	if biome_name.is_empty():
-		print("   ⚠️  No biome assignment for position %s" % position)
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "No biome assignment for position %s" % position)
 		return
 
-	print("   📍 Plot at %s assigned to biome: %s" % [position, biome_name])
+	if _verbose:
+		_verbose.debug("viz", "📍", "Plot at %s assigned to biome: %s" % [position, biome_name])
 
 	# Get the actual plot (needed for entanglement visualization)
 	var plot = farm_ref.grid.get_plot(position)
@@ -235,13 +252,15 @@ func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dic
 		# If not found, try by terminal_id
 		if not terminal:
 			terminal = farm_ref.plot_pool.get_terminal(terminal_id)
-			if terminal:
-				print("   🔗 Found terminal by ID (grid_pos lookup failed)")
+			if terminal and _verbose:
+				_verbose.debug("viz", "🔗", "Found terminal by ID (grid_pos lookup failed)")
 
 	if terminal:
-		print("   ✅ Terminal reference acquired: %s (is_bound=%s)" % [terminal.terminal_id, terminal.is_bound])
+		if _verbose:
+			_verbose.debug("viz", "✅", "Terminal reference acquired: %s (is_bound=%s)" % [terminal.terminal_id, terminal.is_bound])
 	else:
-		print("   ⚠️  Could not find terminal %s in plot_pool" % terminal_id)
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "Could not find terminal %s in plot_pool" % terminal_id)
 
 	# Create bubble with terminal reference (enables state queries)
 	_create_bubble_for_terminal(biome_name, position, north_emoji, south_emoji, plot, terminal)
@@ -260,7 +279,8 @@ func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: Str
 		outcome: The measured emoji outcome
 		probability: The recorded probability (for credits on POP)
 	"""
-	print("📏 BathQuantumViz: Terminal %s measured at %s → %s (p=%.2f)" % [terminal_id, position, outcome, probability])
+	if _verbose:
+		_verbose.debug("viz", "📏", "Terminal %s measured at %s → %s (p=%.2f)" % [terminal_id, position, outcome, probability])
 
 	if not graph:
 		return
@@ -271,8 +291,8 @@ func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: Str
 		# V2.2: Ensure bubble has terminal reference (may have been missed during creation)
 		if not bubble.terminal and farm_ref and farm_ref.plot_pool:
 			bubble.terminal = farm_ref.plot_pool.get_terminal_at_grid_pos(position)
-			if bubble.terminal:
-				print("   🔗 Late-bound terminal to bubble at %s" % position)
+			if bubble.terminal and _verbose:
+				_verbose.debug("viz", "🔗", "Late-bound terminal to bubble at %s" % position)
 
 		# Freeze position for measurement visualization
 		if bubble.terminal:
@@ -281,9 +301,11 @@ func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: Str
 
 		# Trigger redraw to update visual appearance
 		graph.queue_redraw()
-		print("   ✨ Bubble at %s visual update triggered (terminal=%s)" % [position, "found" if bubble.terminal else "missing"])
+		if _verbose:
+			_verbose.debug("viz", "✨", "Bubble at %s visual update triggered (terminal=%s)" % [position, "found" if bubble.terminal else "missing"])
 	else:
-		print("   ⚠️  No bubble found at %s" % position)
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "No bubble found at %s" % position)
 
 
 func _on_terminal_released(position: Vector2i, terminal_id: String, credits_earned: int) -> void:
@@ -294,16 +316,19 @@ func _on_terminal_released(position: Vector2i, terminal_id: String, credits_earn
 		terminal_id: Unique terminal identifier
 		credits_earned: Credits gained from the harvest
 	"""
-	print("💰 BathQuantumViz: Terminal %s released at %s (+%d credits)" % [terminal_id, position, credits_earned])
+	if _verbose:
+		_verbose.debug("viz", "💰", "Terminal %s released at %s (+%d credits)" % [terminal_id, position, credits_earned])
 
 	if not graph:
-		print("   ⚠️  No graph found")
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "No graph found")
 		return
 
 	# Find and remove bubble by grid position
 	var bubble = graph.quantum_nodes_by_grid_pos.get(position)
 	if not bubble:
-		print("   ⚠️  No bubble found at position %s" % position)
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "No bubble found at position %s" % position)
 		return
 
 	# Get biome name for cleanup
@@ -316,11 +341,13 @@ func _on_terminal_released(position: Vector2i, terminal_id: String, credits_earn
 	# Remove from biome bubble tracking
 	if basis_bubbles.has(biome_name):
 		basis_bubbles[biome_name].erase(bubble)
-		print("   🗑️  Removed bubble from %s (remaining: %d)" % [biome_name, basis_bubbles[biome_name].size()])
+		if _verbose:
+			_verbose.debug("viz", "🗑️", "Removed bubble from %s (remaining: %d)" % [biome_name, basis_bubbles[biome_name].size()])
 
 	# Trigger redraw to hide bubble
 	graph.queue_redraw()
-	print("   ✅ Bubble despawned at %s" % position)
+	if _verbose:
+		_verbose.debug("viz", "✅", "Bubble despawned at %s" % position)
 
 
 func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
@@ -359,14 +386,17 @@ func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
 		south_emoji = plot.south_emoji
 	else:
 		# Neither path works - skip this bubble
-		print("   ⚠️  Plot at %s has no terminal or valid plot data" % grid_pos)
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "Plot at %s has no terminal or valid plot data" % grid_pos)
 		return
 
 	if north_emoji.is_empty():
-		print("   ⚠️  No emoji data for plot at %s" % grid_pos)
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "No emoji data for plot at %s" % grid_pos)
 		return
 
-	print("   🌱 Requesting plot bubble at %s: %s/%s" % [grid_pos, north_emoji, south_emoji])
+	if _verbose:
+		_verbose.debug("viz", "🌱", "Requesting plot bubble at %s: %s/%s" % [grid_pos, north_emoji, south_emoji])
 
 	# Remove any existing bubble at this grid position (from previous harvest cycle)
 	if graph.quantum_nodes_by_grid_pos.has(grid_pos):
@@ -376,7 +406,8 @@ func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
 			var idx = graph.quantum_nodes.find(old_bubble)
 			if idx >= 0:
 				graph.quantum_nodes.remove_at(idx)
-				print("   🗑️  Removed old bubble at grid %s" % grid_pos)
+				if _verbose:
+					_verbose.debug("viz", "🗑️", "Removed old bubble at grid %s" % grid_pos)
 
 			# Remove from basis_bubbles array
 			if basis_bubbles.has(biome_name):
@@ -391,7 +422,8 @@ func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
 		basis_bubbles[biome_name].append(bubble)
 		graph.quantum_nodes.append(bubble)  # Add to graph for rendering!
 		graph.quantum_nodes_by_grid_pos[grid_pos] = bubble  # Index by grid pos
-		print("   🔵 Created plot bubble (%s/%s) at grid %s" % [north_emoji, south_emoji, grid_pos])
+		if _verbose:
+			_verbose.debug("viz", "🔵", "Created plot bubble (%s/%s) at grid %s" % [north_emoji, south_emoji, grid_pos])
 
 		# Trigger graph redraw to show new bubble
 		graph.queue_redraw()
@@ -427,7 +459,8 @@ func request_emoji_bubble(biome_name: String, emoji: String) -> void:
 	if bubble:
 		basis_bubbles[biome_name].append(bubble)
 		emoji_to_bubble[biome_name][emoji] = bubble
-		print("   🔵 Created bubble for %s in %s (total: %d)" % [emoji, biome_name, basis_bubbles[biome_name].size()])
+		if _verbose:
+			_verbose.debug("viz", "🔵", "Created bubble for %s in %s (total: %d)" % [emoji, biome_name, basis_bubbles[biome_name].size()])
 
 
 func _create_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> QuantumNode:
@@ -488,12 +521,14 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 		terminal: Terminal instance (v2.2 - single source of truth)
 	"""
 	if not biomes.has(biome_name):
-		print("   ⚠️  Unknown biome: %s" % biome_name)
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "Unknown biome: %s" % biome_name)
 		return
 
 	var biome = biomes.get(biome_name)
 	if not biome or (not biome.quantum_computer):
-		print("   ⚠️  Biome %s has no quantum backend" % biome_name)
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "Biome %s has no quantum backend" % biome_name)
 		return
 
 	# Determine initial position (scatter around biome oval)
@@ -555,10 +590,11 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 	# visual_scale to stay at 0 forever (bubbles invisible).
 	bubble.start_spawn_animation(graph.time_accumulator)
 
-	print("   🔵 Created terminal bubble (%s/%s) at grid %s%s" % [
-		north_emoji, south_emoji, grid_pos,
-		" [with plot for entanglement]" if plot else ""
-	])
+	if _verbose:
+		_verbose.debug("viz", "🔵", "Created terminal bubble (%s/%s) at grid %s%s" % [
+			north_emoji, south_emoji, grid_pos,
+			" [with plot for entanglement]" if plot else ""
+		])
 	graph.queue_redraw()
 
 
