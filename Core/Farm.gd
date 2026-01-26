@@ -3,6 +3,7 @@ extends Node
 
 # Access autoloads safely (avoids compile-time errors)
 @onready var _icon_registry = get_node("/root/IconRegistry")
+@onready var _verbose = get_node("/root/VerboseConfig")
 
 ## Farm - Pure simulation manager for quantum wheat farming
 ## Owns all game systems and handles all game logic
@@ -279,12 +280,12 @@ func rebuild_all_biome_operators() -> void:
 	if not biome_enabled:
 		return
 
-	print("  🔧 Rebuilding operators for all biomes...")
+	_verbose.info("boot", "🔧", "Rebuilding operators for all biomes...")
 	biotic_flux_biome.rebuild_quantum_operators()
 	stellar_forges_biome.rebuild_quantum_operators()
 	fungal_networks_biome.rebuild_quantum_operators()
 	volcanic_worlds_biome.rebuild_quantum_operators()
-	print("  ✓ All biome operators rebuilt")
+	_verbose.info("boot", "✓", "All biome operators rebuilt")
 
 
 ## Called by BootManager in Stage 3A to finalize setup before simulation starts
@@ -301,7 +302,7 @@ func finalize_setup() -> void:
 		assert(fungal_networks_biome.quantum_computer != null, "FungalNetworks biome has no quantum_computer!")
 		assert(volcanic_worlds_biome.quantum_computer != null, "VolcanicWorlds biome has no quantum_computer!")
 
-	print("  ✓ Farm setup finalized")
+	_verbose.info("boot", "✓", "Farm setup finalized")
 
 
 ## Called by BootManager in Stage 3D to enable simulation processing
@@ -323,9 +324,9 @@ func enable_simulation() -> void:
 			fungal_networks_biome.set_process(true)
 		if volcanic_worlds_biome:
 			volcanic_worlds_biome.set_process(true)
-		print("  ✓ All biome processing enabled")
+		_verbose.info("boot", "✓", "All biome processing enabled")
 
-	print("  ✓ Farm simulation process enabled")
+	_verbose.info("boot", "✓", "Farm simulation process enabled")
 
 
 func _process(delta: float):
@@ -397,8 +398,7 @@ func _process_mushroom_composting(delta: float):
 			# Reset accumulator, keeping remainder
 			set_meta("composting_accumulator", accumulator - detritus_consumed)
 
-			if OS.get_environment("VERBOSE_LOGGING") == "1" or OS.get_environment("VERBOSE_ECONOMY") == "1":
-				print("🍄 Composting: %d 🍂 → %d 🍄 (%.1f%% activation, %d mushrooms planted)" % [detritus_consumed, mushrooms_produced, activation * 100, _cached_mushroom_count])
+			_verbose.debug("economy", "🍄", "Composting: %d 🍂 → %d 🍄 (%.1f%% activation, %d mushrooms planted)" % [detritus_consumed, mushrooms_produced, activation * 100, _cached_mushroom_count])
 		else:
 			# Conversion failed, keep accumulator for next frame
 			set_meta("composting_accumulator", accumulator)
@@ -619,7 +619,7 @@ func build(pos: Vector2i, build_type: String) -> bool:
 			if built_plot:
 				emoji_pair = built_plot.get_plot_emojis()
 
-		print("🏗️ Farm: Emitting structure_built signal for %s at %s" % [build_type, pos])
+		_verbose.debug("farm", "🏗️", "Emitting structure_built signal for %s at %s" % [build_type, pos])
 		structure_built.emit(pos, build_type, emoji_pair)
 		_emit_state_changed()
 		action_result.emit("build_%s" % build_type, true, "%s placed successfully!" % build_type.capitalize())
@@ -1119,11 +1119,13 @@ func _ensure_iconregistry() -> void:
 	if tree and tree.root:
 		tree.root.add_child(icon_registry)
 		icon_registry._ready()  # Trigger initialization
-		print("✓ Test mode: IconRegistry initialized with %d icons" % icon_registry.icons.size())
+		if _verbose:
+			_verbose.info("test", "✓", "Test mode: IconRegistry initialized with %d icons" % icon_registry.icons.size())
 	else:
 		# Headless mode without scene tree - just initialize locally
 		icon_registry._ready()
-		print("✓ Headless mode: IconRegistry initialized with %d icons" % icon_registry.icons.size())
+		if _verbose:
+			_verbose.info("test", "✓", "Headless mode: IconRegistry initialized with %d icons" % icon_registry.icons.size())
 
 
 ## Private Helpers - Resource & Economy Management

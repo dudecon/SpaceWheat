@@ -44,7 +44,7 @@ var menu_title: String = "Menu"
 var menu_panel_size: Vector2 = Vector2(360, 380)
 var menu_border_color: Color = UIStyleFactory.COLOR_PANEL_BORDER
 var menu_title_size: int = 28
-var use_ornamentation: bool = true
+var use_ornamentation: bool = false  # Disabled - layout issues with PanelContainer
 var ornamentation_style: int = UIOrnamentation.Style.CORNERS_ONLY
 var ornamentation_tint: Color = UIOrnamentation.TINT_DEFAULT
 

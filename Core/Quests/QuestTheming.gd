@@ -399,6 +399,9 @@ static func generate_quest(faction: Dictionary, bath, player_vocab: Array = []) 
 	quest["ring"] = faction.get("ring", "unknown")
 	quest["description"] = faction.get("description", "")
 
+	# Banner asset path (if available)
+	quest["banner_path"] = FactionDatabaseV2.get_faction_banner_path(faction)
+
 	# 9. Add vocabulary info
 	quest["faction_vocabulary"] = faction_vocab.all
 	quest["available_emojis"] = available_emojis

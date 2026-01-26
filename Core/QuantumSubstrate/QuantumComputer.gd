@@ -13,6 +13,25 @@ const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 const QuantumGateLibrary = preload("res://Core/QuantumSubstrate/QuantumGateLibrary.gd")
 const RegisterMap = preload("res://Core/QuantumSubstrate/RegisterMap.gd")
 
+
+## Safely log via VerboseConfig (Resource can't use @onready)
+func _log(level: String, category: String, emoji: String, message: String) -> void:
+	var tree = Engine.get_main_loop()
+	if not tree or not tree is SceneTree:
+		return
+	var verbose = tree.root.get_node_or_null("/root/VerboseConfig")
+	if not verbose:
+		return
+	match level:
+		"info":
+			verbose.info(category, emoji, message)
+		"debug":
+			verbose.debug(category, emoji, message)
+		"warn":
+			verbose.warn(category, emoji, message)
+		"error":
+			verbose.error(category, emoji, message)
+
 @export var biome_name: String = ""
 
 ## Model C (Analog Upgrade): RegisterMap-based architecture
@@ -417,7 +436,7 @@ func allocate_axis(qubit_index: int, north_emoji: String, south_emoji: String) -
 	register_map.register_axis(qubit_index, north_emoji, south_emoji)
 	_ensure_entanglement_node(qubit_index)
 	_resize_density_matrix()
-	print("📍 Allocated axis %d: %s (north) ↔ %s (south)" % [qubit_index, north_emoji, south_emoji])
+	_log("debug", "quantum", "📍", "Allocated axis %d: %s (north) ↔ %s (south)" % [qubit_index, north_emoji, south_emoji])
 
 
 func _resize_density_matrix() -> void:
@@ -431,7 +450,7 @@ func _resize_density_matrix() -> void:
 
 	if density_matrix == null:
 		density_matrix = ComplexMatrix.zeros(dim)
-		print("🔧 Created density matrix: %d qubits → %dD" % [num_qubits, dim])
+		_log("debug", "quantum", "🔧", "Created density matrix: %d qubits → %dD" % [num_qubits, dim])
 	elif density_matrix.n != dim:
 		# Tensor-extend: ρ_new = ρ_old ⊗ |0⟩⟨0|
 		var old_dim = density_matrix.n
@@ -439,7 +458,7 @@ func _resize_density_matrix() -> void:
 		ket0_bra0.set_element(0, 0, Complex.one())  # |0⟩⟨0| = [[1,0],[0,0]]
 		var new_density = density_matrix.tensor_product(ket0_bra0)
 		density_matrix = new_density
-		print("🔧 Extended density matrix: %dD → %dD (tensor with |0⟩⟨0|)" % [old_dim, dim])
+		_log("debug", "quantum", "🔧", "Extended density matrix: %dD → %dD (tensor with |0⟩⟨0|)" % [old_dim, dim])
 
 
 func initialize_basis(basis_index: int) -> void:
@@ -458,7 +477,7 @@ func initialize_basis(basis_index: int) -> void:
 
 	density_matrix = ComplexMatrix.zeros(dim)
 	density_matrix.set_element(basis_index, basis_index, Complex.one())
-	print("🎯 Initialized to |%d⟩ = %s" % [basis_index, register_map.basis_to_emojis(basis_index)])
+	_log("debug", "quantum", "🎯", "Initialized to |%d⟩ = %s" % [basis_index, register_map.basis_to_emojis(basis_index)])
 
 
 # Delegate RegisterMap queries
@@ -829,7 +848,7 @@ func measure_axis(north_emoji: String, south_emoji: String) -> String:
 	# Project density matrix onto outcome
 	_project_qubit(qubit_idx, outcome_pole)
 
-	print("🔬 Measured axis %s/%s: outcome=%s (p_north=%.3f, p_south=%.3f)" % [
+	_log("debug", "quantum", "🔬", "Measured axis %s/%s: outcome=%s (p_north=%.3f, p_south=%.3f)" % [
 		north_emoji, south_emoji, outcome_emoji, p_north, p_south])
 
 	return outcome_emoji
@@ -1733,7 +1752,7 @@ func add_coupling(qubit_a: int, qubit_b: int, strength: float) -> Dictionary:
 	if native_evolution_engine != null:
 		setup_native_evolution()
 
-	print("⚛️ Added ZZ coupling: qubit %d ↔ qubit %d (J=%.3f)" % [qubit_a, qubit_b, strength])
+	_log("debug", "quantum", "⚛️", "Added ZZ coupling: qubit %d ↔ qubit %d (J=%.3f)" % [qubit_a, qubit_b, strength])
 	return {"success": true, "coupling_key": key}
 
 
@@ -1825,10 +1844,10 @@ func set_hamiltonian(H: ComplexMatrix) -> void:
 
 	if sparsity > 0.5:
 		sparse_hamiltonian = H  # Keep reference for native engine
-		print("⚡ Hamiltonian converted to sparse: %.1f%% zeros, nnz=%d" % [sparsity * 100, nnz])
+		_log("debug", "quantum", "⚡", "Hamiltonian converted to sparse: %.1f%% zeros, nnz=%d" % [sparsity * 100, nnz])
 	else:
 		sparse_hamiltonian = null
-		print("📊 Hamiltonian kept dense: %.1f%% zeros (below threshold)" % [sparsity * 100])
+		_log("debug", "quantum", "📊", "Hamiltonian kept dense: %.1f%% zeros (below threshold)" % [sparsity * 100])
 
 
 func set_driven_icons(configs: Array) -> void:
@@ -1848,7 +1867,7 @@ func set_driven_icons(configs: Array) -> void:
 		var driver_emojis = []
 		for cfg in configs:
 			driver_emojis.append("%s(%s)" % [cfg.emoji, cfg.driver_type])
-		print("⚡ Registered %d driven icons: %s" % [configs.size(), ", ".join(driver_emojis)])
+		_log("debug", "quantum", "⚡", "Registered %d driven icons: %s" % [configs.size(), ", ".join(driver_emojis)])
 
 
 func update_driven_self_energies(time: float) -> void:
@@ -1944,7 +1963,7 @@ func set_lindblad_operators(operators: Array) -> void:
 		total_dense += total
 
 	var avg_sparsity = 1.0 - (float(total_nnz) / float(total_dense)) if total_dense > 0 else 0.0
-	print("⚡ %d Lindblad ops → sparse: avg %.1f%% zeros, total nnz=%d" % [
+	_log("debug", "quantum", "⚡", "%d Lindblad ops → sparse: avg %.1f%% zeros, total nnz=%d" % [
 		operators.size(), avg_sparsity * 100, total_nnz])
 
 	# Auto-setup native evolution engine for maximum performance
@@ -1961,10 +1980,7 @@ static func _check_native_engine() -> void:
 		return
 	_native_engine_checked = true
 	_native_engine_available = ClassDB.class_exists("QuantumEvolutionEngine")
-	if _native_engine_available:
-		print("⚡ QuantumEvolutionEngine: Native batched evolution available")
-	else:
-		print("📊 QuantumEvolutionEngine: Not available (using per-operator sparse path)")
+	# Static function can't use _log - logged once at startup via boot category by BootManager
 
 
 func setup_native_evolution() -> void:
@@ -1990,7 +2006,7 @@ func setup_native_evolution() -> void:
 	# Create native engine
 	native_evolution_engine = ClassDB.instantiate("QuantumEvolutionEngine")
 	if native_evolution_engine == null:
-		print("⚠️ QuantumEvolutionEngine: Failed to instantiate")
+		_log("warn", "quantum", "⚠️", "QuantumEvolutionEngine: Failed to instantiate")
 		return
 
 	native_evolution_engine.set_dimension(dim)
@@ -2012,7 +2028,7 @@ func setup_native_evolution() -> void:
 	# Finalize (precompute L†, L†L)
 	native_evolution_engine.finalize()
 
-	print("🚀 QuantumEvolutionEngine: Batched evolution ready (%d dim, %d Lindblad)" % [
+	_log("info", "quantum", "🚀", "QuantumEvolutionEngine: Batched evolution ready (%d dim, %d Lindblad)" % [
 		dim, lindblad_operators.size()])
 
 

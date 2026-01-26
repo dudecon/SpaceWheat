@@ -233,12 +233,12 @@ func _create_ui() -> void:
 	main_vbox.add_theme_constant_override("separation", int(8 * scale))
 	menu_panel.add_child(main_vbox)
 
-	# Apply corner ornamentation
-	UIOrnamentation.apply_corners_to_panel(
-		menu_panel,
-		UIOrnamentation.CORNER_SIZE_MEDIUM,
-		UIOrnamentation.TINT_GOLD
-	)
+	# Corner ornamentation disabled - layout issues with PanelContainer
+	# UIOrnamentation.apply_corners_to_panel(
+	# 	menu_panel,
+	# 	UIOrnamentation.CORNER_SIZE_MEDIUM,
+	# 	UIOrnamentation.TINT_GOLD
+	# )
 
 	# Header - compact
 	title_label = UIStyleFactory.create_title_label("⚛️ QUEST ORACLE ⚛️", title_size)
@@ -283,6 +283,7 @@ func open_board() -> void:
 		return
 
 	visible = true
+	mouse_filter = Control.MOUSE_FILTER_STOP  # Capture input when open
 	_refresh_biome_state()
 	_refresh_slots()
 	_update_accessible_count()
@@ -295,6 +296,7 @@ func open_board() -> void:
 func close_board() -> void:
 	"""Close the quest board"""
 	visible = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE  # Release input to prevent blocking
 	is_browser_open = false
 	if faction_browser:
 		faction_browser.visible = false

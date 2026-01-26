@@ -764,6 +764,35 @@ static func get_faction_signature_string(faction: Dictionary) -> String:
 	return ""
 
 
+static func get_faction_banner_path(faction: Dictionary) -> String:
+	"""Get banner asset path for faction
+
+	Returns resource path to banner SVG, or empty string if not found
+	"""
+	if not faction.has("name"):
+		return ""
+
+	var faction_name = faction["name"]
+	var banner_path = "res://Assets/UI/Factions/Banners/%s.svg" % faction_name
+
+	if ResourceLoader.exists(banner_path):
+		return banner_path
+
+	return ""
+
+
+static func load_faction_banner(faction: Dictionary) -> Texture2D:
+	"""Load faction banner texture
+
+	Returns loaded texture or null if banner doesn't exist
+	"""
+	var path = get_faction_banner_path(faction)
+	if path.is_empty():
+		return null
+
+	return load(path) as Texture2D
+
+
 static func get_faction_vocabulary(faction: Dictionary) -> Dictionary:
 	"""Compute complete vocabulary for a faction
 

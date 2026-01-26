@@ -19,7 +19,9 @@ var main_vbox: VBoxContainer
 # Quantum state section
 var purity_bar: HBoxContainer
 var entropy_bar: HBoxContainer
+var coherence_bar: HBoxContainer
 var dimension_label: Label
+var dynamics_label: Label
 
 # Icon populations section (harvest probabilities)
 var populations_container: HBoxContainer
@@ -157,6 +159,16 @@ func _build_ui() -> void:
 
 	entropy_bar = _create_stat_bar("Entropy", 0.0, Color(1.0, 0.5, 0.3))
 	state_vbox.add_child(entropy_bar)
+
+	coherence_bar = _create_stat_bar("Coherence", 0.0, Color(0.7, 0.3, 1.0))
+	state_vbox.add_child(coherence_bar)
+
+	# Dynamics stability label
+	dynamics_label = Label.new()
+	dynamics_label.text = "⚡ Stable"
+	dynamics_label.add_theme_font_size_override("font_size", small_size)
+	dynamics_label.add_theme_color_override("font_color", Color(0.6, 0.9, 0.6))
+	state_vbox.add_child(dynamics_label)
 
 	# Right: Populations (harvest probabilities)
 	var pop_vbox = VBoxContainer.new()
@@ -309,6 +321,30 @@ func _update_quantum_state() -> void:
 	# Update bars
 	_update_stat_bar(purity_bar, purity)
 	_update_stat_bar(entropy_bar, entropy)
+
+	# Get coherence and dynamics from biome's dynamics_tracker
+	var coherence = 0.0
+	var dynamics = 0.5
+	var stability_label = "⚡ Moderate"
+
+	if biome and "dynamics_tracker" in biome and biome.dynamics_tracker:
+		coherence = biome.dynamics_tracker.get_average_coherence()
+		dynamics = biome.dynamics_tracker.get_dynamics()
+		stability_label = "⚡ " + biome.dynamics_tracker.get_stability_label()
+
+	_update_stat_bar(coherence_bar, coherence)
+
+	# Update dynamics label with color coding
+	if dynamics_label:
+		dynamics_label.text = stability_label
+		if dynamics < 0.2:
+			dynamics_label.add_theme_color_override("font_color", Color(0.5, 0.9, 0.5))  # Green - stable
+		elif dynamics < 0.5:
+			dynamics_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.5))  # Yellow - moderate
+		elif dynamics < 0.8:
+			dynamics_label.add_theme_color_override("font_color", Color(0.9, 0.6, 0.3))  # Orange - active
+		else:
+			dynamics_label.add_theme_color_override("font_color", Color(0.9, 0.3, 0.3))  # Red - volatile
 
 
 func _update_populations() -> void:

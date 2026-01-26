@@ -43,7 +43,6 @@ const BuildingManager = preload("res://Core/GameMechanics/Grid/BuildingManager.g
 const HarvestMeasurementManager = preload("res://Core/GameMechanics/Grid/HarvestMeasurementManager.gd")
 
 const FarmPlot = preload("res://Core/GameMechanics/FarmPlot.gd")
-const TopologyAnalyzer = preload("res://Core/QuantumSubstrate/TopologyAnalyzer.gd")
 const Icon = preload("res://Core/QuantumSubstrate/Icon.gd")
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -70,9 +69,6 @@ var conspiracy_network = null
 var faction_territory_manager = null
 var farm_economy = null
 var vocabulary_evolution = null
-
-# Topology analyzer
-var topology_analyzer: TopologyAnalyzer
 
 # Legacy biome reference (for backward compatibility)
 var biome = null
@@ -150,7 +146,6 @@ func _init(width: int = 6, height: int = 4):
 	# Create components EARLY so they're available before _ready()
 	# This fixes initialization order issues where Farm._ready() calls
 	# register_biome() before FarmGrid._ready() runs.
-	topology_analyzer = TopologyAnalyzer.new()
 	_plot_manager = GridPlotManager.new(grid_width, grid_height)
 	_biome_routing = BiomeRoutingManager.new()
 	_entanglement = EntanglementManager.new()
@@ -175,11 +170,10 @@ func _ready():
 	_planting.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement)
 	_buildings.set_dependencies(_plot_manager, _biome_routing, _entanglement)
 	_buildings.set_parent_node(self)
-	_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, topology_analyzer)
+	_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement)
 
 	# Wire external references
 	_plot_manager.faction_territory_manager = faction_territory_manager
-	_harvest.set_faction_territory_manager(faction_territory_manager)
 
 	# Forward signals from components
 	_entanglement.entanglement_created.connect(func(a, b): entanglement_created.emit(a, b))
@@ -374,21 +368,8 @@ func harvest_wheat(position: Vector2i) -> Dictionary:
 	"""Harvest wheat at position"""
 	# Ensure economy is wired
 	if farm_economy and not _harvest._economy:
-		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, topology_analyzer)
+		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement)
 	return _harvest.harvest_wheat(position)
-
-
-func get_local_network(center_plot, radius: int = 2) -> Array:
-	"""Get plots within entanglement distance from center plot"""
-	return _harvest.get_local_network(center_plot, radius)
-
-
-func harvest_with_topology(position: Vector2i, local_radius: int = 2) -> Dictionary:
-	"""Harvest wheat with local topology bonus and coherence penalty"""
-	# Ensure economy is wired
-	if farm_economy and not _harvest._economy:
-		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, topology_analyzer)
-	return _harvest.harvest_with_topology(position, local_radius)
 
 
 func measure_plot(position: Vector2i) -> String:

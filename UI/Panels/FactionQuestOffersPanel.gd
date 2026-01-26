@@ -252,31 +252,51 @@ class QuestOfferItem extends PanelContainer:
 		vbox.add_theme_constant_override("separation", int(5 * scale))
 		add_child(vbox)
 
-		# Faction header with alignment
+		# Faction header with banner + name + alignment
 		var header_hbox = HBoxContainer.new()
+		header_hbox.add_theme_constant_override("separation", int(8 * scale))
 		vbox.add_child(header_hbox)
 
+		# Faction banner (left side)
+		var banner_path = quest_data.get("banner_path", "")
+		if not banner_path.is_empty() and ResourceLoader.exists(banner_path):
+			var banner_rect = TextureRect.new()
+			banner_rect.texture = load(banner_path)
+			banner_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+			banner_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			banner_rect.custom_minimum_size = Vector2(40 * scale, 40 * scale)
+			banner_rect.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			header_hbox.add_child(banner_rect)
+
+		# Faction label (name + ring)
 		var faction_label = Label.new()
-		# Show domain and ring along with faction name
 		var domain = quest_data.get("domain", "")
 		var ring = quest_data.get("ring", "")
 		var ring_display = ""
 		if ring:
 			ring_display = " [%s]" % ring.capitalize()
-		faction_label.text = "%s %s%s" % [
-			quest_data.get("faction_emoji", ""),
+
+		# Show emoji ONLY if no banner is displayed
+		var faction_emoji_prefix = ""
+		if banner_path.is_empty():
+			faction_emoji_prefix = quest_data.get("faction_emoji", "") + " "
+
+		faction_label.text = "%s%s%s" % [
+			faction_emoji_prefix,
 			quest_data.get("faction", "Unknown"),
 			ring_display
 		]
 		faction_label.add_theme_font_size_override("font_size", faction_size)
 		faction_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		faction_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		header_hbox.add_child(faction_label)
 
-		# Alignment score
+		# Alignment score (right side)
 		var alignment_label = Label.new()
 		alignment_label.text = "Alignment: %d%%" % int(alignment * 100)
 		alignment_label.add_theme_font_size_override("font_size", detail_size)
 		alignment_label.modulate = _get_alignment_text_color(alignment)
+		alignment_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		header_hbox.add_child(alignment_label)
 
 		# Motto (if available)

@@ -12,6 +12,23 @@ extends Resource
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 const QuantumRigorConfig = preload("res://Core/GameState/QuantumRigorConfig.gd")
 
+
+## Safely log via VerboseConfig (Resource can't use @onready)
+func _log(level: String, category: String, emoji: String, message: String) -> void:
+	var tree = Engine.get_main_loop()
+	if not tree or not tree is SceneTree:
+		return
+	var verbose = tree.root.get_node_or_null("/root/VerboseConfig")
+	if not verbose:
+		return
+	match level:
+		"info":
+			verbose.info(category, emoji, message)
+		"debug":
+			verbose.debug(category, emoji, message)
+		"warn":
+			verbose.warn(category, emoji, message)
+
 signal growth_complete
 signal state_collapsed(final_state: String)
 
@@ -204,7 +221,7 @@ func register_in_biome(biome: Node) -> bool:
 	has_been_measured = false
 	measured_outcome = ""
 
-	print("🌱 Plot %s: registered axis %d (%s/%s) in %s" % [
+	_log("debug", "farm", "🌱", "Plot %s: registered axis %d (%s/%s) in %s" % [
 		grid_position, register_id, north_emoji, south_emoji, biome.get_biome_type()])
 	return true
 
@@ -251,7 +268,7 @@ func measure(_icon_network = null) -> String:
 	has_been_measured = true
 	measured_outcome = basis_outcome
 
-	print("🔬 Plot %s measured: outcome=%s (emoji: %s)" % [grid_position, basis_outcome, outcome_emoji])
+	_log("debug", "farm", "🔬", "Plot %s measured: outcome=%s (emoji: %s)" % [grid_position, basis_outcome, outcome_emoji])
 
 	return basis_outcome
 
@@ -349,7 +366,7 @@ func harvest() -> Dictionary:
 	if use_costed_model:
 		result_dict["measurement_cost"] = measurement_cost
 
-	print("✂️  Plot %s harvested: purity=%.3f (×%.2f), cost=%.2f/%.2f, outcome=%s, yield=%d" % [
+	_log("debug", "farm", "✂️", "Plot %s harvested: purity=%.3f (×%.2f), cost=%.2f/%.2f, outcome=%s, yield=%d" % [
 		grid_position, purity, purity_multiplier, 1.0/measurement_cost, measurement_cost, outcome, yield_amount])
 
 	return result_dict
@@ -396,7 +413,7 @@ func add_persistent_gate(gate_type: String, linked_plots: Array[Vector2i] = []) 
 		"active": true,
 		"linked_plots": linked_plots.duplicate()
 	})
-	print("🔧 Added persistent gate '%s' to plot %s (linked: %d plots)" % [gate_type, grid_position, linked_plots.size()])
+	_log("debug", "farm", "🔧", "Added persistent gate '%s' to plot %s (linked: %d plots)" % [gate_type, grid_position, linked_plots.size()])
 
 
 func clear_persistent_gates() -> void:
@@ -404,7 +421,7 @@ func clear_persistent_gates() -> void:
 	var count = persistent_gates.size()
 	persistent_gates.clear()
 	if count > 0:
-		print("🔧 Cleared %d persistent gates from plot %s" % [count, grid_position])
+		_log("debug", "farm", "🔧", "Cleared %d persistent gates from plot %s" % [count, grid_position])
 
 
 func has_active_gate(gate_type: String) -> bool:

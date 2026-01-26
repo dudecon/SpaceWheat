@@ -105,8 +105,9 @@ static func create_corner(
 	var rect = TextureRect.new()
 	rect.texture = texture
 	rect.custom_minimum_size = corner_size
+	rect.size = corner_size
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 	rect.flip_h = flip_h
 	rect.flip_v = flip_v
 	rect.modulate = tint
@@ -155,30 +156,43 @@ static func apply_corners_to_panel(
 	"""
 	var corners = create_corner_set(corner_size, tint)
 
+	# Create a wrapper Control to hold corners - this prevents Container layout interference
+	# The wrapper fills the panel but doesn't participate in container layout
+	var corner_wrapper = Control.new()
+	corner_wrapper.name = "CornerOrnamentation"
+	corner_wrapper.set_anchors_preset(Control.PRESET_FULL_RECT)
+	corner_wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(corner_wrapper)
+
 	# Top-left corner
 	if corners.top_left:
 		corners.top_left.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		corners.top_left.size = corner_size
 		corners.top_left.position = Vector2(margin, margin)
-		panel.add_child(corners.top_left)
+		corner_wrapper.add_child(corners.top_left)
 
 	# Top-right corner
 	if corners.top_right:
 		corners.top_right.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		corners.top_right.size = corner_size
 		corners.top_right.position = Vector2(-corner_size.x - margin, margin)
-		panel.add_child(corners.top_right)
+		corner_wrapper.add_child(corners.top_right)
 
 	# Bottom-left corner
 	if corners.bottom_left:
 		corners.bottom_left.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		corners.bottom_left.size = corner_size
 		corners.bottom_left.position = Vector2(margin, -corner_size.y - margin)
-		panel.add_child(corners.bottom_left)
+		corner_wrapper.add_child(corners.bottom_left)
 
 	# Bottom-right corner
 	if corners.bottom_right:
 		corners.bottom_right.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		corners.bottom_right.size = corner_size
 		corners.bottom_right.position = Vector2(-corner_size.x - margin, -corner_size.y - margin)
-		panel.add_child(corners.bottom_right)
+		corner_wrapper.add_child(corners.bottom_right)
 
+	corners["wrapper"] = corner_wrapper
 	return corners
 
 
@@ -203,23 +217,63 @@ static func apply_ornamentation(
 	if style == Style.NONE:
 		return ornaments
 
+	# Create a shared wrapper Control - prevents Container layout interference
+	var wrapper = Control.new()
+	wrapper.name = "Ornamentation"
+	wrapper.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(wrapper)
+	ornaments["wrapper"] = wrapper
+
 	# Always add corners for non-NONE styles
 	if style >= Style.CORNERS_ONLY:
-		ornaments["corners"] = apply_corners_to_panel(panel, corner_size, tint)
+		ornaments["corners"] = _add_corners_to_wrapper(wrapper, corner_size, tint)
 
 	# Add wedges for CORNERS_WEDGES and FULL
 	if style >= Style.CORNERS_WEDGES:
-		ornaments["wedges"] = _apply_wedges_to_panel(panel, tint)
+		ornaments["wedges"] = _apply_wedges_to_wrapper(wrapper, tint)
 
 	# Add brackets for FULL
 	if style == Style.FULL:
-		ornaments["brackets"] = _apply_brackets_to_panel(panel, tint)
+		ornaments["brackets"] = _apply_brackets_to_wrapper(wrapper, tint)
 
 	return ornaments
 
 
-static func _apply_wedges_to_panel(panel: Control, tint: Color) -> Dictionary:
-	"""Apply top and bottom wedge ornaments."""
+static func _add_corners_to_wrapper(wrapper: Control, corner_size: Vector2, tint: Color) -> Dictionary:
+	"""Add corners to a wrapper Control."""
+	var corners = create_corner_set(corner_size, tint)
+	var margin = -4
+
+	if corners.top_left:
+		corners.top_left.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		corners.top_left.size = corner_size
+		corners.top_left.position = Vector2(margin, margin)
+		wrapper.add_child(corners.top_left)
+
+	if corners.top_right:
+		corners.top_right.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		corners.top_right.size = corner_size
+		corners.top_right.position = Vector2(-corner_size.x - margin, margin)
+		wrapper.add_child(corners.top_right)
+
+	if corners.bottom_left:
+		corners.bottom_left.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		corners.bottom_left.size = corner_size
+		corners.bottom_left.position = Vector2(margin, -corner_size.y - margin)
+		wrapper.add_child(corners.bottom_left)
+
+	if corners.bottom_right:
+		corners.bottom_right.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		corners.bottom_right.size = corner_size
+		corners.bottom_right.position = Vector2(-corner_size.x - margin, -corner_size.y - margin)
+		wrapper.add_child(corners.bottom_right)
+
+	return corners
+
+
+static func _apply_wedges_to_wrapper(wrapper: Control, tint: Color) -> Dictionary:
+	"""Apply top and bottom wedge ornaments to wrapper."""
 	var wedges = {}
 
 	var top_tex = get_wedge_top_texture()
@@ -229,33 +283,37 @@ static func _apply_wedges_to_panel(panel: Control, tint: Color) -> Dictionary:
 		var top_wedge = TextureRect.new()
 		top_wedge.texture = top_tex
 		top_wedge.custom_minimum_size = Vector2(100, 20)
+		top_wedge.size = Vector2(100, 20)
 		top_wedge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		top_wedge.stretch_mode = TextureRect.STRETCH_SCALE
+		top_wedge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 		top_wedge.modulate = tint
 		top_wedge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		top_wedge.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		top_wedge.position.x = -50  # Center the 100px wide wedge
 		top_wedge.position.y = -10
-		panel.add_child(top_wedge)
+		wrapper.add_child(top_wedge)
 		wedges["top"] = top_wedge
 
 	if btm_tex:
 		var btm_wedge = TextureRect.new()
 		btm_wedge.texture = btm_tex
 		btm_wedge.custom_minimum_size = Vector2(100, 20)
+		btm_wedge.size = Vector2(100, 20)
 		btm_wedge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		btm_wedge.stretch_mode = TextureRect.STRETCH_SCALE
+		btm_wedge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 		btm_wedge.modulate = tint
 		btm_wedge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		btm_wedge.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		btm_wedge.position.x = -50  # Center the 100px wide wedge
 		btm_wedge.position.y = -10
-		panel.add_child(btm_wedge)
+		wrapper.add_child(btm_wedge)
 		wedges["bottom"] = btm_wedge
 
 	return wedges
 
 
-static func _apply_brackets_to_panel(panel: Control, tint: Color) -> Dictionary:
-	"""Apply left and right bracket ornaments."""
+static func _apply_brackets_to_wrapper(wrapper: Control, tint: Color) -> Dictionary:
+	"""Apply left and right bracket ornaments to wrapper."""
 	var brackets = {}
 
 	var bracket_tex = get_bracket_texture()
@@ -266,27 +324,31 @@ static func _apply_brackets_to_panel(panel: Control, tint: Color) -> Dictionary:
 	var left_bracket = TextureRect.new()
 	left_bracket.texture = bracket_tex
 	left_bracket.custom_minimum_size = Vector2(16, 60)
+	left_bracket.size = Vector2(16, 60)
 	left_bracket.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	left_bracket.stretch_mode = TextureRect.STRETCH_SCALE
+	left_bracket.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 	left_bracket.modulate = tint
 	left_bracket.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_bracket.set_anchors_preset(Control.PRESET_CENTER_LEFT)
 	left_bracket.position.x = -8
-	panel.add_child(left_bracket)
+	left_bracket.position.y = -30  # Center the 60px tall bracket
+	wrapper.add_child(left_bracket)
 	brackets["left"] = left_bracket
 
 	# Right bracket (flipped)
 	var right_bracket = TextureRect.new()
 	right_bracket.texture = bracket_tex
 	right_bracket.custom_minimum_size = Vector2(16, 60)
+	right_bracket.size = Vector2(16, 60)
 	right_bracket.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	right_bracket.stretch_mode = TextureRect.STRETCH_SCALE
+	right_bracket.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
 	right_bracket.flip_h = true
 	right_bracket.modulate = tint
 	right_bracket.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right_bracket.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
 	right_bracket.position.x = -8
-	panel.add_child(right_bracket)
+	right_bracket.position.y = -30  # Center the 60px tall bracket
+	wrapper.add_child(right_bracket)
 	brackets["right"] = right_bracket
 
 	return brackets
