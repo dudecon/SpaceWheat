@@ -203,17 +203,19 @@ func _on_quantum_node_clicked(grid_pos: Vector2i, button_index: int) -> void:
 		else:
 			_verbose.warn("ui", "⚠️", "Measure failed: %s" % result.get("message", "unknown"))
 	else:
-		# POP: Convert recorded probability to credits with purity bonus
+		# POP: Convert recorded probability to credits with purity and neighbor bonuses
 		_verbose.debug("ui", "→", "POPPING terminal at %s" % grid_pos)
-		var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy)
+		var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy, farm)
 		if result.success:
 			var credits = result.credits
 			var purity = result.get("purity", 1.0)
-			_verbose.info("ui", "🎉", "Popped: %s → %.1f credits (purity: %.2f)" % [result.resource, credits, purity])
+			var neighbors = result.get("neighbor_count", 4)
+			_verbose.info("ui", "🎉", "Popped: %s → %.1f credits (purity: %.2f, neighbors: %d)" % [result.resource, credits, purity, neighbors])
 			farm.plot_harvested.emit(grid_pos, {
 				"emoji": result.resource,
 				"credits": credits,
-				"purity": purity
+				"purity": purity,
+				"neighbors": neighbors
 			})
 		else:
 			_verbose.warn("ui", "⚠️", "Pop failed: %s" % result.get("message", "unknown"))

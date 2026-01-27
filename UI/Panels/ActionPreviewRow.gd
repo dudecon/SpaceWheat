@@ -93,6 +93,7 @@ func update_for_tool(tool_num: int) -> void:
 			continue
 
 		var btn_data = action_buttons[action_key]
+		var action_info = ToolConfig.get_action(tool_num, action_key)
 		var label_text = ToolConfig.get_action_label(tool_num, action_key)
 		var emoji = ToolConfig.get_action_emoji(tool_num, action_key)
 		var icon_path = ToolConfig.get_action_icon(tool_num, action_key)

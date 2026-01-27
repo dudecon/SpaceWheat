@@ -217,7 +217,7 @@ static func pop(farm, plot_pool, economy, positions: Array[Vector2i]) -> Diction
 		var terminal_id = terminal.terminal_id
 
 		# Execute POP via ProbeActions
-		var result = ProbeActions.action_pop(terminal, plot_pool, economy)
+		var result = ProbeActions.action_pop(terminal, plot_pool, economy, farm)
 
 		if result.success:
 			popped_count += 1

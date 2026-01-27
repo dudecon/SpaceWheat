@@ -93,7 +93,7 @@ func _run_cycle():
 	cycle_data["measure_ok"] = true
 
 	# POP
-	var pop_result = ProbeActions.action_pop(terminal, plot_pool, economy)
+	var pop_result = ProbeActions.action_pop(terminal, plot_pool, economy, farm)
 	cycle_data["pop_ok"] = pop_result and pop_result.success
 
 	# COLLECT DATA

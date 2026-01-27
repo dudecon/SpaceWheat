@@ -319,26 +319,29 @@ static func _collapse_density_matrix(register_id: int, is_north: bool, biome) ->
 ## POP ACTION - Convert recorded probability to credits
 ## ============================================================================
 
-static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
+static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
 	"""Execute POP action: convert recorded probability to credits.
 
 	Ensemble Model:
 	- The quantum effect (drain) already happened at MEASURE time
 	- POP is purely classical bookkeeping
-	- Credits = recorded_probability × CONVERSION_RATE
+	- Credits = recorded_probability × purity × neighbor_count
 	- No further interaction with ρ
 
 	Algorithm:
 	1. Check terminal is measured
 	2. Get recorded probability (the "claim" from MEASURE)
-	3. Convert to credits: P × CONVERSION_RATE
-	4. Add credits to economy
-	5. Unbind terminal (return to pool)
+	3. Get purity from biome quantum computer
+	4. Get neighbor count from farm grid (bonus multiplier)
+	5. Convert to credits: P × purity × neighbors
+	6. Add credits to economy
+	7. Unbind terminal (return to pool)
 
 	Args:
 		terminal: Terminal instance (must be measured)
 		plot_pool: PlotPool instance
 		economy: FarmEconomy instance (optional, for credit tracking)
+		farm: Farm instance (optional, for neighbor bonus calculation)
 
 	Returns:
 		Dictionary with keys:
@@ -404,12 +407,18 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 	if biome and biome.quantum_computer:
 		purity = biome.quantum_computer.get_purity()
 
-	# 4. Convert probability to credits with purity multiplier
-	# Credits = probability × purity × 10
-	# This rewards maintaining quantum coherence!
-	var credits = recorded_prob * purity * EconomyConstants.QUANTUM_TO_CREDITS
+	# 4. Get neighbor count bonus multiplier from farm grid
+	var neighbor_count = 4  # Default fallback (standard grid has 4 neighbors)
+	if farm and farm.grid and terminal.grid_position != Vector2i(-1, -1):
+		var neighbors = farm.grid.get_neighbors(terminal.grid_position)
+		neighbor_count = neighbors.size()
 
-	# 5. Add resource to economy - use the MEASURED EMOJI as the resource type
+	# 5. Convert probability to credits with purity and neighbor multipliers
+	# Credits = probability × purity × neighbor_count
+	# Rewards: quantum coherence (purity) + plot connectivity (neighbors)
+	var credits = recorded_prob * purity * neighbor_count
+
+	# 6. Add resource to economy - use the MEASURED EMOJI as the resource type
 	# Each emoji type becomes its own classical resource (🌾, 🍄, etc.)
 	if economy:
 		var resource_amount = int(credits)
@@ -417,7 +426,7 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 			resource_amount = 1  # Minimum 1 unit per harvest
 		economy.add_resource(resource, resource_amount, "pop")
 
-	# 6. Unbind terminal (this is the ONLY mutation point for binding state)
+	# 7. Unbind terminal (this is the ONLY mutation point for binding state)
 	# Terminal.unbind() makes the register available again for future EXPLORE
 	plot_pool.unbind_terminal(terminal)
 	print("📤 Register %d released in %s" % [register_id, biome.get_biome_type() if biome.has_method("get_biome_type") else "biome"])
@@ -430,9 +439,10 @@ static func action_pop(terminal, plot_pool, economy = null) -> Dictionary:
 	return {
 		"success": true,
 		"resource": resource,  # The emoji that was harvested (🌾, 🍄, etc.)
-		"amount": resource_amount,  # Credits added (probability × purity × 10)
+		"amount": resource_amount,  # Credits added (probability × purity × neighbors)
 		"recorded_probability": recorded_prob,
 		"purity": purity,  # Quantum purity at POP time (coherence bonus)
+		"neighbor_count": neighbor_count,  # Number of adjacent plots (connectivity bonus)
 		"credits": credits,
 		"terminal_id": terminal_id,
 		"register_id": register_id

@@ -48,6 +48,7 @@ const SUBSPACE_ACTIONS = ["subspace_0", "subspace_1", "subspace_2", "subspace_3"
 var farm  # Farm instance
 var plot_grid_display  # PlotGridDisplay reference for visual selection
 var current_selection: Dictionary = {"plot_idx": -1, "biome": "", "subspace_idx": -1}
+var last_selected_plot_position: Vector2i = Vector2i(-1, -1)  # Most recently selected plot for neighbor bonus
 
 # Submenu state
 var _current_submenu: Dictionary = {}  # Current submenu data
@@ -127,7 +128,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			if _in_submenu:
 				_handle_submenu_action(key)
 			else:
-				if event.shift:
+				if event.is_shift_pressed():
 					_perform_shift_key_action(key)
 				else:
 					_perform_action(key)
@@ -431,6 +432,7 @@ func _select_plot(plot_idx: int, key: String) -> void:
 		var grid_pos = _get_grid_position()
 		if grid_pos.x >= 0:
 			plot_grid_display.set_selected_plot(grid_pos)
+			last_selected_plot_position = grid_pos  # Track for neighbor bonus
 			_verbose.debug("input", "~", "Visual selection: %s" % grid_pos)
 
 	# Emit selection changed signal
@@ -756,7 +758,7 @@ func _action_pop() -> Dictionary:
 	if not terminal:
 		return {"success": false, "error": "no_terminal", "message": "No terminal at selection"}
 
-	var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy)
+	var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy, farm)
 
 	if result.get("success", false):
 		farm.terminal_released.emit(grid_pos, result.terminal_id, int(result.credits))
