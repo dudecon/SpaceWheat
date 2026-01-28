@@ -14,6 +14,9 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 const FactionStateMatcher = preload("res://Core/QuantumSubstrate/FactionStateMatcher.gd")
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 
+# Logging
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 # =============================================================================
 # SIGNALS
 # =============================================================================
@@ -99,7 +102,8 @@ func _physics_process(delta: float) -> void:
 				_update_collapse_deliberately_quest(quest, delta)
 	var t1 = Time.get_ticks_usec()
 	if Engine.get_physics_frames() % 60 == 0:
-		print("QuestManager Physics Trace: Total %d us" % [t1 - t0])
+		if _verbose:
+			_verbose.trace("quest", "⏱️", "QuestManager Physics Trace: Total %d us" % [t1 - t0])
 
 func connect_to_economy(econ: Node) -> void:
 	"""Inject economy dependency"""

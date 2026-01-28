@@ -531,6 +531,11 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 			_verbose.debug("viz", "⚠️", "Biome %s has no quantum backend" % biome_name)
 		return
 
+	if not graph or not graph.layout_calculator:
+		if _verbose:
+			_verbose.warn("viz", "⚠️", "Cannot create bubble: graph or layout_calculator not initialized")
+		return
+
 	# Determine initial position (scatter around biome oval)
 	var initial_pos = stored_center
 	var oval = graph.layout_calculator.get_biome_oval(biome_name)
@@ -669,7 +674,7 @@ func _process(delta: float) -> void:
 	var t2 = Time.get_ticks_usec()
 
 	if Engine.get_process_frames() % 60 == 0:
-		print("BQVC Process Trace: Total %d us (Visuals: %d, Forces: %d)" % [t2 - t0, t1 - t0, t2 - t1])
+		_verbose.trace("viz", "⏱️", "BQVC Process Trace: Total %d us (Visuals: %d, Forces: %d)" % [t2 - t0, t1 - t0, t2 - t1])
 
 
 func _update_bubble_visuals_from_bath() -> void:
@@ -696,6 +701,9 @@ func _apply_skating_rink_forces(delta: float) -> void:
 
 	for biome_name in basis_bubbles:
 		var bubbles = basis_bubbles[biome_name]
+		if bubbles.is_empty():
+			continue
+
 		var oval = graph.layout_calculator.get_biome_oval(biome_name)
 		if oval.is_empty():
 			continue

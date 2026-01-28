@@ -39,6 +39,9 @@ const NodeManagerScript = preload("res://Core/Visualization/QuantumNodeManager.g
 const QuantumNode = preload("res://Core/Visualization/QuantumNode.gd")
 const BiomeLayoutCalculator = preload("res://Core/Visualization/BiomeLayoutCalculator.gd")
 
+# Logging
+@onready var _verbose = get_node("/root/VerboseConfig")
+
 
 # Signals
 signal quantum_node_selected(node: QuantumNode)
@@ -180,43 +183,64 @@ func _process(delta: float):
 	var t7 = Time.get_ticks_usec()
 	
 	if frame_count % 60 == 0:
-		print("QFG Process Trace:")
-		print("  Total: %d us" % [t7 - t0])
-		print("  Viewport: %d us" % [t1 - t0])
-		print("  Context: %d us" % [t2 - t1])
-		print("  Visuals: %d us" % [t3 - t2])
-		print("  Anims: %d us" % [t4 - t3])
-		print("  Forces: %d us" % [t5 - t4])
-		print("  Particles: %d us" % [t6 - t5])
+		if _verbose:
+			var result = "QFG Process Trace: Total %d us (Viewport: %d, Context: %d, Visuals: %d, Anims: %d, Forces: %d, Particles: %d)" % [
+				t7 - t0, t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5
+			]
+			_verbose.trace("viz", "⏱️", result)
 
 
 func _draw():
 	var t_start = Time.get_ticks_usec()
 	var ctx = _build_context()
-
+	var t_ctx = Time.get_ticks_usec()
 
 	# Draw in layers (back to front)
 	# 1. Background regions
 	region_renderer.draw(self, ctx)
+	var t_region = Time.get_ticks_usec()
 
 	# 2. Gate infrastructure
 	infra_renderer.draw(self, ctx)
+	var t_infra = Time.get_ticks_usec()
 
 	# 3. Edge relationships (MI web, entanglement, coherence, etc.)
 	edge_renderer.draw(self, ctx)
+	var t_edge = Time.get_ticks_usec()
 
 	# 4. Effects (particles, attractors)
 	effects_renderer.draw(self, ctx)
+	var t_effects = Time.get_ticks_usec()
 
 	# 5. Quantum bubbles
 	bubble_renderer.draw(self, ctx)
+	var t_bubble = Time.get_ticks_usec()
 
 	# 6. Sun qubit (always on top)
 	bubble_renderer.draw_sun_qubit(self, ctx)
+	var t_sun = Time.get_ticks_usec()
 
 	# Debug overlay
 	if DEBUG_MODE:
 		_draw_debug_overlay()
+	var t_end = Time.get_ticks_usec()
+
+	# Performance logging (every 60 frames ~ 1 second at 60 FPS)
+	if frame_count % 60 == 0:
+		var total_ms = (t_end - t_start) / 1000.0
+		var ctx_ms = (t_ctx - t_start) / 1000.0
+		var region_ms = (t_region - t_ctx) / 1000.0
+		var infra_ms = (t_infra - t_region) / 1000.0
+		var edge_ms = (t_edge - t_infra) / 1000.0
+		var effects_ms = (t_effects - t_edge) / 1000.0
+		var bubble_ms = (t_bubble - t_effects) / 1000.0
+		var sun_ms = (t_sun - t_bubble) / 1000.0
+		var debug_ms = (t_end - t_sun) / 1000.0
+
+		print("QuantumForceGraph Draw: %.2fms total (Ctx=%.2f Region=%.2f Infra=%.2f Edge=%.2f Effects=%.2f Bubble=%.2f Sun=%.2f Debug=%.2f) [%d nodes]" % [
+			total_ms, ctx_ms, region_ms, infra_ms, edge_ms, effects_ms, bubble_ms, sun_ms, debug_ms,
+			quantum_nodes.size()
+		])
 
 
 func _build_context() -> Dictionary:

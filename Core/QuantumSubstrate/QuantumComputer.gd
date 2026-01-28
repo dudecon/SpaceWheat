@@ -31,6 +31,8 @@ func _log(level: String, category: String, emoji: String, message: String) -> vo
 			verbose.warn(category, emoji, message)
 		"error":
 			verbose.error(category, emoji, message)
+		"trace":
+			verbose.trace(category, emoji, message)
 
 @export var biome_name: String = ""
 
@@ -79,6 +81,9 @@ var sink_flux_per_emoji: Dictionary = {}  # emoji → float (accumulated flux)
 ## TIME TRACKING FOR TIME-DEPENDENT HAMILTONIAN
 ## Tracks elapsed time to apply time-dependent drivers (e.g., sun oscillation)
 var elapsed_time: float = 0.0  # Total time elapsed since biome initialization
+
+# Performance: Purity cache (invalidated on density matrix changes)
+var _purity_cache: float = -1.0
 
 func _init(name: String = ""):
 	biome_name = name
@@ -1004,26 +1009,23 @@ func _renormalize() -> void:
 	var dim = register_map.dim()
 
 	# Stage 1: Clip small negative diagonal values (numerical noise fix)
-	# This is a standard technique for Lindblad evolution stability
-	var clipped_any = false
+	var data = density_matrix._data
 	for i in range(dim):
-		var diag = density_matrix.get_element(i, i)
+		var idx = i * dim + i
+		var diag = data[idx]
 		if diag.re < 0.0 and diag.re > -0.15:
-			# Clip small negatives to zero
-			density_matrix.set_element(i, i, Complex.new(0.0, 0.0))
-			clipped_any = true
+			data[idx] = Complex.zero()
 
 	# Compute trace and check for catastrophic failure
 	var trace = 0.0
 	var min_diag = 1.0
 	for i in range(dim):
-		var diag_re = density_matrix.get_element(i, i).re
+		var diag_re = data[i * dim + i].re
 		trace += diag_re
 		if diag_re < min_diag:
 			min_diag = diag_re
 
 	# Stage 2: Only reinitialize on truly catastrophic failure
-	# (trace collapsed or populations severely negative after clipping)
 	if abs(trace) < 1e-10 or min_diag < -0.15:
 		push_warning("⚠️ Quantum state catastrophic (trace=%.4f, min_diag=%.4f), reinitializing" % [trace, min_diag])
 		_reinitialize_mixed_state()
@@ -1032,10 +1034,11 @@ func _renormalize() -> void:
 	# Stage 3: Normalize trace to 1
 	if abs(trace - 1.0) > 1e-10:
 		var scale = 1.0 / trace
-		for i in range(dim):
-			for j in range(dim):
-				var rho_ij = density_matrix.get_element(i, j)
-				density_matrix.set_element(i, j, rho_ij.scale(scale))
+		var scale_c = Complex.new(scale, 0.0)
+		for i in range(data.size()):
+			data[i] = data[i].mul(scale_c)
+	
+	_purity_cache = -1.0
 
 
 func _reinitialize_mixed_state() -> void:
@@ -1113,7 +1116,7 @@ func evolve(dt: float) -> void:
 		_renormalize()  # Critical: ensure Tr(ρ) = 1 after native evolution
 		var t1 = Time.get_ticks_usec()
 		if Engine.get_process_frames() % 60 == 0:
-			print("QC Evolve Trace (Native): Total %d us" % [t1 - t0])
+			_log("trace", "quantum", "⏱️", "QC Evolve Trace (Native): Total %d us" % [t1 - t0])
 		return
 
 	# ==========================================================================
@@ -1129,13 +1132,13 @@ func evolve(dt: float) -> void:
 			_evolve_step(sub_dt)
 		var t1 = Time.get_ticks_usec()
 		if Engine.get_process_frames() % 60 == 0:
-			print("QC Evolve Trace (Fallback Subcycle %d): Total %d us" % [num_steps, t1 - t0])
+			_log("trace", "quantum", "⏱️", "QC Evolve Trace (Fallback Subcycle %d): Total %d us" % [num_steps, t1 - t0])
 		return
 
 	_evolve_step(dt)
 	var t1 = Time.get_ticks_usec()
 	if Engine.get_process_frames() % 60 == 0:
-		print("QC Evolve Trace (Fallback Single): Total %d us" % [t1 - t0])
+		_log("trace", "quantum", "⏱️", "QC Evolve Trace (Fallback Single): Total %d us" % [t1 - t0])
 
 
 func _evolve_step(dt: float) -> void:
@@ -1302,6 +1305,9 @@ func get_purity() -> float:
 	    1.0 for pure states, < 1.0 for mixed states
 	    Minimum is 1/dim for maximally mixed state
 	"""
+	if _purity_cache >= 0.0:
+		return _purity_cache
+
 	if density_matrix == null:
 		return 0.0
 
@@ -1312,7 +1318,8 @@ func get_purity() -> float:
 		var c = data[i]
 		sum_sq += c.re * c.re + c.im * c.im
 	
-	return clamp(sum_sq, 0.0, 1.0)
+	_purity_cache = clamp(sum_sq, 0.0, 1.0)
+	return _purity_cache
 
 
 # ============================================================================

@@ -621,7 +621,7 @@ func _process(delta: float):
 	var t2 = Time.get_ticks_usec()
 	
 	if Engine.get_process_frames() % 60 == 0:
-		print("Farm Process Trace: Total %d us (Grid: %d, Compost: %d)" % [t2 - t0, t1 - t0, t2 - t1])
+		_verbose.trace("farm", "⏱️", "Farm Process Trace: Total %d us (Grid: %d, Compost: %d)" % [t2 - t0, t1 - t0, t2 - t1])
 
 
 func _physics_process(delta: float) -> void:
@@ -930,6 +930,146 @@ func get_plot_position_for_active_biome(plot_index: int) -> Vector2i:
 
 
 ## Public API - Game Operations
+
+func explore_biome() -> Dictionary:
+	"""Explore and unlock a random new biome (4E action)
+
+	Returns:
+		Dictionary with:
+			- success: bool
+			- biome_name: String (if successful)
+			- message: String (error or success message)
+	"""
+	print("🗺️ explore_biome() called!")
+
+	var observation_frame = get_node_or_null("/root/ObservationFrame")
+	if not observation_frame:
+		print("❌ ObservationFrame not found")
+		return {"success": false, "message": "ObservationFrame not available"}
+
+	# Get unexplored biomes
+	var unexplored = observation_frame.get_unexplored_biomes()
+	print("🗺️ Unexplored biomes: %s" % str(unexplored))
+
+	if unexplored.is_empty():
+		print("❌ All biomes already explored")
+		return {"success": false, "message": "All biomes already explored!"}
+
+	# Pick a random unexplored biome
+	var random_index = randi() % unexplored.size()
+	var new_biome = unexplored[random_index]
+	print("🗺️ Selected random biome: %s" % new_biome)
+
+	# Unlock it
+	var unlocked = observation_frame.unlock_biome(new_biome)
+	if not unlocked:
+		print("❌ Failed to unlock biome")
+		return {"success": false, "message": "Failed to unlock biome"}
+	print("✅ Biome unlocked successfully")
+
+	# Load the new biome
+	print("🗺️ Loading biome dynamically...")
+	var biome_loaded = _load_biome_dynamically(new_biome)
+	if not biome_loaded:
+		print("❌ Biome failed to load")
+		return {"success": false, "biome_name": new_biome, "message": "Biome unlocked but failed to load"}
+	print("✅ Biome loaded successfully")
+
+	# Sync with ActiveBiomeManager
+	var biome_manager = get_node_or_null("/root/ActiveBiomeManager")
+	if biome_manager:
+		biome_manager.BIOME_ORDER = observation_frame.get_unlocked_biomes()
+		print("✅ Synced with ActiveBiomeManager")
+
+	# Switch to the new biome
+	if biome_manager:
+		var direction = 1  # Slide right (new biome appears)
+		biome_manager.set_active_biome(new_biome, direction)
+		print("✅ Switched to new biome: %s" % new_biome)
+
+	print("🗺️ Exploration complete: %s" % new_biome)
+	return {"success": true, "biome_name": new_biome, "message": "Discovered %s!" % new_biome}
+
+
+func _load_biome_dynamically(biome_name: String) -> bool:
+	"""Load a biome at runtime (used by explore_biome)
+
+	Loads the biome script, adds it to tree, registers with grid, and rebuilds operators.
+	"""
+	if not grid:
+		push_error("Grid not initialized - cannot load biome dynamically")
+		return false
+
+	var biome = null
+	var already_loaded = false
+
+	# Check if already loaded and load if needed
+	match biome_name:
+		"StarterForest":
+			if starter_forest_biome:
+				already_loaded = true
+				biome = starter_forest_biome
+			else:
+				starter_forest_biome = _safe_load_biome("res://Core/Environment/StarterForestBiome.gd", "StarterForest")
+				biome = starter_forest_biome
+		"Village":
+			if village_biome:
+				already_loaded = true
+				biome = village_biome
+			else:
+				village_biome = _safe_load_biome("res://Core/Environment/VillageBiome.gd", "Village")
+				biome = village_biome
+		"BioticFlux":
+			if biotic_flux_biome:
+				already_loaded = true
+				biome = biotic_flux_biome
+			else:
+				biotic_flux_biome = _safe_load_biome("res://Core/Environment/BioticFluxBiome.gd", "BioticFlux")
+				biome = biotic_flux_biome
+		"StellarForges":
+			if stellar_forges_biome:
+				already_loaded = true
+				biome = stellar_forges_biome
+			else:
+				stellar_forges_biome = _safe_load_biome("res://Core/Environment/StellarForgesBiome.gd", "StellarForges")
+				biome = stellar_forges_biome
+		"FungalNetworks":
+			if fungal_networks_biome:
+				already_loaded = true
+				biome = fungal_networks_biome
+			else:
+				fungal_networks_biome = _safe_load_biome("res://Core/Environment/FungalNetworksBiome.gd", "FungalNetworks")
+				biome = fungal_networks_biome
+		"VolcanicWorlds":
+			if volcanic_worlds_biome:
+				already_loaded = true
+				biome = volcanic_worlds_biome
+			else:
+				volcanic_worlds_biome = _safe_load_biome("res://Core/Environment/VolcanicWorldsBiome.gd", "VolcanicWorlds")
+				biome = volcanic_worlds_biome
+		_:
+			push_warning("Unknown biome: %s" % biome_name)
+			return false
+
+	if biome == null:
+		return false
+
+	# If newly loaded, register with grid and rebuild operators
+	if not already_loaded:
+		_register_biome_if_loaded(biome_name, biome, grid)
+
+		# Add metadata for UI systems
+		set_meta(biome_name.to_lower() + "_biome", biome)
+
+		# Rebuild quantum operators (similar to BootManager Stage 3A)
+		var icon_registry = get_node_or_null("/root/IconRegistry")
+		if icon_registry and biome.has_method("rebuild_quantum_operators"):
+			biome.rebuild_quantum_operators()
+
+		print("🗺️ Dynamically loaded and registered biome: %s" % biome_name)
+
+	return true
+
 
 func build(pos: Vector2i, build_type: String) -> bool:
 	"""Build at position - unified method for build/gather (planting deprecated).

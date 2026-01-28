@@ -3,6 +3,7 @@ extends Node
 
 # Access autoloads safely (avoids compile-time errors)
 @onready var _icon_registry = get_node("/root/IconRegistry")
+@onready var _verbose = get_node("/root/VerboseConfig")
 
 ## Abstract base class for all biomes (Model C - Unified QuantumComputer)
 ##
@@ -243,7 +244,7 @@ func _process(delta: float) -> void:
 				_update_quantum_substrate(actual_dt)
 				var t1 = Time.get_ticks_usec()
 				if Engine.get_process_frames() % 60 == 0:
-					print("Biome %s Substrate Update: %d us" % [name, t1 - t0])
+					_verbose.trace("biome", "⏱️", "Biome %s Substrate Update: %d us" % [name, t1 - t0])
 				
 				if not dynamics_tracker:
 					dynamics_tracker = BiomeDynamicsTracker.new()

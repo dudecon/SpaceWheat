@@ -1172,7 +1172,7 @@ func _process(delta: float) -> void:
 	var t4 = Time.get_ticks_usec()
 	
 	if Engine.get_process_frames() % 60 == 0:
-		print("PGD Process Trace: Total %d us (Sync: %d, Rejection: %d, Cleanup: %d, Connections: %d)" % [t4 - t0, t1 - t0, t2 - t1, t3 - t2, t4 - t3])
+		_verbose.trace("ui", "⏱️", "PGD Process Trace: Total %d us (Sync: %d, Rejection: %d, Cleanup: %d, Connections: %d)" % [t4 - t0, t1 - t0, t2 - t1, t3 - t2, t4 - t3])
 
 
 func _has_visual_connections() -> bool:

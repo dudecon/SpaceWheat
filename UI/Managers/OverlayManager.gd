@@ -27,6 +27,7 @@ const OverlayBaseClass = preload("res://UI/Core/OverlayBase.gd")
 const InspectorOverlay = preload("res://UI/Overlays/InspectorOverlay.gd")
 const ControlsOverlay = preload("res://UI/Overlays/ControlsOverlay.gd")
 const SemanticMapOverlay = preload("res://UI/Overlays/SemanticMapOverlay.gd")
+const SimStatsOverlay = preload("res://UI/Overlays/SimStatsOverlay.gd")
 
 # Overlay instances
 var quest_panel: QuestPanel
@@ -50,6 +51,7 @@ var v2_overlays: Dictionary = {}  # name → OverlayBase instance
 var inspector_overlay = null  # Density matrix inspector
 var controls_overlay = null  # Keyboard controls reference
 var semantic_map_overlay = null  # Semantic octant visualization
+var sim_stats_overlay = null
 
 # Reference to unified overlay stack (set by PlayerShell)
 var overlay_stack = null  # OverlayStackManager
@@ -173,6 +175,12 @@ func create_overlays(parent: Control) -> void:
 	quest_board.board_closed.connect(_on_quest_board_closed)
 
 	_verbose.info("ui", "📋", "Quest Board created (press C to toggle - modal 4-slot system)")
+
+	# Create simulation stats overlay (time scale + FPS)
+	sim_stats_overlay = SimStatsOverlay.new()
+	sim_stats_overlay.z_index = 5000
+	parent.add_child(sim_stats_overlay)
+	_verbose.info("ui", "⏱", "Simulation stats overlay created (upper-left)")
 
 	# Create Vocabulary Overlay
 	vocabulary_overlay = _create_vocabulary_overlay()

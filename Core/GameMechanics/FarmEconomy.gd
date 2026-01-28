@@ -42,7 +42,7 @@ const INITIAL_RESOURCES = {
 	# Forest organisms
 	"🌿": 0,    # vegetation (producer)
 	"🐇": 0,    # rabbit (herbivore)
-	"🦅": 500,  # eagle (apex predator) - 50 quantum units
+	"🦅": 800,  # eagle (apex predator) - 80 quantum units
 	# StellarForges resources
 	"⚙": 20,   # gears (industry)
 	# Other

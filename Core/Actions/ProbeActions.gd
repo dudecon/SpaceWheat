@@ -317,7 +317,7 @@ static func _drain_register(register_id: int, is_north: bool, biome) -> bool:
 			return true
 
 	# Last resort: log warning
-	print("ProbeActions: drain_register called but biome doesn't support drain")
+	_log("warn", "quantum", "⚠️", "ProbeActions: drain_register called but biome doesn't support drain")
 	return false
 
 
@@ -344,7 +344,7 @@ static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dict
 	plot_pool.unbind_terminal(terminal)
 	var biome = terminal.bound_biome
 	var register_id = harvest_result.get("register_id", -1)
-	print("📤 Register %d released in %s" % [register_id, biome.get_biome_type() if biome and biome.has_method("get_biome_type") else "biome"])
+	_log("info", "farm", "📤", "Register %d released in %s" % [register_id, biome.get_biome_type() if biome and biome.has_method("get_biome_type") else "biome"])
 
 	return harvest_result
 
@@ -378,7 +378,7 @@ static func action_reap(terminal, plot_pool, economy = null, farm = null) -> Dic
 
 	# Unbind terminal after reaping (returns it to pool)
 	plot_pool.unbind_terminal(terminal)
-	print("📤 Terminal reaped in %s" % [biome.get_biome_type() if biome and biome.has_method("get_biome_type") else "biome"])
+	_log("info", "farm", "📤", "Terminal reaped in %s" % [biome.get_biome_type() if biome and biome.has_method("get_biome_type") else "biome"])
 
 	return harvest_result
 
@@ -715,12 +715,12 @@ static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dicti
 				bonus_applied[emoji] = bonus_amount
 
 		if bonus_applied.size() > 0:
-			print("🍼 Midwife %.1fx multiplier applied (cost: %.1f tokens)" % [midwife_multiplier, token_cost])
+			_log("info", "economy", "🍼", "Midwife %.1fx multiplier applied (cost: %.1f tokens)" % [midwife_multiplier, token_cost])
 			for emoji in bonus_applied:
 				var total_resources = int(resource_totals[emoji] * midwife_multiplier)
-				print("   %s: +%d bonus (total: %d)" % [emoji, bonus_applied[emoji], total_resources])
+				_log("info", "economy", "   ", "%s: +%d bonus (total: %d)" % [emoji, bonus_applied[emoji], total_resources])
 	elif midwife_multiplier == 0 and economy:
-		print("⚠️ No Reality Midwife tokens - harvest yields 0 resources")
+		_log("warn", "economy", "⚠️", "No Reality Midwife tokens - harvest yields 0 resources")
 
 	return {
 		"success": true,
@@ -770,8 +770,8 @@ static func action_clear_all(plot_pool) -> Dictionary:
 	for terminal in terminals_to_clear:
 		plot_pool.unbind_terminal(terminal)
 		cleared_count += 1
-
-	print("🧹 Cleared %d terminals (no harvest)" % cleared_count)
+	
+	_log("info", "farm", "🧹", "Cleared %d terminals (no harvest)" % cleared_count)
 
 	return {
 		"success": true,
@@ -897,3 +897,24 @@ static func get_pop_preview(terminal: RefCounted) -> Dictionary:
 		"resource": terminal.measured_outcome,
 		"probability": terminal.measured_probability
 	}
+
+# ============================================================================
+# INTERNAL HELPERS
+# ============================================================================
+
+static func _log(level: String, category: String, emoji: String, message: String) -> void:
+	var tree = Engine.get_main_loop()
+	if not tree: return
+	var verbose = tree.root.get_node_or_null("/root/VerboseConfig")
+	if not verbose:
+		if level == "error": push_error("[%s] %s" % [category.to_upper(), message])
+		elif level == "warn": push_warning("[%s] %s" % [category.to_upper(), message])
+		else: print("[%s] %s" % [category.to_upper(), message])
+		return
+
+	match level:
+		"trace": verbose.trace(category, emoji, message)
+		"debug": verbose.debug(category, emoji, message)
+		"info": verbose.info(category, emoji, message)
+		"warn": verbose.warn(category, emoji, message)
+		"error": verbose.error(category, emoji, message)

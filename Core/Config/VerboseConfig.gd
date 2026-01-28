@@ -51,6 +51,8 @@ var category_levels = {
 	"test": LogLevel.TRACE,       # Tests want everything
 	"perf": LogLevel.WARN,        # Only show slow frames
 	"network": LogLevel.DEBUG,
+	"viz": LogLevel.WARN,         # Visualization debugging
+	"trace": LogLevel.WARN,       # Extremely low-level performance traces
 }
 
 # Category enable/disable flags
@@ -68,6 +70,8 @@ var category_enabled = {
 	"test": true,
 	"perf": true,
 	"network": true,
+	"viz": true,
+	"trace": true,
 }
 
 # ============================================================================
