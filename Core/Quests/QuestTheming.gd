@@ -469,12 +469,11 @@ static func _roll_vocabulary_reward_pair(
 	player_vocab: Array,
 	bias_emojis: Array = []
 ) -> Dictionary:
-	"""Roll vocabulary reward pair at quest creation time
+	"""Roll vocabulary reward pair at quest creation time (FACTION SIGNATURE)
 
-	Strategy:
-	1. Find emojis in faction signature that player doesn't know
-	2. Pick one as "north" (biased toward simulated vocab)
-	3. Roll "south" partner using VocabularyPairing physics
+	NEW STRATEGY (Faction Signature Rolls):
+	1. Roll SOUTH pole from faction signature (weighted by player inventory, can be known/unknown)
+	2. Roll NORTH pole from faction signature (weighted by connectedness + player vocab, must be unknown)
 
 	Args:
 		faction_signature: Faction's signature emojis
@@ -483,65 +482,80 @@ static func _roll_vocabulary_reward_pair(
 	Returns:
 		{north, south, weight, probability} or {north: "", south: ""} if none available
 	"""
-	# Filter to unknown signature emojis
-	var unknown_north: Array = []
+	var icon_registry = VocabularyPairing._get_icon_registry()
+	if not icon_registry:
+		return {"north": "", "south": "", "error": "no_icon_registry"}
+
+	# Step 1: Roll SOUTH pole from faction signature (weighted by player inventory)
+	# South can be known OR unknown to player
+	var south_result = VocabularyPairing._roll_south_pole_from_signature(
+		icon_registry,
+		faction_signature
+	)
+
+	if south_result.get("error"):
+		_log("warn", "quest", "⚠️", "South roll failed: %s" % south_result.get("message", "unknown"))
+		return {"north": "", "south": "", "error": south_result.get("error")}
+
+	var south = south_result.south
+	var south_connections = south_result.get("connections", {})
+
+	# Step 2: Find NORTH candidates from faction signature
+	# Must be: in faction signature AND connected to South AND unknown to player
+	var north_candidates: Array = []
 	for emoji in faction_signature:
-		if emoji not in player_vocab:
-			unknown_north.append(emoji)
+		# Skip if player already knows this emoji
+		if emoji in player_vocab:
+			continue
+		# Skip if same as south
+		if emoji == south:
+			continue
+		# Skip if not connected to South
+		if not south_connections.has(emoji):
+			continue
 
-	if unknown_north.is_empty():
-		_log("debug", "quest", "📖", "Player knows all signature emojis - no vocab reward")
-		return {"north": "", "south": "", "all_known": true}
+		# Calculate weight: connectedness to South + player vocab connectivity
+		var connection_weight = south_connections[emoji].get("weight", 1.0)
+		var vocab_connectivity = VocabularyPairing.calculate_vocab_connectivity(emoji, player_vocab, icon_registry)
 
-	# Pick a north emoji (light bias toward simulated vocab)
-	var bias_set = {}
-	for emoji in bias_emojis:
-		if emoji != "" and emoji not in player_vocab:
-			bias_set[emoji] = true
+		# Combined weight (TODO: clarify weighting formula with user)
+		var combined_weight = connection_weight * (1.0 + vocab_connectivity)
 
+		north_candidates.append({
+			"emoji": emoji,
+			"weight": combined_weight,
+			"connection_weight": connection_weight,
+			"vocab_connectivity": vocab_connectivity
+		})
+
+	if north_candidates.is_empty():
+		_log("debug", "quest", "📖", "No unknown north candidates for south=%s in faction signature" % south)
+		return {"north": "", "south": south, "no_north_candidates": true}
+
+	# Step 3: Weighted roll for NORTH
 	var total_weight = 0.0
-	var weighted_candidates: Array = []
-	for emoji in unknown_north:
-		var weight = NORTH_BIAS_WEIGHT if bias_set.has(emoji) else 1.0
-		weighted_candidates.append({"emoji": emoji, "weight": weight})
-		total_weight += weight
+	for candidate in north_candidates:
+		total_weight += candidate.weight
 
-	var north = unknown_north[randi() % unknown_north.size()]
+	var north = north_candidates[0].emoji
+	var north_weight = 0.0
+
 	if total_weight > 0:
 		var roll = randf() * total_weight
 		var cumulative = 0.0
-		for entry in weighted_candidates:
-			cumulative += entry.weight
+		for candidate in north_candidates:
+			cumulative += candidate.weight
 			if roll <= cumulative:
-				north = entry.emoji
+				north = candidate.emoji
+				north_weight = candidate.weight
 				break
 
-	# Roll partner using VocabularyPairing (uses IconRegistry physics)
-	var pair_result = VocabularyPairing.roll_partner(north)
+	_log("debug", "quest", "📖", "Faction pair: %s → %s (weight=%.2f)" % [south, north, north_weight])
 
-	if pair_result.get("south", "") != "":
-		return {
-			"north": north,
-			"south": pair_result["south"],
-			"weight": pair_result.get("weight", 0.0),
-			"probability": pair_result.get("probability", 0.0)
-		}
-	else:
-		# No connections for this north emoji - try another
-		_log("warn", "quest", "⚠️", "No connections for %s - trying next candidate" % north)
-
-		# Try remaining candidates
-		for candidate in unknown_north:
-			if candidate == north:
-				continue
-			var alt_result = VocabularyPairing.roll_partner(candidate)
-			if alt_result.get("south", "") != "":
-				return {
-					"north": candidate,
-					"south": alt_result["south"],
-					"weight": alt_result.get("weight", 0.0),
-					"probability": alt_result.get("probability", 0.0)
-				}
-
-		# No pairs found at all - return north only (single emoji reward)
-		return {"north": north, "south": "", "no_connections": true}
+	return {
+		"north": north,
+		"south": south,
+		"weight": north_weight,
+		"probability": north_weight / total_weight if total_weight > 0 else 0.0,
+		"south_weight": south_result.get("weight", 0.0)
+	}

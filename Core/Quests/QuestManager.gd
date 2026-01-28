@@ -61,6 +61,7 @@ func _ready() -> void:
 	set_physics_process(true)  # Enable for quest tracking
 
 func _physics_process(delta: float) -> void:
+	var t0 = Time.get_ticks_usec()
 	"""Update quest progress for non-delivery quests"""
 	if current_biome == null:
 		return
@@ -96,6 +97,9 @@ func _physics_process(delta: float) -> void:
 				_update_prevent_decoherence_quest(quest, delta)
 			QuestTypes.Type.COLLAPSE_DELIBERATELY:
 				_update_collapse_deliberately_quest(quest, delta)
+	var t1 = Time.get_ticks_usec()
+	if Engine.get_physics_frames() % 60 == 0:
+		print("QuestManager Physics Trace: Total %d us" % [t1 - t0])
 
 func connect_to_economy(econ: Node) -> void:
 	"""Inject economy dependency"""

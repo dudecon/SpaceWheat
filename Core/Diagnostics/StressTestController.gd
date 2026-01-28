@@ -43,9 +43,9 @@ func start_stress_test(cycles: int = 20):
 	coherence_history.clear()
 	sun_theta_history.clear()
 
-	print("\n" + "="*80)
+	print("\n" + "=".repeat(80))
 	print("STRESS TEST STARTED: %d cycles" % cycles)
-	print("="*80)
+	print("=".repeat(80))
 
 func _process(_delta):
 	if not test_active or cycle_count >= num_cycles:
@@ -145,9 +145,9 @@ func _print_progress():
 
 func _print_results():
 	"""Print comprehensive test results"""
-	print("\n" + "="*80)
+	print("\n" + "=".repeat(80))
 	print("STRESS TEST RESULTS (%d cycles)" % cycle_count)
-	print("="*80)
+	print("=".repeat(80))
 
 	# Success rate
 	var explore_ok = 0

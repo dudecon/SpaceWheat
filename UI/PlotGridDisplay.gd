@@ -567,6 +567,18 @@ func set_selected_plot(pos: Vector2i) -> void:
 		_verbose.debug("ui", "🎯", "Selected plot: %s" % pos)
 
 
+func set_plot_checked(pos: Vector2i, is_checked: bool) -> void:
+	"""Update checkbox visual state for multi-select.
+
+	Args:
+		pos: Grid position of the plot
+		is_checked: Whether the plot should show as checked
+	"""
+	if tiles.has(pos):
+		tiles[pos].set_checkbox_selected(is_checked)
+		_verbose.debug("ui", "☑" if is_checked else "☐", "Checkbox: %s" % pos)
+
+
 func update_tile_from_farm(pos: Vector2i) -> void:
 	"""PHASE 4: Update tile visual state directly from farm plot data
 
@@ -1132,14 +1144,17 @@ func _get_tile_center(grid_pos: Vector2i) -> Vector2:
 	return Vector2.ZERO
 
 func _process(delta: float) -> void:
+	var t0 = Time.get_ticks_usec()
 	"""Update animation time and periodically check for connections to draw"""
 	_time_accumulator += delta
 	_check_connections_timer += delta
 	time_accumulator += delta
+	var t1 = Time.get_ticks_usec()
 
 	# CRITICAL: Redraw EVERY FRAME while rejection effects are active (they're animated!)
 	if rejection_effects.size() > 0:
 		queue_redraw()
+	var t2 = Time.get_ticks_usec()
 
 	# Remove expired rejection effects
 	for i in range(rejection_effects.size() - 1, -1, -1):
@@ -1147,12 +1162,17 @@ func _process(delta: float) -> void:
 		var age = time_accumulator - effect.start_time
 		if age >= REJECTION_EFFECT_DURATION:
 			rejection_effects.remove_at(i)
+	var t3 = Time.get_ticks_usec()
 
 	# Check for connections every 0.2 seconds (not every frame for performance)
 	if _check_connections_timer >= 0.2:
 		_check_connections_timer = 0.0
 		if _has_visual_connections():
 			queue_redraw()
+	var t4 = Time.get_ticks_usec()
+	
+	if Engine.get_process_frames() % 60 == 0:
+		print("PGD Process Trace: Total %d us (Sync: %d, Rejection: %d, Cleanup: %d, Connections: %d)" % [t4 - t0, t1 - t0, t2 - t1, t3 - t2, t4 - t3])
 
 
 func _has_visual_connections() -> bool:

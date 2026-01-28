@@ -28,7 +28,8 @@ extends Node2D
 
 # Preload component scripts
 const ForceSystemScript = preload("res://Core/Visualization/QuantumForceSystem.gd")
-const BubbleRendererScript = preload("res://Core/Visualization/QuantumBubbleRenderer.gd")
+# Use batched renderer (falls back to GDScript if native unavailable)
+const BubbleRendererScript = preload("res://Core/Visualization/BatchedBubbleRenderer.gd")
 const EdgeRendererScript = preload("res://Core/Visualization/QuantumEdgeRenderer.gd")
 const RegionRendererScript = preload("res://Core/Visualization/QuantumRegionRenderer.gd")
 const InfraRendererScript = preload("res://Core/Visualization/QuantumInfraRenderer.gd")
@@ -105,6 +106,23 @@ const PARTICLE_SIZE = 3.0
 
 func _ready():
 	_initialize_components()
+	_connect_to_active_biome_manager()
+
+
+func _connect_to_active_biome_manager():
+	"""Connect to ActiveBiomeManager for biome filtering optimization."""
+	var abm = get_node_or_null("/root/ActiveBiomeManager")
+	if abm:
+		# Initialize with current active biome
+		active_biome = abm.active_biome
+		# Listen for changes
+		if abm.has_signal("active_biome_changed"):
+			abm.active_biome_changed.connect(_on_active_biome_changed)
+
+
+func _on_active_biome_changed(new_biome: String, _old_biome: String):
+	"""Handle biome switching - update active_biome for force system optimization."""
+	active_biome = new_biome
 
 
 func _initialize_components():
@@ -127,6 +145,7 @@ func _initialize_components():
 
 
 func _process(delta: float):
+	var t0 = Time.get_ticks_usec()
 	time_accumulator += delta
 	frame_count += 1
 
@@ -137,29 +156,46 @@ func _process(delta: float):
 		if new_size != cached_viewport_size:
 			cached_viewport_size = new_size
 			update_layout(true)
+	var t1 = Time.get_ticks_usec()
 
-	# Build context for components
 	var ctx = _build_context()
+	var t2 = Time.get_ticks_usec()
 
 	# Update node visuals from quantum state
 	node_manager.update_node_visuals(quantum_nodes, ctx)
+	var t3 = Time.get_ticks_usec()
 	node_manager.update_animations(quantum_nodes, time_accumulator, delta)
+	var t4 = Time.get_ticks_usec()
 
 	# Update physics forces
 	force_system.update(delta, quantum_nodes, ctx)
+	var t5 = Time.get_ticks_usec()
 
 	# Update particle effects
 	effects_renderer.update_particles(delta, ctx)
+	var t6 = Time.get_ticks_usec()
 
 	# Request redraw
-	queue_redraw()
+	# queue_redraw() # DISABLED FOR PERF ISO
+	var t7 = Time.get_ticks_usec()
+	
+	if frame_count % 60 == 0:
+		print("QFG Process Trace:")
+		print("  Total: %d us" % [t7 - t0])
+		print("  Viewport: %d us" % [t1 - t0])
+		print("  Context: %d us" % [t2 - t1])
+		print("  Visuals: %d us" % [t3 - t2])
+		print("  Anims: %d us" % [t4 - t3])
+		print("  Forces: %d us" % [t5 - t4])
+		print("  Particles: %d us" % [t6 - t5])
 
 
 func _draw():
+	var t_start = Time.get_ticks_usec()
 	var ctx = _build_context()
 
-	# Draw in layers (back to front)
 
+	# Draw in layers (back to front)
 	# 1. Background regions
 	region_renderer.draw(self, ctx)
 

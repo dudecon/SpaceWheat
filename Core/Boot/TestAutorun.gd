@@ -13,9 +13,9 @@ func _ready():
 	_run_tests()
 
 func _run_tests():
-	print("\n" + "="*90)
+	print("\n" + "=".repeat(90))
 	print("🧪 AUTO-RUN GAMEPLAY TESTS")
-	print("="*90)
+	print("=".repeat(90))
 
 	var farm_view = get_tree().get_first_node_in_group("farm_view")
 	var player_shell = get_tree().get_first_node_in_group("player_shell")
@@ -27,9 +27,9 @@ func _run_tests():
 	var overlay_mgr = player_shell.overlay_manager
 	var action_bar_mgr = player_shell.action_bar_manager
 
-	print("\n" + "─"*90)
+	print("\n" + "─".repeat(90))
 	print("PHASE 1: TOOL SELECTION & BASIC ACTIONS")
-	print("─"*90)
+	print("─".repeat(90))
 
 	# Test Tool 1
 	print("\n🔶 Tool 1 (Grower 🌱): Simulating key selection...")
@@ -75,9 +75,9 @@ func _run_tests():
 	else:
 		print("   ❌ Biome Inspector did NOT open")
 
-	print("\n" + "─"*90)
+	print("\n" + "─".repeat(90))
 	print("PHASE 2: QUEST BOARD")
-	print("─"*90)
+	print("─".repeat(90))
 
 	print("\n🔶 Quest Board: Simulating C key...")
 	_send_input_key(KEY_C)
@@ -122,9 +122,9 @@ func _run_tests():
 	else:
 		print("   ❌ Quest board did NOT open")
 
-	print("\n" + "─"*90)
+	print("\n" + "─".repeat(90))
 	print("PHASE 3: V2 OVERLAYS")
-	print("─"*90)
+	print("─".repeat(90))
 
 	var overlays_to_test = ["inspector", "controls", "semantic_map"]
 
@@ -164,9 +164,9 @@ func _run_tests():
 		else:
 			print("   ❌ Failed to open")
 
-	print("\n" + "="*90)
+	print("\n" + "=".repeat(90))
 	print("✅ AUTO-RUN TESTS COMPLETE - Check output above for results")
-	print("="*90)
+	print("=".repeat(90))
 	print("\nSUMMARY:")
 	print("   If you see mostly ✅: Tools and overlays are working")
 	print("   If you see ❌: Specific features are broken")

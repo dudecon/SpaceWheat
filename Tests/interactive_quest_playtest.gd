@@ -62,6 +62,12 @@ var last_hint_time: float = 0.0
 # UI
 var hud_label: Label = null
 
+const RIG_COMMAND_REL_PATH := "llm_inbox/rig_commands.txt"
+const COMMAND_POLL_INTERVAL := 0.5
+
+var _rig_command_abs_path: String = ""
+var _command_poll_timer: float = 0.0
+
 
 func _init():
 	print("")
@@ -73,6 +79,12 @@ func _init():
 	print("Loading game...")
 
 
+func _ready():
+	_rig_command_abs_path = ProjectSettings.globalize_path("res://") + "/" + RIG_COMMAND_REL_PATH
+	_ensure_rig_command_file()
+	_print_rig_command_help()
+
+
 func _process(delta: float):
 	frame_count += 1
 
@@ -81,6 +93,7 @@ func _process(delta: float):
 
 	if game_ready:
 		_update_tutorial(delta)
+		_poll_rig_commands(delta)
 
 
 func _load_scene():
@@ -281,7 +294,7 @@ func _print_phase_intro():
 			print("    [E] = Measure - collapse to emoji")
 			print("    [R] = Pop/Harvest - collect resource")
 			print("")
-			print("  Select plots with [T][Y][U][I][O][P] keys")
+			print("  Select plots with the Homerow: [J][K][L][;]")
 			print("  Farm until you have enough resources!")
 			print("")
 
@@ -411,7 +424,7 @@ func _update_hud():
 			lines.append("[ESC] Close board, start farming")
 		TutorialPhase.FARMING_LOOP:
 			lines.append("Tool 1: [Q]Explore [E]Measure [R]Pop")
-			lines.append("Select plots: [T][Y][U][I][O][P]")
+			lines.append("Select plots: [J][K][L][;] (Homerow)")
 		TutorialPhase.CHECK_QUEST_READY:
 			lines.append("[C] Check quest progress")
 		TutorialPhase.COMPLETE_QUEST:
@@ -491,11 +504,13 @@ func _on_quest_completed(quest_id: int, rewards: Dictionary):
 	_advance_phase(TutorialPhase.VOCABULARY_REWARD)
 
 
-func _on_resource_changed(emoji: String, new_amount: int, _delta: int):
+func _on_resource_changed(emoji: String, new_amount: int) -> void:
+	var previous_amount = resources_harvested.get(emoji, 0)
+	var delta = new_amount - previous_amount
 	resources_harvested[emoji] = new_amount
 
-	if current_phase == TutorialPhase.FARMING_LOOP:
-		print("  Harvested: %s (total: %d)" % [emoji, new_amount])
+	if current_phase == TutorialPhase.FARMING_LOOP and delta > 0:
+		print("  Harvested: %s (+%d) → total %d" % [emoji, delta, new_amount])
 
 
 func _on_emoji_discovered(emoji: String):
@@ -508,3 +523,178 @@ func _on_faction_unlocked(faction_name: String):
 	print("  NEW FACTION UNLOCKED: %s" % faction_name)
 	if faction_name not in factions_unlocked:
 		factions_unlocked.append(faction_name)
+
+
+func _poll_rig_commands(delta: float) -> void:
+	if not game_ready:
+		return
+
+	_command_poll_timer -= delta
+	if _command_poll_timer > 0.0:
+		return
+
+	_command_poll_timer = COMMAND_POLL_INTERVAL
+	for command in _read_rig_commands():
+		_execute_rig_command(command)
+
+
+func _read_rig_commands() -> Array:
+	if _rig_command_abs_path == "":
+		return []
+
+	if not FileAccess.file_exists(_rig_command_abs_path):
+		return []
+
+	var file = FileAccess.open(_rig_command_abs_path, FileAccess.READ)
+	if not file:
+		return []
+
+	var text = file.get_as_text()
+	file.close()
+
+	var commands: Array = []
+	for line in text.split("\n", false):
+		var trimmed = line.strip_edges(true, true)
+		if trimmed != "":
+			commands.append(trimmed)
+
+	if commands.size() > 0:
+		_clear_rig_command_file()
+
+	return commands
+
+
+func _clear_rig_command_file() -> void:
+	if _rig_command_abs_path == "":
+		return
+
+	var file = FileAccess.open(_rig_command_abs_path, FileAccess.WRITE)
+	if not file:
+		return
+
+	file.store_string("")
+	file.close()
+
+
+func _ensure_rig_command_file() -> void:
+	if _rig_command_abs_path == "":
+		return
+
+	var base_dir = _rig_command_abs_path.get_base_dir()
+	if not DirAccess.dir_exists(base_dir):
+		DirAccess.make_dir_recursive(base_dir)
+
+	if not FileAccess.file_exists(_rig_command_abs_path):
+		var file = FileAccess.open(_rig_command_abs_path, FileAccess.WRITE)
+		if file:
+			file.close()
+
+
+func _execute_rig_command(command: String) -> void:
+	var text = command.strip_edges(true, true)
+	if text == "":
+		return
+
+	print("\nLLM rig command: %s" % text)
+
+	var parts = text.split(" ", false)
+	var action = parts[0].to_lower()
+
+	match action:
+		"press", "key":
+			if parts.size() < 2:
+				print("  Missing key argument.")
+			else:
+				_press_key(parts[1])
+		"open":
+			if quest_board:
+				quest_board.open_board()
+		"close":
+			if quest_board:
+				quest_board.close_board()
+		"select", "slot":
+			if parts.size() < 2:
+				print("  Missing slot argument.")
+			else:
+				var idx = _slot_index_from_letter(parts[1])
+				if idx >= 0 and quest_board:
+					quest_board.select_slot(idx)
+				else:
+					print("  Invalid slot: %s" % parts[1])
+		"accept":
+			if quest_board:
+				quest_board.action_q_on_selected()
+		"status", "info", "dump":
+			_print_rig_status()
+		"help":
+			_print_rig_command_help()
+		_:
+			print("  Unknown rig command: %s" % text)
+
+
+func _print_rig_command_help() -> void:
+	print("")
+	print("LLM Rig command file: %s" % _rig_command_abs_path)
+	print("Commands:")
+	print("  press <key>     – simulate pressing a key (C, Q, R, J, K, L, ;, 1-4, etc.)")
+	print("  open / close    – open/close the quest board")
+	print("  select <U|I|O|P> – select quest slot by letter")
+	print("  accept          – trigger the current slot's Q action")
+	print("  status          – dump resources, quest selection, and phase info")
+	print("  help            – reprint this help")
+	print("")
+
+
+func _print_rig_status() -> void:
+	print("\n=== LLM Rig status ===")
+	print("Phase: %s" % current_phase)
+	print("Quests completed: %d" % quests_completed)
+	print("Vocabulary learned: %s" % vocabulary_learned)
+	print("Resources: %s" % resources_harvested)
+
+	if quest_board and quest_board.has_method("get_selected_quest"):
+		print("Selected quest: %s" % quest_board.get_selected_quest())
+
+	print("Command file: %s" % _rig_command_abs_path)
+	print("========================\n")
+
+
+func _slot_index_from_letter(letter: String) -> int:
+	match letter.to_upper():
+		"U":
+			return 0
+		"I":
+			return 1
+		"O":
+			return 2
+		"P":
+			return 3
+		"0":
+			return 0
+		"1":
+			return 1
+		"2":
+			return 2
+		"3":
+			return 3
+	return -1
+
+
+func _press_key(key_name: String) -> void:
+	var keycode = OS.find_keycode_from_string(key_name.to_upper())
+	if keycode == KEY_UNKNOWN:
+		print("  Unknown key: %s" % key_name)
+		return
+
+	var event = InputEventKey.new()
+	event.keycode = keycode
+	event.pressed = true
+	Input.parse_input_event(event)
+	call_deferred("_release_key", keycode)
+
+
+func _release_key(keycode: int) -> void:
+	var event = InputEventKey.new()
+	event.keycode = keycode
+	event.pressed = false
+	Input.parse_input_event(event)

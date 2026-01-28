@@ -91,8 +91,13 @@ var _qc_missing_warned: bool = false
 
 # Performance: Control quantum evolution frequency
 var quantum_evolution_accumulator: float = 0.0
-var quantum_evolution_timestep: float = 0.1
+var quantum_evolution_timestep: float = 0.1  # Physics update rate: 10 Hz
 var quantum_evolution_enabled: bool = true
+
+# Quantum time scaling (affects simulation speed without changing render rate)
+# Lower = slower simulation, higher = faster simulation
+# 1.0 = real-time, 0.5 = half-speed, 2.0 = double-speed
+var quantum_time_scale: float = 0.125  # Default to 1/8th real-time for detailed observation
 
 # BUILD mode pause
 var evolution_paused: bool = false
@@ -215,25 +220,31 @@ func _on_coupling_updated(emoji_a: String, emoji_b: String, strength: float) -> 
 # MAIN PROCESS LOOP
 # ============================================================================
 
-func _process(dt: float) -> void:
-	advance_simulation(dt)
+func _process(delta: float) -> void:
+	if not _is_initialized:
+		return
 
-
-func advance_simulation(dt: float) -> void:
-	"""Advance simulation by dt seconds"""
-	time_tracker.update(dt)
-
-	if evolution_paused:
+	# Check if batched evolution is enabled (BiomeEvolutionBatcher handles evolution)
+	if get_meta("batched_evolution", false):
+		# Batcher handles quantum evolution
+		# Only update time tracker here for UI and drift mechanics
+		time_tracker.update(delta)
 		return
 
 	if quantum_evolution_enabled:
-		quantum_evolution_accumulator += dt
+		quantum_evolution_accumulator += delta
 		if quantum_evolution_accumulator >= quantum_evolution_timestep:
-			var actual_dt = quantum_evolution_accumulator
+			var t0 = Time.get_ticks_usec()
+			# Apply quantum_time_scale to slow down/speed up simulation
+			var actual_dt = quantum_evolution_accumulator * quantum_time_scale
 			quantum_evolution_accumulator = 0.0
 
 			if _ensure_quantum_computer():
 				_update_quantum_substrate(actual_dt)
+				var t1 = Time.get_ticks_usec()
+				if Engine.get_process_frames() % 60 == 0:
+					print("Biome %s Substrate Update: %d us" % [name, t1 - t0])
+				
 				if not dynamics_tracker:
 					dynamics_tracker = BiomeDynamicsTracker.new()
 				if dynamics_tracker:

@@ -94,40 +94,47 @@ func _trace_node_at_position(node: Node, screen_pos: Vector2, depth: int) -> voi
 	if not is_instance_valid(node):
 		return
 
-	# Skip if not a Control
-	if not node is Control:
-		for child in node.get_children():
-			_trace_node_at_position(child, screen_pos, depth)
-		return
+	# Check if this is a Control (for bounds checking) or a CanvasLayer
+	var is_control = node is Control
+	var is_canvas_layer = node is CanvasLayer
 
-	var control = node as Control
+	if is_control:
+		var control = node as Control
+		# Check if this control is at the position
+		var global_rect = control.get_global_rect()
+		if global_rect.has_point(screen_pos):
+			var indent = "  ".repeat(depth)
+			var mouse_filter_name = _mouse_filter_to_name(control.mouse_filter)
+			var visible_str = "✓" if control.visible else "✗"
+			var enabled_str = "✓" if control.get_process_unhandled_input() else "✗"
 
-	# Check if this control is at the position
-	var global_rect = control.get_global_rect()
-	if global_rect.has_point(screen_pos):
+			_log(indent + "📦", "%s [%s] visible=%s input=%s mouse_filter=%s" % [
+				control.name, control.get_class(), visible_str, enabled_str, mouse_filter_name
+			])
+
+			# Special handling for specific nodes
+			_analyze_node(control, screen_pos)
+	elif is_canvas_layer:
+		var canvas_layer = node as CanvasLayer
 		var indent = "  ".repeat(depth)
-		var mouse_filter_name = _mouse_filter_to_name(control.mouse_filter)
-		var visible_str = "✓" if control.visible else "✗"
-		var enabled_str = "✓" if control.get_process_unhandled_input() else "✗"
-
-		_log(indent + "📦", "%s [%s] visible=%s input=%s mouse_filter=%s" % [
-			control.name, control.get_class(), visible_str, enabled_str, mouse_filter_name
+		var visible_str = "✓" if canvas_layer.visible else "✗"
+		_log(indent + "🖼️", "%s [CanvasLayer] visible=%s layer=%d" % [
+			canvas_layer.name, visible_str, canvas_layer.layer
 		])
-
-		# Special handling for specific nodes
-		_analyze_node(control, screen_pos)
+		_analyze_node(canvas_layer, screen_pos)
 
 	# Continue to children
-	for child in control.get_children():
+	for child in node.get_children():
 		_trace_node_at_position(child, screen_pos, depth + 1)
 
 
-func _analyze_node(control: Control, screen_pos: Vector2) -> void:
+func _analyze_node(node: Node, screen_pos: Vector2) -> void:
 	"""Analyze specific node types for issues"""
 
 	# Check CanvasLayer nodes
-	if control is CanvasLayer:
-		var canvas_layer = control as CanvasLayer
+	if node is CanvasLayer:
+		var canvas_layer = node as CanvasLayer
+		_log("", "  ⚠️ CanvasLayer detected:")
 		_log("", "  ⚠️ CanvasLayer detected:")
 		_log("", "     - visible: %s" % canvas_layer.visible)
 		_log("", "     - layer: %d" % canvas_layer.layer)
@@ -137,9 +144,11 @@ func _analyze_node(control: Control, screen_pos: Vector2) -> void:
 			_log("", "     Children of invisible CanvasLayer might still intercept input")
 
 	# Check ColorRect with MOUSE_FILTER_STOP
-	if control is ColorRect and control.mouse_filter == Control.MOUSE_FILTER_STOP:
-		_log("", "  ⚠️ ColorRect with MOUSE_FILTER_STOP detected:")
-		_log("", "     This will block input from reaching controls below")
+	if node is ColorRect:
+		var color_rect = node as ColorRect
+		if color_rect.mouse_filter == Control.MOUSE_FILTER_STOP:
+			_log("", "  ⚠️ ColorRect with MOUSE_FILTER_STOP detected:")
+			_log("", "     This will block input from reaching controls below")
 
 
 func _mouse_filter_to_name(mouse_filter: Control.MouseFilter) -> String:
@@ -226,25 +235,22 @@ func _scan_for_mouse_filter_issues(node: Node) -> Array:
 	"""Recursively scan for mouse_filter issues"""
 	var issues = []
 
-	if not node is Control:
-		for child in node.get_children():
-			issues += _scan_for_mouse_filter_issues(child)
-		return issues
-
-	var control = node as Control
-
 	# Check for hidden nodes with MOUSE_FILTER_STOP
-	if not control.visible and control.mouse_filter == Control.MOUSE_FILTER_STOP:
-		issues.append("Hidden %s has MOUSE_FILTER_STOP - may block input!" % control.name)
+	if node is Control:
+		var control = node as Control
+		if not control.visible and control.mouse_filter == Control.MOUSE_FILTER_STOP:
+			issues.append("Hidden %s has MOUSE_FILTER_STOP - may block input!" % control.name)
 
 	# Check for invisible CanvasLayer children with blocking filters
-	if control is CanvasLayer and not control.visible:
-		for child in control.get_children():
-			if child is Control and (child as Control).mouse_filter == Control.MOUSE_FILTER_STOP:
-				issues.append("Invisible CanvasLayer '%s' contains MOUSE_FILTER_STOP node '%s'" %
-					[control.name, child.name])
+	if node is CanvasLayer:
+		var canvas_layer = node as CanvasLayer
+		if not canvas_layer.visible:
+			for child in canvas_layer.get_children():
+				if child is Control and (child as Control).mouse_filter == Control.MOUSE_FILTER_STOP:
+					issues.append("Invisible CanvasLayer '%s' contains MOUSE_FILTER_STOP node '%s'" %
+						[canvas_layer.name, child.name])
 
-	for child in control.get_children():
+	for child in node.get_children():
 		issues += _scan_for_mouse_filter_issues(child)
 
 	return issues

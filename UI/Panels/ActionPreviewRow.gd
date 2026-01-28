@@ -621,10 +621,12 @@ func _get_cost_for_action(action_name: String, action_info: Dictionary = {}) -> 
 
 
 func _get_cost_for_action_name(action_name: String, action_info: Dictionary = {}) -> Dictionary:
+	# Special cases that need context
 	match action_name:
 		"inject_vocabulary":
 			var pair = action_info.get("vocab_pair", {})
-			return EconomyConstants.get_vocab_injection_cost(pair.get("south", ""))
+			var context = {"south_emoji": pair.get("south", "")}
+			return EconomyConstants.get_action_cost(action_name, context)
 		"drain", "pump":
 			var emoji = _resolve_selected_north_emoji()
 			if emoji == "":
@@ -633,10 +635,10 @@ func _get_cost_for_action_name(action_name: String, action_info: Dictionary = {}
 				emoji: LindbladHandler.PLACEMENT_COST_CREDITS,
 				LindbladHandler.GEAR_COST_EMOJI: LindbladHandler.GEAR_COST_CREDITS
 			}
-		"harvest_all":
-			return {EconomyConstants.MIDWIFE_EMOJI: EconomyConstants.MIDWIFE_ACTION_COST}
 		_:
-			return {}
+			# Use unified cost system for all standard actions
+			# (explore, measure, reap, harvest_all, explore_biome, etc.)
+			return EconomyConstants.get_action_cost(action_name)
 
 
 func _format_cost(cost: Dictionary) -> String:

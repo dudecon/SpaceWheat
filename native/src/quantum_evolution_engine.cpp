@@ -28,6 +28,12 @@ void QuantumEvolutionEngine::_bind_methods() {
                          &QuantumEvolutionEngine::evolve_step);
     ClassDB::bind_method(D_METHOD("evolve", "rho_data", "dt", "max_dt"),
                          &QuantumEvolutionEngine::evolve);
+
+    // MI computation methods
+    ClassDB::bind_method(D_METHOD("compute_all_mutual_information", "rho_data", "num_qubits"),
+                         &QuantumEvolutionEngine::compute_all_mutual_information);
+    ClassDB::bind_method(D_METHOD("evolve_with_mi", "rho_data", "dt", "max_dt", "num_qubits"),
+                         &QuantumEvolutionEngine::evolve_with_mi);
 }
 
 QuantumEvolutionEngine::QuantumEvolutionEngine()
@@ -242,4 +248,182 @@ PackedFloat64Array QuantumEvolutionEngine::pack_dense(const Eigen::MatrixXcd& ma
         }
     }
     return packed;
+}
+
+// ============================================================================
+// MUTUAL INFORMATION COMPUTATION
+// ============================================================================
+
+Eigen::MatrixXcd QuantumEvolutionEngine::partial_trace_single(
+    const Eigen::MatrixXcd& rho, int qubit, int num_qubits) const {
+    // Trace out all qubits except 'qubit', returning 2×2 reduced density matrix
+    // Uses the formula: ρ_A = Tr_B(ρ) where B is the complement of qubit A
+
+    int dim = 1 << num_qubits;
+    Eigen::MatrixXcd reduced = Eigen::MatrixXcd::Zero(2, 2);
+
+    // For each element (a, b) of the 2×2 reduced matrix (a, b ∈ {0, 1})
+    for (int a = 0; a < 2; a++) {
+        for (int b = 0; b < 2; b++) {
+            std::complex<double> sum(0.0, 0.0);
+
+            // Sum over all basis states where qubit has value a (row) and b (col)
+            // and all other qubits have the same value (trace condition)
+            for (int other_bits = 0; other_bits < (1 << (num_qubits - 1)); other_bits++) {
+                // Construct full basis state index with qubit at position 'qubit'
+                // Insert 'a' at position qubit for row, 'b' for column
+                int row_idx = 0, col_idx = 0;
+                int bit_pos = 0;
+                for (int q = 0; q < num_qubits; q++) {
+                    if (q == qubit) {
+                        row_idx |= (a << q);
+                        col_idx |= (b << q);
+                    } else {
+                        int other_bit = (other_bits >> bit_pos) & 1;
+                        row_idx |= (other_bit << q);
+                        col_idx |= (other_bit << q);  // Same value for trace
+                        bit_pos++;
+                    }
+                }
+                sum += rho(row_idx, col_idx);
+            }
+            reduced(a, b) = sum;
+        }
+    }
+    return reduced;
+}
+
+Eigen::MatrixXcd QuantumEvolutionEngine::partial_trace_complement(
+    const Eigen::MatrixXcd& rho, int qubit_a, int qubit_b, int num_qubits) const {
+    // Trace out all qubits except qubit_a and qubit_b, returning 4×4 reduced matrix
+    // Basis order: |00⟩, |01⟩, |10⟩, |11⟩ where first digit is qubit_a, second is qubit_b
+
+    int dim = 1 << num_qubits;
+    Eigen::MatrixXcd reduced = Eigen::MatrixXcd::Zero(4, 4);
+
+    // Ensure qubit_a < qubit_b for consistent ordering
+    int q_lo = std::min(qubit_a, qubit_b);
+    int q_hi = std::max(qubit_a, qubit_b);
+    bool swapped = (qubit_a > qubit_b);
+
+    // For each element of the 4×4 reduced matrix
+    for (int row_ab = 0; row_ab < 4; row_ab++) {
+        for (int col_ab = 0; col_ab < 4; col_ab++) {
+            // Extract qubit values from 2-bit indices
+            int a_row = swapped ? (row_ab & 1) : ((row_ab >> 1) & 1);
+            int b_row = swapped ? ((row_ab >> 1) & 1) : (row_ab & 1);
+            int a_col = swapped ? (col_ab & 1) : ((col_ab >> 1) & 1);
+            int b_col = swapped ? ((col_ab >> 1) & 1) : (col_ab & 1);
+
+            std::complex<double> sum(0.0, 0.0);
+
+            // Sum over all other qubits (trace condition: same value in row and col)
+            int other_qubits = num_qubits - 2;
+            for (int other_bits = 0; other_bits < (1 << other_qubits); other_bits++) {
+                int row_idx = 0, col_idx = 0;
+                int bit_pos = 0;
+
+                for (int q = 0; q < num_qubits; q++) {
+                    if (q == qubit_a) {
+                        row_idx |= (a_row << q);
+                        col_idx |= (a_col << q);
+                    } else if (q == qubit_b) {
+                        row_idx |= (b_row << q);
+                        col_idx |= (b_col << q);
+                    } else {
+                        int other_bit = (other_bits >> bit_pos) & 1;
+                        row_idx |= (other_bit << q);
+                        col_idx |= (other_bit << q);  // Same for trace
+                        bit_pos++;
+                    }
+                }
+                sum += rho(row_idx, col_idx);
+            }
+            reduced(row_ab, col_ab) = sum;
+        }
+    }
+    return reduced;
+}
+
+double QuantumEvolutionEngine::von_neumann_entropy(const Eigen::MatrixXcd& reduced_rho) const {
+    // S(ρ) = -Tr(ρ log ρ) = -Σ λ_i log λ_i (in bits)
+    // Use eigenvalue decomposition
+
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXcd> solver(reduced_rho);
+    Eigen::VectorXd eigenvalues = solver.eigenvalues().real();
+
+    double entropy = 0.0;
+    const double eps = 1e-15;
+    const double log2_e = 1.0 / std::log(2.0);  // Convert nats to bits
+
+    for (int i = 0; i < eigenvalues.size(); i++) {
+        double lambda = eigenvalues(i);
+        if (lambda > eps) {
+            entropy -= lambda * std::log(lambda) * log2_e;
+        }
+    }
+
+    return std::max(entropy, 0.0);  // Ensure non-negative due to numerical errors
+}
+
+double QuantumEvolutionEngine::mutual_information(
+    const Eigen::MatrixXcd& rho, int qubit_a, int qubit_b, int num_qubits) const {
+    // I(A:B) = S(A) + S(B) - S(AB)
+
+    Eigen::MatrixXcd rho_a = partial_trace_single(rho, qubit_a, num_qubits);
+    Eigen::MatrixXcd rho_b = partial_trace_single(rho, qubit_b, num_qubits);
+    Eigen::MatrixXcd rho_ab = partial_trace_complement(rho, qubit_a, qubit_b, num_qubits);
+
+    double S_a = von_neumann_entropy(rho_a);
+    double S_b = von_neumann_entropy(rho_b);
+    double S_ab = von_neumann_entropy(rho_ab);
+
+    // Subadditivity guarantees I(A:B) >= 0
+    return std::max(S_a + S_b - S_ab, 0.0);
+}
+
+PackedFloat64Array QuantumEvolutionEngine::compute_all_mutual_information(
+    const PackedFloat64Array& rho_data, int num_qubits) {
+    // Compute MI for all qubit pairs in upper triangular order
+    // Returns: [mi_01, mi_02, ..., mi_0(n-1), mi_12, mi_13, ..., mi_(n-2)(n-1)]
+    // Total: n*(n-1)/2 values
+
+    int num_pairs = num_qubits * (num_qubits - 1) / 2;
+    PackedFloat64Array mi_values;
+    mi_values.resize(num_pairs);
+
+    if (num_qubits < 2) {
+        return mi_values;  // No pairs for 0 or 1 qubit
+    }
+
+    Eigen::MatrixXcd rho = unpack_dense(rho_data);
+    double* ptr = mi_values.ptrw();
+
+    int idx = 0;
+    for (int i = 0; i < num_qubits; i++) {
+        for (int j = i + 1; j < num_qubits; j++) {
+            ptr[idx] = mutual_information(rho, i, j, num_qubits);
+            idx++;
+        }
+    }
+
+    return mi_values;
+}
+
+Dictionary QuantumEvolutionEngine::evolve_with_mi(
+    const PackedFloat64Array& rho_data, float dt, float max_dt, int num_qubits) {
+    // Combined evolution + MI computation in single call
+    // Avoids multiple GDScript ↔ C++ round trips
+
+    Dictionary result;
+
+    // Evolve the state
+    PackedFloat64Array evolved_rho = evolve(rho_data, dt, max_dt);
+    result["rho"] = evolved_rho;
+
+    // Compute MI on the evolved state
+    PackedFloat64Array mi_values = compute_all_mutual_information(evolved_rho, num_qubits);
+    result["mi"] = mi_values;
+
+    return result;
 }

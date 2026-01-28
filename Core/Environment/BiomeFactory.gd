@@ -73,9 +73,7 @@ static func gather_icons(register_map: RegisterMap) -> Dictionary:
 	var icons: Dictionary = {}
 
 	# Get IconRegistry from autoload
-	var icon_registry = Engine.get_singleton("IconRegistry")
-	if not icon_registry:
-		icon_registry = get_node_or_null("/root/IconRegistry")
+	var icon_registry = Engine.get_main_loop().root.get_node_or_null("IconRegistry")
 
 	if not icon_registry:
 		push_error("🛁 IconRegistry not available!")

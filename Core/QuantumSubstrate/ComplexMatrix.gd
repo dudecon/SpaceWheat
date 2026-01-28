@@ -36,7 +36,7 @@ func _get_native():
 		_native_backend = ClassDB.instantiate("QuantumMatrixNative")
 	return _native_backend
 
-## Marshal GDScript data to PackedFloat64Array for native
+## Marshal GDScript data to PackedFloat64Array for native (DENSE)
 func _to_packed() -> PackedFloat64Array:
 	var packed = PackedFloat64Array()
 	packed.resize(n * n * 2)
@@ -45,12 +45,122 @@ func _to_packed() -> PackedFloat64Array:
 		packed[i * 2 + 1] = _data[i].im
 	return packed
 
-## Unmarshal PackedFloat64Array back to GDScript
+## Unmarshal PackedFloat64Array back to GDScript (DENSE)
 func _from_packed(packed: PackedFloat64Array, dim: int) -> void:
 	n = dim
 	_data = []
 	for i in range(n * n):
 		_data.append(Complex.new(packed[i * 2], packed[i * 2 + 1]))
+
+#region Sparse Matrix Transfer (CSR Format)
+
+## Sparsity threshold - elements below this magnitude are considered zero
+const SPARSITY_THRESHOLD: float = 1e-12
+
+## Calculate sparsity ratio (0.0 = all zero, 1.0 = all non-zero)
+func get_sparsity_ratio() -> float:
+	var nonzero_count = 0
+	var total = n * n
+	for i in range(total):
+		if _data[i].abs() > SPARSITY_THRESHOLD:
+			nonzero_count += 1
+	return float(nonzero_count) / float(total) if total > 0 else 0.0
+
+## Count non-zero elements
+func count_nonzeros() -> int:
+	var count = 0
+	for i in range(n * n):
+		if _data[i].abs() > SPARSITY_THRESHOLD:
+			count += 1
+	return count
+
+## Marshal to CSR (Compressed Sparse Row) format for efficient transfer
+## Returns Dictionary with: row_ptr, col_idx, values_real, values_imag, dim, nnz
+func _to_packed_csr() -> Dictionary:
+	var row_ptr = PackedInt32Array()
+	var col_idx = PackedInt32Array()
+	var values_real = PackedFloat64Array()
+	var values_imag = PackedFloat64Array()
+
+	row_ptr.resize(n + 1)
+	var current_nnz = 0
+
+	for i in range(n):
+		row_ptr[i] = current_nnz
+		for j in range(n):
+			var elem = get_element(i, j)
+			if elem.abs() > SPARSITY_THRESHOLD:
+				col_idx.append(j)
+				values_real.append(elem.re)
+				values_imag.append(elem.im)
+				current_nnz += 1
+
+	row_ptr[n] = current_nnz
+
+	return {
+		"format": "csr",
+		"dim": n,
+		"nnz": current_nnz,
+		"row_ptr": row_ptr,
+		"col_idx": col_idx,
+		"values_real": values_real,
+		"values_imag": values_imag
+	}
+
+## Unmarshal from CSR format
+func _from_packed_csr(csr_data: Dictionary) -> void:
+	n = csr_data.dim
+	_data = []
+	for i in range(n * n):
+		_data.append(Complex.zero())
+
+	var row_ptr = csr_data.row_ptr
+	var col_idx = csr_data.col_idx
+	var values_real = csr_data.values_real
+	var values_imag = csr_data.values_imag
+
+	for i in range(n):
+		var row_start = row_ptr[i]
+		var row_end = row_ptr[i + 1]
+		for k in range(row_start, row_end):
+			var j = col_idx[k]
+			set_element(i, j, Complex.new(values_real[k], values_imag[k]))
+
+## Smart marshal: choose dense or sparse based on sparsity ratio
+## Uses sparse if less than 40% non-zero (60% sparse or more)
+func _to_packed_auto() -> Dictionary:
+	var sparsity_ratio = get_sparsity_ratio()
+	var use_sparse = sparsity_ratio < 0.4  # Use sparse if <40% non-zero
+
+	if use_sparse:
+		var csr = _to_packed_csr()
+		# Calculate transfer savings for logging
+		var dense_bytes = n * n * 2 * 8
+		var sparse_bytes = (n + 1) * 4 + csr.nnz * 4 + csr.nnz * 2 * 8
+		# Only use sparse if it actually saves bytes
+		if sparse_bytes < dense_bytes:
+			return csr
+
+	# Fall back to dense
+	return {
+		"format": "dense",
+		"dim": n,
+		"data": _to_packed()
+	}
+
+## Smart unmarshal: detect format and use appropriate method
+func _from_packed_auto(packed_data) -> void:
+	if packed_data is Dictionary:
+		if packed_data.format == "csr":
+			_from_packed_csr(packed_data)
+		else:
+			_from_packed(packed_data.data, packed_data.dim)
+	else:
+		# Legacy: PackedFloat64Array, assume square matrix
+		var dim = int(sqrt(packed_data.size() / 2))
+		_from_packed(packed_data, dim)
+
+#endregion
 
 ## Sync current matrix to native backend
 func _sync_to_native() -> void:

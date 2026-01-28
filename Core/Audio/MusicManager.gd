@@ -23,6 +23,8 @@ const TRACKS: Dictionary = {
 	"entropic_bread": "res://Assets/Audio/Music/Entropic Bread Rise.mp3",
 	"yeast_prophet": "res://Assets/Audio/Music/Yeast Prophet_s Eclipse.mp3",
 	"end_credits": "res://Assets/Audio/Music/SpaceWheat (End Credits).mp3",
+	"heisenberg_township": "res://Assets/Audio/Music/Heisenberg Township, Poppenoff-ulation.mp3",
+	"peripheral_arbor": "res://Assets/Audio/Music/Peripheral Arbor.mp3",
 }
 
 ## Biome to track mapping
@@ -31,8 +33,8 @@ const BIOME_TRACKS: Dictionary = {
 	"StellarForges": "black_horizon",
 	"FungalNetworks": "fungal_lattice",
 	"VolcanicWorlds": "entropic_bread",
-	"StarterForest": "quantum_harvest",
-	"Village": "yeast_prophet",
+	"StarterForest": "peripheral_arbor",
+	"Village": "heisenberg_township",
 }
 
 ## Menu/special tracks

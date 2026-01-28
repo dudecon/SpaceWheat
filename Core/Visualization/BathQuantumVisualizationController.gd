@@ -658,12 +658,18 @@ func _create_basis_bubbles(biome_name: String) -> void:
 
 
 func _process(delta: float) -> void:
+	var t0 = Time.get_ticks_usec()
 	"""Update bubble visuals from bath state and apply forces"""
 	if not graph:
 		return
 
 	_update_bubble_visuals_from_bath()
+	var t1 = Time.get_ticks_usec()
 	_apply_skating_rink_forces(delta)
+	var t2 = Time.get_ticks_usec()
+
+	if Engine.get_process_frames() % 60 == 0:
+		print("BQVC Process Trace: Total %d us (Visuals: %d, Forces: %d)" % [t2 - t0, t1 - t0, t2 - t1])
 
 
 func _update_bubble_visuals_from_bath() -> void:
@@ -704,6 +710,13 @@ func _apply_skating_rink_forces(delta: float) -> void:
 		if biome and biome.quantum_computer:
 			biome_purity = biome.quantum_computer.get_purity()
 
+		# RADIAL POSITION: ring_distance ← purity (constant for all bubbles in this biome)
+		# Pure (1.0) → 0.3 (center), Mixed (0.125 for 8-dim) → 0.85 (edge)
+		# Interpolate: ring = 0.85 - (purity - min_purity) * 0.55 / (1 - min_purity)
+		var min_purity = 0.125  # 1/8 for 3-qubit system
+		var purity_normalized = clampf((biome_purity - min_purity) / (1.0 - min_purity), 0.0, 1.0)
+		var ring_distance = 0.85 - purity_normalized * 0.55  # 0.85 (mixed) to 0.30 (pure)
+
 		for bubble in bubbles:
 			# Skip bubbles without plot OR farm_tether (neither v1 nor v2 style)
 			if not bubble.plot and not bubble.has_farm_tether:
@@ -722,13 +735,6 @@ func _apply_skating_rink_forces(delta: float) -> void:
 			elif bubble.plot:
 				# Plot bubbles: use grid position for spread
 				phi = (bubble.grid_position.x * 2.236 + bubble.grid_position.y * 1.414) * TAU
-
-			# RADIAL POSITION: ring_distance ← purity
-			# Pure (1.0) → 0.3 (center), Mixed (0.125 for 8-dim) → 0.85 (edge)
-			# Interpolate: ring = 0.85 - (purity - min_purity) * 0.55 / (1 - min_purity)
-			var min_purity = 0.125  # 1/8 for 3-qubit system
-			var purity_normalized = clampf((biome_purity - min_purity) / (1.0 - min_purity), 0.0, 1.0)
-			var ring_distance = 0.85 - purity_normalized * 0.55  # 0.85 (mixed) to 0.30 (pure)
 
 			var target_pos = center + Vector2(
 				semi_a * cos(phi) * ring_distance,

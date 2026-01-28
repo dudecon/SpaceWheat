@@ -18,8 +18,11 @@ signal purchase_failed(reason: String)
 signal flour_processed(wheat_amount: int, flour_produced: int)
 signal flour_sold(flour_amount: int, credits_received: int)
 
+const STARTER_BREAD_UNITS: int = 100
+const STARTER_BREAD_CREDITS: int = STARTER_BREAD_UNITS * EconomyConstants.QUANTUM_TO_CREDITS
+
 # Initial resources in emoji-credits (10 credits = 1 quantum energy unit)
-# Start with 0 - player must gather all resources through gameplay
+# Start with basic resources - player gathers more through gameplay
 const INITIAL_RESOURCES = {
 	# BioticFlux crops
 	"🌾": 10,   # wheat (agriculture)
@@ -30,7 +33,7 @@ const INITIAL_RESOURCES = {
 	"🌌": 0,    # cosmic chaos (entropy/void)
 	# Market commodities
 	"💨": 0,    # flour (processed grain)
-	"🍞": 0,    # bread (finished product)
+	"🍞": STARTER_BREAD_CREDITS,   # bread (finished product) – starter buffer (100 bread units)
 	# Kitchen ingredients
 	"🔥": 0,    # fire (heat)
 	"💧": 0,    # water (moisture)
@@ -39,7 +42,7 @@ const INITIAL_RESOURCES = {
 	# Forest organisms
 	"🌿": 0,    # vegetation (producer)
 	"🐇": 0,    # rabbit (herbivore)
-	"🐺": 0,    # wolf (predator)
+	"🦅": 500,  # eagle (apex predator) - 50 quantum units
 	# StellarForges resources
 	"⚙": 20,   # gears (industry)
 	# Other
@@ -95,46 +98,60 @@ func _print_resources():
 ## UNIFIED API - Primary methods for all resource operations
 ## ============================================================================
 
-func add_resource(emoji: String, credits_amount: int, reason: String = "") -> void:
-	"""Add emoji-credits to any resource"""
-	if credits_amount > 0 and not _is_gain_allowed(emoji):
-		if reason != "":
-			if _verbose: _verbose.warn("economy", "🚫", "Blocked gain of %s (%d credits) from %s" % [emoji, credits_amount, reason])
-		return
+func add_resource(emoji: String, credits_amount, reason: String = "") -> void:
+	"""Add emoji-credits to any resource
 
+	Purity Bonus: If emoji is in player's vocabulary, apply 2x multiplier (squared = 4x total)
+	Otherwise, always allow gain with no bonus (1x)
+	"""
 	if not emoji_credits.has(emoji):
 		emoji_credits[emoji] = 0
 
-	emoji_credits[emoji] += credits_amount
+	# Apply vocabulary purity bonus: 2x before squaring = 4x total
+	var purity_multiplier = _get_vocabulary_purity_multiplier(emoji)
+	var final_amount = int(credits_amount * purity_multiplier)
+
+	emoji_credits[emoji] += final_amount
 	_emit_resource_change(emoji)
 
-	var quantum_units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
+	var quantum_units = final_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	if reason != "":
-		if _verbose: _verbose.info("economy", "+", "%d %s-credits (%d units) from %s" % [credits_amount, emoji, quantum_units, reason])
+		var bonus_text = " (×%.1f purity)" % purity_multiplier if purity_multiplier > 1.0 else ""
+		if _verbose: _verbose.info("economy", "+", "%d %s-credits (%d units) from %s%s" % [final_amount, emoji, quantum_units, reason, bonus_text])
 
 
-func _is_gain_allowed(emoji: String) -> bool:
-	"""Allow gains only for emojis in the player's known vocabulary."""
+func _get_vocabulary_purity_multiplier(emoji: String) -> float:
+	"""Get purity multiplier for vocabulary match.
+
+	If emoji is in player's vocabulary: 2x multiplier, squared = 4.0x bonus
+	Otherwise: 1.0x (no bonus, but still allowed)
+	"""
 	var gsm = get_node_or_null("/root/GameStateManager")
 	if not gsm:
-		return true
+		return 1.0
+
+	var is_in_vocabulary = false
 
 	# Prefer farm-owned vocabulary when available
 	if "active_farm" in gsm and gsm.active_farm and gsm.active_farm.has_method("get_known_emojis"):
 		var known_emojis = gsm.active_farm.get_known_emojis()
-		return emoji in known_emojis
-
+		is_in_vocabulary = emoji in known_emojis
 	# Fallback to saved state (legacy)
-	if not gsm.current_state:
-		return true
-	var known = gsm.current_state.get_known_emojis() if gsm.current_state.has_method("get_known_emojis") else []
-	return emoji in known
+	elif gsm.current_state and gsm.current_state.has_method("get_known_emojis"):
+		var known = gsm.current_state.get_known_emojis()
+		is_in_vocabulary = emoji in known
+
+	# Purity bonus: 2x before squaring = 4x total
+	if is_in_vocabulary:
+		return 2.0 * 2.0  # Squared multiplier
+	else:
+		return 1.0  # Always allow, just no bonus
 
 
-func remove_resource(emoji: String, credits_amount: int, reason: String = "") -> bool:
-	"""Remove emoji-credits from a resource. Returns false if insufficient."""
+func remove_resource(emoji: String, credits_amount, reason: String = "") -> bool:
+	"""Remove emoji-credits from a resource. Returns false if insufficient. Supports float amounts."""
 	if not can_afford_resource(emoji, credits_amount):
-		purchase_failed.emit("Not enough %s! Need %d, have %d" % [emoji, credits_amount, get_resource(emoji)])
+		purchase_failed.emit("Not enough %s! Need %.2f, have %.2f" % [emoji, credits_amount, get_resource(emoji)])
 		return false
 
 	emoji_credits[emoji] -= credits_amount
@@ -142,22 +159,22 @@ func remove_resource(emoji: String, credits_amount: int, reason: String = "") ->
 
 	var quantum_units = credits_amount / EconomyConstants.QUANTUM_TO_CREDITS
 	if reason != "":
-		if _verbose: _verbose.info("economy", "-", "%d %s-credits (%d units) for %s" % [credits_amount, emoji, quantum_units, reason])
+		if _verbose: _verbose.info("economy", "-", "%.2f %s-credits (%.2f units) for %s" % [credits_amount, emoji, quantum_units, reason])
 	return true
 
 
-func set_resource(emoji: String, credits_amount: int, reason: String = "") -> void:
-	"""Set emoji-credits directly (bypasses gain gate)."""
+func set_resource(emoji: String, credits_amount, reason: String = "") -> void:
+	"""Set emoji-credits directly (bypasses gain gate). Supports float amounts."""
 	if not emoji_credits.has(emoji):
 		emoji_credits[emoji] = 0
 	emoji_credits[emoji] = max(0, credits_amount)
 	_emit_resource_change(emoji)
 	if reason != "":
-		if _verbose: _verbose.info("economy", "=", "%d %s-credits from %s" % [credits_amount, emoji, reason])
+		if _verbose: _verbose.info("economy", "=", "%.2f %s-credits from %s" % [credits_amount, emoji, reason])
 
 
-func get_resource(emoji: String) -> int:
-	"""Get emoji-credits for any resource"""
+func get_resource(emoji: String):
+	"""Get emoji-credits for any resource (supports float amounts)"""
 	return emoji_credits.get(emoji, 0)
 
 
@@ -166,8 +183,13 @@ func get_resource_units(emoji: String) -> int:
 	return get_resource(emoji) / EconomyConstants.QUANTUM_TO_CREDITS
 
 
-func can_afford_resource(emoji: String, credits_amount: int) -> bool:
-	"""Check if player has enough emoji-credits"""
+func get_all_resources() -> Dictionary:
+	"""Get all emoji-credits as dictionary. Returns copy to prevent mutation."""
+	return emoji_credits.duplicate()
+
+
+func can_afford_resource(emoji: String, credits_amount) -> bool:
+	"""Check if player has enough emoji-credits (supports float amounts)"""
 	return get_resource(emoji) >= credits_amount
 
 

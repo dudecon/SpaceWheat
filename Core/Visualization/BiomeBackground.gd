@@ -14,7 +14,7 @@ const BIOME_TEXTURES: Dictionary = {
 	"FungalNetworks": preload("res://Assets/Biomes/Fungal_Networks.png"),
 	"VolcanicWorlds": preload("res://Assets/Biomes/Volcanic_Worlds.png"),
 	"StarterForest": preload("res://Assets/Biomes/Starter_Forest.png"),
-	"Village": preload("res://Assets/Biomes/Entropy_Garden.png"),
+	"Village": preload("res://Assets/Biomes/Village.png"),
 }
 
 ## Transition duration in seconds
@@ -67,12 +67,19 @@ func _ready() -> void:
 		if not _biome_manager.biome_transition_requested.is_connected(_on_transition_requested):
 			_biome_manager.biome_transition_requested.connect(_on_transition_requested)
 
-		# Set initial biome
-		set_biome(_biome_manager.get_active_biome())
+		# Defer setting initial biome (wait for ActiveBiomeManager to sync with ObservationFrame)
+		# Similar pattern to MusicManager - prevents race condition at boot
+		call_deferred("_set_initial_biome")
 	else:
 		push_warning("BiomeBackground: ActiveBiomeManager not found")
-		# Default to BioticFlux
-		set_biome("BioticFlux")
+		# Default to StarterForest (matches ObservationFrame initial state)
+		set_biome("StarterForest")
+
+
+func _set_initial_biome() -> void:
+	"""Deferred call to set initial biome after ActiveBiomeManager syncs with ObservationFrame"""
+	if _biome_manager:
+		set_biome(_biome_manager.get_active_biome())
 
 
 func _on_viewport_size_changed() -> void:

@@ -179,6 +179,11 @@ static func enable_persistent_drive(farm, positions: Array[Vector2i],
 			already_active += 1
 			continue
 
+		var known_emojis: Array = farm.get_known_emojis() if farm.has_method("get_known_emojis") else []
+		if emoji not in known_emojis:
+			insufficient[emoji] = insufficient.get(emoji, 0) + 1
+			continue
+
 		if not farm.economy or not farm.economy.can_afford_resource(emoji, PLACEMENT_COST_CREDITS) \
 			or not farm.economy.can_afford_resource(GEAR_COST_EMOJI, GEAR_COST_CREDITS):
 			insufficient[emoji] = insufficient.get(emoji, 0) + 1
@@ -248,6 +253,10 @@ static func enable_persistent_decay(farm, positions: Array[Vector2i],
 			continue
 
 		var plot = farm.grid.get_plot(pos)
+		var known_emojis: Array = farm.get_known_emojis() if farm.has_method("get_known_emojis") else []
+		if emoji not in known_emojis:
+			insufficient[emoji] = insufficient.get(emoji, 0) + 1
+			continue
 		if plot and plot.lindblad_drain_active:
 			already_active += 1
 			continue

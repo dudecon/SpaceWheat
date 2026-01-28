@@ -31,7 +31,9 @@ var selected_slot_index: int = 0
 
 # Quest pool for F-cycling
 var all_available_quests: Array = []  # All quests from accessible factions
-var quest_page_offset: int = 0  # Current page offset (0, 4, 8, ...)
+var quest_pages_memory: Dictionary = {}  # Runtime cache: page_num → [4 slots]
+var current_page: int = 0  # Current page (0, 1, 2...) not offset!
+const QUESTS_PER_PAGE: int = 4  # Fixed: all slots cycle together
 
 # Faction browser
 var faction_browser: Node = null
@@ -198,6 +200,34 @@ func open_board() -> void:
 		push_error("QuestBoard: quest_manager or current_biome not set")
 		return
 
+	# Restore from GameState
+	var gsm = _get_game_state_manager()
+	if gsm and gsm.current_state:
+		# Migrate old quest_slots format to new quest_pages format (only if has actual quests)
+		if "quest_slots" in gsm.current_state and gsm.current_state.quest_slots.size() == 4:
+			if not ("quest_pages" in gsm.current_state) or gsm.current_state.quest_pages.is_empty():
+				# Check if old slots have any actual quests (not all null)
+				var has_quests = false
+				for slot_data in gsm.current_state.quest_slots:
+					if slot_data != null:
+						has_quests = true
+						break
+
+				# Only migrate if there were actual quests saved
+				if has_quests:
+					gsm.current_state.quest_pages = {0: gsm.current_state.quest_slots.duplicate(true)}
+					gsm.current_state.quest_board_current_page = 0
+
+		# Restore page memory
+		if "quest_pages" in gsm.current_state and not gsm.current_state.quest_pages.is_empty():
+			quest_pages_memory = gsm.current_state.quest_pages.duplicate(true)
+
+		# Restore current page
+		if "quest_board_current_page" in gsm.current_state:
+			current_page = gsm.current_state.quest_board_current_page
+		else:
+			current_page = 0
+
 	visible = true
 	is_active = true
 	_refresh_biome_state()
@@ -212,6 +242,9 @@ func open_board() -> void:
 
 func close_board() -> void:
 	"""Close the quest board"""
+	# Save current page before closing
+	_save_current_page()
+
 	visible = false
 	is_active = false
 	is_browser_open = false
@@ -279,101 +312,154 @@ func _get_game_state_manager():
 func _get_saved_quest_slots() -> Array:
 	"""Safely load quest slots from GameStateManager"""
 	var gsm = _get_game_state_manager()
-	if gsm and gsm.current_state and gsm.current_state.has("quest_slots"):
+	if gsm and gsm.current_state and "quest_slots" in gsm.current_state:
 		return gsm.current_state.quest_slots
 	return []
 
 
-func _refresh_slots() -> void:
-	"""Refresh all quest slots - displays current page from all_available_quests pool
+func _save_current_page() -> void:
+	"""Capture current slot configuration to page memory."""
+	var page_slots = []
+	for slot in quest_slots:
+		if slot.state == SlotState.EMPTY:
+			page_slots.append(null)
+		else:
+			page_slots.append({
+				"quest_id": slot.quest_data.get("id", -1),
+				"offered_quest": slot.quest_data.duplicate(true),
+				"faction": slot.quest_data.get("faction", ""),
+				"is_locked": slot.is_locked,
+				"state": slot.state
+			})
 
-	IMPORTANT: Locked and Active slots are PINNED - they don't change when F cycles pages.
-	Only EMPTY and OFFERED (not locked) slots get updated from the quest pool.
+	# Save to runtime cache
+	quest_pages_memory[current_page] = page_slots
+
+	# Persist to GameState
+	var gsm = _get_game_state_manager()
+	if gsm and gsm.current_state:
+		gsm.current_state.quest_pages = quest_pages_memory.duplicate(true)
+		gsm.current_state.quest_board_current_page = current_page
+
+
+func _load_page(page_num: int) -> bool:
+	"""Load a page from memory and display it. Returns true if found."""
+	# Check runtime cache first
+	if quest_pages_memory.has(page_num):
+		var page_slots = quest_pages_memory[page_num]
+		_display_page_slots(page_slots)
+		current_page = page_num
+		return true
+
+	# Check GameState (for session restore)
+	var gsm = _get_game_state_manager()
+	if gsm and gsm.current_state and "quest_pages" in gsm.current_state:
+		if gsm.current_state.quest_pages.has(page_num):
+			var page_slots = gsm.current_state.quest_pages[page_num]
+			quest_pages_memory[page_num] = page_slots  # Cache it
+			_display_page_slots(page_slots)
+			current_page = page_num
+			return true
+
+	# Page not in memory
+	return false
+
+
+func _display_page_slots(page_slots: Array) -> void:
+	"""Set quest slots to match saved page configuration."""
+	for i in range(min(4, page_slots.size())):
+		var slot = quest_slots[i]
+		var slot_data = page_slots[i]
+
+		if slot_data == null:
+			slot.set_empty()
+		else:
+			var quest_state = slot_data.get("state", SlotState.OFFERED)
+			var quest_data = slot_data.get("offered_quest", {})
+			var is_locked = slot_data.get("is_locked", false)
+
+			match quest_state:
+				SlotState.OFFERED:
+					slot.set_quest_offered(quest_data, is_locked)
+				SlotState.ACTIVE:
+					slot.set_quest_active(quest_data)
+				SlotState.READY:
+					slot.state = SlotState.READY
+					slot.quest_data = quest_data
+					slot._refresh_ui()
+				_:
+					slot.set_empty()
+
+
+func _generate_and_display_page(page_num: int) -> void:
+	"""Generate a new page of quests and display it."""
+	var start_index = page_num * QUESTS_PER_PAGE
+	var end_index = min(start_index + QUESTS_PER_PAGE, all_available_quests.size())
+
+	for i in range(4):
+		var slot = quest_slots[i]
+		var pool_index = start_index + i
+
+		if pool_index < end_index:
+			var quest = all_available_quests[pool_index]
+			slot.set_quest_offered(quest, false)  # Not locked by default
+		else:
+			slot.set_empty()
+
+	current_page = page_num
+	# Save this newly generated page
+	_save_current_page()
+
+
+func _calculate_total_pages() -> int:
+	"""Calculate total pages from quest pool."""
+	if all_available_quests.is_empty():
+		return 1
+	return int(ceil(float(all_available_quests.size()) / QUESTS_PER_PAGE))
+
+
+func _regenerate_all_pages() -> void:
+	"""Clear page memory and regenerate from updated quest pool.
+
+	Called when quest pool order changes (accept, complete, etc).
+	Preserves current page number but updates all slot contents.
+	"""
+	# Clear runtime page memory (force regeneration)
+	quest_pages_memory.clear()
+
+	# Clear GameState page memory
+	var gsm = _get_game_state_manager()
+	if gsm and gsm.current_state:
+		gsm.current_state.quest_pages = {}
+
+	# Regenerate current page from new pool order
+	_generate_and_display_page(current_page)
+
+
+func _refresh_slots() -> void:
+	"""Refresh quest slots - load current page or generate.
+
+	NEW BEHAVIOR:
+	- No pinning logic (all slots cycle together)
+	- Load page from memory if available
+	- Generate new page if not in memory
 	"""
 	if not quest_manager or not current_biome:
 		return
 
-	# Build the full quest pool from all accessible factions
+	# Build quest pool
 	all_available_quests = quest_manager.offer_all_faction_quests(current_biome)
 
-	# Identify pinned slots and their factions (locked OR active)
-	var pinned_factions: Array = []
-	var unpinned_slot_indices: Array = []
-
-	for i in range(4):
-		var slot = quest_slots[i]
-		var is_pinned = slot.is_locked or slot.state == SlotState.ACTIVE or slot.state == SlotState.READY
-
-		if is_pinned and slot.quest_data.has("faction"):
-			pinned_factions.append(slot.quest_data.get("faction", ""))
-		elif not is_pinned:
-			unpinned_slot_indices.append(i)
-
-	# Filter quest pool to exclude factions already in pinned slots
-	var available_for_cycling: Array = []
-	for quest in all_available_quests:
-		var faction = quest.get("faction", "")
-		if faction not in pinned_factions:
-			available_for_cycling.append(quest)
-
-	# Reset page offset if it exceeds filtered quests
-	if quest_page_offset >= available_for_cycling.size():
-		quest_page_offset = 0
-
-	# Fill only UNPINNED slots from current page of available quests
-	var quest_index = quest_page_offset
-	for slot_index in unpinned_slot_indices:
-		var slot = quest_slots[slot_index]
-
-		if quest_index < available_for_cycling.size():
-			var quest = available_for_cycling[quest_index]
-			slot.set_quest_offered(quest, false)
-			quest_index += 1
-		else:
-			slot.set_empty()
+	# Try to load current page
+	if _load_page(current_page):
+		# Loaded from memory
+		pass
+	else:
+		# First time viewing, generate
+		_generate_and_display_page(current_page)
 
 	_update_slot_selection()
 	_update_page_display()
-
-
-func _auto_fill_slot(slot_index: int) -> void:
-	"""Auto-fill slot with best-aligned accessible quest"""
-	if not quest_manager or not current_biome:
-		return
-
-	var slot = quest_slots[slot_index]
-
-	# Don't auto-fill locked slots
-	if slot.is_locked:
-		return
-
-	# Get all accessible quests
-	var all_quests = quest_manager.offer_all_faction_quests(current_biome)
-
-	if all_quests.is_empty():
-		slot.set_empty()
-		return
-
-	# Filter out quests from factions already in other slots
-	var used_factions = []
-	for i in range(4):
-		if i == slot_index:
-			continue
-		var other_slot = quest_slots[i]
-		if other_slot.quest_data.has("faction"):
-			used_factions.append(other_slot.quest_data.faction)
-
-	# Find best quest not already used
-	for quest in all_quests:
-		if quest.get("faction", "") not in used_factions:
-			slot.set_quest_offered(quest, false)
-			_save_slot_state()
-			return
-
-	# All factions used - just take first available
-	if all_quests.size() > 0:
-		slot.set_quest_offered(all_quests[0], false)
-		_save_slot_state()
 
 
 func _update_accessible_count() -> void:
@@ -386,34 +472,33 @@ func _update_accessible_count() -> void:
 
 
 func _update_page_display() -> void:
-	"""Update the page indicator in accessible_factions_label"""
-	# Count pinned slots
-	var pinned_count = 0
-	var pinned_factions: Array = []
-	for slot in quest_slots:
-		var is_pinned = slot.is_locked or slot.state == SlotState.ACTIVE or slot.state == SlotState.READY
-		if is_pinned:
-			pinned_count += 1
-			if slot.quest_data.has("faction"):
-				pinned_factions.append(slot.quest_data.get("faction", ""))
+	"""Update page indicator label."""
+	var total_pages = _calculate_total_pages()
+	var total_quests = all_available_quests.size()
+	var visited_pages = quest_pages_memory.size()
 
-	# Count available quests (excluding pinned factions)
-	var available_count = 0
-	for quest in all_available_quests:
-		var faction = quest.get("faction", "")
-		if faction not in pinned_factions:
-			available_count += 1
-
-	var unpinned_slots = 4 - pinned_count
-	var total_pages = int(ceil(float(available_count) / float(max(1, unpinned_slots)))) if available_count > 0 else 1
-	var current_page = (quest_page_offset / max(1, unpinned_slots)) + 1
-
-	# Show pinned count if any slots are pinned
-	var pinned_text = " | %d pinned" % pinned_count if pinned_count > 0 else ""
-
-	accessible_factions_label.text = "Page %d/%d  |  %d quests%s  |  [F] Next" % [
-		current_page, total_pages, all_available_quests.size(), pinned_text
+	accessible_factions_label.text = "Page %d/%d  |  %d quests  |  %d visited  |  [F] Next" % [
+		current_page + 1,  # 1-indexed for display
+		total_pages,
+		total_quests,
+		visited_pages
 	]
+
+
+func get_selected_quest() -> Dictionary:
+	"""Return a snapshot of the currently selected quest, if any."""
+	if selected_slot_index < 0 or selected_slot_index >= quest_slots.size():
+		return {}
+
+	var slot = quest_slots[selected_slot_index]
+	if slot.quest_data.is_empty():
+		return {}
+
+	var snapshot = slot.quest_data.duplicate(true)
+	snapshot["slot_index"] = selected_slot_index
+	snapshot["slot_state"] = slot.state
+	snapshot["slot_locked"] = slot.is_locked
+	return snapshot
 
 
 func select_slot(index: int) -> void:
@@ -519,7 +604,7 @@ func action_e_on_selected() -> void:
 		SlotState.OFFERED:
 			# E = Lock/Unlock toggle
 			slot.toggle_lock()
-			_save_slot_state()
+			_save_current_page()
 			_emit_selection_update()
 		SlotState.ACTIVE:
 			_abandon_quest(slot)
@@ -538,9 +623,11 @@ func action_r_on_selected() -> void:
 		SlotState.EMPTY:
 			# Generate a new quest for this empty slot
 			_reroll_quest(slot)
+			_save_current_page()
 		SlotState.OFFERED:
 			if not slot.is_locked:
 				_reroll_quest(slot)
+				_save_current_page()
 
 
 func _accept_quest(slot) -> void:
@@ -567,8 +654,26 @@ func _accept_quest(slot) -> void:
 
 	if success:
 		quest_accepted.emit(quest_data_copy)
-		_save_slot_state()
-		# CRITICAL: Update action labels after state change!
+
+		# Bubble sort - move accepted quest to top of pool
+		var quest_id = quest_data_copy.get("id", -1)
+		var quest_index = -1
+
+		# Find quest in pool
+		for i in range(all_available_quests.size()):
+			if all_available_quests[i].get("id") == quest_id:
+				quest_index = i
+				break
+
+		# Move to front of pool
+		if quest_index >= 0:
+			var quest_to_move = all_available_quests[quest_index]
+			all_available_quests.remove_at(quest_index)
+			all_available_quests.insert(0, quest_to_move)
+
+			# Regenerate all pages with new ordering
+			_regenerate_all_pages()
+
 		_emit_selection_update()
 	else:
 		# Revert slot state if accept failed
@@ -586,8 +691,14 @@ func _deliver_quest(slot) -> void:
 
 	var success = quest_manager.complete_quest(quest_id)
 	if success:
+		# Remove from pool and regenerate pages
+		for i in range(all_available_quests.size()):
+			if all_available_quests[i].get("id") == quest_id:
+				all_available_quests.remove_at(i)
+				break
+
+		_regenerate_all_pages()
 		_emit_selection_update()
-		# Slot will be auto-filled on next refresh
 
 
 func _claim_quest(slot) -> void:
@@ -601,8 +712,14 @@ func _claim_quest(slot) -> void:
 
 	var success = quest_manager.claim_quest(quest_id)
 	if success:
+		# Remove from pool and regenerate pages
+		for i in range(all_available_quests.size()):
+			if all_available_quests[i].get("id") == quest_id:
+				all_available_quests.remove_at(i)
+				break
+
+		_regenerate_all_pages()
 		_emit_selection_update()
-		# Slot will be auto-filled on next refresh
 
 
 func _reject_quest(slot) -> void:
@@ -616,8 +733,14 @@ func _reject_quest(slot) -> void:
 
 	quest_manager.reject_quest(quest_id)
 	quest_abandoned.emit(quest_id)
-	_auto_fill_slot(slot.slot_index)
-	_save_slot_state()
+
+	# Remove from pool and regenerate pages
+	for i in range(all_available_quests.size()):
+		if all_available_quests[i].get("id") == quest_id:
+			all_available_quests.remove_at(i)
+			break
+
+	_regenerate_all_pages()
 
 
 func _abandon_quest(slot) -> void:
@@ -631,8 +754,14 @@ func _abandon_quest(slot) -> void:
 
 	quest_manager.fail_quest(quest_id, "player_abandoned")
 	quest_abandoned.emit(quest_id)
-	_auto_fill_slot(slot.slot_index)
-	_save_slot_state()
+
+	# Remove from pool and regenerate pages
+	for i in range(all_available_quests.size()):
+		if all_available_quests[i].get("id") == quest_id:
+			all_available_quests.remove_at(i)
+			break
+
+	_regenerate_all_pages()
 
 
 func _reroll_quest(slot) -> void:
@@ -665,7 +794,6 @@ func _reroll_quest(slot) -> void:
 	# Pick random
 	var new_quest = available[randi() % available.size()]
 	slot.set_quest_offered(new_quest, slot.is_locked)
-	_save_slot_state()
 
 
 func _check_can_complete(slot) -> bool:
@@ -684,19 +812,19 @@ func _on_faction_selected(faction_quest: Dictionary) -> void:
 	"""Handle faction selected from browser"""
 	var slot = quest_slots[selected_slot_index]
 	slot.set_quest_offered(faction_quest, slot.is_locked)
-	_save_slot_state()
+	_save_current_page()
 	close_faction_browser()
 
 
 func _on_quest_completed(quest_id: int, rewards: Dictionary) -> void:
 	"""Handle quest completed signal from manager"""
-	# Find slot with this quest and auto-fill
-	for i in range(4):
-		var slot = quest_slots[i]
-		if slot.quest_data.get("id", -1) == quest_id:
-			_auto_fill_slot(i)
+	# Remove from pool and regenerate pages
+	for i in range(all_available_quests.size()):
+		if all_available_quests[i].get("id") == quest_id:
+			all_available_quests.remove_at(i)
 			break
 
+	_regenerate_all_pages()
 	quest_completed.emit(quest_id, rewards)
 
 
@@ -712,27 +840,6 @@ func _on_quest_ready_to_claim(quest_id: int) -> void:
 			if i == selected_slot_index:
 				_emit_selection_update()
 			break
-
-
-func _save_slot_state() -> void:
-	"""Save slot state to GameStateManager (safe access)"""
-	var gsm = _get_game_state_manager()
-	if not gsm or not gsm.current_state:
-		return
-
-	var slot_data = []
-	for slot in quest_slots:
-		if slot.state == SlotState.EMPTY:
-			slot_data.append(null)
-		else:
-			slot_data.append({
-				"quest_id": slot.quest_data.get("id", -1),
-				"offered_quest": slot.quest_data if slot.state == SlotState.OFFERED else null,
-				"is_locked": slot.is_locked,
-				"state": slot.state
-			})
-
-	gsm.current_state.quest_slots = slot_data
 
 
 # =============================================================================
@@ -768,34 +875,34 @@ func on_r_pressed() -> void:
 
 
 func on_f_pressed() -> void:
-	"""v2 overlay action: F key cycles to next page of quests.
+	"""F key cycles to next page (all 4 slots).
 
-	Advances by the number of UNPINNED slots, so locked/active quests stay put.
+	NEW BEHAVIOR:
+	- Saves current page
+	- Advances to next page
+	- Loads from memory OR generates new page
+	- Wraps to page 0 at end
 	"""
-	if all_available_quests.is_empty():
-		return
+	# Save current page before leaving
+	_save_current_page()
 
-	# Count unpinned slots to determine page size
-	var unpinned_count = 0
-	for slot in quest_slots:
-		var is_pinned = slot.is_locked or slot.state == SlotState.ACTIVE or slot.state == SlotState.READY
-		if not is_pinned:
-			unpinned_count += 1
+	# Calculate total pages
+	var total_pages = _calculate_total_pages()
 
-	# No unpinned slots means nothing to cycle
-	if unpinned_count == 0:
-		return
+	# Advance to next page (wrap around)
+	current_page = (current_page + 1) % max(1, total_pages)
 
-	# Advance by number of unpinned slots (dynamic page size)
-	quest_page_offset += unpinned_count
+	# Try to load from memory
+	if not _load_page(current_page):
+		# Generate new page
+		_generate_and_display_page(current_page)
 
-	# Wrap around handled in _refresh_slots()
+	# Update UI
+	_update_slot_selection()
+	_update_page_display()
 
-	# Refresh slots with new page
-	_refresh_slots()
-
-	# Keep current selection (don't reset to 0)
-	action_performed.emit("quest_next_page", {"page_offset": quest_page_offset})
+	# Emit signal
+	action_performed.emit("quest_next_page", {"page": current_page})
 
 
 func get_action_labels() -> Dictionary:

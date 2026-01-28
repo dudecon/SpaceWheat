@@ -59,6 +59,7 @@ func _create_children():
 	texture_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(texture_rect)
 
 	# Label for emoji text fallback (secondary display)
@@ -66,6 +67,7 @@ func _create_children():
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(label)
 
 
@@ -89,10 +91,16 @@ func _update_display():
 	var registry = get_node_or_null("/root/VisualAssetRegistry")
 	if registry and registry.has_method("get_texture"):
 		texture = registry.get_texture(emoji)
+	elif not registry:
+		# Registry not ready yet - defer update until next frame
+		if is_inside_tree():
+			call_deferred("_update_display")
+		return
 
 	if texture:
 		# Use SVG glyph (primary path)
 		texture_rect.texture = texture
+		texture_rect.modulate = modulate_color
 		texture_rect.visible = true
 		texture_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 
@@ -101,6 +109,7 @@ func _update_display():
 		# Fallback to emoji text (secondary path)
 		label.text = emoji
 		label.add_theme_font_size_override("font_size", font_size)
+		label.add_theme_color_override("font_color", modulate_color)
 		label.visible = true
 		label.set_anchors_preset(Control.PRESET_FULL_RECT)
 

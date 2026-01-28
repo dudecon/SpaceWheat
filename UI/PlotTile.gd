@@ -26,6 +26,14 @@ var press_timer: float = 0.0
 var is_pressing: bool = false
 const LONG_PRESS_TIME = 0.5
 
+# Performance optimization: Dirty flag for event-driven updates
+var _visuals_dirty: bool = true  # Start dirty to ensure initial draw
+
+# Performance optimization: Shared glow value (static across all PlotTiles)
+# Updated once per physics frame instead of 24 times per visual frame
+static var _shared_glow_value: float = 0.5
+static var _shared_glow_frame: int = -1  # Track which frame last updated
+
 # UI elements (will be created in _ready)
 var background: ColorRect
 var emoji_label_north: EmojiDisplay  # North pole emoji (quantum superposition) - auto SVG/text fallback
@@ -89,8 +97,11 @@ func _ready():
 	# Explicitly layout elements since NOTIFICATION_RESIZED may not fire in all cases
 	_layout_elements()
 
-	# Update visuals
-	set_process(true)
+	# Performance optimization: Start with processing disabled for empty tiles
+	# Processing is enabled when plot data is set via set_plot_data()
+	set_process(false)
+	set_physics_process(true)  # Physics process updates shared glow value
+	_visuals_dirty = true  # Ensure first update when data arrives
 
 
 func set_label_text(label: String) -> void:
@@ -236,8 +247,32 @@ func _process(delta):
 			is_pressing = false
 			press_timer = 0.0
 
-	_update_visuals()
-	queue_redraw()  # Continuously redraw PCB styling and dynamic effects
+	# Performance optimization: Only update data-dependent visuals when dirty
+	# (quantum state, emojis, probabilities - these change on physics tick)
+	if _visuals_dirty:
+		_update_visuals()
+		_visuals_dirty = false
+
+	# Glow animation runs every frame for planted tiles
+	# (uses shared glow value computed once per physics frame)
+	# Glow animation runs every frame for planted tiles
+	# (uses shared glow value computed once per physics frame)
+	if plot_ui_data and plot_ui_data.get("is_planted", false):
+		background.color = COLOR_MATURE.lightened(_shared_glow_value * 0.2)
+		queue_redraw()
+
+
+func _physics_process(_delta):
+	"""Update shared glow value once per physics frame (not per tile).
+
+	Physics runs at fixed rate (~60Hz or game's physics tick rate).
+	Only the first tile to run each frame updates the shared value.
+	"""
+	var current_frame = Engine.get_physics_frames()
+	if _shared_glow_frame != current_frame:
+		_shared_glow_frame = current_frame
+		# Single sin() call shared by all 24 tiles
+		_shared_glow_value = (sin(Time.get_ticks_msec() * 0.003) + 1.0) / 2.0
 
 
 ## REMOVED: _gui_input() was dead code - PlotTile has mouse_filter=IGNORE
@@ -375,10 +410,9 @@ func _show_mature_state():
 				emoji_label_north.modulate.a = 1.0
 				emoji_label_south.modulate.a = 0.0
 
-	# Golden glow for mature crops
-	var glow_pulse = (sin(Time.get_ticks_msec() * 0.003) + 1.0) / 2.0
+	# Golden glow for mature crops (uses shared glow value - not per-tile sin())
 	var base_golden = COLOR_MATURE
-	background.color = base_golden.lightened(glow_pulse * 0.2)
+	background.color = base_golden.lightened(_shared_glow_value * 0.2)
 
 	# Update center state indicator (shows quantum state + biome effects)
 	_update_center_indicator()
@@ -725,8 +759,17 @@ func set_plot_data(plot_data, pos: Vector2i, index: int = -1):
 	if index >= 0 and number_label:
 		number_label.text = str(index)
 
-	# Update visuals to reflect new plot data
+	# Performance optimization: Mark visuals as dirty for next frame update
+	_visuals_dirty = true
+
+	# Performance optimization: Only enable _process for planted tiles
+	# Empty tiles don't need per-frame updates
+	var is_planted = plot_data != null and plot_data.get("is_planted", false)
+	set_process(is_planted)
+
+	# Immediate visual update for responsiveness on state change
 	_update_visuals()
+	queue_redraw()
 
 
 func get_debug_info() -> String:

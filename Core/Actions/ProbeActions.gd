@@ -24,19 +24,21 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 ## EXPLORE ACTION - Bind terminal to register with probability weighting
 ## ============================================================================
 
-static func action_explore(plot_pool, biome) -> Dictionary:
+static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 	"""Execute EXPLORE action: discover a register in the quantum soup.
 
 	Algorithm:
-	1. Get unbound terminal from pool
-	2. Get unbound registers with probabilities from biome
-	3. Weighted random selection (higher probability = more likely)
-	4. Bind terminal to selected register
-	5. Return result with emoji for bubble spawn
+	1. Check cost (🍞 bread)
+	2. Get unbound terminal from pool
+	3. Get unbound registers with probabilities from biome
+	4. Weighted random selection (higher probability = more likely)
+	5. Bind terminal to selected register
+	6. Return result with emoji for bubble spawn
 
 	Args:
 		plot_pool: PlotPool instance
 		biome: BiomeBase instance (the quantum soup to probe)
+		economy: FarmEconomy instance (for cost deduction)
 
 	Returns:
 		Dictionary with keys:
@@ -58,6 +60,16 @@ static func action_explore(plot_pool, biome) -> Dictionary:
 			"success": false,
 			"error": "no_biome",
 			"message": "Biome not initialized."
+		}
+
+	# 0b. Check and deduct cost
+	if economy and not EconomyConstants.try_action("explore", economy):
+		var cost = EconomyConstants.get_action_cost("explore")
+		var missing = cost.keys()[0] if cost.size() > 0 else "resources"
+		return {
+			"success": false,
+			"error": "insufficient_resources",
+			"message": "Need %s to explore." % missing
 		}
 
 	# 1. Get unbound terminal
@@ -248,6 +260,10 @@ static func action_measure(terminal, biome) -> Dictionary:
 	# 8. Mark terminal as measured with RECORDED probability
 	terminal.mark_measured(outcome, recorded_probability)
 
+	# 9. FREE THE REGISTER - allow another terminal to bind to it
+	# Terminal keeps its measurement snapshot for REAP to harvest
+	terminal.release_register()
+
 	return {
 		"success": true,
 		"outcome": outcome,
@@ -320,38 +336,55 @@ static func _collapse_density_matrix(register_id: int, is_north: bool, biome) ->
 ## ============================================================================
 
 static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
-	"""Execute POP action: convert recorded probability to credits.
+	"""Pop action: harvest the terminal and clean up relay."""
+	var harvest_result = _prepare_pop_result(terminal, plot_pool, economy, farm)
+	if not harvest_result.get("success", false):
+		return harvest_result
 
-	Ensemble Model:
-	- The quantum effect (drain) already happened at MEASURE time
-	- POP is purely classical bookkeeping
-	- Credits = recorded_probability × purity × neighbor_count
-	- No further interaction with ρ
+	plot_pool.unbind_terminal(terminal)
+	var biome = terminal.bound_biome
+	var register_id = harvest_result.get("register_id", -1)
+	print("📤 Register %d released in %s" % [register_id, biome.get_biome_type() if biome and biome.has_method("get_biome_type") else "biome"])
 
-	Algorithm:
-	1. Check terminal is measured
-	2. Get recorded probability (the "claim" from MEASURE)
-	3. Get purity from biome quantum computer
-	4. Get neighbor count from farm grid (bonus multiplier)
-	5. Convert to credits: P × purity × neighbors
-	6. Add credits to economy
-	7. Unbind terminal (return to pool)
+	return harvest_result
 
-	Args:
-		terminal: Terminal instance (must be measured)
-		plot_pool: PlotPool instance
-		economy: FarmEconomy instance (optional, for credit tracking)
-		farm: Farm instance (optional, for neighbor bonus calculation)
 
-	Returns:
-		Dictionary with keys:
-		- success: bool
-		- resource: String (emoji that was harvested)
-		- recorded_probability: float (from MEASURE)
-		- credits: float (probability × conversion rate)
-		- terminal_id: String
+static func action_reap(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
+	"""Reap action: harvest the terminal and unbind it.
+
+	Costs 1 🐺 wolf to claim the harvest.
+	Harvests the recorded probability (captured at MEASURE time, after 50% drain).
+	Terminal is unbound after reaping, ready for a new EXPLORE.
 	"""
-	# 0. Null checks - terminal and plot_pool must exist
+	# Check and deduct cost
+	if economy and not EconomyConstants.try_action("reap", economy):
+		return {
+			"success": false,
+			"error": "insufficient_resources",
+			"message": "Need 🐺 wolf to reap harvest."
+		}
+
+	var harvest_result = _prepare_pop_result(terminal, plot_pool, economy, farm)
+	if not harvest_result.get("success", false):
+		# Refund cost if harvest failed
+		var cost = EconomyConstants.get_action_cost("reap")
+		if economy and not cost.is_empty():
+			for emoji in cost:
+				economy.add_resource(emoji, cost[emoji], "reap_refund")
+		return harvest_result
+
+	# Capture biome before unbinding
+	var biome = terminal.bound_biome
+
+	# Unbind terminal after reaping (returns it to pool)
+	plot_pool.unbind_terminal(terminal)
+	print("📤 Terminal reaped in %s" % [biome.get_biome_type() if biome and biome.has_method("get_biome_type") else "biome"])
+
+	return harvest_result
+
+
+static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
+	"""Shared harvesting logic used by both pop/reap."""
 	if not terminal:
 		return {
 			"success": false,
@@ -365,24 +398,16 @@ static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dict
 			"message": "Plot pool not initialized."
 		}
 
-	# 1. Validate terminal state consistency
 	var state_error = terminal.validate_state()
 	if state_error != "":
-		push_warning("ProbeActions.action_pop: Terminal state invalid - %s" % state_error)
+		push_warning("ProbeActions._prepare_pop_result: Terminal state invalid - %s" % state_error)
 		return {
 			"success": false,
 			"error": "invalid_terminal_state",
 			"message": "Terminal in invalid state: %s" % state_error
 		}
 
-	# 2. Validate terminal can be popped
 	if not terminal.can_pop():
-		if not terminal.is_bound:
-			return {
-				"success": false,
-				"error": "not_bound",
-				"message": "Terminal is not bound."
-			}
 		if not terminal.is_measured:
 			return {
 				"success": false,
@@ -395,54 +420,40 @@ static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dict
 			"message": "Terminal cannot be popped."
 		}
 
-	# 2. Get recorded probability (the "claim" from MEASURE time)
 	var resource = terminal.measured_outcome
 	var recorded_prob = terminal.measured_probability
 	var terminal_id = terminal.terminal_id
 	var register_id = terminal.bound_register_id
 	var biome = terminal.bound_biome
 
-	# 3. Get purity bonus multiplier from biome's quantum computer
-	var purity = 1.0  # Default if no quantum computer
+	var purity = 1.0
 	if biome and biome.quantum_computer:
 		purity = biome.quantum_computer.get_purity()
 
-	# 4. Get neighbor count bonus multiplier from farm grid
-	var neighbor_count = 4  # Default fallback (standard grid has 4 neighbors)
+	var neighbor_count = 4
 	if farm and farm.grid and terminal.grid_position != Vector2i(-1, -1):
 		var neighbors = farm.grid.get_neighbors(terminal.grid_position)
 		neighbor_count = neighbors.size()
 
-	# 5. Convert probability to credits with purity and neighbor multipliers
-	# Credits = probability × purity × neighbor_count
-	# Rewards: quantum coherence (purity) + plot connectivity (neighbors)
 	var credits = recorded_prob * purity * neighbor_count
 
-	# 6. Add resource to economy - use the MEASURED EMOJI as the resource type
-	# Each emoji type becomes its own classical resource (🌾, 🍄, etc.)
 	if economy:
 		var resource_amount = int(credits)
 		if resource_amount < 1:
-			resource_amount = 1  # Minimum 1 unit per harvest
+			resource_amount = 1
 		economy.add_resource(resource, resource_amount, "pop")
 
-	# 7. Unbind terminal (this is the ONLY mutation point for binding state)
-	# Terminal.unbind() makes the register available again for future EXPLORE
-	plot_pool.unbind_terminal(terminal)
-	print("📤 Register %d released in %s" % [register_id, biome.get_biome_type() if biome.has_method("get_biome_type") else "biome"])
-
-	# Calculate the resource amount that was added
 	var resource_amount = int(credits)
 	if resource_amount < 1:
 		resource_amount = 1
 
 	return {
 		"success": true,
-		"resource": resource,  # The emoji that was harvested (🌾, 🍄, etc.)
-		"amount": resource_amount,  # Credits added (probability × purity × neighbors)
+		"resource": resource,
+		"amount": resource_amount,
 		"recorded_probability": recorded_prob,
-		"purity": purity,  # Quantum purity at POP time (coherence bonus)
-		"neighbor_count": neighbor_count,  # Number of adjacent plots (connectivity bonus)
+		"purity": purity,
+		"neighbor_count": neighbor_count,
 		"credits": credits,
 		"terminal_id": terminal_id,
 		"register_id": register_id
@@ -551,14 +562,20 @@ static func action_harvest_global(biome, plot_pool = null, economy = null) -> Di
 ## ============================================================================
 
 static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dictionary:
-	"""Execute HARVEST ALL action: end of turn, pop all terminals, collect all credits.
+	"""Execute HARVEST ALL action: end of turn, pop all terminals, collect resources.
 
-	This is the 3R "end of turn" trigger that:
-	1. Checks for Reality Midwife token (required to proceed)
-	2. Saves density matrix state snapshot
-	3. Pops all bound terminals
-	4. Harvests all resources
-	5. Advances turn counter
+	Harvests all bound terminals and applies Reality Midwife token multiplier.
+
+	System:
+	- Multiplier = token count (before cost deduction)
+	- Cost = 1 token (fixed cost, same as other actions)
+	- Resources = base × multiplier
+
+	Examples:
+	  1 token → 1x resources, costs 1, leaves 0
+	  2 tokens → 2x resources, costs 1, leaves 1
+	  3 tokens → 3x resources, costs 1, leaves 2
+	  5 tokens → 5x resources, costs 1, leaves 4
 
 	Args:
 		plot_pool: PlotPool instance with bound terminals
@@ -569,10 +586,11 @@ static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dicti
 		Dictionary with keys:
 		- success: bool
 		- state_saved: bool
-		- terminals_popped: int
-		- total_credits: float
-		- pop_results: Array of individual pop results
-		- error: String (if failure)
+		- terminals_harvested: int
+		- midwife_multiplier: float (token count)
+		- token_cost: float (amount deducted)
+		- resource_totals: Dictionary of harvested resources
+		- bonus_applied: Dictionary of bonus resources
 	"""
 	# 0. Null check for plot_pool
 	if not plot_pool:
@@ -582,55 +600,182 @@ static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dicti
 			"message": "Plot pool not initialized."
 		}
 
-	# 1. Charge midwife token cost (stored in economy)
-	var token_cost = EconomyConstants.MIDWIFE_ACTION_COST
+	# 1. Get midwife token count BEFORE deduction (determines multiplier)
 	var token_emoji = EconomyConstants.MIDWIFE_EMOJI
-	if economy and economy.has_method("remove_resource"):
-		if not economy.remove_resource(token_emoji, token_cost, "harvest_all"):
-			return {
-				"success": false,
-				"error": "no_midwife_token",
-				"message": "No Reality Midwife token! Use 3E to pop individual terminals."
-			}
+	var midwife_token_count = 0
+	if economy and economy.has_method("get_resource"):
+		midwife_token_count = economy.get_resource(token_emoji)
 
-	# 2. Save density matrix state snapshot
+	# Multiplier = token count (snapshot before cost)
+	var midwife_multiplier: float = float(midwife_token_count)
+
+	# 2. Deduct fixed cost (1 token)
+	var token_cost: float = 0.0
+	if economy and not EconomyConstants.try_action("harvest_all", economy):
+		# Insufficient tokens - harvest fails
+		return {
+			"success": false,
+			"error": "insufficient_resources",
+			"message": "Need 🍼 Reality Midwife token to harvest."
+		}
+
+	# Cost was deducted, record it
+	var cost_dict = EconomyConstants.get_action_cost("harvest_all")
+	token_cost = cost_dict.get(token_emoji, 0.0)
+
+	# 3. Save density matrix state snapshot
 	var state_snapshot = _save_density_matrices(biome)
 
-	# 3. Get all bound terminals and pop them
-	var pop_results: Array = []
+	# 4. Harvest density matrix directly (no measurement collapse)
+	# Get resources from BOTH north and south emojis weighted by probability
+	var harvest_results: Array = []
 	var total_credits: float = 0.0
-	var terminals_to_pop: Array = []
+	var terminals_to_harvest: Array = []
+	var resource_totals: Dictionary = {}  # Track harvested resources by emoji
 
-	# Collect all bound terminals first (to avoid modifying while iterating)
+	# Collect all measured terminals first (to avoid modifying while iterating)
+	# Note: After MEASURE, terminals are no longer bound (register released)
+	# but they still have their measurement data (is_measured=true)
 	if plot_pool.has_method("get_all_terminals"):
 		for terminal in plot_pool.get_all_terminals():
-			if terminal and terminal.is_bound:
-				terminals_to_pop.append(terminal)
+			if terminal and terminal.is_measured:
+				terminals_to_harvest.append(terminal)
 
-	# Pop each terminal
-	for terminal in terminals_to_pop:
-		# If terminal is bound but not measured, measure it first
-		if not terminal.is_measured:
-			var measure_biome = terminal.bound_biome if terminal else biome
-			var measure_result = action_measure(terminal, measure_biome)
-			if not measure_result.success:
-				continue  # Skip if measure fails
+	# Harvest each terminal using saved measurement data
+	for terminal in terminals_to_harvest:
+		# Use saved measurement probability (from when terminal was measured)
+		# Note: After measure + release_register, terminal is no longer bound
+		# but still has measured_probability and measured_outcome
+		var probability = terminal.measured_probability if terminal.measured_probability > 0 else 0.5
+		var outcome = terminal.measured_outcome
 
-		# Now pop the terminal
-		var result = action_pop(terminal, plot_pool, economy)
-		if result.success:
-			pop_results.append(result)
-			total_credits += result.get("credits", 0.0)
+		# Determine north/south probabilities based on outcome
+		var north_prob = 0.5
+		var south_prob = 0.5
+		if outcome == terminal.north_emoji:
+			# Measured north - use saved probability
+			north_prob = probability
+			south_prob = 1.0 - probability
+		elif outcome == terminal.south_emoji:
+			# Measured south - use saved probability
+			south_prob = probability
+			north_prob = 1.0 - probability
 
-	# 4. No midwife drop (tokens are standard economy credits)
+		# Get purity bonus from biome (use first available biome if terminal not bound)
+		var terminal_biome = biome
+		var purity = 1.0
+		if terminal_biome and terminal_biome.quantum_computer:
+			purity = terminal_biome.quantum_computer.get_purity()
+
+		# Harvest BOTH emojis weighted by probability
+		var north_credits = int(north_prob * purity * 10)  # Scale by 10 for meaningful amounts
+		var south_credits = int(south_prob * purity * 10)
+
+		if north_credits > 0 and terminal.north_emoji != "":
+			if not resource_totals.has(terminal.north_emoji):
+				resource_totals[terminal.north_emoji] = 0
+			resource_totals[terminal.north_emoji] += north_credits
+			total_credits += north_credits
+
+		if south_credits > 0 and terminal.south_emoji != "":
+			if not resource_totals.has(terminal.south_emoji):
+				resource_totals[terminal.south_emoji] = 0
+			resource_totals[terminal.south_emoji] += south_credits
+			total_credits += south_credits
+
+		# Store grid position before unbinding (needed for signal emission)
+		var grid_pos = terminal.grid_position
+
+		# Unbind terminal after harvesting
+		plot_pool.unbind_terminal(terminal)
+
+		harvest_results.append({
+			"terminal_id": terminal.terminal_id,
+			"grid_position": grid_pos,
+			"north_emoji": terminal.north_emoji,
+			"north_prob": north_prob,
+			"north_credits": north_credits,
+			"south_emoji": terminal.south_emoji,
+			"south_prob": south_prob,
+			"south_credits": south_credits,
+			"total_credits": north_credits + south_credits
+		})
+
+	# 5. Apply multiplier to harvested resources (resources = base × multiplier)
+	var bonus_applied: Dictionary = {}
+	if midwife_multiplier > 0 and economy and economy.has_method("add_resource"):
+		for emoji in resource_totals:
+			var base_amount = resource_totals[emoji]
+			var total_amount = int(base_amount * midwife_multiplier)
+			economy.add_resource(emoji, total_amount, "density_harvest")
+
+			# Track bonus for logging (bonus = total - base)
+			var bonus_amount = total_amount - base_amount
+			if bonus_amount > 0:
+				bonus_applied[emoji] = bonus_amount
+
+		if bonus_applied.size() > 0:
+			print("🍼 Midwife %.1fx multiplier applied (cost: %.1f tokens)" % [midwife_multiplier, token_cost])
+			for emoji in bonus_applied:
+				var total_resources = int(resource_totals[emoji] * midwife_multiplier)
+				print("   %s: +%d bonus (total: %d)" % [emoji, bonus_applied[emoji], total_resources])
+	elif midwife_multiplier == 0 and economy:
+		print("⚠️ No Reality Midwife tokens - harvest yields 0 resources")
 
 	return {
 		"success": true,
 		"state_saved": state_snapshot != null,
-		"terminals_popped": pop_results.size(),
+		"terminals_harvested": harvest_results.size(),
 		"total_credits": total_credits,
-		"pop_results": pop_results,
+		"midwife_multiplier": midwife_multiplier,
+		"token_cost": token_cost,
+		"bonus_applied": bonus_applied,
+		"resource_totals": resource_totals,
+		"harvest_results": harvest_results,
 		"state_snapshot": state_snapshot
+	}
+
+
+static func action_clear_all(plot_pool) -> Dictionary:
+	"""Clear all terminals: unbind without harvesting.
+
+	Releases all bound terminals and their registers without collecting resources.
+	Use this to reset the grid and start fresh exploration.
+
+	Args:
+		plot_pool: PlotPool instance
+
+	Returns:
+		Dictionary with keys:
+		- success: bool
+		- terminals_cleared: int (number of terminals unbound)
+	"""
+	if not plot_pool:
+		return {
+			"success": false,
+			"error": "no_pool",
+			"message": "Plot pool not initialized."
+		}
+
+	var cleared_count = 0
+	var terminals_to_clear: Array = []
+
+	# Collect all bound terminals
+	if plot_pool.has_method("get_all_terminals"):
+		for terminal in plot_pool.get_all_terminals():
+			if terminal and terminal.is_bound:
+				terminals_to_clear.append(terminal)
+
+	# Unbind each terminal (no harvesting)
+	for terminal in terminals_to_clear:
+		plot_pool.unbind_terminal(terminal)
+		cleared_count += 1
+
+	print("🧹 Cleared %d terminals (no harvest)" % cleared_count)
+
+	return {
+		"success": true,
+		"terminals_cleared": cleared_count
 	}
 
 

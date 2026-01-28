@@ -18,6 +18,9 @@ extends Node
 ##   E = NEUTRAL action (observe, balance, transfer)
 ##   R = UP action (extract, harvest, remove)
 ##   F = Mode cycling within tool group
+##
+##   - = Decrease simulation speed (halve)
+##   = = Increase simulation speed (double)
 
 # Preloads
 const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
@@ -50,6 +53,9 @@ var plot_grid_display  # PlotGridDisplay reference for visual selection
 var current_selection: Dictionary = {"plot_idx": -1, "biome": "", "subspace_idx": -1}
 var last_selected_plot_position: Vector2i = Vector2i(-1, -1)  # Most recently selected plot for neighbor bonus
 
+# Multi-select state (NEW - for batch operations with Shift modifier)
+var checked_plots: Array[Vector2i] = []  # Set of checked grid positions (persists across biome switches)
+
 # Submenu state
 var _current_submenu: Dictionary = {}  # Current submenu data
 var _in_submenu: bool = false  # Are we in a submenu?
@@ -62,6 +68,7 @@ signal biome_switched(old_biome: String, new_biome: String)
 signal tool_group_changed(group: int)
 signal mode_cycled(group: int, mode_index: int, mode_label: String)
 signal submenu_changed(submenu_name: String, submenu_actions: Dictionary)
+signal plot_checked(grid_pos: Vector2i, is_checked: bool)  # Multi-select checkbox toggled
 
 
 func _ready() -> void:
@@ -119,6 +126,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	# Subspace selection: M,./ (reserved for future)
 	if key in SUBSPACE_ROW:
 		_select_subspace(SUBSPACE_ROW[key], key)
+		get_viewport().set_input_as_handled()
+		return
+
+	# Speed controls: - (decrease), = (increase)
+	if key == "-":
+		_decrease_simulation_speed()
+		get_viewport().set_input_as_handled()
+		return
+	if key == "=":
+		_increase_simulation_speed()
 		get_viewport().set_input_as_handled()
 		return
 
@@ -427,17 +444,98 @@ func _select_plot(plot_idx: int, key: String) -> void:
 		"subspace_idx": -1
 	}
 
+	# Get grid position for visual updates and multi-select
+	var grid_pos = _get_grid_position()
+
+	_verbose.debug("input", "📍", "SELECTION DEBUG: plot_idx=%d, biome=%s → grid_pos=%s" % [plot_idx, biome_name, grid_pos])
+
 	# CRITICAL: Update PlotGridDisplay visual selection
-	if plot_grid_display and farm:
-		var grid_pos = _get_grid_position()
-		if grid_pos.x >= 0:
-			plot_grid_display.set_selected_plot(grid_pos)
-			last_selected_plot_position = grid_pos  # Track for neighbor bonus
-			_verbose.debug("input", "~", "Visual selection: %s" % grid_pos)
+	if plot_grid_display and farm and grid_pos.x >= 0:
+		plot_grid_display.set_selected_plot(grid_pos)
+		last_selected_plot_position = grid_pos  # Track for neighbor bonus
+		_verbose.debug("input", "~", "Visual selection: %s" % grid_pos)
 
 	# Emit selection changed signal
 	selection_changed.emit(plot_idx, biome_name)
 	_verbose.debug("input", "~", "Plot %d in %s" % [plot_idx, biome_name])
+
+	# NEW: Toggle checkmark on selection (multi-select support)
+	if grid_pos.x >= 0:
+		toggle_check(grid_pos)
+
+
+## ============================================================================
+## MULTI-SELECT SYSTEM (Checkboxes)
+## ============================================================================
+
+func toggle_check(grid_pos: Vector2i) -> void:
+	"""Toggle checkmark for multi-select at given grid position.
+
+	Args:
+		grid_pos: Grid position to toggle (Vector2i(plot_idx, biome_row))
+	"""
+	if grid_pos.x < 0 or grid_pos.y < 0:
+		return  # Invalid position
+
+	var was_checked = grid_pos in checked_plots
+
+	if was_checked:
+		# Uncheck: remove from list
+		checked_plots.erase(grid_pos)
+		_verbose.debug("input", "☐", "Unchecked plot at %s" % grid_pos)
+	else:
+		# Check: add to list
+		checked_plots.append(grid_pos)
+		_verbose.debug("input", "☑", "Checked plot at %s (total: %d)" % [grid_pos, checked_plots.size()])
+
+	# Emit signal so PlotGridDisplay can update visual checkbox
+	plot_checked.emit(grid_pos, not was_checked)
+
+
+func clear_all_checks() -> void:
+	"""Clear all checkmarks (useful for batch operation completion)."""
+	for pos in checked_plots.duplicate():  # Duplicate to avoid modification during iteration
+		plot_checked.emit(pos, false)
+	checked_plots.clear()
+	_verbose.debug("input", "☐", "Cleared all checkmarks")
+
+
+func _clear_checks_and_cycle_biome() -> void:
+	"""Shift+4E: Full quantum reset + cycle to next biome (fresh start).
+
+	Performs:
+	- Clear all checkmarks
+	- Deselect all plots
+	- Reset selection state
+	- Reset quantum simulation (if available)
+	- Cycle to next biome
+	"""
+	_verbose.info("input", "⇧4E", "QUANTUM RESET + CYCLE - Clearing selections and cycling biome")
+
+	# Clear all checkmarks
+	clear_all_checks()
+
+	# Deselect all plots visually
+	if plot_grid_display:
+		plot_grid_display.set_selected_plot(Vector2i(-1, -1))  # Invalid position = clear selection
+
+	# Reset current selection state
+	current_selection = {"plot_idx": -1, "biome": "", "subspace_idx": -1}
+	last_selected_plot_position = Vector2i(-1, -1)
+
+	# Reset quantum simulation (if farm has reset method)
+	if farm and farm.has_method("reset_quantum_state"):
+		farm.reset_quantum_state()
+		_verbose.info("input", "⚛️", "Quantum state reset")
+	else:
+		_verbose.debug("input", "~", "No quantum reset method available (farm.reset_quantum_state)")
+
+	# Cycle to next biome
+	var result = _action_cycle_biome()
+	if result.success:
+		_verbose.info("input", "✓", "Reset complete + cycled to %s" % result.get("new_biome", "next biome"))
+	else:
+		_verbose.warn("input", "⚠️", "Failed to cycle biome: %s" % result.get("message", "unknown"))
 
 
 ## ============================================================================
@@ -493,40 +591,73 @@ func _perform_action(action_key: String) -> void:
 
 
 func _perform_shift_key_action(action_key: String) -> void:
-	"""Apply the Q/E/R action across the entire homerow (JKL;)."""
+	"""Apply the Q/E/R action across all checked plots (multi-select batch operation).
+
+	Special case: Shift+4E = Clear all checkmarks + cycle to next biome
+	"""
 	var current_group = ToolConfig.get_current_group()
 	var action_info = ToolConfig.get_action(current_group, action_key)
 	if action_info.is_empty():
 		return
 
-	var action_name = action_info.get("action", "")
+	# Special case: Shift+4E (Tool 4, E key) = Clear checks + cycle biome
+	if current_group == 4 and action_key == "E":
+		_clear_checks_and_cycle_biome()
+		return
+
+	# Use shift_action if defined, otherwise use normal action
+	var action_name = action_info.get("shift_action", action_info.get("action", ""))
 	if action_name == "":
 		return
 
 	var symbol = "⇧%s" % action_key
 	var log_label = action_info.get("shift_label", action_info.get("label", action_name))
-	var shift_action_name = action_info.get("shift_action", "")
 
-	if shift_action_name != "":
-		_run_action(shift_action_name, symbol, log_label)
-		return
-
-	var positions = _get_homerow_positions()
+	# Use checked plots instead of entire homerow
+	var positions = checked_plots.duplicate()  # Duplicate to avoid modification during iteration
 	if positions.is_empty():
+		_verbose.debug("input", "⚠️", "No plots checked - Shift+action requires checked plots")
 		return
+
+	_verbose.info("input", symbol, "Batch %s on %d checked plots" % [log_label, positions.size()])
 
 	var original_selection = current_selection.duplicate()
 	for pos in positions:
 		_set_selection_for_grid_pos(pos)
-		_run_action(action_name, symbol, log_label)
+		if action_name == "pop":
+			_run_cleanup_action(action_name, symbol, log_label)
+		else:
+			_run_action(action_name, symbol, log_label)
+		_refresh_plot_tiles([pos])
 	_restore_selection(original_selection)
+
+	# Note: harvest_all action handles clearing checkmarks internally
 
 
 func _run_action(action_name: String, log_symbol: String, action_label: String) -> void:
 	"""Execute an action and emit logging + signal."""
+	var result = _execute_action(action_name)
+	_log_action_result(action_name, log_symbol, action_label, result)
+
+
+func _run_cleanup_action(action_name: String, log_symbol: String, action_label: String) -> void:
+	"""Execute a cleanup version of an action (e.g., pop cleanup)."""
+	var result = _execute_cleanup_action(action_name)
+	_log_action_result(action_name, log_symbol, action_label, result)
+
+
+func _execute_cleanup_action(action_name: String) -> Dictionary:
+	"""Execute cleanup variants for actions that require special handling.
+
+	NOTE: Currently just calls _execute_action() for all actions.
+	Previously had special handling for pop cleanup, but unified into standard _action_pop().
+	"""
+	return _execute_action(action_name)
+
+
+func _log_action_result(action_name: String, log_symbol: String, action_label: String, result: Dictionary) -> void:
 	var symbol = log_symbol if log_symbol != "" else action_name
 	var label = action_label if action_label != "" else action_name
-	var result = _execute_action(action_name)
 	if result.get("success", false):
 		_verbose.info("input", symbol, "%s succeeded: %s" % [label, result])
 	else:
@@ -570,10 +701,14 @@ func _execute_action(action_name: String) -> Dictionary:
 			return _action_explore()
 		"measure":
 			return _action_measure()
+		"reap":
+			return _action_reap()
 		"pop":
 			return _action_pop()
 		"harvest_all":
 			return _action_harvest_all()
+		"clear_all":
+			return _action_clear_all()
 
 		# GROUP 3: MEASURE - Gate mode
 		"build_gate":
@@ -715,13 +850,12 @@ func _action_explore() -> Dictionary:
 	var grid_pos = _get_grid_position()
 	_verbose.debug("input", "?", "Explore at %s in %s" % [grid_pos, biome.name if biome else "null"])
 
-	var result = ProbeActions.action_explore(farm.plot_pool, biome)
+	var result = ProbeActions.action_explore(farm.plot_pool, biome, farm.economy)
 
 	if result.get("success", false):
-		# CRITICAL: Set the terminal's grid position so gates can find it later
-		result.terminal.grid_position = grid_pos
 		_verbose.debug("input", "?", "Terminal %s bound to grid %s" % [result.terminal.terminal_id, grid_pos])
-		farm.terminal_bound.emit(grid_pos, result.terminal.terminal_id, result.emoji_pair)
+	# Central signal emission (handles grid_position assignment internally)
+	farm.emit_action_signal("explore", result, grid_pos)
 
 	return result
 
@@ -732,23 +866,53 @@ func _action_measure() -> Dictionary:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var grid_pos = _get_grid_position()
+	_verbose.debug("input", "🔍", "MEASURE DEBUG: grid_pos=%s, current_selection=%s" % [grid_pos, current_selection])
+
 	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
 
 	if not terminal:
+		_verbose.warn("input", "❌", "MEASURE DEBUG: No terminal found at %s" % grid_pos)
 		return {"success": false, "error": "no_terminal", "message": "No terminal at selection"}
 
+	_verbose.debug("input", "🔍", "MEASURE DEBUG: Terminal found - is_bound=%s, is_measured=%s, terminal_id=%s" % [terminal.is_bound, terminal.is_measured, terminal.terminal_id])
+
 	if not terminal.can_measure():
+		_verbose.warn("input", "❌", "MEASURE DEBUG: can_measure()=false (is_bound=%s, is_measured=%s)" % [terminal.is_bound, terminal.is_measured])
 		return {"success": false, "error": "cannot_measure", "message": "Terminal not ready to measure"}
 
 	var biome = terminal.bound_biome
 	if not biome:
 		return {"success": false, "error": "no_biome", "message": "Terminal not bound to biome"}
 
-	return ProbeActions.action_measure(terminal, biome)
+	var result = ProbeActions.action_measure(terminal, biome)
+
+	# Central signal emission
+	farm.emit_action_signal("measure", result, grid_pos)
+
+	return result
+
+
+func _action_reap() -> Dictionary:
+	"""Execute REAP action - harvest credits and unbind terminal."""
+	if not farm or not farm.plot_pool:
+		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
+
+	var grid_pos = _get_grid_position()
+	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
+
+	if not terminal:
+		return {"success": false, "error": "no_terminal", "message": "No terminal at selection"}
+
+	var result = ProbeActions.action_reap(terminal, farm.plot_pool, farm.economy, farm)
+
+	# Central signal emission
+	farm.emit_action_signal("reap", result, grid_pos)
+
+	return result
 
 
 func _action_pop() -> Dictionary:
-	"""Execute POP action - harvest single terminal."""
+	"""Execute POP action - harvest credits and unbind terminal."""
 	if not farm or not farm.plot_pool:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
@@ -760,19 +924,43 @@ func _action_pop() -> Dictionary:
 
 	var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy, farm)
 
-	if result.get("success", false):
-		farm.terminal_released.emit(grid_pos, result.terminal_id, int(result.credits))
+	# Central signal emission
+	farm.emit_action_signal("pop", result, grid_pos)
 
 	return result
 
 
 func _action_harvest_all() -> Dictionary:
-	"""Execute SHIFT+R/harvest_all: pop every bound terminal."""
+	"""Execute SHIFT+R/harvest_all: harvest density matrix, clear selections, unexplore plots."""
 	if not farm or not farm.plot_pool:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var biome = _get_current_biome()
-	return ProbeActions.action_harvest_all(farm.plot_pool, farm.economy, biome)
+	var result = ProbeActions.action_harvest_all(farm.plot_pool, farm.economy, biome)
+
+	# Central signal emission (handles all terminal_released signals internally)
+	farm.emit_action_signal("harvest_all", result)
+
+	if result.get("success", false):
+		# Clear all checkmarks after successful harvest
+		clear_all_checks()
+		var harvest_results = result.get("harvest_results", [])
+		_verbose.info("input", "🧹", "Cleared %d terminals and selections after density matrix harvest" % harvest_results.size())
+
+	return result
+
+
+func _action_clear_all() -> Dictionary:
+	"""Execute SHIFT+R/clear_all: unbind all terminals without harvesting."""
+	if not farm or not farm.plot_pool:
+		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
+
+	var result = ProbeActions.action_clear_all(farm.plot_pool)
+
+	# Central signal emission (handles all terminal_released signals internally)
+	farm.emit_action_signal("clear_all", result)
+
+	return result
 
 
 ## ============================================================================
@@ -912,6 +1100,15 @@ func _action_remove_vocabulary() -> Dictionary:
 		pair_to_remove = _get_pair_for_qubit(rm, target_qubit)
 	else:
 		pair_to_remove = _get_pair_for_qubit(rm, target_qubit)
+
+	var cost = EconomyConstants.get_action_cost("remove_vocabulary")
+	if cost.size() > 0:
+		if not farm.economy or not EconomyConstants.try_action("remove_vocabulary", farm.economy):
+			return {
+				"success": false,
+				"error": "insufficient_resources",
+				"message": "Need %d %s to remove vocabulary." % [cost.values()[0], cost.keys()[0]]
+			}
 
 	if pair_to_remove.is_empty():
 		return {"success": false, "error": "no_pair_found", "message": "Could not find vocab pair to remove"}
@@ -1329,6 +1526,8 @@ func _keycode_to_string(keycode: int) -> String:
 		KEY_COMMA: return ","
 		KEY_PERIOD: return "."
 		KEY_SLASH: return "/"
+		KEY_MINUS: return "-"
+		KEY_EQUAL: return "="
 		_: return ""
 
 
@@ -1385,3 +1584,69 @@ func get_current_tool_info() -> Dictionary:
 func get_actions_for_current_group() -> Dictionary:
 	"""Get Q/E/R actions for current tool group."""
 	return ToolConfig.get_all_actions(ToolConfig.get_current_group())
+
+
+## ============================================================================
+## SIMULATION SPEED CONTROLS
+## ============================================================================
+
+func _decrease_simulation_speed() -> void:
+	"""Halve the quantum simulation speed (- key)."""
+	if not farm or not farm.grid:
+		_verbose.warn("input", "⚠️", "Cannot adjust speed - no farm/grid")
+		return
+
+	# Get current speed from first biome (assume all biomes have same speed)
+	var current_speed = 1.0
+	if farm.grid.biomes and not farm.grid.biomes.is_empty():
+		var first_biome = farm.grid.biomes.values()[0]
+		if "quantum_time_scale" in first_biome:
+			current_speed = first_biome.quantum_time_scale
+
+	# Halve the speed (minimum 0.001 = 1/1000th speed - ultra slow-mo)
+	var new_speed = max(current_speed * 0.5, 0.001)
+
+	# Apply to all biomes
+	var biome_count = 0
+	for biome in farm.grid.biomes.values():
+		if "quantum_time_scale" in biome:
+			biome.quantum_time_scale = new_speed
+			biome_count += 1
+
+	# Update GameState so it's saved
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm and gsm.current_state:
+		gsm.current_state.quantum_time_scale = new_speed
+
+	_verbose.info("input", "⏬", "Simulation speed: %.4fx → %.4fx (%d biomes)" % [current_speed, new_speed, biome_count])
+
+
+func _increase_simulation_speed() -> void:
+	"""Double the quantum simulation speed (= key)."""
+	if not farm or not farm.grid:
+		_verbose.warn("input", "⚠️", "Cannot adjust speed - no farm/grid")
+		return
+
+	# Get current speed from first biome
+	var current_speed = 1.0
+	if farm.grid.biomes and not farm.grid.biomes.is_empty():
+		var first_biome = farm.grid.biomes.values()[0]
+		if "quantum_time_scale" in first_biome:
+			current_speed = first_biome.quantum_time_scale
+
+	# Double the speed (maximum 16.0 = 16x speed - extreme fast-forward)
+	var new_speed = min(current_speed * 2.0, 16.0)
+
+	# Apply to all biomes
+	var biome_count = 0
+	for biome in farm.grid.biomes.values():
+		if "quantum_time_scale" in biome:
+			biome.quantum_time_scale = new_speed
+			biome_count += 1
+
+	# Update GameState so it's saved
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm and gsm.current_state:
+		gsm.current_state.quantum_time_scale = new_speed
+
+	_verbose.info("input", "⏫", "Simulation speed: %.4fx → %.4fx (%d biomes)" % [current_speed, new_speed, biome_count])

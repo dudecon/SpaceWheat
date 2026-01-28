@@ -52,6 +52,13 @@ var native_evolution_engine = null            # QuantumEvolutionEngine (native C
 static var _native_engine_available: bool = false
 static var _native_engine_checked: bool = false
 
+## CACHED MUTUAL INFORMATION (computed in C++ during evolution at 5Hz)
+## Format: {qubit_pair_index: mi_value} where index = i * num_qubits + j (upper triangular)
+## Access via get_cached_mutual_information(qubit_a, qubit_b)
+var _cached_mi_values: PackedFloat64Array = PackedFloat64Array()
+var _mi_compute_enabled: bool = true          # Set false to disable MI computation
+var _mi_last_compute_frame: int = -1          # Frame when MI was last computed
+
 ## Gated Lindblad configurations (set by biome via LindbladBuilder)
 ## Format: [{target_emoji: String, source_emoji: String, rate: float, gate: String, power: float}]
 ## Evaluated each timestep: effective_rate = rate × P(gate)^power
@@ -1055,6 +1062,7 @@ func _reinitialize_mixed_state() -> void:
 # ============================================================================
 
 func evolve(dt: float) -> void:
+	var t0 = Time.get_ticks_usec()
 	"""Evolve density matrix under Lindblad master equation.
 
 	Implements: dρ/dt = -i[H,ρ] + Σ_k (L_k ρ L_k† - ½{L_k†L_k, ρ})
@@ -1091,9 +1099,21 @@ func evolve(dt: float) -> void:
 	if native_evolution_engine != null and native_evolution_engine.is_finalized():
 		const MAX_DT: float = 0.02  # Smaller steps = better numerical accuracy
 		var rho_packed = density_matrix._to_packed()
-		var result_packed = native_evolution_engine.evolve(rho_packed, dt, MAX_DT)
-		density_matrix._from_packed(result_packed, dim)
+
+		# Use evolve_with_mi if MI computation is enabled (computes both in one C++ call)
+		if _mi_compute_enabled and native_evolution_engine.has_method("evolve_with_mi"):
+			var result = native_evolution_engine.evolve_with_mi(rho_packed, dt, MAX_DT, register_map.num_qubits)
+			density_matrix._from_packed(result["rho"], dim)
+			_cached_mi_values = result["mi"]
+			_mi_last_compute_frame = Engine.get_process_frames()
+		else:
+			var result_packed = native_evolution_engine.evolve(rho_packed, dt, MAX_DT)
+			density_matrix._from_packed(result_packed, dim)
+
 		_renormalize()  # Critical: ensure Tr(ρ) = 1 after native evolution
+		var t1 = Time.get_ticks_usec()
+		if Engine.get_process_frames() % 60 == 0:
+			print("QC Evolve Trace (Native): Total %d us" % [t1 - t0])
 		return
 
 	# ==========================================================================
@@ -1107,9 +1127,15 @@ func evolve(dt: float) -> void:
 		var sub_dt = dt / num_steps
 		for _i in range(num_steps):
 			_evolve_step(sub_dt)
+		var t1 = Time.get_ticks_usec()
+		if Engine.get_process_frames() % 60 == 0:
+			print("QC Evolve Trace (Fallback Subcycle %d): Total %d us" % [num_steps, t1 - t0])
 		return
 
 	_evolve_step(dt)
+	var t1 = Time.get_ticks_usec()
+	if Engine.get_process_frames() % 60 == 0:
+		print("QC Evolve Trace (Fallback Single): Total %d us" % [t1 - t0])
 
 
 func _evolve_step(dt: float) -> void:
@@ -1279,8 +1305,14 @@ func get_purity() -> float:
 	if density_matrix == null:
 		return 0.0
 
-	var rho_squared = density_matrix.mul(density_matrix)
-	return rho_squared.trace().re
+	# Tr(ρ²) = Σ_ij |ρ_ij|² for Hermitian ρ
+	var sum_sq = 0.0
+	var data = density_matrix._data
+	for i in range(data.size()):
+		var c = data[i]
+		sum_sq += c.re * c.re + c.im * c.im
+	
+	return clamp(sum_sq, 0.0, 1.0)
 
 
 # ============================================================================
@@ -1319,6 +1351,45 @@ func get_mutual_information(qubit_a: int, qubit_b: int) -> float:
 
 	# I(A:B) = S(A) + S(B) - S(AB) (subadditivity guarantees this is >= 0)
 	return max(S_A + S_B - S_AB, 0.0)
+
+
+func get_cached_mutual_information(qubit_a: int, qubit_b: int) -> float:
+	"""Get mutual information from native C++ cache (computed during evolution).
+
+	This is the FAST path - MI is computed in C++ during evolve_with_mi() at physics rate.
+	Falls back to GDScript calculation if cache is empty or indices are invalid.
+
+	The cache stores MI in upper triangular order: [mi_01, mi_02, ..., mi_12, mi_13, ...]
+	Index formula: for i < j, index = i * (2*n - i - 1) / 2 + (j - i - 1)
+	"""
+	if qubit_a == qubit_b:
+		return 0.0
+
+	# Ensure a < b for cache lookup (MI is symmetric)
+	var i = min(qubit_a, qubit_b)
+	var j = max(qubit_a, qubit_b)
+	var n = register_map.num_qubits
+
+	if i < 0 or j >= n:
+		return 0.0
+
+	# Check if cache is valid
+	if _cached_mi_values.is_empty():
+		# Fallback to GDScript calculation
+		return get_mutual_information(qubit_a, qubit_b)
+
+	# Upper triangular index: i * (2n - i - 1) / 2 + (j - i - 1)
+	var idx = i * (2 * n - i - 1) / 2 + (j - i - 1)
+
+	if idx < 0 or idx >= _cached_mi_values.size():
+		return get_mutual_information(qubit_a, qubit_b)
+
+	return _cached_mi_values[idx]
+
+
+func has_cached_mi() -> bool:
+	"""Check if MI cache is populated (native path is working)."""
+	return not _cached_mi_values.is_empty()
 
 
 func _entropy_of_marginal(qubit_index: int) -> float:

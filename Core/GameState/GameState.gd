@@ -21,6 +21,7 @@ extends Resource
 @export var scenario_id: String = "default"
 @export var save_timestamp: int = 0  # Unix timestamp
 @export var game_time: float = 0.0  # Total playtime
+@export var quantum_time_scale: float = 0.125  # Simulation speed multiplier (0.001-16.0)
 @export var save_version: int = 1  # Phase 4: Save format version (increment when format changes)
 
 ## Grid Dimensions (for variable-sized farms)
@@ -64,6 +65,13 @@ extends Resource
 ## Serialized data from PlayerVocabulary autoload
 @export var player_vocab_data: Dictionary = {}
 
+## Unlocked Biomes - Start with StarterForest and Village, unlock more through exploration
+@export var unlocked_biomes: Array[String] = ["StarterForest", "Village"]
+
+## Pool of unexplored biomes (assigned to UIOP slots dynamically)
+## These are available but not yet assigned to keyboard slots
+@export var unexplored_biome_pool: Array[String] = ["BioticFlux", "StellarForges", "FungalNetworks", "VolcanicWorlds"]
+
 
 ## Get known emojis (derived from known_pairs)
 ## This is the canonical way to get the player's vocabulary
@@ -86,8 +94,18 @@ func get_pair_for_emoji(emoji: String) -> Variant:
 			return pair
 	return null
 
-## Quest Slots - 4 persistent quest slots (UIOP)
-## Each slot can be empty (null) or contain quest data
+## Quest Board - Multi-Page Memory System
+@export var quest_pages: Dictionary = {}
+# Structure: {
+#   0: [slot0_dict, slot1_dict, slot2_dict, slot3_dict],
+#   1: [slot0_dict, slot1_dict, slot2_dict, slot3_dict],
+#   ...
+# }
+# Each slot_dict: {quest_id, offered_quest, faction, is_locked, state}
+
+@export var quest_board_current_page: int = 0
+
+## DEPRECATED: Old single-page storage (kept for migration)
 @export var quest_slots: Array = [null, null, null, null]
 # Each slot dictionary contains:
 #   quest_id: int - ID of active quest (if active)

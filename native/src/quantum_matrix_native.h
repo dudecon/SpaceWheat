@@ -49,6 +49,12 @@ public:
     double trace_real() const;
     double trace_imag() const;
     bool is_hermitian(double tolerance) const;
+
+    // Sparse matrix support (CSR format)
+    void from_packed_csr(const Dictionary& csr_data);
+    Dictionary to_packed_csr(double threshold) const;
+    double get_sparsity_ratio(double threshold) const;
+    int count_nonzeros(double threshold) const;
 };
 
 }

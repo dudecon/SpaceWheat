@@ -20,8 +20,11 @@ extends Node
 signal active_biome_changed(new_biome: String, old_biome: String)
 signal biome_transition_requested(from_biome: String, to_biome: String, direction: int)
 
-## Biome order for cycling (matches keyboard layout: T,Y,U,I,O,P)
-const BIOME_ORDER: Array[String] = ["StarterForest", "Village", "BioticFlux", "StellarForges", "FungalNetworks", "VolcanicWorlds"]
+## Full biome order (for reference)
+const ALL_BIOMES: Array[String] = ["StarterForest", "Village", "BioticFlux", "StellarForges", "FungalNetworks", "VolcanicWorlds"]
+
+## Current available biomes (filtered by unlocked status - synced with ObservationFrame)
+var BIOME_ORDER: Array[String] = ["StarterForest", "Village"]
 
 ## Key-to-biome mapping (legacy - now handled by QuantumInstrumentInput)
 const BIOME_KEYS: Dictionary = {
@@ -43,8 +46,8 @@ const BIOME_INFO: Dictionary = {
 	"VolcanicWorlds": {"key": "P", "emoji": "^", "label": "Volcanic"},
 }
 
-## Current active biome
-var active_biome: String = "BioticFlux"
+## Current active biome (default matches ObservationFrame's initial neutral_index = 0)
+var active_biome: String = "StarterForest"
 
 ## Whether a transition is currently in progress (prevents rapid switching)
 var _transitioning: bool = false
@@ -68,6 +71,8 @@ func _connect_to_observation_frame() -> void:
 			_observation_frame.neutral_changed.connect(_on_neutral_changed)
 		# Sync initial state
 		active_biome = _observation_frame.get_neutral_biome()
+		# Sync unlocked biomes
+		BIOME_ORDER = _observation_frame.get_unlocked_biomes()
 
 
 func _on_neutral_changed(biome: String) -> void:
@@ -197,6 +202,7 @@ func get_biome_info(biome_name: String) -> Dictionary:
 
 func reset() -> void:
 	"""Reset to initial state (for dev restart)."""
-	active_biome = "BioticFlux"
+	active_biome = "StarterForest"
+	BIOME_ORDER = ["StarterForest", "Village"]
 	_transitioning = false
 	_observation_frame = null

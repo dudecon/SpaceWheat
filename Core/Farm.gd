@@ -21,6 +21,7 @@ const FarmEconomy = preload("res://Core/GameMechanics/FarmEconomy.gd")
 const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 const PlotPoolClass = preload("res://Core/GameMechanics/PlotPool.gd")
 const GoalsSystem = preload("res://Core/GameMechanics/GoalsSystem.gd")
+const BiomeEvolutionBatcherClass = preload("res://Core/Environment/BiomeEvolutionBatcher.gd")
 # GRACEFUL BIOME LOADING: Use load() instead of preload() so script errors
 # in individual biomes don't break the entire Farm. Failed biomes are skipped.
 var _BiomeScripts: Dictionary = {}  # Populated at runtime in _init_biomes()
@@ -46,6 +47,7 @@ var known_pairs: Array = []  # Player vocabulary pairs (canonical, farm-owned)
 var ui_state: FarmUIState  # UI State abstraction layer
 var grid_config: GridConfig = null  # Single source of truth for grid layout
 var plot_pool: PlotPoolClass = null  # v2 Architecture: Terminal pool for EXPLORE/MEASURE/POP
+var biome_evolution_batcher: BiomeEvolutionBatcherClass = null  # Batched quantum evolution
 
 # Icon system now managed by faction-based IconRegistry (deprecated variables removed)
 
@@ -99,6 +101,41 @@ func _verify_biome_quantum(biome_name: String, biome) -> void:
 		_verbose.debug("boot", "✓", "%s biome quantum system verified" % biome_name)
 
 
+func _setup_biome_evolution_batcher() -> void:
+	"""Initialize batched biome evolution for smooth frame times.
+
+	Processes 2 biomes per frame in rotation instead of all 6 at once.
+	This eliminates 30-40ms frame spikes for smoother gameplay.
+	"""
+	biome_evolution_batcher = BiomeEvolutionBatcherClass.new()
+	biome_evolution_batcher.initialize([
+		biotic_flux_biome,
+		stellar_forges_biome,
+		fungal_networks_biome,
+		volcanic_worlds_biome,
+		starter_forest_biome,
+		village_biome
+	], plot_pool)  # Pass plot_pool for "skip empty biomes" optimization
+
+	# Disable individual biome _process() to prevent double evolution
+	# BiomeEvolutionBatcher handles both quantum evolution AND time_tracker updates
+	var biomes_to_batch = [
+		biotic_flux_biome,
+		stellar_forges_biome,
+		fungal_networks_biome,
+		volcanic_worlds_biome,
+		starter_forest_biome,
+		village_biome
+	]
+
+	for biome in biomes_to_batch:
+		if biome:
+			biome.set_meta("batched_evolution", true)
+			biome.set_process(false)  # Completely disable - batcher handles everything
+
+	print("Farm: Biome evolution batcher initialized (2 biomes/frame)")
+
+
 # Configuration
 
 # Biome availability (may fail to load if icon dependencies are missing)
@@ -112,6 +149,13 @@ const INFRASTRUCTURE_COSTS = {
 	"market": {"🌾": 30},    # 3 wheat = 30 wheat-credits
 	"kitchen": {"🌾": 30, "💨": 10},  # 3 wheat + 1 flour
 	# NOTE: energy_tap removed (2026-01) - energy tap system deprecated
+}
+
+# Source of truth for GameController build system
+const BUILD_CONFIGS = {
+	"mill": {"cost": INFRASTRUCTURE_COSTS.mill},
+	"market": {"cost": INFRASTRUCTURE_COSTS.market},
+	"kitchen": {"cost": INFRASTRUCTURE_COSTS.kitchen},
 }
 
 # Special gather actions (not plantable, not buildings)
@@ -175,6 +219,68 @@ signal plots_entangled(pos1: Vector2i, pos2: Vector2i, bell_state: String)
 signal economy_changed(state: Dictionary)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CENTRAL SIGNAL EMISSION (DRY Architecture)
+# All action→signal mapping in ONE place. UI handlers call this instead of
+# emitting signals directly. This ensures headless and headed modes behave
+# identically, and tests can trigger visualization by calling this method.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+func emit_action_signal(action: String, result: Dictionary, grid_pos: Vector2i = Vector2i(-1, -1)) -> void:
+	"""Central hub for action→signal emission.
+
+	Simulation layer (ProbeActions) returns result dictionaries.
+	This method translates those results into appropriate Farm signals.
+	Visualization layer observes these signals to update display.
+
+	Args:
+		action: Action name ("explore", "measure", "pop", "reap", "harvest_all", "build")
+		result: Dictionary returned by ProbeActions (must have "success" key)
+		grid_pos: Grid position for the action (used by most signals)
+	"""
+	if not result.get("success", false):
+		return  # Only emit signals on successful actions
+
+	match action:
+		"explore":
+			var terminal = result.get("terminal")
+			if terminal:
+				# Set grid_position on terminal if not already set
+				if "grid_position" in terminal and grid_pos != Vector2i(-1, -1):
+					terminal.grid_position = grid_pos
+				terminal_bound.emit(grid_pos, terminal.terminal_id, result.get("emoji_pair", {}))
+
+		"measure":
+			var terminal = result.get("terminal")
+			var terminal_id = terminal.terminal_id if terminal else result.get("terminal_id", "")
+			terminal_measured.emit(grid_pos, terminal_id,
+				result.get("outcome", ""), result.get("probability", 0.0))
+
+		"pop", "reap":
+			terminal_released.emit(grid_pos, result.get("terminal_id", ""),
+				int(result.get("credits", 0)))
+
+		"harvest_all", "clear_all":
+			# Handle array of harvest/clear results
+			var harvest_results = result.get("harvest_results", result.get("terminals", []))
+			for harvest in harvest_results:
+				var h_pos = harvest.get("grid_position", Vector2i(-1, -1))
+				var tid = harvest.get("terminal_id", "")
+				if h_pos == Vector2i(-1, -1) and harvest is Object and "grid_position" in harvest:
+					h_pos = harvest.grid_position
+				if tid == "" and harvest is Object and "terminal_id" in harvest:
+					tid = harvest.terminal_id
+				if h_pos != Vector2i(-1, -1) and tid != "":
+					terminal_released.emit(h_pos, tid, int(harvest.get("total_credits", 0)))
+
+		"build":
+			structure_built.emit(grid_pos, result.get("structure_type", ""),
+				result.get("emoji_pair", {}))
+
+		"demolish":
+			structure_demolished.emit(grid_pos, result.get("structure_type", ""))
+
+
 func _ready():
 	# Ensure IconRegistry exists (for test mode where autoloads don't exist)
 	_ensure_iconregistry()
@@ -198,13 +304,26 @@ func _ready():
 	biome_enabled = false
 	_loaded_biome_count = 0
 
-	# Load and instantiate each biome gracefully
-	biotic_flux_biome = _safe_load_biome("res://Core/Environment/BioticFluxBiome.gd", "BioticFlux")
-	stellar_forges_biome = _safe_load_biome("res://Core/Environment/StellarForgesBiome.gd", "StellarForges")
-	fungal_networks_biome = _safe_load_biome("res://Core/Environment/FungalNetworksBiome.gd", "FungalNetworks")
-	volcanic_worlds_biome = _safe_load_biome("res://Core/Environment/VolcanicWorldsBiome.gd", "VolcanicWorlds")
-	starter_forest_biome = _safe_load_biome("res://Core/Environment/StarterForestBiome.gd", "StarterForest")
-	village_biome = _safe_load_biome("res://Core/Environment/VillageBiome.gd", "Village")
+	# Load only unlocked biomes (initially just StarterForest and Village)
+	# Other biomes are loaded dynamically when explored via 4E action
+	var observation_frame = get_node_or_null("/root/ObservationFrame")
+	var unlocked_biomes = ["StarterForest", "Village"]  # Default
+	if observation_frame:
+		unlocked_biomes = observation_frame.get_unlocked_biomes()
+
+	# Load unlocked biomes
+	if "StarterForest" in unlocked_biomes:
+		starter_forest_biome = _safe_load_biome("res://Core/Environment/StarterForestBiome.gd", "StarterForest")
+	if "Village" in unlocked_biomes:
+		village_biome = _safe_load_biome("res://Core/Environment/VillageBiome.gd", "Village")
+	if "BioticFlux" in unlocked_biomes:
+		biotic_flux_biome = _safe_load_biome("res://Core/Environment/BioticFluxBiome.gd", "BioticFlux")
+	if "StellarForges" in unlocked_biomes:
+		stellar_forges_biome = _safe_load_biome("res://Core/Environment/StellarForgesBiome.gd", "StellarForges")
+	if "FungalNetworks" in unlocked_biomes:
+		fungal_networks_biome = _safe_load_biome("res://Core/Environment/FungalNetworksBiome.gd", "FungalNetworks")
+	if "VolcanicWorlds" in unlocked_biomes:
+		volcanic_worlds_biome = _safe_load_biome("res://Core/Environment/VolcanicWorldsBiome.gd", "VolcanicWorlds")
 
 	# Enable biome features if at least one biome loaded
 	if _loaded_biome_count > 0:
@@ -293,6 +412,9 @@ func _ready():
 
 	goals = GoalsSystem.new()
 	add_child(goals)
+
+	# Initialize biome evolution batcher for smooth frame times
+	_setup_biome_evolution_batcher()
 
 	# Create UI State abstraction layer (Phase 2 integration)
 	ui_state = FarmUIState.new()
@@ -473,36 +595,43 @@ func enable_simulation() -> void:
 	set_process(true)
 	set_physics_process(true)
 
-	# Enable biome processing
+	# Enable biome processing (only for non-batched biomes)
+	# Batched biomes stay disabled - BiomeEvolutionBatcher handles their updates
 	if biome_enabled:
-		if biotic_flux_biome:
-			biotic_flux_biome.set_process(true)
-		if stellar_forges_biome:
-			stellar_forges_biome.set_process(true)
-		if fungal_networks_biome:
-			fungal_networks_biome.set_process(true)
-		if volcanic_worlds_biome:
-			volcanic_worlds_biome.set_process(true)
-		if starter_forest_biome:
-			starter_forest_biome.set_process(true)
-		if village_biome:
-			village_biome.set_process(true)
-		_verbose.info("boot", "✓", "All biome processing enabled")
+		var all_biomes = [biotic_flux_biome, stellar_forges_biome, fungal_networks_biome,
+						  volcanic_worlds_biome, starter_forest_biome, village_biome]
+		for biome in all_biomes:
+			if biome and not biome.get_meta("batched_evolution", false):
+				biome.set_process(true)
+		_verbose.info("boot", "✓", "All biome processing enabled (batched biomes use BiomeEvolutionBatcher)")
 
 	_verbose.info("boot", "✓", "Farm simulation process enabled")
 
 
 func _process(delta: float):
-	"""Handle passive effects like mushroom composting and grid processing"""
-	# Process grid (mills, markets, kitchens, etc.)
+	var t0 = Time.get_ticks_usec()
+	"""Visual updates only - runs at 60+ FPS independent of quantum simulation"""
+	# Process grid UI updates (mills, markets, kitchens, etc.)
 	if grid:
 		grid._process(delta)
+	var t1 = Time.get_ticks_usec()
 
-	# Handle passive composting
+	# Handle passive composting (visual effects)
 	_process_mushroom_composting(delta)
+	var t2 = Time.get_ticks_usec()
+	
+	if Engine.get_process_frames() % 60 == 0:
+		print("Farm Process Trace: Total %d us (Grid: %d, Compost: %d)" % [t2 - t0, t1 - t0, t2 - t1])
 
 
 func _physics_process(delta: float) -> void:
+	"""Physics simulation - runs at fixed 20Hz"""
+	# BATCHED QUANTUM EVOLUTION (moved here for visual/physics separation)
+	# Runs at fixed 20Hz, independent of visual framerate (60+ FPS)
+	if biome_evolution_batcher:
+		biome_evolution_batcher.physics_process(delta)
+
+	# Lindblad pump/drain effects
 	_process_lindblad_effects(delta)
 
 
@@ -758,6 +887,23 @@ func get_biome_row(biome_name: String) -> int:
 func get_biome_for_row(row: int) -> String:
 	"""Get the biome name for a row (y-coordinate)"""
 	return ROW_BIOME_MAP.get(row, "BioticFlux")
+
+
+func get_biomes() -> Array:
+	"""Get all loaded biomes for testing/diagnostics.
+
+	Returns array of biome instances in order:
+	[BioticFlux, StellarForges, FungalNetworks, VolcanicWorlds, StarterForest, Village]
+	Null entries if biome failed to load.
+	"""
+	return [
+		biotic_flux_biome,
+		stellar_forges_biome,
+		fungal_networks_biome,
+		volcanic_worlds_biome,
+		starter_forest_biome,
+		village_biome
+	]
 
 
 func get_plot_position_for_active_biome(plot_index: int) -> Vector2i:

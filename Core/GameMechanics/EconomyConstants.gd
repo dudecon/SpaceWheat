@@ -17,7 +17,8 @@ const QUANTUM_TO_CREDITS: float = 10.0
 ## Reality Midwife token emoji (display + economy tracking)
 const MIDWIFE_EMOJI: String = "🍼"
 
-## Reality Midwife token cost for harvest-all action (in emoji-credits)
+## DEPRECATED: Harvest-all cost is now dynamic (1 if >2 tokens, half if <=2)
+## Kept for backward compatibility with UI preview
 const MIDWIFE_ACTION_COST: int = 1
 
 ## Drain factor: fraction of probability removed during MEASURE
@@ -31,11 +32,30 @@ const MILL_EFFICIENCY: float = 0.8    # 10 wheat → 8 flour + 40 💰
 const KITCHEN_EFFICIENCY: float = 0.6 # 5 flour → 3 bread
 
 ## ===========================================
-## BUILD MODE COSTS
+## ACTION COSTS (Classical Resources as Sink)
+## ===========================================
+## All costs are in raw credits (the numbers stored in emoji_credits).
+## Unified table: action_name → cost dictionary
+
+const ACTION_COSTS: Dictionary = {
+	"explore": {"🍞": 1},       # Send probe
+	"measure": {},              # FREE - information gain
+	"reap": {"👥": 1},          # Claim harvest (labor)
+	"harvest_all": {"🍼": 1},   # End of turn harvest (costs 1 Reality Midwife token)
+	"explore_biome": {"🦅": 20},# Scout new biome
+	"remove_vocabulary": {"🐺": 20} # Remove vocabulary: penalize with wolf cost
+	# vocab_injection is dynamic - use get_action_cost()
+}
+
+## Vocab injection dynamic costs
+const VOCAB_INJECTION_SOUTH_COST: int = 100
+const VOCAB_INJECTION_SPROUT_COST: Dictionary = {"🌱": 10}
+
+## ===========================================
+## BUILD MODE COSTS (Legacy)
 ## ===========================================
 
-## Cost to inject new vocabulary (in 💰-credits)
-## ~2 quest rewards = 1 new word
+## DEPRECATED: Use VOCAB_INJECTION_SOUTH_COST + VOCAB_INJECTION_SPROUT_COST instead
 const VOCAB_INJECTION_BASE_COST: int = 150
 
 ## Hard cap on biome qubits (enforced by actions, not by the quantum computer)
@@ -99,15 +119,21 @@ static func get_plant_type_emojis(plant_type: String) -> Dictionary:
 	return PLANT_TYPE_EMOJIS.get(plant_type, {})
 
 
-static func get_vocab_injection_cost(emoji: String) -> Dictionary:
+static func get_vocab_injection_cost(south_emoji: String) -> Dictionary:
 	"""Get cost dictionary for vocabulary injection.
 
-	Cost is paid in the south-pole emoji resource.
+	Cost = 100 of south-pole emoji + 10 sprouts (🌱)
 	Returns dictionary of {emoji: amount} for costs.
+
+	Args:
+		south_emoji: The south pole emoji of the pair being injected
 	"""
-	if emoji == "":
-		return {}
-	return {emoji: 100}
+	if south_emoji == "":
+		return VOCAB_INJECTION_SPROUT_COST.duplicate()
+
+	var cost = VOCAB_INJECTION_SPROUT_COST.duplicate()
+	cost[south_emoji] = VOCAB_INJECTION_SOUTH_COST
+	return cost
 
 
 static func can_afford(economy, costs: Dictionary) -> bool:
@@ -137,3 +163,41 @@ static func spend(economy, costs: Dictionary, reason: String = "purchase") -> bo
 			economy.spend_resource(emoji, amount, reason)
 		return true
 	return false
+
+
+## ===========================================
+## UNIFIED ACTION COST API
+## ===========================================
+
+static func get_action_cost(action: String, context: Dictionary = {}) -> Dictionary:
+	"""Get cost dictionary for an action.
+
+	Args:
+		action: Action name (explore, measure, reap, explore_biome, vocab_injection)
+		context: Optional context for dynamic costs (e.g., {south_emoji: "🌾"})
+
+	Returns:
+		Dictionary of {emoji: amount} costs
+	"""
+	if action == "vocab_injection":
+		return get_vocab_injection_cost(context.get("south_emoji", ""))
+	return ACTION_COSTS.get(action, {})
+
+
+static func try_action(action: String, economy, context: Dictionary = {}) -> bool:
+	"""Check affordability and spend cost for an action.
+
+	Single entry point for action cost handling. Returns true if action can proceed.
+
+	Args:
+		action: Action name from ACTION_COSTS
+		economy: FarmEconomy instance
+		context: Optional context for dynamic costs
+
+	Returns:
+		true if cost was paid (or action is free), false if insufficient resources
+	"""
+	var cost = get_action_cost(action, context)
+	if cost.is_empty():
+		return true  # Free action
+	return spend(economy, cost, action)

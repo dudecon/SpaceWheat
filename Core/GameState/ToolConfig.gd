@@ -168,11 +168,10 @@ const TOOL_GROUPS = {
 			"E": {"action": "measure", "label": "Measure", "emoji": "!",
 				  "icon": "res://Assets/UI/Science/Measure.svg",
 				  "hint": "Collapse state (observe)"},
-			"R": {"action": "pop", "label": "Pop", "emoji": "^",
+			"R": {"action": "reap", "label": "Reap", "emoji": "^",
 				  "icon": "res://Assets/UI/Science/Pop-Harvest.svg",
-				  "hint": "Harvest + remove (UP)",
-				  "shift_action": "harvest_all",
-				  "shift_label": "Shift+R: Pop All"}
+				  "hint": "Harvest & unbind terminal",
+				  "shift_action": "harvest_all", "shift_label": "Harvest All"}
 			},
 			# GATE MODE: Entanglement infrastructure
 			"gate": {
@@ -218,9 +217,9 @@ const TOOL_GROUPS = {
 				  "icon": "res://Assets/UI/Biome/BiomeAssign.svg",
 				  "hint": "Inject vocabulary into biome",
 				  "submenu": "vocab_injection"},
-			"E": {"action": "cycle_biome", "label": "Biome", "emoji": "=",
-				  "icon": "res://Assets/UI/Biome/BiomeInspect.svg",
-				  "hint": "Cycle to next biome"},
+			"E": {"action": "explore_biome", "label": "Explore", "emoji": "?",
+				  "icon": "res://Assets/UI/Science/Explore.svg",
+				  "hint": "Explore and unlock a new biome"},
 			"R": {"action": "remove_vocabulary", "label": "-Vocab", "emoji": "-",
 				  "icon": "res://Assets/UI/Biome/BiomeClear.svg",
 				  "hint": "Remove vocabulary from biome"}
@@ -511,6 +510,6 @@ static func get_submenu(submenu_name_or_tool = null, action_key: String = "") ->
 	return {}
 
 
-static func get_dynamic_submenu(_tool_num: int, _action_key: String, _farm = null) -> Dictionary:
+static func get_dynamic_submenu(_arg1 = null, _arg2 = null, _arg3 = null) -> Dictionary:
 	"""Legacy: Get dynamic submenu. Returns empty dict (submenus deprecated)."""
 	return {}

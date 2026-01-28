@@ -27,6 +27,12 @@ void QuantumMatrixNative::_bind_methods() {
     ClassDB::bind_method(D_METHOD("trace_real"), &QuantumMatrixNative::trace_real);
     ClassDB::bind_method(D_METHOD("trace_imag"), &QuantumMatrixNative::trace_imag);
     ClassDB::bind_method(D_METHOD("is_hermitian", "tolerance"), &QuantumMatrixNative::is_hermitian);
+
+    // Sparse matrix support
+    ClassDB::bind_method(D_METHOD("from_packed_csr", "csr_data"), &QuantumMatrixNative::from_packed_csr);
+    ClassDB::bind_method(D_METHOD("to_packed_csr", "threshold"), &QuantumMatrixNative::to_packed_csr);
+    ClassDB::bind_method(D_METHOD("get_sparsity_ratio", "threshold"), &QuantumMatrixNative::get_sparsity_ratio);
+    ClassDB::bind_method(D_METHOD("count_nonzeros", "threshold"), &QuantumMatrixNative::count_nonzeros);
 }
 
 QuantumMatrixNative::QuantumMatrixNative() : m_dim(0) {}
@@ -181,4 +187,107 @@ double QuantumMatrixNative::trace_imag() const {
 
 bool QuantumMatrixNative::is_hermitian(double tolerance) const {
     return (m_matrix - m_matrix.adjoint()).norm() < tolerance;
+}
+
+// Sparse matrix support (CSR format)
+
+void QuantumMatrixNative::from_packed_csr(const Dictionary& csr_data) {
+    // Extract CSR components from Dictionary
+    int dim = csr_data["dim"];
+    int nnz = csr_data["nnz"];
+    PackedInt32Array row_ptr = csr_data["row_ptr"];
+    PackedInt32Array col_idx = csr_data["col_idx"];
+    PackedFloat64Array values_real = csr_data["values_real"];
+    PackedFloat64Array values_imag = csr_data["values_imag"];
+
+    // Initialize matrix with zeros
+    m_dim = dim;
+    m_matrix = Eigen::MatrixXcd::Zero(dim, dim);
+
+    // Fill from CSR data
+    const int32_t* row_ptr_data = row_ptr.ptr();
+    const int32_t* col_idx_data = col_idx.ptr();
+    const double* real_data = values_real.ptr();
+    const double* imag_data = values_imag.ptr();
+
+    for (int i = 0; i < dim; i++) {
+        int row_start = row_ptr_data[i];
+        int row_end = row_ptr_data[i + 1];
+        for (int k = row_start; k < row_end; k++) {
+            int j = col_idx_data[k];
+            m_matrix(i, j) = std::complex<double>(real_data[k], imag_data[k]);
+        }
+    }
+}
+
+Dictionary QuantumMatrixNative::to_packed_csr(double threshold) const {
+    // Count non-zeros first
+    int nnz = 0;
+    for (int i = 0; i < m_dim; i++) {
+        for (int j = 0; j < m_dim; j++) {
+            if (std::abs(m_matrix(i, j)) > threshold) {
+                nnz++;
+            }
+        }
+    }
+
+    // Allocate arrays
+    PackedInt32Array row_ptr;
+    PackedInt32Array col_idx;
+    PackedFloat64Array values_real;
+    PackedFloat64Array values_imag;
+
+    row_ptr.resize(m_dim + 1);
+    col_idx.resize(nnz);
+    values_real.resize(nnz);
+    values_imag.resize(nnz);
+
+    int32_t* row_ptr_data = row_ptr.ptrw();
+    int32_t* col_idx_data = col_idx.ptrw();
+    double* real_data = values_real.ptrw();
+    double* imag_data = values_imag.ptrw();
+
+    // Fill CSR arrays
+    int current_nnz = 0;
+    for (int i = 0; i < m_dim; i++) {
+        row_ptr_data[i] = current_nnz;
+        for (int j = 0; j < m_dim; j++) {
+            if (std::abs(m_matrix(i, j)) > threshold) {
+                col_idx_data[current_nnz] = j;
+                real_data[current_nnz] = m_matrix(i, j).real();
+                imag_data[current_nnz] = m_matrix(i, j).imag();
+                current_nnz++;
+            }
+        }
+    }
+    row_ptr_data[m_dim] = current_nnz;
+
+    // Build result dictionary
+    Dictionary result;
+    result["format"] = "csr";
+    result["dim"] = m_dim;
+    result["nnz"] = nnz;
+    result["row_ptr"] = row_ptr;
+    result["col_idx"] = col_idx;
+    result["values_real"] = values_real;
+    result["values_imag"] = values_imag;
+    return result;
+}
+
+double QuantumMatrixNative::get_sparsity_ratio(double threshold) const {
+    int nnz = count_nonzeros(threshold);
+    int total = m_dim * m_dim;
+    return total > 0 ? (double)nnz / (double)total : 0.0;
+}
+
+int QuantumMatrixNative::count_nonzeros(double threshold) const {
+    int count = 0;
+    for (int i = 0; i < m_dim; i++) {
+        for (int j = 0; j < m_dim; j++) {
+            if (std::abs(m_matrix(i, j)) > threshold) {
+                count++;
+            }
+        }
+    }
+    return count;
 }

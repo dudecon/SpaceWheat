@@ -243,6 +243,10 @@ subspace_3={
 ]
 }
 
+[physics]
+
+common/physics_ticks_per_second=20
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"

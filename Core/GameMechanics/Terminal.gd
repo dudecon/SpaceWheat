@@ -125,6 +125,45 @@ func mark_measured(outcome: String, probability: float = 0.0) -> void:
 	state_changed.emit(self)
 
 
+## Release the quantum register while keeping the measurement snapshot
+## This allows the register to be explored and measured again by another terminal
+func release_register() -> void:
+	"""Free the quantum register but keep measurement data on terminal.
+
+	After MEASURE:
+	- Register becomes available for another terminal to bind to
+	- This terminal keeps its measurement result (outcome + probability)
+	- Terminal stays on the grid showing the frozen measurement
+
+	This enables multiple measurements of the same quantum axis by chunking
+	probability across multiple measurement cycles.
+	"""
+	if not is_bound:
+		return
+
+	bound_register_id = -1
+	bound_biome = null
+	is_bound = false
+	# KEEP: is_measured, measured_outcome, measured_probability (the measurement snapshot)
+	# KEEP: grid_position (terminal stays visible on grid)
+	# KEEP: north_emoji, south_emoji (reference for the measurement basis)
+
+	state_changed.emit(self)
+
+
+func clear_measurement() -> void:
+	"""Clear the measured state while remaining bound."""
+	if not is_measured:
+		return
+
+	is_measured = false
+	measured_outcome = ""
+	measured_probability = 0.0
+	current_emoji = north_emoji if north_emoji != "" else "?"
+	frozen_position = Vector2.ZERO
+	state_changed.emit(self)
+
+
 ## Reset terminal to initial state (full cleanup)
 func reset() -> void:
 	unbind()
@@ -187,7 +226,7 @@ func can_measure() -> bool:
 
 ## Check if this terminal can be used for POP action
 func can_pop() -> bool:
-	return is_bound and is_measured
+	return is_measured
 
 
 ## Validate that terminal state is internally consistent
@@ -200,12 +239,19 @@ func validate_state() -> String:
 
 	if not is_bound:
 		# Unbound state should have no register
-		if is_measured:
-			return "INVALID: unbound but marked measured"
 		if bound_register_id != -1:
 			return "INVALID: unbound but has register_id"
 		if bound_biome != null:
 			return "INVALID: unbound but has biome reference"
+
+		if is_measured:
+			# Allow measured snapshot even though terminal is unbound
+			if measured_outcome.is_empty():
+				return "INVALID: measured but no outcome recorded"
+			if measured_probability <= 0.0:
+				return "INVALID: measured but probability not set"
+			return ""
+
 		return ""
 
 	# Bound state (is_bound=true)

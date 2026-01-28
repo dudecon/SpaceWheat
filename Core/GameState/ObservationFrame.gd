@@ -10,8 +10,12 @@ extends Node
 ## Selecting plots in UP or DOWN rows shifts the spindle, making that biome
 ## the new neutral reference point.
 
-## Biome order for the fractal hierarchy (matches TYUIOP keyboard layout)
-const BIOME_ORDER: Array[String] = ["StarterForest", "Village", "BioticFlux", "StellarForges", "FungalNetworks", "VolcanicWorlds"]
+## Full biome order (for reference)
+const ALL_BIOMES: Array[String] = ["StarterForest", "Village", "BioticFlux", "StellarForges", "FungalNetworks", "VolcanicWorlds"]
+
+## Current available biomes (filtered by unlocked status from GameState)
+## Starts with ["StarterForest", "Village"], grows as player explores
+var BIOME_ORDER: Array[String] = ["StarterForest", "Village"]
 
 ## Current neutral index in BIOME_ORDER
 var neutral_index: int = 0
@@ -23,6 +27,8 @@ signal neutral_changed(biome: String)
 
 func _ready() -> void:
 	add_to_group("observation_frame")
+	# Initialize from GameState if available
+	call_deferred("_load_unlocked_biomes")
 
 
 ## Get the current neutral biome
@@ -119,6 +125,61 @@ func get_neutral_index() -> int:
 	return neutral_index
 
 
+func _load_unlocked_biomes() -> void:
+	"""Load unlocked biomes from GameState"""
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm and gsm.current_state and "unlocked_biomes" in gsm.current_state:
+		var unlocked = gsm.current_state.unlocked_biomes
+		if unlocked.size() > 0:
+			BIOME_ORDER = unlocked.duplicate()
+			# Clamp neutral_index to valid range
+			if neutral_index >= BIOME_ORDER.size():
+				neutral_index = 0
+
+
+func unlock_biome(biome_name: String) -> bool:
+	"""Add a biome to the unlocked list
+
+	Returns true if biome was newly unlocked, false if already unlocked
+	"""
+	if biome_name in BIOME_ORDER:
+		return false  # Already unlocked
+
+	if biome_name not in ALL_BIOMES:
+		push_warning("ObservationFrame: Unknown biome '%s'" % biome_name)
+		return false
+
+	BIOME_ORDER.append(biome_name)
+
+	# Persist to GameState
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm and gsm.current_state:
+		gsm.current_state.unlocked_biomes = BIOME_ORDER.duplicate()
+		# Remove from unexplored pool
+		if "unexplored_biome_pool" in gsm.current_state:
+			var pool = gsm.current_state.unexplored_biome_pool
+			var idx = pool.find(biome_name)
+			if idx >= 0:
+				pool.remove_at(idx)
+
+	return true
+
+
+func get_unlocked_biomes() -> Array[String]:
+	"""Get list of unlocked biomes"""
+	return BIOME_ORDER.duplicate()
+
+
+func get_unexplored_biomes() -> Array[String]:
+	"""Get list of biomes not yet unlocked"""
+	var unexplored: Array[String] = []
+	for biome in ALL_BIOMES:
+		if biome not in BIOME_ORDER:
+			unexplored.append(biome)
+	return unexplored
+
+
 ## Reset to initial state (for dev restart)
 func reset() -> void:
+	BIOME_ORDER = ["StarterForest", "Village"]
 	neutral_index = 0

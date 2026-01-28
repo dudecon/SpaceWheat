@@ -46,26 +46,35 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 	Args:
 	    delta: Time step
 	    nodes: Array of QuantumNode instances
-	    ctx: Context dictionary with {biomes, layout_calculator, time_accumulator, etc.}
+	    ctx: Context dictionary with {biomes, layout_calculator, time_accumulator, active_biome, etc.}
 	"""
 	var biomes = ctx.get("biomes", {})
 	var layout_calculator = ctx.get("layout_calculator")
 	var plot_pool = ctx.get("plot_pool")
+	var active_biome_name = ctx.get("active_biome", "")  # "" means process all biomes
 
-	# Throttle expensive MI computation
+	# Throttle expensive MI computation (now just reads C++ cache, but still throttle)
 	_time_since_mi_update += delta
 	if _time_since_mi_update >= 1.0 / _mi_throttle_hz:
 		_update_mutual_information_cache(nodes, biomes)
 		_time_since_mi_update = 0.0
 
 	# Build list of active (planted/visible) nodes for O(n²) calculations
+	# OPTIMIZATION: Only include nodes from active biome if specified
 	var active_nodes: Array = []
 	for node in nodes:
 		if _is_active_node(node):
+			# Skip nodes from non-active biomes if filtering is enabled
+			if active_biome_name != "" and node.biome_name != active_biome_name:
+				continue
 			active_nodes.append(node)
 
 	# Calculate and apply forces
 	for node in nodes:
+		# OPTIMIZATION: Skip force calculations for non-active biomes entirely
+		if active_biome_name != "" and node.biome_name != active_biome_name:
+			continue
+
 		var total_force = Vector2.ZERO
 
 		# Check plot's quantum behavior (FLOATING=0, HOVERING=1, FIXED=2)
@@ -267,9 +276,10 @@ func _update_positions(delta: float, nodes: Array) -> void:
 
 
 func _update_mutual_information_cache(nodes: Array, biomes: Dictionary) -> void:
-	"""Recompute mutual information cache for all node pairs.
+	"""Update mutual information cache from native C++ computation.
 
-	This is expensive O(n² × matrix ops) so we throttle it.
+	MI is now computed in C++ during evolution (evolve_with_mi) at physics rate.
+	This function just reads the cached values - no expensive GDScript calculations.
 	"""
 	_mi_cache.clear()
 
@@ -285,7 +295,7 @@ func _update_mutual_information_cache(nodes: Array, biomes: Dictionary) -> void:
 			nodes_by_biome[biome_name] = []
 		nodes_by_biome[biome_name].append(node)
 
-	# Compute MI for all pairs within each biome
+	# Read cached MI for all pairs within each biome (computed in C++ during evolution)
 	for biome_name in nodes_by_biome:
 		var biome = biomes.get(biome_name)
 		if not biome or not biome.quantum_computer:
@@ -306,8 +316,13 @@ func _update_mutual_information_cache(nodes: Array, biomes: Dictionary) -> void:
 				if qubit_a < 0 or qubit_b < 0:
 					continue
 
-				# Compute MI
-				var mi = qc.get_mutual_information(qubit_a, qubit_b) if qc.has_method("get_mutual_information") else 0.0
+				# Use CACHED MI from native C++ (computed during evolution)
+				# Falls back to GDScript if cache is empty
+				var mi = 0.0
+				if qc.has_method("get_cached_mutual_information"):
+					mi = qc.get_cached_mutual_information(qubit_a, qubit_b)
+				elif qc.has_method("get_mutual_information"):
+					mi = qc.get_mutual_information(qubit_a, qubit_b)
 
 				# Cache bidirectionally
 				var key_ab = "%s_%s" % [node_a.get_instance_id(), node_b.get_instance_id()]

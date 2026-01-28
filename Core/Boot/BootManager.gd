@@ -215,6 +215,10 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 	input_handler.inject_farm(farm)
 	if plot_grid_display:
 		input_handler.inject_plot_grid_display(plot_grid_display)
+
+		# Connect multi-select checkbox signal to PlotGridDisplay
+		input_handler.plot_checked.connect(plot_grid_display.set_plot_checked)
+		_verbose.info("boot", "✓", "Multi-select checkbox signals connected")
 	farm_ui.input_handler = input_handler
 
 	# CRITICAL: Connect input_handler signals to action bar AFTER input_handler exists

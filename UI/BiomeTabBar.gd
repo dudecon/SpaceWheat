@@ -63,12 +63,12 @@ func _ready() -> void:
 		if not active_biome_manager.active_biome_changed.is_connected(_on_active_biome_changed):
 			active_biome_manager.active_biome_changed.connect(_on_active_biome_changed)
 			_verbose.info("ui", "📡", "BiomeTabBar connected to ActiveBiomeManager")
-		# Set initial state
-		_update_tab_states(active_biome_manager.get_active_biome())
+		# Defer setting initial state (wait for ActiveBiomeManager to sync with ObservationFrame)
+		call_deferred("_set_initial_tab_state")
 	else:
 		_verbose.warn("ui", "⚠️", "BiomeTabBar: ActiveBiomeManager not found")
-		# Default to first biome
-		_update_tab_states("BioticFlux")
+		# Default to StarterForest (matches ObservationFrame initial state)
+		_update_tab_states("StarterForest")
 
 
 func _create_tab_button(biome_name: String) -> Button:
@@ -120,6 +120,12 @@ func _on_tab_hover(biome_name: String, is_hovering: bool) -> void:
 		button.add_theme_color_override("font_color", HOVER_COLOR)
 	else:
 		button.add_theme_color_override("font_color", INACTIVE_COLOR)
+
+
+func _set_initial_tab_state() -> void:
+	"""Deferred call to set initial tab state after ActiveBiomeManager syncs with ObservationFrame"""
+	if active_biome_manager:
+		_update_tab_states(active_biome_manager.get_active_biome())
 
 
 func _on_active_biome_changed(new_biome: String, _old_biome: String) -> void:

@@ -179,10 +179,10 @@ func get_active_terminals() -> Array:
 
 
 ## Get terminal by grid position (bubble location)
-## Returns null if no terminal is bound to that position
+## Returns null if no terminal (bound or measured) occupies that slot
 func get_terminal_at_grid_pos(grid_pos: Vector2i) -> RefCounted:
 	for terminal in terminals:
-		if terminal.is_bound and terminal.grid_position == grid_pos:
+		if terminal.grid_position == grid_pos and (terminal.is_bound or terminal.is_measured):
 			return terminal
 	return null
 

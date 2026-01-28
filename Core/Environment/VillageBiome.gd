@@ -3,19 +3,31 @@ extends "res://Core/Environment/BiomeBase.gd"
 
 const Icon = preload("res://Core/QuantumSubstrate/Icon.gd")
 
-## Village Biome - Civilization and transformation ecosystem
-## Fire/ice, grain/bread, mill power, microbiome to civilization, commerce
+## Village Biome - Starter civilization hub (reduced emoji set)
+## Fire/ice, labor/bread, mill power, commerce
 ##
-## Themes: Hearth, baker, millwright, microbiome, granary
+## Themes: Hearth, baker, millwright, labor, trade
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSTANTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-const TRANSFORMATION_RATE = 0.2   # Grain → Bread
-const FERMENTATION_RATE = 0.15    # Microbes → People
-const MILL_RATE = 0.12            # Gears process grain
-const TRADE_RATE = 0.06           # Commerce coupling
+const USE_REDUCED_EMOJI_SET = true
+
+const REDUCED_VILLAGE_EMOJI_AXES = [
+	{"north": "🔥", "south": "❄️"},
+	{"north": "👥", "south": "🍞"},
+	{"north": "⚙️", "south": "💨"},
+	{"north": "💰", "south": "🧺"}
+]
+
+const FULL_VILLAGE_EMOJI_AXES = [
+	{"north": "🔥", "south": "❄️"},
+	{"north": "🌾", "south": "🍞"},
+	{"north": "⚙️", "south": "💨"},
+	{"north": "🦠", "south": "👥"},
+	{"north": "💰", "south": "🧺"}
+]
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INITIALIZATION
@@ -24,12 +36,9 @@ const TRADE_RATE = 0.06           # Commerce coupling
 func _ready():
 	super._ready()
 
-	# Register emoji pairings for 5-qubit system
-	register_emoji_pair("🔥", "❄️")  # Hearth temperature axis
-	register_emoji_pair("🌾", "🍞")  # Transformation axis
-	register_emoji_pair("⚙️", "💨")  # Mill power axis
-	register_emoji_pair("🦠", "👥")  # Microbiome/Society axis
-	register_emoji_pair("💰", "🧺")  # Commerce axis
+	# Register emoji pairings for the starter Village (reduced axis set by default)
+	for axis in _get_active_village_axes():
+		register_emoji_pair(axis["north"], axis["south"])
 
 	# Configure visual properties for QuantumForceGraph
 	visual_color = Color(0.8, 0.6, 0.3, 0.3)  # Warm village brown/orange
@@ -48,12 +57,11 @@ func _initialize_bath() -> void:
 	# Create QuantumComputer with RegisterMap
 	quantum_computer = QuantumComputer.new("Village")
 
-	# Allocate 5 qubits with emoji axes
-	quantum_computer.allocate_axis(0, "🔥", "❄️")  # Hearth: Fire/Ice
-	quantum_computer.allocate_axis(1, "🌾", "🍞")  # Transformation: Grain/Bread
-	quantum_computer.allocate_axis(2, "⚙️", "💨")  # Mill Power: Gears/Wind
-	quantum_computer.allocate_axis(3, "🦠", "👥")  # Microbiome: Bacteria/People
-	quantum_computer.allocate_axis(4, "💰", "🧺")  # Commerce: Money/Baskets
+	# Allocate qubits using the active emoji axis set (reduced for starter Village by default)
+	var axes = _get_active_village_axes()
+	for idx in range(axes.size()):
+		var axis = axes[idx]
+		quantum_computer.allocate_axis(idx, axis["north"], axis["south"])
 
 	# Initialize to warm village with grain |00000⟩ = 🔥🌾⚙️🦠💰
 	quantum_computer.initialize_basis(0)
@@ -67,8 +75,13 @@ func _initialize_bath() -> void:
 		return
 
 	# Get or create Icons for village emojis
-	var village_emojis = ["🔥", "❄️", "🌾", "🍞", "⚙️", "💨", "🦠", "👥", "💰", "🧺"]
+	var village_emojis: Array = []
 	var icons = {}
+
+	for axis in axes:
+		for emoji in [axis["north"], axis["south"]]:
+			if emoji != "" and not village_emojis.has(emoji):
+				village_emojis.append(emoji)
 
 	for emoji in village_emojis:
 		var icon = icon_registry.get_icon(emoji)
@@ -103,31 +116,25 @@ func _create_village_emoji_icon(emoji: String) -> Icon:
 	# Set up basic couplings based on emoji role
 	match emoji:
 		"🔥":  # Fire - hearth oscillation
-			icon.hamiltonian_couplings = {"❄️": 0.7, "🌾": 0.08}
+			icon.hamiltonian_couplings = {"❄️": 0.7, "🍞": 0.08}
 			icon.self_energy = 0.5
 		"❄️":  # Ice - cold hearth
 			icon.hamiltonian_couplings = {"🔥": 0.7}
 			icon.self_energy = -0.5
-		"🌾":  # Grain - transforms to bread
-			icon.hamiltonian_couplings = {"🍞": TRANSFORMATION_RATE, "⚙️": MILL_RATE, "💰": TRADE_RATE}
+		"👥":  # Labor - people/bread axis
+			icon.hamiltonian_couplings = {"🍞": 0.15, "💰": 0.05}
 			icon.self_energy = 0.2
-		"🍞":  # Bread - product of transformation
-			icon.hamiltonian_couplings = {"🌾": TRANSFORMATION_RATE, "🧺": 0.07, "🦠": 0.08}
+		"🍞":  # Bread - labor product
+			icon.hamiltonian_couplings = {"👥": 0.15, "🧺": 0.07, "⚙️": 0.05}
 			icon.self_energy = 0.3
 		"⚙️":  # Gears - mechanical power
-			icon.hamiltonian_couplings = {"💨": 0.1, "🌾": MILL_RATE}
+			icon.hamiltonian_couplings = {"💨": 0.1}
 			icon.self_energy = 0.3
 		"💨":  # Wind - drives mill
 			icon.hamiltonian_couplings = {"⚙️": 0.1}
 			icon.self_energy = 0.1
-		"🦠":  # Bacteria - fermentation, microbiome
-			icon.hamiltonian_couplings = {"👥": FERMENTATION_RATE, "🍞": 0.08}
-			icon.self_energy = 0.4
-		"👥":  # People - civilization
-			icon.hamiltonian_couplings = {"🦠": FERMENTATION_RATE, "💰": 0.05}
-			icon.self_energy = 0.2
 		"💰":  # Money - commerce
-			icon.hamiltonian_couplings = {"🧺": 0.05, "🌾": TRADE_RATE, "👥": 0.05}
+			icon.hamiltonian_couplings = {"🧺": 0.05, "👥": 0.05}
 			icon.self_energy = 0.3
 		"🧺":  # Baskets - hold goods
 			icon.hamiltonian_couplings = {"💰": 0.05, "🍞": 0.07}
@@ -138,17 +145,22 @@ func _create_village_emoji_icon(emoji: String) -> Icon:
 
 func _configure_village_dynamics(icons: Dictionary, icon_registry) -> void:
 	"""Configure village-specific Icon dynamics."""
-	# Fire bakes grain into bread
+	# Fire bakes bread
 	if icons.has("🔥") and icons.has("🍞"):
 		icons["🔥"].lindblad_incoming["🍞"] = 0.03
 
-	# Yeast (microbes) help bread rise
-	if icons.has("🦠") and icons.has("🍞"):
-		icons["🦠"].lindblad_incoming["🍞"] = 0.02
+	# Labor (👥) boosts bread production in the starter village
+	if icons.has("👥") and icons.has("🍞"):
+		icons["👥"].lindblad_incoming["🍞"] = 0.02
 
 	# Trade creates bread from money
 	if icons.has("💰") and icons.has("🍞"):
 		icons["💰"].lindblad_incoming["🍞"] = 0.01
+
+
+func _get_active_village_axes() -> Array:
+	"""Return the emoji axis set the village currently uses."""
+	return REDUCED_VILLAGE_EMOJI_AXES if USE_REDUCED_EMOJI_SET else FULL_VILLAGE_EMOJI_AXES
 
 
 func get_biome_type() -> String:
@@ -166,13 +178,16 @@ func _rebuild_quantum_operators_impl() -> void:
 	if not icon_registry or not quantum_computer:
 		return
 
-	var village_emojis = ["🔥", "❄️", "🌾", "🍞", "⚙️", "💨", "🦠", "👥", "💰", "🧺"]
-	var icons = {}
+	var axes = _get_active_village_axes()
+	var icons: Dictionary = {}
 
-	for emoji in village_emojis:
-		var icon = icon_registry.get_icon(emoji)
-		if icon:
-			icons[emoji] = icon
+	for axis in axes:
+		for emoji in [axis["north"], axis["south"]]:
+			if emoji == "":
+				continue
+			var icon = icon_registry.get_icon(emoji)
+			if icon:
+				icons[emoji] = icon
 
 	if icons.size() > 0:
 		_configure_village_dynamics(icons, icon_registry)

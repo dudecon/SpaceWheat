@@ -344,6 +344,13 @@ func capture_state_from_game() -> GameState:
 	state.save_timestamp = Time.get_unix_time_from_system()
 	state.game_time = current_state.game_time if current_state else 0.0
 
+	# Simulation speed (from first biome)
+	if farm.grid.biomes and not farm.grid.biomes.is_empty():
+		var first_biome = farm.grid.biomes.values()[0]
+		if "quantum_time_scale" in first_biome:
+			state.quantum_time_scale = first_biome.quantum_time_scale
+			_verbose.debug("save", "⏱️", "Captured simulation speed: %.4fx" % state.quantum_time_scale)
+
 	# Grid Dimensions (from Farm.grid)
 	state.grid_width = farm.grid.grid_width
 	state.grid_height = farm.grid.grid_height
@@ -890,6 +897,15 @@ func apply_state_to_game(state: GameState):
 	# Emit signals for UI updates
 	for emoji in economy.emoji_credits.keys():
 		economy._emit_resource_change(emoji)
+
+	# Apply Simulation Speed (to all biomes)
+	if farm.grid and farm.grid.biomes:
+		var biome_count = 0
+		for biome in farm.grid.biomes.values():
+			if "quantum_time_scale" in biome:
+				biome.quantum_time_scale = state.quantum_time_scale
+				biome_count += 1
+		_verbose.debug("save", "⏱️", "Applied simulation speed %.4fx to %d biomes" % [state.quantum_time_scale, biome_count])
 
 	# Apply Player Vocabulary (farm-owned canonical)
 	var has_player_vocab_data = state.player_vocab_data and not state.player_vocab_data.is_empty()
