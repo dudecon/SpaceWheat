@@ -133,6 +133,9 @@ func _ready():
 		_verbose.info("farm", "✅", "Clean Boot Sequence complete")
 	else:
 		_verbose.info("farm", "✓", "Skipped boot sequence (headless mode - no visualization/UI)")
+		# Emit game_ready for headless tests that wait for this signal
+		_boot_mgr.is_ready = true
+		_boot_mgr.game_ready.emit()
 
 	# ═══════════════════════════════════════════════════════════════════════
 	# POST-BOOT: Additional signal connections and final setup
