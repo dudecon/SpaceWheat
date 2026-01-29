@@ -62,7 +62,27 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 			"message": "Biome not initialized."
 		}
 
-	# 0b. Check and deduct cost
+	# 1. Get unbound terminal
+	var terminal = plot_pool.get_unbound_terminal()
+	if not terminal:
+		return {
+			"success": false,
+			"error": "no_terminals",
+			"message": "All terminals are bound. POP a measured terminal to free one.",
+			"blocked": true
+		}
+
+	# 2. Check for unbound registers (availability gate)
+	var available_registers = biome.get_available_registers_v2(plot_pool) if biome.has_method("get_available_registers_v2") else []
+	if available_registers.is_empty():
+		return {
+			"success": false,
+			"error": "no_registers",
+			"message": "Explore blocked: no unbound registers in this biome.",
+			"blocked": true
+		}
+
+	# 2b. Check and deduct cost (after availability gates)
 	if economy and not EconomyConstants.try_action("explore", economy):
 		var cost = EconomyConstants.get_action_cost("explore")
 		var missing = cost.keys()[0] if cost.size() > 0 else "resources"
@@ -72,22 +92,14 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 			"message": "Need %s to explore." % missing
 		}
 
-	# 1. Get unbound terminal
-	var terminal = plot_pool.get_unbound_terminal()
-	if not terminal:
-		return {
-			"success": false,
-			"error": "no_terminals",
-			"message": "All terminals are bound. POP a measured terminal to free one."
-		}
-
-	# 2. Get unbound registers with probabilities (queries PlotPool for binding state)
+	# 3. Get unbound registers with probabilities (queries PlotPool for binding state)
 	var probabilities = biome.get_register_probabilities(plot_pool)
 	if probabilities.is_empty():
 		return {
 			"success": false,
 			"error": "no_registers",
-			"message": "No unbound registers available in this biome."
+			"message": "Explore blocked: no unbound registers in this biome.",
+			"blocked": true
 		}
 
 	# 3. Weighted random selection using squared probabilities
@@ -107,7 +119,8 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 		return {
 			"success": false,
 			"error": "selection_failed",
-			"message": "Weighted selection failed (all weights zero?)."
+			"message": "Explore blocked: weighted selection failed (all weights zero?).",
+			"blocked": true
 		}
 
 	var selected_register = register_ids[selected_index]
@@ -116,13 +129,17 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 	# 4. Get emoji pair for this register
 	var emoji_pair = biome.get_register_emoji_pair(selected_register)
 
-	# 5. Bind terminal to register (Terminal is now the single source of truth)
-	var bound = plot_pool.bind_terminal(terminal, selected_register, biome, emoji_pair)
+	# 5. Get biome name for binding (decouple from object reference)
+	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
+
+	# 6. Bind terminal to register with biome NAME (Terminal is now the single source of truth)
+	var bound = plot_pool.bind_terminal(terminal, selected_register, biome_name, emoji_pair)
 	if not bound:
 		return {
 			"success": false,
 			"error": "binding_failed",
-			"message": "Failed to bind terminal to register (already bound?)."
+			"message": "Failed to bind terminal to register (already bound?).",
+			"blocked": true
 		}
 
 	# NOTE: No need to call mark_register_bound() - Terminal.is_bound is the source of truth
@@ -133,7 +150,8 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 		"terminal": terminal,
 		"register_id": selected_register,
 		"emoji_pair": emoji_pair,
-		"probability": selected_probability
+		"probability": selected_probability,
+		"biome_name": biome_name
 	}
 
 
@@ -177,23 +195,25 @@ static func action_measure(terminal, biome) -> Dictionary:
 		return {
 			"success": false,
 			"error": "no_terminal",
-			"message": "No terminal to measure. Use EXPLORE first."
+			"message": "No terminal to measure. Use EXPLORE first.",
+			"blocked": true
 		}
 	if not biome:
 		return {
 			"success": false,
 			"error": "no_biome",
-			"message": "Biome not initialized."
+			"message": "Biome not initialized.",
+			"blocked": true
 		}
 
 	# 1. Validate terminal state consistency
 	var state_error = terminal.validate_state()
 	if state_error != "":
-		push_warning("ProbeActions.action_measure: Terminal state invalid - %s" % state_error)
 		return {
 			"success": false,
 			"error": "invalid_terminal_state",
-			"message": "Terminal in invalid state: %s" % state_error
+			"message": "Terminal in invalid state: %s" % state_error,
+			"blocked": true
 		}
 
 	# 2. Validate terminal can be measured
@@ -202,18 +222,21 @@ static func action_measure(terminal, biome) -> Dictionary:
 			return {
 				"success": false,
 				"error": "not_bound",
-				"message": "Terminal is not bound. Use EXPLORE first."
+				"message": "Terminal is not bound. Use EXPLORE first.",
+				"blocked": true
 			}
 		if terminal.is_measured:
 			return {
 				"success": false,
 				"error": "already_measured",
-				"message": "Terminal already measured. Use POP to harvest."
+				"message": "Terminal already measured. Use POP to harvest.",
+				"blocked": true
 			}
 		return {
 			"success": false,
 			"error": "cannot_measure",
-			"message": "Terminal cannot be measured."
+			"message": "Terminal cannot be measured.",
+			"blocked": true
 		}
 
 	# 2. Get current probability from ρ (this becomes our "claim")
@@ -258,7 +281,10 @@ static func action_measure(terminal, biome) -> Dictionary:
 			entangled_drains.append(ent_reg_id)
 
 	# 8. Mark terminal as measured with RECORDED probability
-	terminal.mark_measured(outcome, recorded_probability)
+	var measured_purity = 1.0
+	if biome and biome.quantum_computer:
+		measured_purity = biome.quantum_computer.get_purity()
+	terminal.mark_measured(outcome, recorded_probability, measured_purity)
 
 	# 9. FREE THE REGISTER - allow another terminal to bind to it
 	# Terminal keeps its measurement snapshot for REAP to harvest
@@ -341,10 +367,14 @@ static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dict
 	if not harvest_result.get("success", false):
 		return harvest_result
 
-	plot_pool.unbind_terminal(terminal)
-	var biome = terminal.bound_biome
+	# Capture biome name before unbinding
+	var biome_name = harvest_result.get("biome_name", "")
+	if biome_name == "":
+		biome_name = terminal.measured_biome_name if terminal.measured_biome_name != "" else terminal.bound_biome_name
 	var register_id = harvest_result.get("register_id", -1)
-	_log("info", "farm", "📤", "Register %d released in %s" % [register_id, biome.get_biome_type() if biome and biome.has_method("get_biome_type") else "biome"])
+
+	plot_pool.unbind_terminal(terminal)
+	_log("info", "farm", "📤", "Register %d released in %s" % [register_id, biome_name if biome_name else "biome"])
 
 	return harvest_result
 
@@ -352,33 +382,33 @@ static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dict
 static func action_reap(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
 	"""Reap action: harvest the terminal and unbind it.
 
-	Costs 1 🐺 wolf to claim the harvest.
+	Costs 1 👥 labor to claim the harvest.
 	Harvests the recorded probability (captured at MEASURE time, after 50% drain).
 	Terminal is unbound after reaping, ready for a new EXPLORE.
 	"""
-	# Check and deduct cost
+	# Preflight: ensure terminal can be harvested before charging
+	var preflight = _prepare_pop_result(terminal, plot_pool, null, farm)
+	if not preflight.get("success", false):
+		return preflight
+
+	# Check and deduct cost (after preflight)
 	if economy and not EconomyConstants.try_action("reap", economy):
 		return {
 			"success": false,
 			"error": "insufficient_resources",
-			"message": "Need 🐺 wolf to reap harvest."
+			"message": "Need 👥 labor to reap harvest."
 		}
 
 	var harvest_result = _prepare_pop_result(terminal, plot_pool, economy, farm)
-	if not harvest_result.get("success", false):
-		# Refund cost if harvest failed
-		var cost = EconomyConstants.get_action_cost("reap")
-		if economy and not cost.is_empty():
-			for emoji in cost:
-				economy.add_resource(emoji, cost[emoji], "reap_refund")
-		return harvest_result
 
-	# Capture biome before unbinding
-	var biome = terminal.bound_biome
+	# Capture biome name before unbinding (String, not object)
+	var biome_name = harvest_result.get("biome_name", "")
+	if biome_name == "":
+		biome_name = terminal.measured_biome_name if terminal.measured_biome_name != "" else terminal.bound_biome_name
 
 	# Unbind terminal after reaping (returns it to pool)
 	plot_pool.unbind_terminal(terminal)
-	_log("info", "farm", "📤", "Terminal reaped in %s" % [biome.get_biome_type() if biome and biome.has_method("get_biome_type") else "biome"])
+	_log("info", "farm", "📤", "Terminal reaped in %s" % [biome_name if biome_name else "biome"])
 
 	return harvest_result
 
@@ -389,22 +419,24 @@ static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null
 		return {
 			"success": false,
 			"error": "no_terminal",
-			"message": "No terminal to harvest. Use MEASURE first."
+			"message": "No terminal to harvest. Use MEASURE first.",
+			"blocked": true
 		}
 	if not plot_pool:
 		return {
 			"success": false,
 			"error": "no_pool",
-			"message": "Plot pool not initialized."
+			"message": "Plot pool not initialized.",
+			"blocked": true
 		}
 
 	var state_error = terminal.validate_state()
 	if state_error != "":
-		push_warning("ProbeActions._prepare_pop_result: Terminal state invalid - %s" % state_error)
 		return {
 			"success": false,
 			"error": "invalid_terminal_state",
-			"message": "Terminal in invalid state: %s" % state_error
+			"message": "Terminal in invalid state: %s" % state_error,
+			"blocked": true
 		}
 
 	if not terminal.can_pop():
@@ -412,23 +444,25 @@ static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null
 			return {
 				"success": false,
 				"error": "not_measured",
-				"message": "Terminal not measured. Use MEASURE first."
+				"message": "Terminal not measured. Use MEASURE first.",
+				"blocked": true
 			}
 		return {
 			"success": false,
 			"error": "cannot_pop",
-			"message": "Terminal cannot be popped."
+			"message": "Terminal cannot be popped.",
+			"blocked": true
 		}
 
 	var resource = terminal.measured_outcome
 	var recorded_prob = terminal.measured_probability
 	var terminal_id = terminal.terminal_id
-	var register_id = terminal.bound_register_id
-	var biome = terminal.bound_biome
+	var register_id = terminal.measured_register_id
+	var biome_name = terminal.measured_biome_name
+	var purity = terminal.measured_purity
 
-	var purity = 1.0
-	if biome and biome.quantum_computer:
-		purity = biome.quantum_computer.get_purity()
+	if purity <= 0.0:
+		purity = 1.0
 
 	var neighbor_count = 4
 	if farm and farm.grid and terminal.grid_position != Vector2i(-1, -1):
@@ -456,7 +490,8 @@ static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null
 		"neighbor_count": neighbor_count,
 		"credits": credits,
 		"terminal_id": terminal_id,
-		"register_id": register_id
+		"register_id": register_id,
+		"biome_name": biome_name
 	}
 
 
@@ -901,6 +936,7 @@ static func get_pop_preview(terminal: RefCounted) -> Dictionary:
 # ============================================================================
 # INTERNAL HELPERS
 # ============================================================================
+
 
 static func _log(level: String, category: String, emoji: String, message: String) -> void:
 	var tree = Engine.get_main_loop()

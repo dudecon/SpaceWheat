@@ -19,8 +19,8 @@ extends Node
 ##   R = UP action (extract, harvest, remove)
 ##   F = Mode cycling within tool group
 ##
-##   - = Decrease simulation speed (halve)
-##   = = Increase simulation speed (double)
+##   - = Decrease matrix granularity (finer substeps, more accurate)
+##   = = Increase matrix granularity (coarser substeps, faster)
 
 # Preloads
 const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
@@ -37,12 +37,12 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 @onready var _chain_tracker = get_node("/root/ActionChainTracker")
 @onready var _active_biome_mgr = get_node("/root/ActiveBiomeManager")
 
-# Row mappings: key -> index
-const BIOME_ROW = {"T": 0, "Y": 1, "U": 2, "I": 3, "O": 4, "P": 5}  # Biome selection (6 biomes)
+# Row mappings: key -> slot index (T,Y,U,I,O,P)
+const BIOME_ROW = {"T": 0, "Y": 1, "U": 2, "I": 3, "O": 4, "P": 5}  # Biome selection (6 slots)
 const HOMEROW = {"J": 0, "K": 1, "L": 2, ";": 3}        # Plot selection (4 plots - PRIMARY INTERFACE)
 const SUBSPACE_ROW = {"M": 0, ",": 1, ".": 2, "/": 3}   # Reserved for future subspace navigation
 
-# Input action mappings for the rows
+# Input action mappings for the rows (order must match BIOME_ROW: T,Y,U,I,O,P)
 const BIOME_ACTIONS = ["biome_0", "biome_1", "biome_2", "biome_3", "biome_4", "biome_5"]
 const HOMEROW_ACTIONS = ["plot_0", "plot_1", "plot_2", "plot_3"]
 const SUBSPACE_ACTIONS = ["subspace_0", "subspace_1", "subspace_2", "subspace_3"]
@@ -101,6 +101,8 @@ func inject_plot_grid_display(pgd_ref) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	"""Handle keyboard input for the quantum instrument."""
 	if not event is InputEventKey or not event.pressed:
+		return
+	if event.echo:
 		return
 
 	var key = _keycode_to_string(event.keycode)
@@ -163,7 +165,12 @@ func _input(event: InputEvent) -> void:
 	# Check BIOME row actions (UIOP)
 	for i in range(BIOME_ACTIONS.size()):
 		if event.is_action_pressed(BIOME_ACTIONS[i]):
-			_select_biome(i, BIOME_ACTIONS[i])
+			var key_label = BIOME_ACTIONS[i]
+			if _active_biome_mgr:
+				var slot_key = _active_biome_mgr.get_slot_key(i)
+				if slot_key != "":
+					key_label = slot_key
+			_select_biome(i, key_label)
 			get_viewport().set_input_as_handled()
 			return
 
@@ -329,6 +336,7 @@ func _execute_inject_vocabulary(vocab_pair: Dictionary) -> void:
 	Args:
 		vocab_pair: {north: String, south: String}
 	"""
+	var cost: Dictionary = {}
 	var biome = _get_current_biome()
 	if not biome:
 		_verbose.warn("input", "+", "No biome for vocab injection")
@@ -345,21 +353,17 @@ func _execute_inject_vocabulary(vocab_pair: Dictionary) -> void:
 		_verbose.warn("input", "+", "%s already in biome" % vocab_pair.get("south", ""))
 		return
 
-	# Calculate cost
-	var cost = EconomyConstants.get_vocab_injection_cost(vocab_pair.get("south", ""))
-
-	# Check affordability
-	if not EconomyConstants.can_afford(farm.economy, cost):
+	# 5. Check and deduct cost BEFORE expanding
+	var context = {"south_emoji": vocab_pair.get("south", "")}
+	cost = EconomyConstants.get_action_cost("inject_vocabulary", context)
+	if not EconomyConstants.try_action("inject_vocabulary", farm.economy, context):
 		_verbose.warn("input", "+", "Insufficient funds for vocab injection (need %s)" % [cost])
 		return
 
-	# Perform expansion
+	# 6. Perform expansion
 	var result = biome.expand_quantum_system(vocab_pair.get("north", ""), vocab_pair.get("south", ""))
 
 	if result.get("success", false):
-		# Deduct cost
-		EconomyConstants.spend(farm.economy, cost, "vocab_injection")
-
 		# Update game state vocabulary
 		if farm and farm.has_method("discover_pair"):
 			farm.discover_pair(vocab_pair.get("north", ""), vocab_pair.get("south", ""))
@@ -392,13 +396,12 @@ func _select_biome(biome_idx: int, key: String) -> void:
 		_verbose.warn("input", "~", "ActiveBiomeManager not available")
 		return
 
-	# Map biome index to biome name (6-biome ordering: U,I,O,P,T,Y)
-	const BIOME_NAMES = ["BioticFlux", "StellarForges", "FungalNetworks", "VolcanicWorlds", "StarterForest", "Village"]
-	if biome_idx < 0 or biome_idx >= BIOME_NAMES.size():
+	var new_biome = _active_biome_mgr.get_biome_for_slot(biome_idx)
+	if new_biome == "":
+		_verbose.info("input", "•", "Biome slot %s unassigned" % key)
 		return
 
 	var old_biome = _active_biome_mgr.get_active_biome()
-	var new_biome = BIOME_NAMES[biome_idx]
 
 	# Switch active biome
 	_active_biome_mgr.set_active_biome(new_biome)
@@ -587,22 +590,21 @@ func _perform_action(action_key: String) -> void:
 	if action_name == "":
 		return
 
+	if not ActionValidator.can_execute_action_name(
+		action_name, farm, _get_selected_positions(), _get_grid_position()
+	):
+		_verbose.info("input", "•", "%s blocked" % action_info.get("label", action_name))
+		return
+
 	_run_action(action_name, emoji if emoji != "" else action_name, action_info.get("label", action_name))
 
 
 func _perform_shift_key_action(action_key: String) -> void:
 	"""Apply the Q/E/R action across all checked plots (multi-select batch operation).
-
-	Special case: Shift+4E = Clear all checkmarks + cycle to next biome
 	"""
 	var current_group = ToolConfig.get_current_group()
 	var action_info = ToolConfig.get_action(current_group, action_key)
 	if action_info.is_empty():
-		return
-
-	# Special case: Shift+4E (Tool 4, E key) = Clear checks + cycle biome
-	if current_group == 4 and action_key == "E":
-		_clear_checks_and_cycle_biome()
 		return
 
 	# Use shift_action if defined, otherwise use normal action
@@ -619,11 +621,25 @@ func _perform_shift_key_action(action_key: String) -> void:
 		_verbose.debug("input", "⚠️", "No plots checked - Shift+action requires checked plots")
 		return
 
+	var original_selection = current_selection.duplicate()
+
+	# Special case: Global shift actions (execute once, not per plot)
+	# harvest_all and clear_all already iterate over the entire pool/grid
+	if action_name == "harvest_all" or action_name == "clear_all":
+		_verbose.info("input", symbol, "Executing global %s once (costs 1 🍼)" % log_label)
+		_run_action(action_name, symbol, log_label)
+		_restore_selection(original_selection)
+		return
+
 	_verbose.info("input", symbol, "Batch %s on %d checked plots" % [log_label, positions.size()])
 
-	var original_selection = current_selection.duplicate()
 	for pos in positions:
 		_set_selection_for_grid_pos(pos)
+		if not ActionValidator.can_execute_action_name(
+			action_name, farm, _get_selected_positions(), _get_grid_position()
+		):
+			_verbose.info("input", "•", "%s blocked" % log_label)
+			continue
 		if action_name == "pop":
 			_run_cleanup_action(action_name, symbol, log_label)
 		else:
@@ -661,7 +677,11 @@ func _log_action_result(action_name: String, log_symbol: String, action_label: S
 	if result.get("success", false):
 		_verbose.info("input", symbol, "%s succeeded: %s" % [label, result])
 	else:
-		_verbose.warn("input", "✗", "%s failed: %s" % [label, result.get("message", "unknown")])
+		var message = result.get("message", "unknown")
+		if result.get("blocked", false):
+			_verbose.info("input", "•", "%s blocked: %s" % [label, message])
+		else:
+			_verbose.warn("input", "✗", "%s failed: %s" % [label, message])
 	action_performed.emit(action_name, result)
 
 
@@ -723,6 +743,8 @@ func _execute_action(action_name: String) -> Dictionary:
 		# =====================================================================
 		"inject_vocabulary":
 			return _action_inject_vocabulary()
+		"explore_biome":
+			return _action_explore_biome()
 		"cycle_biome", "toggle_view":
 			return _action_cycle_biome()
 		"remove_vocabulary":
@@ -872,17 +894,22 @@ func _action_measure() -> Dictionary:
 
 	if not terminal:
 		_verbose.warn("input", "❌", "MEASURE DEBUG: No terminal found at %s" % grid_pos)
-		return {"success": false, "error": "no_terminal", "message": "No terminal at selection"}
+		return {"success": false, "error": "no_terminal", "message": "No terminal at selection", "blocked": true}
 
 	_verbose.debug("input", "🔍", "MEASURE DEBUG: Terminal found - is_bound=%s, is_measured=%s, terminal_id=%s" % [terminal.is_bound, terminal.is_measured, terminal.terminal_id])
 
 	if not terminal.can_measure():
 		_verbose.warn("input", "❌", "MEASURE DEBUG: can_measure()=false (is_bound=%s, is_measured=%s)" % [terminal.is_bound, terminal.is_measured])
-		return {"success": false, "error": "cannot_measure", "message": "Terminal not ready to measure"}
+		return {"success": false, "error": "cannot_measure", "message": "Terminal not ready to measure", "blocked": true}
 
-	var biome = terminal.bound_biome
+	# Resolve biome from terminal's biome name
+	var biome_name = terminal.bound_biome_name
+	if biome_name == "":
+		return {"success": false, "error": "no_biome", "message": "Terminal not bound to biome", "blocked": true}
+
+	var biome = farm.grid.biomes.get(biome_name, null) if farm and farm.grid else null
 	if not biome:
-		return {"success": false, "error": "no_biome", "message": "Terminal not bound to biome"}
+		return {"success": false, "error": "no_biome", "message": "Biome '%s' not found" % biome_name, "blocked": true}
 
 	var result = ProbeActions.action_measure(terminal, biome)
 
@@ -898,7 +925,7 @@ func _action_reap() -> Dictionary:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var grid_pos = _get_grid_position()
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
+	var terminal = _resolve_terminal_for_harvest(grid_pos)
 
 	if not terminal:
 		return {"success": false, "error": "no_terminal", "message": "No terminal at selection"}
@@ -917,7 +944,7 @@ func _action_pop() -> Dictionary:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var grid_pos = _get_grid_position()
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
+	var terminal = _resolve_terminal_for_harvest(grid_pos)
 
 	if not terminal:
 		return {"success": false, "error": "no_terminal", "message": "No terminal at selection"}
@@ -1016,6 +1043,7 @@ func _action_inject_vocabulary() -> Dictionary:
 	var biome = _get_current_biome()
 	if not biome or not biome.quantum_computer:
 		return {"success": false, "error": "no_biome", "message": "No biome at selection"}
+	
 	if biome.quantum_computer.register_map.num_qubits >= EconomyConstants.MAX_BIOME_QUBITS:
 		return {
 			"success": false,
@@ -1028,27 +1056,26 @@ func _action_inject_vocabulary() -> Dictionary:
 	if pair.is_empty():
 		return {"success": false, "error": "no_available_pair", "message": "No injectable vocab pair for this biome"}
 
-	var cost = EconomyConstants.get_vocab_injection_cost(pair.get("south", ""))
+	# CRITICAL: Check and spend cost BEFORE heavy expansion
+	var context = {"south_emoji": pair.get("south", "")}
+	if not EconomyConstants.try_action("inject_vocabulary", farm.economy, context):
+		var cost = EconomyConstants.get_action_cost("inject_vocabulary", context)
+		return {
+			"success": false,
+			"error": "insufficient_funds",
+			"message": "Insufficient resources for vocab injection (%s)" % [cost]
+		}
 
+	# Heavy operation starts here
 	var result = biome.expand_quantum_system(pair.get("north", ""), pair.get("south", ""))
 	if result.get("success", false):
 		if farm and farm.has_method("discover_pair"):
 			farm.discover_pair(pair.get("north", ""), pair.get("south", ""))
-		var cost_spent = false
-		if farm and farm.economy and EconomyConstants.can_afford(farm.economy, cost):
-			EconomyConstants.spend(farm.economy, cost, "vocab_injection")
-			cost_spent = true
+		
 		_verbose.debug("input", "+", "Injected vocab %s/%s into %s" % [
 			pair.get("north", ""), pair.get("south", ""), current_selection.biome
 		])
-		return {
-			"success": true,
-			"north_emoji": pair.get("north", ""),
-			"south_emoji": pair.get("south", ""),
-			"biome": biome.get_biome_type() if biome.has_method("get_biome_type") else "unknown",
-			"cost": cost,
-			"cost_spent": cost_spent
-		}
+		return result
 
 	return {
 		"success": false,
@@ -1075,6 +1102,18 @@ func _action_cycle_biome() -> Dictionary:
 	}
 
 
+func _action_explore_biome() -> Dictionary:
+	"""Explore and unlock a random new biome (4E action)."""
+	if not farm:
+		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
+	if not farm.has_method("explore_biome"):
+		return {"success": false, "error": "no_method", "message": "Farm cannot explore biomes"}
+	var result = farm.explore_biome()
+	if result.get("success", false):
+		_select_tool_group(3)
+	return result
+
+
 func _action_remove_vocabulary() -> Dictionary:
 	"""Remove vocabulary from biome - shrink quantum system."""
 	if current_selection.plot_idx < 0:
@@ -1094,8 +1133,9 @@ func _action_remove_vocabulary() -> Dictionary:
 	var target_qubit = rm.num_qubits - 1
 	var pair_to_remove = {}
 	var grid_pos = _get_grid_position()
+	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
 	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos) if farm and farm.plot_pool else null
-	if terminal and terminal.is_bound and terminal.bound_biome == biome:
+	if terminal and terminal.is_bound and terminal.bound_biome_name == biome_name:
 		target_qubit = terminal.bound_register_id
 		pair_to_remove = _get_pair_for_qubit(rm, target_qubit)
 	else:
@@ -1243,16 +1283,18 @@ func _reindex_entanglement_graph(quantum_computer, removed_qubit: int) -> void:
 func _unbind_terminals_for_register(biome, register_id: int) -> void:
 	if not farm or not farm.plot_pool:
 		return
+	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
 	for terminal in farm.plot_pool.get_all_terminals():
-		if terminal.is_bound and terminal.bound_biome == biome and terminal.bound_register_id == register_id:
+		if terminal.is_bound and terminal.bound_biome_name == biome_name and terminal.bound_register_id == register_id:
 			farm.plot_pool.unbind_terminal(terminal)
 
 
 func _reindex_bound_terminals(biome, removed_qubit: int) -> void:
 	if not farm or not farm.plot_pool:
 		return
+	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
 	for terminal in farm.plot_pool.get_all_terminals():
-		if not terminal.is_bound or terminal.bound_biome != biome:
+		if not terminal.is_bound or terminal.bound_biome_name != biome_name:
 			continue
 		if terminal.bound_register_id > removed_qubit:
 			terminal.bound_register_id -= 1
@@ -1405,6 +1447,29 @@ func _get_selected_positions() -> Array[Vector2i]:
 	if current_selection.plot_idx >= 0:
 		positions.append(_get_grid_position())
 	return positions
+
+func _resolve_terminal_for_harvest(grid_pos: Vector2i) -> RefCounted:
+	"""Locate the terminal that should be harvested for a given selection."""
+	if not farm or not farm.plot_pool:
+		return null
+
+	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
+	if terminal:
+		return terminal
+
+	# Fallback: try the last selected plot (useful when selection resets after MEASURE)
+	if last_selected_plot_position != Vector2i(-1, -1) and last_selected_plot_position != grid_pos:
+		var fallback = farm.plot_pool.get_terminal_at_grid_pos(last_selected_plot_position)
+		if fallback and fallback.is_measured:
+			return fallback
+
+	# Final fallback: search measured terminals exactly at the requested grid
+	if farm.plot_pool.has_method("get_measured_terminals"):
+		for candidate in farm.plot_pool.get_measured_terminals():
+			if candidate.grid_position == grid_pos:
+				return candidate
+
+	return null
 
 
 func _get_homerow_positions() -> Array[Vector2i]:
@@ -1591,62 +1656,74 @@ func get_actions_for_current_group() -> Dictionary:
 ## ============================================================================
 
 func _decrease_simulation_speed() -> void:
-	"""Halve the quantum simulation speed (- key)."""
+	"""Decrease quantum evolution granularity - finer substeps (- key)."""
 	if not farm or not farm.grid:
-		_verbose.warn("input", "⚠️", "Cannot adjust speed - no farm/grid")
+		_verbose.warn("input", "⚠️", "Cannot adjust granularity - no farm/grid")
 		return
 
-	# Get current speed from first biome (assume all biomes have same speed)
-	var current_speed = 1.0
+	# Get current granularity from first biome
+	var current_dt = 0.02
 	if farm.grid.biomes and not farm.grid.biomes.is_empty():
 		var first_biome = farm.grid.biomes.values()[0]
-		if "quantum_time_scale" in first_biome:
-			current_speed = first_biome.quantum_time_scale
+		if "max_evolution_dt" in first_biome:
+			current_dt = first_biome.max_evolution_dt
 
-	# Halve the speed (minimum 0.001 = 1/1000th speed - ultra slow-mo)
-	var new_speed = max(current_speed * 0.5, 0.001)
+	# Halve the substep size = finer granularity (minimum 0.0001 = 0.1ms - ultra fine)
+	var new_dt = max(current_dt * 0.5, 0.0001)
+
+	# DEBUG
+	print("[INPUT] Granularity FINER: %.4f → %.4f" % [current_dt, new_dt])
 
 	# Apply to all biomes
 	var biome_count = 0
 	for biome in farm.grid.biomes.values():
-		if "quantum_time_scale" in biome:
-			biome.quantum_time_scale = new_speed
+		if "max_evolution_dt" in biome:
+			biome.max_evolution_dt = new_dt
 			biome_count += 1
 
 	# Update GameState so it's saved
 	var gsm = get_node_or_null("/root/GameStateManager")
 	if gsm and gsm.current_state:
-		gsm.current_state.quantum_time_scale = new_speed
+		if not ("max_evolution_dt" in gsm.current_state):
+			gsm.current_state.set("max_evolution_dt", new_dt)
+		else:
+			gsm.current_state.max_evolution_dt = new_dt
 
-	_verbose.info("input", "⏬", "Simulation speed: %.4fx → %.4fx (%d biomes)" % [current_speed, new_speed, biome_count])
+	_verbose.info("input", "🔬", "Matrix granularity: %.4fs → %.4fs (finer, %d biomes)" % [current_dt, new_dt, biome_count])
 
 
 func _increase_simulation_speed() -> void:
-	"""Double the quantum simulation speed (= key)."""
+	"""Increase quantum evolution granularity - coarser substeps (= key)."""
 	if not farm or not farm.grid:
-		_verbose.warn("input", "⚠️", "Cannot adjust speed - no farm/grid")
+		_verbose.warn("input", "⚠️", "Cannot adjust granularity - no farm/grid")
 		return
 
-	# Get current speed from first biome
-	var current_speed = 1.0
+	# Get current granularity from first biome
+	var current_dt = 0.02
 	if farm.grid.biomes and not farm.grid.biomes.is_empty():
 		var first_biome = farm.grid.biomes.values()[0]
-		if "quantum_time_scale" in first_biome:
-			current_speed = first_biome.quantum_time_scale
+		if "max_evolution_dt" in first_biome:
+			current_dt = first_biome.max_evolution_dt
 
-	# Double the speed (maximum 16.0 = 16x speed - extreme fast-forward)
-	var new_speed = min(current_speed * 2.0, 16.0)
+	# Double the substep size = coarser granularity (maximum 1.0 = 1000ms - ultra coarse)
+	var new_dt = min(current_dt * 2.0, 1.0)
+
+	# DEBUG
+	print("[INPUT] Granularity COARSER: %.4f → %.4f" % [current_dt, new_dt])
 
 	# Apply to all biomes
 	var biome_count = 0
 	for biome in farm.grid.biomes.values():
-		if "quantum_time_scale" in biome:
-			biome.quantum_time_scale = new_speed
+		if "max_evolution_dt" in biome:
+			biome.max_evolution_dt = new_dt
 			biome_count += 1
 
 	# Update GameState so it's saved
 	var gsm = get_node_or_null("/root/GameStateManager")
 	if gsm and gsm.current_state:
-		gsm.current_state.quantum_time_scale = new_speed
+		if not ("max_evolution_dt" in gsm.current_state):
+			gsm.current_state.set("max_evolution_dt", new_dt)
+		else:
+			gsm.current_state.max_evolution_dt = new_dt
 
-	_verbose.info("input", "⏫", "Simulation speed: %.4fx → %.4fx (%d biomes)" % [current_speed, new_speed, biome_count])
+	_verbose.info("input", "🔭", "Matrix granularity: %.4fs → %.4fs (coarser, %d biomes)" % [current_dt, new_dt, biome_count])

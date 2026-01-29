@@ -4,7 +4,7 @@ extends RefCounted
 ## SelectionManager - Unified selection state management
 ##
 ## Manages cursor position and multi-select checkbox state.
-## Provides a clean API for FarmInputHandler to query selected plots.
+## Provides a clean API for QuantumInstrumentInput to query selected plots.
 
 # Current cursor position (single-select fallback)
 var current_selection: Vector2i = Vector2i.ZERO

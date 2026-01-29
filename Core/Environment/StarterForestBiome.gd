@@ -162,6 +162,15 @@ func get_paired_emoji(emoji: String) -> String:
 	return emoji_pairings.get(emoji, "?")
 
 
+func _update_quantum_substrate(dt: float) -> void:
+	"""Evolve quantum substrate under Lindblad dynamics."""
+	if quantum_computer:
+		quantum_computer.evolve(dt, max_evolution_dt)
+
+	# Apply semantic drift game mechanics (🌀 chaos vs ✨ stability)
+	super._update_quantum_substrate(dt)
+
+
 func _rebuild_quantum_operators_impl() -> void:
 	"""Rebuild operators when IconRegistry changes."""
 	var icon_registry = get_node_or_null("/root/IconRegistry")

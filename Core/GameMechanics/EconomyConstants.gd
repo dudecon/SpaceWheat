@@ -42,6 +42,8 @@ const ACTION_COSTS: Dictionary = {
 	"measure": {},              # FREE - information gain
 	"reap": {"👥": 1},          # Claim harvest (labor)
 	"harvest_all": {"🍼": 1},   # End of turn harvest (costs 1 Reality Midwife token)
+	"quest_reroll": {"🐇": 1},   # Reroll quest slot
+	"quest_lock": {"🌲": 1},     # Lock quest slot
 	"explore_biome": {"🦅": 20},# Scout new biome
 	"remove_vocabulary": {"🐺": 20} # Remove vocabulary: penalize with wolf cost
 	# vocab_injection is dynamic - use get_action_cost()

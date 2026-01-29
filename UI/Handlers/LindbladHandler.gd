@@ -14,6 +14,28 @@ const PERSISTENT_RATE = 0.5
 const PLACEMENT_COST_CREDITS = 10
 const GEAR_COST_EMOJI = "⚙"
 const GEAR_COST_CREDITS = 1
+
+
+static func _get_lindblad_cost(emoji: String) -> Dictionary:
+	return {
+		emoji: PLACEMENT_COST_CREDITS,
+		GEAR_COST_EMOJI: GEAR_COST_CREDITS
+	}
+
+
+static func _try_charge_lindblad_cost(farm, emoji: String, insufficient: Dictionary, reason: String) -> bool:
+	if not farm or not farm.economy:
+		return false
+
+	var cost = _get_lindblad_cost(emoji)
+	if not EconomyConstants.can_afford(farm.economy, cost):
+		insufficient[emoji] = insufficient.get(emoji, 0) + 1
+		if not farm.economy.can_afford_resource(GEAR_COST_EMOJI, GEAR_COST_CREDITS):
+			insufficient[GEAR_COST_EMOJI] = insufficient.get(GEAR_COST_EMOJI, 0) + 1
+		return false
+
+	EconomyConstants.spend(farm.economy, cost, reason)
+	return true
 const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 
@@ -184,15 +206,8 @@ static func enable_persistent_drive(farm, positions: Array[Vector2i],
 			insufficient[emoji] = insufficient.get(emoji, 0) + 1
 			continue
 
-		if not farm.economy or not farm.economy.can_afford_resource(emoji, PLACEMENT_COST_CREDITS) \
-			or not farm.economy.can_afford_resource(GEAR_COST_EMOJI, GEAR_COST_CREDITS):
-			insufficient[emoji] = insufficient.get(emoji, 0) + 1
-			if farm.economy and not farm.economy.can_afford_resource(GEAR_COST_EMOJI, GEAR_COST_CREDITS):
-				insufficient[GEAR_COST_EMOJI] = insufficient.get(GEAR_COST_EMOJI, 0) + 1
+		if not _try_charge_lindblad_cost(farm, emoji, insufficient, "lindblad_pump"):
 			continue
-
-		farm.economy.remove_resource(emoji, PLACEMENT_COST_CREDITS, "lindblad_pump")
-		farm.economy.remove_resource(GEAR_COST_EMOJI, GEAR_COST_CREDITS, "lindblad_pump")
 
 		charged_count += 1
 		success_count += 1
@@ -261,15 +276,8 @@ static func enable_persistent_decay(farm, positions: Array[Vector2i],
 			already_active += 1
 			continue
 
-		if not farm.economy or not farm.economy.can_afford_resource(emoji, PLACEMENT_COST_CREDITS) \
-			or not farm.economy.can_afford_resource(GEAR_COST_EMOJI, GEAR_COST_CREDITS):
-			insufficient[emoji] = insufficient.get(emoji, 0) + 1
-			if farm.economy and not farm.economy.can_afford_resource(GEAR_COST_EMOJI, GEAR_COST_CREDITS):
-				insufficient[GEAR_COST_EMOJI] = insufficient.get(GEAR_COST_EMOJI, 0) + 1
+		if not _try_charge_lindblad_cost(farm, emoji, insufficient, "lindblad_drain"):
 			continue
-
-		farm.economy.remove_resource(emoji, PLACEMENT_COST_CREDITS, "lindblad_drain")
-		farm.economy.remove_resource(GEAR_COST_EMOJI, GEAR_COST_CREDITS, "lindblad_drain")
 
 		charged_count += 1
 		success_count += 1

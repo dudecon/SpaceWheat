@@ -110,6 +110,24 @@ func set_overlay_stack(stack) -> void:
 	_verbose.info("ui", "📋", "OverlayManager connected to OverlayStackManager")
 
 
+func _get_current_biome(farm_ref):
+	"""Get the current active biome object from farm (not the hardcoded biotic_flux)"""
+	if not farm_ref:
+		return null
+
+	# Get current biome name
+	var current_biome_name = "StarterForest"  # Default fallback
+	var observation = farm_ref.observation_frame if "observation_frame" in farm_ref else null
+	if observation and observation.has_method("get_neutral_biome"):
+		current_biome_name = observation.get_neutral_biome()
+
+	# Look up biome object in grid
+	if farm_ref.grid and farm_ref.grid.biomes.has(current_biome_name):
+		return farm_ref.grid.biomes[current_biome_name]
+
+	return null
+
+
 func create_overlays(parent: Control) -> void:
 	"""Create all overlay panels and add them to parent"""
 	# HAUNTED UI FIX: Guard against duplicate overlay creation
@@ -178,7 +196,7 @@ func create_overlays(parent: Control) -> void:
 
 	# Create simulation stats overlay (time scale + FPS)
 	sim_stats_overlay = SimStatsOverlay.new()
-	sim_stats_overlay.z_index = 5000
+	sim_stats_overlay.z_index = 4096  # Max z_index in Godot 4 (was 5000, exceeded limit)
 	parent.add_child(sim_stats_overlay)
 	_verbose.info("ui", "⏱", "Simulation stats overlay created (upper-left)")
 
@@ -311,7 +329,7 @@ func show_overlay(name: String) -> void:
 			# C key now shows quest offers (emergent system)
 			if faction_quest_offers_panel and farm:
 				_verbose.debug("quest", "→", "Showing faction quest offers with current biome")
-				var biome = farm.biotic_flux_biome if "biotic_flux_biome" in farm else null
+				var biome = _get_current_biome(farm)
 				if biome:
 					faction_quest_offers_panel.show_offers(biome)
 					overlay_states["quest_offers"] = true
@@ -327,7 +345,7 @@ func show_overlay(name: String) -> void:
 			if faction_quest_offers_panel and farm:
 				_verbose.debug("quest", "→", "Showing faction quest offers with current biome")
 				# Get current biome from farm
-				var biome = farm.biotic_flux_biome if "biotic_flux_biome" in farm else null
+				var biome = _get_current_biome(farm)
 				if biome:
 					faction_quest_offers_panel.show_offers(biome)
 					overlay_states["quest_offers"] = true
@@ -537,7 +555,7 @@ func toggle_quest_board() -> void:
 			_verbose.debug("quest", "→", "Board is hidden, opening")
 			if farm:
 				# Get current biome from farm
-				var biome = farm.biotic_flux_biome if "biotic_flux_biome" in farm else null
+				var biome = _get_current_biome(farm)
 				if biome:
 					quest_board.set_biome(biome)
 					quest_board.open_board()
@@ -913,6 +931,12 @@ func _on_menu_resume() -> void:
 func _on_restart_pressed() -> void:
 	"""Restart the game by reloading the current scene"""
 	_verbose.info("ui", "🔄", "Restarting game...")
+	# Ensure BootManager allows a fresh boot after scene reload.
+	var boot_mgr = get_node_or_null("/root/BootManager")
+	if boot_mgr:
+		boot_mgr._booted = false
+		boot_mgr.is_ready = false
+		_verbose.info("ui", "✓", "BootManager reset for restart")
 	# Reset music completely before reloading
 	if has_node("/root/MusicManager"):
 		get_node("/root/MusicManager").reset()
@@ -1297,7 +1321,7 @@ func open_v2_overlay(name: String) -> bool:
 		if overlay.has_method("set_quest_manager") and quest_manager:
 			overlay.set_quest_manager(quest_manager)
 		if overlay.has_method("set_biome") and farm_ref:
-			var biome = farm_ref.biotic_flux_biome if "biotic_flux_biome" in farm_ref else null
+			var biome = _get_current_biome(farm_ref)
 			if biome:
 				overlay.set_biome(biome)
 

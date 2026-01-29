@@ -36,7 +36,7 @@ func boot(farm: Node, shell: Node, quantum_viz: Node) -> void:
 	# Stage 3B: Visualization
 	_stage_visualization(farm, quantum_viz)
 
-	# Stage 3C: UI (async - must await to ensure FarmInputHandler is created)
+	# Stage 3C: UI (async - must await to ensure QuantumInstrumentInput is created)
 	await _stage_ui(farm, shell, quantum_viz)
 
 	# Stage 3D: Start Simulation
@@ -106,6 +106,19 @@ func _stage_core_systems(farm: Node) -> void:
 	# Any additional farm finalization
 	if farm.has_method("finalize_setup"):
 		farm.finalize_setup()
+
+	# Start music after biomes are loaded (no biomes => no music).
+	var music = get_node_or_null("/root/MusicManager")
+	if music:
+		if has_biomes:
+			var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+			var active_biome = biome_mgr.get_active_biome() if biome_mgr and biome_mgr.has_method("get_active_biome") else ""
+			if active_biome != "":
+				music.play_biome_track(active_biome)
+			else:
+				music.stop()
+		else:
+			music.stop()
 
 	# CRITICAL: Set active_farm in GameStateManager for save/load to work
 	var game_state_mgr = get_node_or_null("/root/GameStateManager")
@@ -203,7 +216,7 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 	# PlotGridDisplay injection is idempotent - guards prevent double tile creation
 	farm_ui.setup_farm(farm)
 
-	# Create and inject QuantumInstrumentInput (replaces FarmInputHandler)
+	# Create and inject QuantumInstrumentInput (single input system)
 	# Uses the new musical instrument spindle interface for tool groups + fractal navigation
 	var input_handler = Node.new()
 	var QuantumInstrumentScript = load("res://UI/Core/QuantumInstrumentInput.gd")

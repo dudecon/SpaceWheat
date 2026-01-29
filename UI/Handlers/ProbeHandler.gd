@@ -135,7 +135,11 @@ static func measure(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
 		if not terminal or not terminal.can_measure():
 			continue
 
-		var biome = terminal.bound_biome
+		# Resolve biome from terminal's biome name
+		var biome_name = terminal.bound_biome_name
+		if biome_name == "":
+			continue
+		var biome = farm.grid.biomes.get(biome_name, null) if farm.grid else null
 		if not biome:
 			continue
 

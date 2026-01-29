@@ -73,6 +73,7 @@ var sun_qubit_node: QuantumNode = null
 
 var biomes: Dictionary = {}
 var active_biome: String = ""
+var render_all_biomes: bool = true
 
 var layout_calculator: BiomeLayoutCalculator
 var farm_grid = null
@@ -82,6 +83,9 @@ var biotic_flux_biome = null
 var biotic_icon = null
 var chaos_icon = null
 var imperium_icon = null
+
+var biome_evolution_batcher = null
+var lookahead_offset: int = 1
 
 var center_position: Vector2 = Vector2.ZERO
 var graph_radius: float = 250.0
@@ -125,7 +129,7 @@ func _connect_to_active_biome_manager():
 
 func _on_active_biome_changed(new_biome: String, _old_biome: String):
 	"""Handle biome switching - update active_biome for force system optimization."""
-	active_biome = new_biome
+	set_active_biome(new_biome)
 
 
 func _initialize_components():
@@ -178,8 +182,9 @@ func _process(delta: float):
 	effects_renderer.update_particles(delta, ctx)
 	var t6 = Time.get_ticks_usec()
 
-	# Request redraw
-	# queue_redraw() # DISABLED FOR PERF ISO
+	# Request redraw (throttled for perf)
+	if frame_count % 2 == 0:
+		queue_redraw()
 	var t7 = Time.get_ticks_usec()
 	
 	if frame_count % 60 == 0:
@@ -237,10 +242,12 @@ func _draw():
 		var sun_ms = (t_sun - t_bubble) / 1000.0
 		var debug_ms = (t_end - t_sun) / 1000.0
 
-		print("QuantumForceGraph Draw: %.2fms total (Ctx=%.2f Region=%.2f Infra=%.2f Edge=%.2f Effects=%.2f Bubble=%.2f Sun=%.2f Debug=%.2f) [%d nodes]" % [
-			total_ms, ctx_ms, region_ms, infra_ms, edge_ms, effects_ms, bubble_ms, sun_ms, debug_ms,
-			quantum_nodes.size()
-		])
+		# Use 'trace' category (WARN by default, only shown if explicitly enabled at DEBUG level)
+		if _verbose:
+			_verbose.debug("trace", "🎨", "QuantumForceGraph Draw: %.2fms total (Ctx=%.2f Region=%.2f Infra=%.2f Edge=%.2f Effects=%.2f Bubble=%.2f Sun=%.2f Debug=%.2f) [%d nodes]" % [
+				total_ms, ctx_ms, region_ms, infra_ms, edge_ms, effects_ms, bubble_ms, sun_ms, debug_ms,
+				quantum_nodes.size()
+			])
 
 
 func _build_context() -> Dictionary:
@@ -253,9 +260,12 @@ func _build_context() -> Dictionary:
 		"sun_qubit_node": sun_qubit_node,
 		"biomes": biomes,
 		"active_biome": active_biome,
+		"filter_biome": _get_filter_biome(),
 		"layout_calculator": layout_calculator,
 		"farm_grid": farm_grid,
 		"plot_pool": plot_pool,
+		"biome_evolution_batcher": biome_evolution_batcher,
+		"lookahead_offset": lookahead_offset,
 		"biotic_flux_biome": biotic_flux_biome,
 		"biotic_icon": biotic_icon,
 		"chaos_icon": chaos_icon,
@@ -329,7 +339,7 @@ func rebuild_nodes():
 	sun_qubit_node = node_manager.create_sun_qubit_node(biotic_flux_biome, layout_calculator)
 
 	# Apply biome filter
-	node_manager.filter_nodes_for_biome(quantum_nodes, active_biome)
+	node_manager.filter_nodes_for_biome(quantum_nodes, _get_filter_biome())
 
 
 func update_layout(force_rebuild: bool = false):
@@ -358,9 +368,13 @@ func set_active_biome(biome_name: String):
 	    biome_name: Name of biome to show, or "" for all biomes
 	"""
 	active_biome = biome_name
-	node_manager.filter_nodes_for_biome(quantum_nodes, active_biome)
+	node_manager.filter_nodes_for_biome(quantum_nodes, _get_filter_biome())
 	update_layout(true)
 	biome_selected.emit(biome_name)
+
+
+func _get_filter_biome() -> String:
+	return "" if render_all_biomes else active_biome
 
 
 func get_node_at_position(pos: Vector2) -> QuantumNode:

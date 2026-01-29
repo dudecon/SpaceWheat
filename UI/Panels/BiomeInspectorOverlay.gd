@@ -284,7 +284,7 @@ func _on_unhandled_key(keycode: int, _event: InputEvent) -> bool:
 	"""Handle keys not caught by OverlayBase standard routing."""
 	match keycode:
 		KEY_COMMA, KEY_PERIOD:
-			# Don't consume biome cycling keys - let FarmInputHandler handle them
+			# Don't consume biome cycling keys - let QuantumInstrumentInput handle them
 			return false
 		# WASD/Arrow navigation
 		KEY_W, KEY_UP:

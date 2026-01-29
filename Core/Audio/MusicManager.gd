@@ -25,6 +25,7 @@ const TRACKS: Dictionary = {
 	"end_credits": "res://Assets/Audio/Music/SpaceWheat (End Credits).mp3",
 	"heisenberg_township": "res://Assets/Audio/Music/Heisenberg Township, Poppenoff-ulation.mp3",
 	"peripheral_arbor": "res://Assets/Audio/Music/Peripheral Arbor.mp3",
+	"afterbirth_arbor": "res://Assets/Audio/Music/Afterbirth Arbor.mp3",
 }
 
 ## Biome to track mapping
@@ -39,7 +40,7 @@ const BIOME_TRACKS: Dictionary = {
 
 ## Menu/special tracks
 const MENU_TRACK: String = "end_credits"
-const FALLBACK_TRACK: String = "yeast_prophet"
+const FALLBACK_TRACK: String = "afterbirth_arbor"
 
 ## Crossfade duration in seconds
 const CROSSFADE_DURATION: float = 0.8
@@ -74,9 +75,6 @@ func _ready() -> void:
 	_setup_audio_players()
 	_connect_biome_manager()
 	_load_volume_preference()
-
-	# Try to play current biome track on next frame (when ActiveBiomeManager is ready)
-	call_deferred("_play_current_biome_track")
 
 	# Monitor playback health - restart if it unexpectedly stops
 	set_process(true)
@@ -154,12 +152,6 @@ func _connect_biome_manager() -> void:
 func _on_biome_changed(new_biome: String, _old_biome: String) -> void:
 	play_biome_track(new_biome)
 
-
-func _play_current_biome_track() -> void:
-	if ActiveBiomeManager:
-		play_biome_track(ActiveBiomeManager.get_active_biome())
-	else:
-		play_track(FALLBACK_TRACK)
 
 
 ## ============================================================================

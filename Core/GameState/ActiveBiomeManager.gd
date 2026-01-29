@@ -19,6 +19,7 @@ extends Node
 
 signal active_biome_changed(new_biome: String, old_biome: String)
 signal biome_transition_requested(from_biome: String, to_biome: String, direction: int)
+signal biome_order_changed(new_order: Array)
 
 ## Full biome order (for reference)
 const ALL_BIOMES: Array[String] = ["StarterForest", "Village", "BioticFlux", "StellarForges", "FungalNetworks", "VolcanicWorlds"]
@@ -26,15 +27,19 @@ const ALL_BIOMES: Array[String] = ["StarterForest", "Village", "BioticFlux", "St
 ## Current available biomes (filtered by unlocked status - synced with ObservationFrame)
 var BIOME_ORDER: Array[String] = ["StarterForest", "Village"]
 
-## Key-to-biome mapping (legacy - now handled by QuantumInstrumentInput)
-const BIOME_KEYS: Dictionary = {
-	KEY_T: "StarterForest",
-	KEY_Y: "Village",
-	KEY_U: "BioticFlux",
-	KEY_I: "StellarForges",
-	KEY_O: "FungalNetworks",
-	KEY_P: "VolcanicWorlds",
+## Key-to-slot mapping (UIOP slots are assigned as biomes are unlocked)
+const BIOME_KEY_ORDER: Array[String] = ["T", "Y", "U", "I", "O", "P"]
+const BIOME_KEYCODES: Dictionary = {
+	KEY_T: 0,
+	KEY_Y: 1,
+	KEY_U: 2,
+	KEY_I: 3,
+	KEY_O: 4,
+	KEY_P: 5,
 }
+
+## Slot assignment (index -> biome name or "")
+var _slot_assignment: Array[String] = ["StarterForest", "Village", "", "", "", ""]
 
 ## Biome display info (for UI)
 const BIOME_INFO: Dictionary = {
@@ -72,7 +77,7 @@ func _connect_to_observation_frame() -> void:
 		# Sync initial state
 		active_biome = _observation_frame.get_neutral_biome()
 		# Sync unlocked biomes
-		BIOME_ORDER = _observation_frame.get_unlocked_biomes()
+		set_biome_order(_observation_frame.get_unlocked_biomes())
 
 
 func _on_neutral_changed(biome: String) -> void:
@@ -139,8 +144,11 @@ func select_biome_by_key(keycode: int) -> bool:
 
 	Returns: true if key was handled, false otherwise
 	"""
-	if BIOME_KEYS.has(keycode):
-		var biome_name = BIOME_KEYS[keycode]
+	if BIOME_KEYCODES.has(keycode):
+		var slot_idx = BIOME_KEYCODES[keycode]
+		var biome_name = get_biome_for_slot(slot_idx)
+		if biome_name == "":
+			return true  # Slot is unassigned, consume the key
 		var direction = _get_direction_to(biome_name)
 		set_active_biome(biome_name, direction)
 		return true
@@ -195,6 +203,41 @@ func get_biome_count() -> int:
 	return BIOME_ORDER.size()
 
 
+func get_biome_for_slot(slot_idx: int) -> String:
+	"""Get the biome assigned to a key slot (T/Y/U/I/O/P)."""
+	if slot_idx < 0:
+		return ""
+	if slot_idx >= _slot_assignment.size():
+		return ""
+	return _slot_assignment[slot_idx]
+
+
+func get_slot_key(slot_idx: int) -> String:
+	"""Get the key label for a slot index."""
+	if slot_idx < 0 or slot_idx >= BIOME_KEY_ORDER.size():
+		return ""
+	return BIOME_KEY_ORDER[slot_idx]
+
+
+func get_slot_count() -> int:
+	"""Total number of biome slots (UIOP row)."""
+	return BIOME_KEY_ORDER.size()
+
+
+func get_biome_order() -> Array[String]:
+	"""Get the current unlocked biome order."""
+	return BIOME_ORDER.duplicate()
+
+
+func set_biome_order(new_order: Array) -> void:
+	"""Replace the current unlocked biome order and notify listeners."""
+	BIOME_ORDER = new_order.duplicate()
+	if not active_biome in BIOME_ORDER and BIOME_ORDER.size() > 0:
+		active_biome = BIOME_ORDER[0]
+	_rebuild_slot_assignment()
+	biome_order_changed.emit(BIOME_ORDER.duplicate())
+
+
 func get_biome_info(biome_name: String) -> Dictionary:
 	"""Get display info for a biome"""
 	return BIOME_INFO.get(biome_name, {})
@@ -203,6 +246,29 @@ func get_biome_info(biome_name: String) -> Dictionary:
 func reset() -> void:
 	"""Reset to initial state (for dev restart)."""
 	active_biome = "StarterForest"
-	BIOME_ORDER = ["StarterForest", "Village"]
+	set_biome_order(["StarterForest", "Village"])
 	_transitioning = false
 	_observation_frame = null
+
+
+func _rebuild_slot_assignment() -> void:
+	"""Rebuild slot->biome mapping with T/Y fixed and extras on UIOP."""
+	_slot_assignment = ["", "", "", "", "", ""]
+
+	# Slot 0 (T) = StarterForest if unlocked
+	if "StarterForest" in BIOME_ORDER:
+		_slot_assignment[0] = "StarterForest"
+
+	# Slot 1 (Y) = Village if unlocked
+	if "Village" in BIOME_ORDER:
+		_slot_assignment[1] = "Village"
+
+	# Fill remaining slots in unlock order, skipping fixed biomes
+	var slot_idx = 2
+	for biome_name in BIOME_ORDER:
+		if biome_name == "StarterForest" or biome_name == "Village":
+			continue
+		if slot_idx >= _slot_assignment.size():
+			break
+		_slot_assignment[slot_idx] = biome_name
+		slot_idx += 1

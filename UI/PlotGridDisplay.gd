@@ -9,7 +9,7 @@ const PlotTile = preload("res://UI/PlotTile.gd")
 
 ## INPUT CONTRACT (Layer 3 - Mouse Drag Selection)
 ## ═══════════════════════════════════════════════════════════════
-## PHASE: _input() - Runs after FarmInputHandler
+## PHASE: _input() - Runs after QuantumInstrumentInput
 ## HANDLES: InputEventMouseButton, InputEventMouseMotion, InputEventScreenTouch
 ## PURPOSE: Multi-plot drag selection across the grid
 ## CONSUMES: ONLY when click/touch IS on a plot tile
@@ -490,6 +490,13 @@ func inject_farm(farm_ref: Node) -> void:
 			if _verbose:
 				_verbose.debug("ui", "📡", "Connected to farm.terminal_bound")
 
+	# Connect to plot_pool terminal unbinds for cleanup (clear_all/harvest_all/reap)
+	if farm.plot_pool and farm.plot_pool.has_signal("terminal_unbound_at"):
+		if not farm.plot_pool.terminal_unbound_at.is_connected(_on_terminal_unbound_at):
+			farm.plot_pool.terminal_unbound_at.connect(_on_terminal_unbound_at)
+			if _verbose:
+				_verbose.debug("ui", "📡", "Connected to plot_pool.terminal_unbound_at")
+
 	# Connect to structure_built for industry building tile updates
 	if farm.has_signal("structure_built"):
 		if not farm.structure_built.is_connected(_on_structure_built):
@@ -637,9 +644,12 @@ func _transform_plot_to_ui_data(pos: Vector2i, plot, terminal = null) -> Diction
 	if plot and plot.entangled_plots:
 		entangled_list = plot.entangled_plots.keys()
 
+	var terminal_active = terminal and (terminal.is_bound or terminal.is_measured)
+
 	var ui_data = {
 		"position": pos,
-		"is_planted": (plot and plot.is_planted) or (terminal and terminal.is_bound),
+		# Single source of truth for v2 terminals: terminal state overrides plot state
+		"is_planted": terminal_active if terminal_active else (plot and plot.is_planted),
 		"plot_type": _get_plot_type_string(plot.plot_type) if plot else "terminal",
 		"north_emoji": "",
 		"south_emoji": "",
@@ -653,39 +663,43 @@ func _transform_plot_to_ui_data(pos: Vector2i, plot, terminal = null) -> Diction
 		"lindblad_drain_active": plot and plot.lindblad_drain_active
 	}
 
-	# CASE 1: Terminal-bound (from EXPLORE action) - takes priority for emoji display
-	if terminal and terminal.is_bound:
+	# CASE 1: Terminal-bound or measured (from EXPLORE/MEASURE) - takes priority for emoji display
+	if terminal_active:
 		ui_data["north_emoji"] = terminal.north_emoji
 		ui_data["south_emoji"] = terminal.south_emoji
-
-		# Get probabilities from biome's quantum_computer
-		var north_prob = 0.5
-		var south_prob = 0.5
-		var biome = terminal.bound_biome
-
-		if biome and biome.quantum_computer:
-			north_prob = biome.get_emoji_probability(terminal.north_emoji)
-			south_prob = biome.get_emoji_probability(terminal.south_emoji)
-
-			# Normalize to ensure they sum to 1.0
-			var total = north_prob + south_prob
-			if total > 0.0:
-				north_prob /= total
-				south_prob /= total
-
-		ui_data["north_probability"] = north_prob
-		ui_data["south_probability"] = south_prob
 
 		# If measured, show the measured outcome
 		if terminal.is_measured:
 			ui_data["has_been_measured"] = true
 			# Set probability to 1.0 for measured outcome
-			if terminal.measured_outcome == "north":
+			if terminal.measured_outcome == terminal.north_emoji:
 				ui_data["north_probability"] = 1.0
 				ui_data["south_probability"] = 0.0
-			else:
+			elif terminal.measured_outcome == terminal.south_emoji:
 				ui_data["north_probability"] = 0.0
 				ui_data["south_probability"] = 1.0
+			else:
+				ui_data["north_probability"] = 0.5
+				ui_data["south_probability"] = 0.5
+		else:
+			# Get probabilities from biome's quantum_computer (unmeasured bound state)
+			var north_prob = 0.5
+			var south_prob = 0.5
+			# Resolve biome from terminal's biome name
+			var biome = biomes.get(terminal.bound_biome_name, null)
+
+			if biome and biome.quantum_computer:
+				north_prob = biome.get_emoji_probability(terminal.north_emoji)
+				south_prob = biome.get_emoji_probability(terminal.south_emoji)
+
+				# Normalize to ensure they sum to 1.0
+				var total = north_prob + south_prob
+				if total > 0.0:
+					north_prob /= total
+					south_prob /= total
+
+			ui_data["north_probability"] = north_prob
+			ui_data["south_probability"] = south_prob
 
 	# CASE 2: Traditional planted plot (no terminal, or terminal doesn't override)
 	elif plot and plot.is_planted and plot.parent_biome and plot.bath_subplot_id >= 0:
@@ -791,6 +805,12 @@ func _on_entanglement_created(pos_a: Vector2i, pos_b: Vector2i) -> void:
 func _on_terminal_bound(pos: Vector2i, _terminal_id: String, _emoji_pair: Dictionary) -> void:
 	"""Handle terminal bound event from EXPLORE action - update tile to show bound terminal"""
 	_verbose.debug("ui", "🔍", "Farm.terminal_bound received at PlotGridDisplay: %s" % pos)
+	update_tile_from_farm(pos)
+
+
+func _on_terminal_unbound_at(pos: Vector2i, _terminal_id: String) -> void:
+	"""Handle terminal unbind (clear/reap/harvest) - update tile to clear terminal visuals."""
+	_verbose.debug("ui", "🧹", "PlotPool.terminal_unbound_at received at PlotGridDisplay: %s" % pos)
 	update_tile_from_farm(pos)
 
 
@@ -1418,4 +1438,3 @@ func _draw_cluster_gate(positions: Array[Vector2]) -> void:
 
 	# Draw hub circle at centroid
 	draw_circle(centroid, 8.0 + pulse * 2.0, gate_color)
-

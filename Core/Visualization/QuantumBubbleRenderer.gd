@@ -43,10 +43,7 @@ func draw(graph: Node2D, ctx: Dictionary) -> void:
 		if not node.plot and node.emoji_north.is_empty():
 			continue
 
-		# NOTE: Plot nodes are already updated by QuantumNodeManager.update_node_visuals()
-		# Only terminal bubbles need update here (they're skipped by QuantumNodeManager)
-		if node.is_terminal_bubble and node.terminal and node.terminal.is_bound:
-			node.update_from_quantum_state()
+		# NOTE: Visuals are updated by QuantumNodeManager (including terminal bubbles)
 
 		# Draw the bubble
 		_draw_quantum_bubble(graph, node, biomes, time_accumulator, plot_pool, false)
@@ -113,10 +110,12 @@ func _draw_quantum_bubble(graph: Node2D, node, biomes: Dictionary, time_accumula
 	# Check if measured
 	var is_measured = _is_node_measured(node, plot_pool)
 
-	# Pulse animation
-	var pulse_rate = node.get_pulse_rate()
+	# Pulse animation - breathing based on measurement uncertainty
+	var pulse_rate = node.get_pulse_rate()  # Berry phase (evolution speed)
+	var measurement_uncertainty = _get_measurement_uncertainty(node, biomes, is_celestial)
+	var pulse_amplitude = 0.12 * measurement_uncertainty  # 0-12% breathing amplitude
 	var pulse_phase = sin(time_accumulator * pulse_rate * TAU) * 0.5 + 0.5
-	var pulse_scale = 1.0 + pulse_phase * 0.08
+	var pulse_scale = 1.0 + pulse_phase * pulse_amplitude
 
 	# Color scheme
 	var base_color: Color
@@ -466,6 +465,41 @@ func _draw_emoji_with_opacity(graph: Node2D, font, text_pos: Vector2, emoji: Str
 
 		var main_color = Color(1, 1, 1, opacity)
 		graph.draw_string(font, text_pos, emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, main_color)
+
+
+func _get_measurement_uncertainty(node, biomes: Dictionary, is_celestial: bool) -> float:
+	"""Calculate measurement uncertainty for a node.
+
+	Physics: 2 × √(p_n × p_s)
+	- Maximum = 1.0 at 50/50 superposition
+	- Minimum = 0.0 when collapsed to either pole
+
+	Returns:
+		Uncertainty value [0.0, 1.0]
+	"""
+	if is_celestial or node.biome_name == "":
+		return 0.0
+
+	var biome = biomes.get(node.biome_name)
+	if not biome or not biome.quantum_computer:
+		return 0.0
+
+	var qc = biome.quantum_computer
+
+	# Get normalized probabilities for this qubit's axis
+	var p_north = qc.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
+	var p_south = qc.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
+	var mass = p_north + p_south
+
+	if mass < 0.001:
+		return 0.0
+
+	# Normalize to this qubit's subspace
+	var p_n = p_north / mass
+	var p_s = p_south / mass
+
+	# Measurement uncertainty: 2 × √(p_n × p_s)
+	return 2.0 * sqrt(p_n * p_s)
 
 
 func _is_node_measured(node, plot_pool) -> bool:

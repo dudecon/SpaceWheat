@@ -27,8 +27,8 @@ var terminal_id: String = ""
 ## Bound register ID (-1 if unbound)
 var bound_register_id: int = -1
 
-## Reference to the biome this terminal is probing
-var bound_biome = null  # BiomeBase (Node)
+## Name of the biome this terminal is probing (decoupled from object reference)
+var bound_biome_name: String = ""
 
 ## Current emoji being displayed (from register or measurement outcome)
 var current_emoji: String = ""
@@ -53,6 +53,11 @@ var measured_outcome: String = ""
 ## Ensemble model: this represents the snapshot we took from the ensemble
 var measured_probability: float = 0.0
 
+## Purity snapshot captured when the register was measured
+var measured_purity: float = 1.0
+var measured_register_id: int = -1
+var measured_biome_name: String = ""
+
 ## Frozen screen position (set on MEASURE, used by visualization)
 ## When measured, bubble should snap to this position instead of floating
 var frozen_position: Vector2 = Vector2.ZERO
@@ -63,13 +68,14 @@ func _init(id: String = ""):
 
 
 ## Bind this terminal to a register in a biome
-func bind_to_register(register_id: int, biome, emoji_pair: Dictionary = {}) -> void:
+## biome_name: String name of the biome (decoupled from object reference)
+func bind_to_register(register_id: int, biome_name: String, emoji_pair: Dictionary = {}) -> void:
 	if is_bound:
 		push_warning("Terminal %s already bound to register %d" % [terminal_id, bound_register_id])
 		return
 
 	bound_register_id = register_id
-	bound_biome = biome
+	bound_biome_name = biome_name  # String, not Node
 	is_bound = true
 	is_measured = false
 	measured_outcome = ""
@@ -83,7 +89,7 @@ func bind_to_register(register_id: int, biome, emoji_pair: Dictionary = {}) -> v
 	# Set current emoji to north (default display before measurement)
 	current_emoji = north_emoji if north_emoji else "?"
 
-	bound.emit(register_id, biome)
+	bound.emit(register_id, biome_name)
 	state_changed.emit(self)
 
 
@@ -92,14 +98,17 @@ func unbind() -> void:
 	if not is_bound:
 		return
 
-	var old_register = bound_register_id
+	var _old_register = bound_register_id
 
 	bound_register_id = -1
-	bound_biome = null
+	bound_biome_name = ""
 	is_bound = false
 	is_measured = false
 	measured_outcome = ""
 	measured_probability = 0.0
+	measured_purity = 1.0
+	measured_register_id = -1
+	measured_biome_name = ""
 	current_emoji = ""
 	north_emoji = ""
 	south_emoji = ""
@@ -111,7 +120,7 @@ func unbind() -> void:
 
 
 ## Mark this terminal as measured with the given outcome
-func mark_measured(outcome: String, probability: float = 0.0) -> void:
+func mark_measured(outcome: String, probability: float = 0.0, purity: float = 1.0) -> void:
 	if not is_bound:
 		push_warning("Cannot measure unbound terminal %s" % terminal_id)
 		return
@@ -120,6 +129,9 @@ func mark_measured(outcome: String, probability: float = 0.0) -> void:
 	measured_outcome = outcome
 	measured_probability = probability
 	current_emoji = outcome  # Update display to show collapsed state
+	measured_purity = purity
+	measured_register_id = bound_register_id
+	measured_biome_name = bound_biome_name
 
 	measured.emit(outcome)
 	state_changed.emit(self)
@@ -142,7 +154,7 @@ func release_register() -> void:
 		return
 
 	bound_register_id = -1
-	bound_biome = null
+	bound_biome_name = ""
 	is_bound = false
 	# KEEP: is_measured, measured_outcome, measured_probability (the measurement snapshot)
 	# KEEP: grid_position (terminal stays visible on grid)
@@ -159,6 +171,9 @@ func clear_measurement() -> void:
 	is_measured = false
 	measured_outcome = ""
 	measured_probability = 0.0
+	measured_purity = 1.0
+	measured_register_id = -1
+	measured_biome_name = ""
 	current_emoji = north_emoji if north_emoji != "" else "?"
 	frozen_position = Vector2.ZERO
 	state_changed.emit(self)
@@ -181,7 +196,7 @@ func get_state() -> Dictionary:
 		"current_emoji": current_emoji,
 		"north_emoji": north_emoji,
 		"south_emoji": south_emoji,
-		"biome_name": bound_biome.get_biome_type() if bound_biome else ""
+		"biome_name": bound_biome_name
 	}
 
 
@@ -205,7 +220,7 @@ func get_binding_info() -> Dictionary:
 	return {
 		"is_bound": is_bound,
 		"register_id": bound_register_id,
-		"biome": bound_biome,
+		"biome_name": bound_biome_name,
 		"grid_position": grid_position,
 		"emoji_pair": get_emoji_pair(),
 		"is_measured": is_measured,
@@ -241,8 +256,8 @@ func validate_state() -> String:
 		# Unbound state should have no register
 		if bound_register_id != -1:
 			return "INVALID: unbound but has register_id"
-		if bound_biome != null:
-			return "INVALID: unbound but has biome reference"
+		if bound_biome_name != "":
+			return "INVALID: unbound but has biome name"
 
 		if is_measured:
 			# Allow measured snapshot even though terminal is unbound
@@ -257,8 +272,8 @@ func validate_state() -> String:
 	# Bound state (is_bound=true)
 	if bound_register_id < 0:
 		return "INVALID: bound but register_id invalid"
-	if bound_biome == null:
-		return "INVALID: bound but no biome reference"
+	if bound_biome_name == "":
+		return "INVALID: bound but no biome name"
 
 	if is_measured:
 		# Measured state requires outcome

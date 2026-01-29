@@ -102,7 +102,7 @@ func _run_cycle():
 	# Coherence
 	var coherences = []
 	for t in plot_pool.get_bound_terminals():
-		if t.bound_biome and t.north_emoji and t.south_emoji:
+		if t.bound_biome_name != "" and t.north_emoji and t.south_emoji:
 			var coh = biotic_flux.get_emoji_coherence(t.north_emoji, t.south_emoji)
 			if coh:
 				coherences.append(coh.abs())

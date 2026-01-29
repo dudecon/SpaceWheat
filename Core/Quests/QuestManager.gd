@@ -258,6 +258,11 @@ func offer_all_faction_quests(biome) -> Array:
 	from all factions, each with alignment score based on biome state.
 	Respects player vocabulary - inaccessible factions are filtered out.
 	"""
+	print("\n🔴 DEBUG: offer_all_faction_quests() CALLED")
+	print("   Stack trace:")
+	for frame in get_stack():
+		print("     - %s:%d in %s()" % [frame.source, frame.line, frame.function])
+
 	var quests = []
 
 	# Get player vocabulary for filtering

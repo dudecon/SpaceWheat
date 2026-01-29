@@ -16,8 +16,8 @@ enum BackactionMode {
 }
 
 enum SelectiveMeasureModel {
-	POSTSELECT_COSTED,  # Measurement cost scales as 1/p_subspace
-	CLICK_NOCLICK       # Binary success/failure (deferred)
+	POSTSELECT_COSTED,  # Measurement cost scales as 1/p_subspace (NOT IMPLEMENTED - UI only)
+	CLICK_NOCLICK       # Binary success/failure (NOT IMPLEMENTED - UI only)
 }
 
 # Current configuration

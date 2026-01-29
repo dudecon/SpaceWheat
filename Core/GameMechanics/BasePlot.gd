@@ -285,26 +285,18 @@ func harvest() -> Dictionary:
 
 	Model C: Queries purity from parent_biome's quantum_computer.
 
-	Manifest Section 4.4: Harvest follows Gozouta protocol:
-	- If POSTSELECT_COSTED enabled: cost = 1/P(subspace), yield *= (1/cost)
-	- If INSPECTOR mode: use old formula (backward compatible)
-
 	Returns: Dictionary with:
 		- success: bool
 		- outcome: String (emoji)
 		- energy: float (raw quantum energy for credits calculation)
 		- yield: int (credits)
-		- measurement_cost: float (POSTSELECT_COSTED mode only)
+		- purity: float (quantum state purity)
+		- purity_multiplier: float (yield multiplier from purity)
 	"""
 	if not is_planted or not parent_biome:
 		return {"success": false, "yield": 0, "energy": 0.0}
 
-	# Get quantum rigor config
-	var config = QuantumRigorConfig.instance
-	var use_costed_model = config and config.selective_measure_model == QuantumRigorConfig.SelectiveMeasureModel.POSTSELECT_COSTED
-
 	var outcome = ""
-	var measurement_cost = 1.0
 
 	# Auto-measure if not already measured
 	if not has_been_measured:
@@ -339,10 +331,8 @@ func harvest() -> Dictionary:
 	# Apply purity multiplier
 	var yield_with_purity = base_yield * purity_multiplier
 
-	# Apply measurement cost penalty (Manifest Section 4.3)
-	# POSTSELECT_COSTED: yield *= (1/cost)
-	# INSPECTOR: cost = 1.0, so no penalty
-	var yield_amount = max(1, int(yield_with_purity / measurement_cost))
+	# Final yield (integer credits)
+	var yield_amount = max(1, int(yield_with_purity))
 
 	# Clear the plot
 	is_planted = false
@@ -369,12 +359,8 @@ func harvest() -> Dictionary:
 		"purity_multiplier": purity_multiplier  # Yield multiplier from purity
 	}
 
-	# Add measurement cost if using costed model
-	if use_costed_model:
-		result_dict["measurement_cost"] = measurement_cost
-
-	_log("debug", "farm", "✂️", "Plot %s harvested: purity=%.3f (×%.2f), cost=%.2f/%.2f, outcome=%s, yield=%d" % [
-		grid_position, purity, purity_multiplier, 1.0/measurement_cost, measurement_cost, outcome, yield_amount])
+	_log("debug", "farm", "✂️", "Plot %s harvested: purity=%.3f (×%.2f), outcome=%s, yield=%d" % [
+		grid_position, purity, purity_multiplier, outcome, yield_amount])
 
 	return result_dict
 

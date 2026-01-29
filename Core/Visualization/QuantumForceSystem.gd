@@ -51,7 +51,7 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 	var biomes = ctx.get("biomes", {})
 	var layout_calculator = ctx.get("layout_calculator")
 	var plot_pool = ctx.get("plot_pool")
-	var active_biome_name = ctx.get("active_biome", "")  # "" means process all biomes
+	var active_biome_name = ctx.get("filter_biome", ctx.get("active_biome", ""))  # "" means process all biomes
 
 	# Throttle expensive MI computation (now just reads C++ cache, but still throttle)
 	_time_since_mi_update += delta
@@ -68,6 +68,7 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 			if active_biome_name != "" and node.biome_name != active_biome_name:
 				continue
 			active_nodes.append(node)
+
 
 	# Calculate and apply forces
 	for node in nodes:
@@ -367,23 +368,57 @@ func _get_biome_center(node, layout_calculator) -> Vector2:
 
 
 func _get_quantum_behavior(node) -> int:
-	"""Get quantum behavior flag from node's plot."""
-	if not node or not node.plot:
-		return 0  # Default: FLOATING
-	if "quantum_behavior" in node.plot:
+	"""Get quantum behavior flag.
+
+	Priority:
+	1. Node's direct quantum_behavior property (if set)
+	2. Plot's quantum_behavior (legacy compatibility)
+	3. Default: FLOATING (0) - forces active
+
+	Values:
+	- 0 = FLOATING: Forces active, normal physics
+	- 1 = HOVERING: Fixed to anchor (biome measurement plots)
+	- 2 = FIXED: Completely static (celestial bodies)
+	"""
+	if not node:
+		return 0
+
+	# Check node's direct property first (first-class quantum viz)
+	if "quantum_behavior" in node:
+		return node.quantum_behavior
+
+	# Fallback to plot property (legacy)
+	if node.plot and "quantum_behavior" in node.plot:
 		return node.plot.quantum_behavior
+
+	# Default: FLOATING (forces active)
 	return 0
 
 
 func _is_active_node(node) -> bool:
-	"""Check if node is active (should receive forces)."""
+	"""Check if node is active (should receive forces).
+
+	Active means the node has quantum data to visualize.
+	Priority (first match wins):
+	1. Direct quantum register (biome_name set) - PREFERRED
+	2. Terminal bubble (has terminal binding)
+	3. Plot bubble (has planted plot)
+	"""
 	if not node:
 		return false
-	# v2 terminal bubbles or v1 plot bubbles
+
+	# First-class quantum visualization: has biome_name and emojis
+	if node.biome_name != "" and not node.emoji_north.is_empty():
+		return true
+
+	# v2 terminal bubbles
 	if node.has_farm_tether and not node.emoji_north.is_empty():
 		return true
+
+	# v1 plot bubbles
 	if node.plot and node.plot.is_planted:
 		return true
+
 	return false
 
 

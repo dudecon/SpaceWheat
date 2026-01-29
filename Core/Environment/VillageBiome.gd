@@ -158,6 +158,15 @@ func _configure_village_dynamics(icons: Dictionary, icon_registry) -> void:
 		icons["💰"].lindblad_incoming["🍞"] = 0.01
 
 
+func _update_quantum_substrate(dt: float) -> void:
+	"""Evolve quantum substrate under Lindblad dynamics."""
+	if quantum_computer:
+		quantum_computer.evolve(dt, max_evolution_dt)
+
+	# Apply semantic drift game mechanics (🌀 chaos vs ✨ stability)
+	super._update_quantum_substrate(dt)
+
+
 func _get_active_village_axes() -> Array:
 	"""Return the emoji axis set the village currently uses."""
 	return REDUCED_VILLAGE_EMOJI_AXES if USE_REDUCED_EMOJI_SET else FULL_VILLAGE_EMOJI_AXES

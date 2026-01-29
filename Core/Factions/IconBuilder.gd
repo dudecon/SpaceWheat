@@ -18,6 +18,8 @@ extends RefCounted
 
 const Faction = preload("res://Core/Factions/Faction.gd")
 const FactionRegistry = preload("res://Core/Factions/FactionRegistry.gd")
+const Biome = preload("res://Core/Biomes/Biome.gd")
+const BiomeRegistry = preload("res://Core/Biomes/BiomeRegistry.gd")
 const IconScript = preload("res://Core/QuantumSubstrate/Icon.gd")
 
 # Cached registry instance for biome presets
@@ -629,3 +631,222 @@ static func debug_print_biome(icons: Dictionary) -> void:
 		debug_print_icon(icons[emoji])
 	
 	print("==================================\n")
+
+
+## ========================================
+## BIOME-AWARE ICON BUILDING (New Architecture)
+## ========================================
+
+## Build icons for a biome with faction overlays weighted by standing
+## This is the new entry point for building icons: biome + (faction × standing)
+static func build_biome_with_factions(
+	biome_name: String,
+	faction_standings: Dictionary = {}
+) -> Dictionary:
+	## Args:
+	##   biome_name: Biome to build for
+	##   faction_standings: {faction_name: standing_float} where 0.0=muted, 1.0=full strength
+	##
+	## Returns:
+	##   Dictionary[emoji] -> Icon (complete icon set for the biome)
+
+	var biome_registry = BiomeRegistry.new()
+	var biome = biome_registry.get_by_name(biome_name)
+	if not biome:
+		push_error("IconBuilder: Biome not found: %s" % biome_name)
+		return {}
+
+	var faction_registry = _get_registry()
+
+	# Get emojis from biome
+	var all_emojis = biome.get_all_emojis()
+
+	# Build index: emoji → factions (from factions.json)
+	var faction_list = faction_registry.get_all()
+	build_faction_index(faction_list)
+
+	# Build each emoji: biome_component + (faction_contributions × standing)
+	var icons: Dictionary = {}
+	for emoji in all_emojis:
+		var biome_component = biome.get_icon_component(emoji)
+		var faction_factions = get_factions_for_emoji(emoji)
+
+		# Filter factions to only those in faction_standings (or all if empty)
+		var relevant_factions: Array = []
+		if faction_standings.size() > 0:
+			for faction in faction_factions:
+				if faction.name in faction_standings:
+					relevant_factions.append(faction)
+		else:
+			relevant_factions = faction_factions
+
+		var icon = _build_icon_from_biome_and_factions(
+			emoji, biome_component, relevant_factions, faction_standings
+		)
+
+		if icon:
+			icons[emoji] = icon
+
+	# Apply biome cross-couplings
+	if biome.cross_couplings.size() > 0:
+		inject_cross_faction_couplings(icons, biome.cross_couplings)
+
+	return icons
+
+
+## Internal: Build a single icon from biome component + weighted faction contributions
+static func _build_icon_from_biome_and_factions(
+	emoji: String,
+	biome_component: Dictionary,
+	faction_list: Array,
+	faction_standings: Dictionary
+) -> Icon:
+	## Start with biome component, then addively merge faction contributions
+	## Each faction is weighted by its standing (0.0 = ignored, 1.0 = full strength)
+
+	var icon = IconScript.new()
+	icon.emoji = emoji
+	icon.display_name = emoji
+
+	# Initialize from biome component
+	icon.self_energy = biome_component.get("self_energy", 0.0)
+
+	var biome_h_couplings = biome_component.get("hamiltonian", {})
+	for target in biome_h_couplings:
+		var current = icon.hamiltonian_couplings.get(target, null)
+		var incoming = biome_h_couplings[target]
+		icon.hamiltonian_couplings[target] = _add_hamiltonian_values(current, incoming)
+
+	var biome_l_out = biome_component.get("lindblad_outgoing", {})
+	for target in biome_l_out:
+		var current = icon.lindblad_outgoing.get(target, 0.0)
+		icon.lindblad_outgoing[target] = current + biome_l_out[target]
+
+	var biome_l_in = biome_component.get("lindblad_incoming", {})
+	for source in biome_l_in:
+		var current = icon.lindblad_incoming.get(source, 0.0)
+		icon.lindblad_incoming[source] = current + biome_l_in[source]
+
+	# Biome decay (if any)
+	var biome_decay = biome_component.get("decay", {})
+	if biome_decay.has("rate"):
+		icon.decay_rate = biome_decay.get("rate", 0.0)
+		icon.decay_target = biome_decay.get("target", "🍂")
+
+	var contributing_sources: Array[String] = ["biome"]
+
+	# Merge faction contributions with standing weights
+	var all_gated: Array = []
+	var all_bell_features: Array = []
+	var total_decoherence: float = 0.0
+
+	for faction in faction_list:
+		var standing = faction_standings.get(faction.name, 1.0)
+		if standing <= 0.0:
+			continue  # Skip muted factions
+
+		contributing_sources.append(faction.name)
+		var contribution = faction.get_icon_contribution(emoji)
+
+		# Merge self_energy (weighted by standing)
+		icon.self_energy += contribution.get("self_energy", 0.0) * standing
+
+		# Merge hamiltonian_couplings (weighted)
+		var h_couplings = contribution.get("hamiltonian_couplings", {})
+		for target in h_couplings:
+			var current = icon.hamiltonian_couplings.get(target, null)
+			var incoming = h_couplings[target]
+			if incoming is Vector2:
+				incoming = Vector2(incoming.x * standing, incoming.y * standing)
+			else:
+				incoming = incoming * standing
+			icon.hamiltonian_couplings[target] = _add_hamiltonian_values(current, incoming)
+
+		# Merge lindblad_outgoing (weighted)
+		var l_out = contribution.get("lindblad_outgoing", {})
+		for target in l_out:
+			var current = icon.lindblad_outgoing.get(target, 0.0)
+			icon.lindblad_outgoing[target] = current + (l_out[target] * standing)
+
+		# Merge lindblad_incoming (weighted)
+		var l_in = contribution.get("lindblad_incoming", {})
+		for source in l_in:
+			var current = icon.lindblad_incoming.get(source, 0.0)
+			icon.lindblad_incoming[source] = current + (l_in[source] * standing)
+
+		# Collect gated_lindblad
+		var gated = contribution.get("gated_lindblad", [])
+		for gate_config in gated:
+			var config_copy = gate_config.duplicate()
+			config_copy["faction"] = faction.name
+			config_copy["standing_weight"] = standing
+			all_gated.append(config_copy)
+
+		# Collect bell_activated_features
+		var bell = contribution.get("bell_activated_features", {})
+		if bell.size() > 0:
+			all_bell_features.append({
+				"faction": faction.name,
+				"standing": standing,
+				"features": bell.duplicate(true)
+			})
+
+		# Merge decoherence_coupling (weighted)
+		var decoh = contribution.get("decoherence_coupling", 0.0)
+		total_decoherence += decoh * standing
+
+		# Merge alignment_couplings (weighted)
+		var align = contribution.get("alignment_couplings", {})
+		for observable in align:
+			var current = icon.energy_couplings.get(observable, 0.0)
+			icon.energy_couplings[observable] = current + (align[observable] * standing)
+
+		# Merge decay (take highest rate weighted by standing, prefer first target)
+		var decay = contribution.get("decay", {})
+		if decay.has("rate"):
+			var weighted_rate = decay.get("rate", 0.0) * standing
+			if icon.decay_rate < weighted_rate:
+				icon.decay_rate = weighted_rate
+				icon.decay_target = decay.get("target", "🍂")
+
+		# Merge driver (take first driver found)
+		var driver = contribution.get("driver", {})
+		if driver.has("type") and icon.self_energy_driver == "":
+			icon.self_energy_driver = driver.get("type", "")
+			icon.driver_frequency = driver.get("freq", 0.0)
+			icon.driver_phase = driver.get("phase", 0.0)
+			icon.driver_amplitude = driver.get("amp", 1.0) * standing
+
+	# Store metadata
+	if all_gated.size() > 0:
+		icon.set_meta("gated_lindblad", all_gated)
+
+	if all_bell_features.size() > 0:
+		icon.set_meta("bell_activated_features", all_bell_features)
+
+	if abs(total_decoherence) > 0.001:
+		icon.set_meta("decoherence_coupling", total_decoherence)
+
+	# Store measurement behavior (first faction wins)
+	var measurement = {}
+	for faction in faction_list:
+		var mb = faction.get_icon_contribution(emoji).get("measurement_behavior", {})
+		if mb.size() > 0 and measurement.size() == 0:
+			measurement = mb
+	if measurement.size() > 0:
+		icon.set_meta("measurement_behavior", measurement)
+
+	# Set description based on contributing sources
+	if contributing_sources.size() == 1:
+		icon.description = "Biome foundation: %s" % emoji
+	else:
+		icon.description = "Biome + factions: %s" % ", ".join(contributing_sources)
+
+	# Set tags
+	icon.tags = _make_tags(contributing_sources)
+
+	# Set special flags
+	icon.is_driver = icon.self_energy_driver != ""
+	icon.is_eternal = icon.decay_rate == 0.0 and icon.is_driver
+
+	return icon

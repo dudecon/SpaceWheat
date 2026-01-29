@@ -2,9 +2,19 @@ class_name QuantumNode
 extends RefCounted
 
 ## Quantum Node - Force-Directed Graph Representation
-## Represents a single quantum state in the central force-directed visualization
+## First-class quantum visualization that represents density matrix states directly.
+##
+## Core Philosophy:
+## - Bubbles ARE the quantum state visualization (not farm plot decorations)
+## - Query quantum computer directly via biome_resolver
+## - Farm plots are OPTIONAL game mechanics that can display bubbles
+##
+## Quantum Data Source (in priority order):
+## 1. Direct quantum register (biome_name + register_id) - PREFERRED
+## 2. Terminal binding (v2 architecture) - game mechanic overlay
+## 3. Farm plot (v1 architecture) - legacy compatibility
 
-# Import dependencies
+# Optional type reference for farm plot (legacy compatibility)
 const FarmPlot = preload("res://Core/GameMechanics/FarmPlot.gd")
 
 # Physics state
@@ -12,10 +22,15 @@ var position: Vector2 = Vector2.ZERO
 var velocity: Vector2 = Vector2.ZERO
 var classical_anchor: Vector2 = Vector2.ZERO  # Position of classical plot (tether target)
 
-# Quantum state reference
-var plot: FarmPlot = null  # Reference to the actual quantum plot
-var plot_id: String = ""
-var grid_position: Vector2i = Vector2i.ZERO
+# QUANTUM STATE REFERENCE (First-class source of truth)
+var biome_name: String = ""        # Which biome's quantum computer to query
+var register_id: int = -1          # Which qubit/register in that quantum computer
+var plot_id: String = ""           # Unique identifier for this bubble
+
+# Optional game mechanic overlays (can be null for pure quantum viz)
+var plot: FarmPlot = null          # Optional: farm plot displaying this bubble
+var terminal = null                # Optional: bound terminal for game mechanics
+var grid_position: Vector2i = Vector2i.ZERO  # Optional: grid position if part of farm
 
 # Visual properties (derived from quantum state)
 var energy: float = 0.0
@@ -32,7 +47,6 @@ var emoji_south_opacity: float = 0.0  # Probability-weighted opacity
 
 # Parametric biome coordinates (for auto-scaling layout)
 # Position is computed by BiomeLayoutCalculator from these coords
-var biome_name: String = ""        # Which biome this node belongs to
 var parametric_t: float = 0.5      # Angular parameter [0, 1] around biome oval
 var parametric_ring: float = 0.5   # Radial parameter [0, 1] (0=center, 1=edge)
 
@@ -51,11 +65,22 @@ var is_terminal_bubble: bool = false
 # When set, emoji and measurement state are queried from here
 var terminal = null  # Terminal instance
 
+# V2 Architecture: Biome resolver callback (set by manager)
+# Callable that takes biome_name: String and returns BiomeBase or null
+# This decouples QuantumNode from scene tree for biome lookup
+var biome_resolver: Callable = Callable()
+
 # V2 Architecture: Frozen anchor position (set on MEASURE, used for snapping)
 var frozen_anchor: Vector2 = Vector2.ZERO
 
 # Lifeless mode - no quantum data available, should not wiggle
 var is_lifeless: bool = false
+
+# Quantum behavior (controls how forces apply)
+# 0 = FLOATING: Forces active, normal physics
+# 1 = HOVERING: Fixed to anchor (biome measurement plots)
+# 2 = FIXED: Completely static (celestial bodies)
+var quantum_behavior: int = 0
 
 # Legacy compatibility (deprecated - use biome_name + parametric coords)
 var venn_zone: int = -1      # Zone enum value (-1 = not set)
@@ -81,13 +106,24 @@ const MAX_RADIUS = 40.0
 const SPAWN_DURATION = 0.5  # Fade-in duration in seconds
 
 
-func _init(wheat_plot: FarmPlot, anchor_pos: Vector2, grid_pos: Vector2i, center_pos: Vector2 = Vector2.ZERO):
+func _init(
+	wheat_plot = null,  # FarmPlot or null for pure quantum viz
+	anchor_pos: Vector2 = Vector2.ZERO,
+	grid_pos: Vector2i = Vector2i.ZERO,
+	center_pos: Vector2 = Vector2.ZERO
+):
+	"""Initialize quantum node.
+
+	Two modes:
+	1. Pure quantum visualization: Pass null for wheat_plot, set biome_name/register_id manually
+	2. Farm plot mode (legacy): Pass FarmPlot instance for compatibility
+	"""
 	plot = wheat_plot
 	classical_anchor = anchor_pos
 	grid_position = grid_pos
 
-	# Start at the tether location (where the classical plot is)
-	position = anchor_pos
+	# Start at the anchor location (or center if no anchor)
+	position = anchor_pos if anchor_pos != Vector2.ZERO else center_pos
 
 	# Initialize visual scale and alpha to 0.0 (spawn animation will fade in)
 	# This prevents the "flash at full size" bug when bubbles are created
@@ -96,9 +132,9 @@ func _init(wheat_plot: FarmPlot, anchor_pos: Vector2, grid_pos: Vector2i, center
 
 	if plot:
 		plot_id = plot.plot_id
-		update_from_quantum_state()
+		# Don't call update_from_quantum_state() yet - wait for biome_resolver to be set
 
-	# Start empty - no emoji displayed until plot is planted
+	# Start empty - no emoji displayed until quantum state is queried
 	emoji_north_opacity = 0.0
 	emoji_south_opacity = 0.0
 
@@ -134,7 +170,10 @@ func update_animation(current_time: float, delta: float):
 
 
 func update_from_quantum_state():
-	"""Update visual properties from quantum state (queries parent_biome.quantum_computer)
+	"""Update visual properties from quantum state (first-class quantum visualization).
+
+	Queries quantum computer directly via biome_resolver + biome_name.
+	No plot dependency - bubbles are independent quantum visualizations.
 
 	Visual mapping (no duplicates):
 	- Emoji opacity ← Normalized probabilities (θ-like, measurement outcome)
@@ -146,15 +185,31 @@ func update_from_quantum_state():
 	"""
 	var is_transitioning_planted = (radius == MAX_RADIUS)
 
-	# === DETERMINE BIOME SOURCE ===
-	# Terminal bubbles use terminal.bound_biome, plot bubbles use plot.parent_biome
+	# === DETERMINE BIOME SOURCE (priority order) ===
+	# 1. Direct quantum register (biome_name + register_id) - PREFERRED
+	# 2. Terminal binding (game mechanic overlay)
+	# 3. Farm plot (legacy compatibility)
 	var biome = null
-	if terminal and terminal.is_bound:
-		# V2 Terminal architecture: get biome from terminal
-		biome = terminal.bound_biome
+
+	# Priority 1: Direct biome reference (first-class quantum viz)
+	if biome_name != "" and biome_resolver.is_valid():
+		biome = biome_resolver.call(biome_name)
+
+	# Priority 2: Terminal binding (v2 game mechanic)
+	elif terminal and terminal.is_bound:
+		if biome_resolver.is_valid() and terminal.bound_biome_name != "":
+			biome = biome_resolver.call(terminal.bound_biome_name)
+			# Also update biome_name for consistency
+			if not biome_name:
+				biome_name = terminal.bound_biome_name
+
+	# Priority 3: Farm plot (v1 legacy)
 	elif plot and plot.is_planted:
-		# V1 Plot architecture: get biome from plot
 		biome = plot.parent_biome
+		# Update biome_name for consistency
+		if not biome_name and biome:
+			if "biome_name" in biome:
+				biome_name = biome.biome_name
 
 	# Guard: no biome or no quantum_computer → LIFELESS fallback (no wiggle)
 	if not biome or not biome.quantum_computer:
@@ -264,8 +319,17 @@ func update_from_quantum_state():
 	# High coherence = stable/slow pulse, low = jittery/fast
 	coherence = coh_magnitude
 
-	# 5. RADIUS ← Mass in subspace (bigger = more probability)
-	radius = lerpf(MIN_RADIUS, MAX_RADIUS, clampf(mass * 2.0, 0.0, 1.0))
+	# 5. RADIUS ← Mass in subspace + quadratic purity boost
+	# Base radius from probability mass
+	var base_radius = lerpf(MIN_RADIUS, MAX_RADIUS * 0.7, clampf(mass * 2.0, 0.0, 1.0))
+
+	# Quadratic purity boost: makes pure states visibly larger
+	# Purity ranges from 0.5 (maximally mixed qubit) to 1.0 (pure)
+	# Normalize to [0, 1]: (purity - 0.5) / 0.5
+	var purity_normalized = clampf((energy - 0.5) / 0.5, 0.0, 1.0)
+	var purity_boost = purity_normalized * purity_normalized * (MAX_RADIUS * 0.3)
+
+	radius = base_radius + purity_boost
 
 	# 6. Berry phase accumulation (tracks total evolution)
 	berry_phase += energy * 0.01
@@ -345,26 +409,15 @@ func get_berry_phase_glow() -> float:
 
 
 func get_pulse_rate() -> float:
-	"""Get pulse/oscillation speed based on COHERENCE + BERRY PHASE.
+	"""Get pulse/oscillation speed based on BERRY PHASE only.
 
-	Components:
-	- Coherence: Low coherence = fast pulse (decoherence threat)
-	- Berry phase: More evolution history = faster pulse (experience)
+	Berry phase accumulates during quantum evolution - more evolved = faster pulse.
+	This visualizes the "quantum experience" accumulated by the state.
 
-	Fast pulse = unstable state OR highly evolved
-	Slow pulse = stable coherent state AND fresh qubit
-
-	Range: 0.3 to 3.0 Hz
+	Range: 0.5 to 3.0 Hz
 	"""
-	# Base rate from decoherence threat (inverted coherence)
-	var decoherence_threat = 1.0 - coherence  # 0 = stable, 1 = chaotic
-	var base_rate = 0.3 + (decoherence_threat * 1.5)  # 0.3 to 1.8 Hz
-
-	# Berry phase adds experience-based pulse acceleration
-	# Clamp to prevent runaway pulse rates
-	var berry_boost = clampf(berry_phase * 0.1, 0.0, 1.2)  # 0 to 1.2 Hz bonus
-
-	return base_rate + berry_boost  # 0.3 to 3.0 Hz
+	var berry_rate = 0.5 + clampf(berry_phase * 0.2, 0.0, 2.5)
+	return berry_rate
 
 
 # ============================================================================
@@ -408,9 +461,9 @@ func get_emoji_opacities(biome = null) -> Dictionary:
 		else:
 			return {"north": 0.0, "south": 1.0}
 
-	# If no biome provided, try to get from terminal
-	if not biome:
-		biome = terminal.bound_biome
+	# If no biome provided, try to resolve from terminal's biome name
+	if not biome and biome_resolver.is_valid() and terminal.bound_biome_name != "":
+		biome = biome_resolver.call(terminal.bound_biome_name)
 
 	if not biome:
 		return {"north": emoji_north_opacity, "south": emoji_south_opacity}

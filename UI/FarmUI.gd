@@ -13,7 +13,7 @@ extends Control
 signal farm_setup_complete  # Emitted when setup_farm() finishes and input_handler is ready
 
 const PlotGridDisplay = preload("res://UI/PlotGridDisplay.gd")
-# FarmInputHandler REMOVED - replaced by QuantumInstrumentInput (created in BootManager)
+# Input is handled by QuantumInstrumentInput (created in BootManager)
 const ResourcePanel = preload("res://UI/Panels/ResourcePanel.gd")
 const QuantumModeStatusIndicator = preload("res://UI/Panels/QuantumModeStatusIndicator.gd")
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
@@ -105,21 +105,11 @@ func setup_farm(farm_ref: Node) -> void:
 	# Signal connections are handled in PlayerShell.load_farm_ui()
 
 	# Input handler is created in BootManager and injected here
-	# Do not try to create it with .new() as FarmInputHandler extends Node
 
 	# Wire input handler (will be set by BootManager after creation)
 	if farm and input_handler:
 		input_handler.farm = farm
-		input_handler.plot_grid_display = plot_grid_display
-		input_handler.inject_grid_config(grid_config)
-
-		if input_handler.has_signal("tool_changed"):
-			input_handler.tool_changed.connect(_on_input_tool_changed)
-			print("   📡 Connected to input_handler.tool_changed")
-
-		if input_handler.has_signal("submenu_changed"):
-			input_handler.submenu_changed.connect(_on_input_submenu_changed)
-			print("   📡 Connected to input_handler.submenu_changed")
+		input_handler.inject_plot_grid_display(plot_grid_display)
 
 	# Wire plot selection changes
 	if plot_grid_display and plot_grid_display.has_signal("selection_count_changed"):
@@ -133,7 +123,7 @@ func setup_farm(farm_ref: Node) -> void:
 func _input(event: InputEvent) -> void:
 	"""Handle debug display toggle and UI input
 
-	Note: Tool selection (1-4) is handled by FarmInputHandler via signals
+	Note: Tool selection (1-4) is handled by QuantumInstrumentInput via signals
 	"""
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F3:  # F3 to toggle debug layout display
@@ -143,35 +133,15 @@ func _input(event: InputEvent) -> void:
 
 
 func _select_tool(tool_num: int) -> void:
-	"""Switch to a different tool via FarmInputHandler (emits signals for UI updates)"""
+	"""Switch to a different tool (UI-driven)."""
 	current_tool = tool_num
-	if input_handler and input_handler.has_method("_select_tool"):
-		input_handler._select_tool(tool_num)  # Use input handler's method to emit tool_changed
-	elif input_handler:
-		input_handler.current_tool = tool_num  # Fallback: direct assignment
-	# Action bars are updated via PlayerShell's ActionBarManager (listens to tool_changed signal)
+	# Action bars are updated via PlayerShell's ActionBarManager
 	print("🔧 Tool changed to %d" % tool_num)
 
 
 func _on_tool_selected(tool_num: int) -> void:
 	"""Handle tool selection from UI buttons"""
 	_select_tool(tool_num)
-
-
-func _on_input_tool_changed(tool_num: int, tool_info: Dictionary) -> void:
-	"""Handle tool change from keyboard input (FarmInputHandler)"""
-	print("🔄 Tool changed via input: %d (%s)" % [tool_num, tool_info.get("name", "unknown")])
-	# Action bars are updated via PlayerShell's ActionBarManager (connected to input_handler signals)
-	current_tool = tool_num
-
-
-func _on_input_submenu_changed(submenu_name: String, submenu_info: Dictionary) -> void:
-	"""Handle submenu enter/exit from FarmInputHandler"""
-	if submenu_name == "":
-		print("📁 Submenu exited - restoring tool display")
-	else:
-		print("📂 Submenu entered: %s" % submenu_info.get("name", "submenu_name"))
-	# Action bars are updated via PlayerShell's ActionBarManager (connected to input_handler signals)
 
 
 func _on_selection_changed(count: int) -> void:

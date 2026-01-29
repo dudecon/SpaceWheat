@@ -4,7 +4,7 @@ extends RefCounted
 ## SubmenuManager - Submenu state machine
 ##
 ## Manages submenu navigation, dynamic submenu generation, and caching.
-## Decouples submenu logic from FarmInputHandler.
+## Decouples submenu logic from QuantumInstrumentInput.
 
 const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
 const QuantumMill = preload("res://Core/GameMechanics/QuantumMill.gd")

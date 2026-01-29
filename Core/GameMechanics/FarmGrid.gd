@@ -216,12 +216,15 @@ func register_biome(biome_name: String, biome_instance) -> void:
 	_biome_routing.register_biome(biome_name, biome_instance)
 
 
-func assign_plot_to_biome(position: Vector2i, biome_name: String) -> void:
-	"""Assign a specific plot to a biome"""
+func assign_plot_to_biome(position: Vector2i, biome_name: String) -> bool:
+	"""Assign a specific plot to a biome (graceful - skips unregistered biomes)
+
+	Returns true if assigned, false if biome not registered or invalid position.
+	"""
 	if not _plot_manager.is_valid_position(position):
 		push_error("Cannot assign plot at invalid position: %s" % position)
-		return
-	_biome_routing.assign_plot_to_biome(position, biome_name)
+		return false
+	return _biome_routing.assign_plot_to_biome(position, biome_name)
 
 
 func get_biome_for_plot(position: Vector2i):

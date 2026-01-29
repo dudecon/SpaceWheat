@@ -56,7 +56,7 @@ func apply_gate_1q(position: Vector2i, gate_name: String) -> bool:
 		true if successful, false if failed
 	"""
 	if not register_manager:
-		push_error("BiomeGateOperations: register_manager not set")
+		# Plot-based gates not supported without register_manager
 		return false
 
 	var reg = register_manager.get_register_for_plot(position)
@@ -100,7 +100,7 @@ func apply_gate_2q(position_a: Vector2i, position_b: Vector2i, gate_name: String
 		true if successful, false if failed
 	"""
 	if not register_manager:
-		push_error("BiomeGateOperations: register_manager not set")
+		# Plot-based gates not supported without register_manager
 		return false
 
 	var reg_a = register_manager.get_register_for_plot(position_a)
@@ -151,7 +151,7 @@ func entangle_plots(position_a: Vector2i, position_b: Vector2i) -> bool:
 		true if successful, false if failed
 	"""
 	if not register_manager:
-		push_error("BiomeGateOperations: register_manager not set")
+		# Plot-based gates not supported without register_manager
 		return false
 
 	var reg_a = register_manager.get_register_for_plot(position_a)
@@ -377,21 +377,15 @@ func batch_measure_plots(position: Vector2i, qubit_measured_callback: Callable =
 
 	# Measure all qubits in the entangled component
 	var outcomes: Dictionary = {}
-	var plot_registers = register_manager.plot_registers
 
 	for reg_id in entangled_ids:
-		# Find the plot register with this ID to get emoji pair
-		for plot_pos in plot_registers.keys():
-			var plot_reg = plot_registers[plot_pos]
-			if plot_reg and plot_reg.register_id == reg_id:
-				var outcome_emoji = quantum_computer.measure_axis(plot_reg.north_emoji, plot_reg.south_emoji)
-				var outcome = "north" if outcome_emoji == plot_reg.north_emoji else "south"
+		# Get emoji pair from quantum_computer.register_map
+		if quantum_computer and quantum_computer.register_map and quantum_computer.register_map.has(reg_id):
+			var qubit = quantum_computer.register_map.get(reg_id)
+			if qubit:
+				var outcome_emoji = quantum_computer.measure_axis(qubit.north_emoji, qubit.south_emoji)
+				var outcome = "north" if outcome_emoji == qubit.north_emoji else "south"
 				outcomes[reg_id] = outcome
-				plot_reg.measurement_outcome = outcome
-				plot_reg.has_been_measured = true
-				if qubit_measured_callback.is_valid():
-					qubit_measured_callback.call(plot_pos, outcome)
-				break
 
 	_verbose_log("debug", "quantum", "🌀", "Batch measurement: %s" % outcomes)
 	return outcomes

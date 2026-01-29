@@ -416,7 +416,10 @@ static func _apply_single_qubit_gate(farm, position: Vector2i, gate_name: String
 	if farm.plot_pool:
 		var terminal = farm.plot_pool.get_terminal_at_grid_pos(position)
 		if terminal and terminal.is_bound:
-			biome = terminal.bound_biome
+			# Resolve biome from terminal's biome name
+			var biome_name = terminal.bound_biome_name
+			if biome_name != "" and farm.grid:
+				biome = farm.grid.biomes.get(biome_name, null)
 			register_id = terminal.bound_register_id
 
 	# V1 MODEL: Fall back to plot-based approach (Model C: use register_map)
@@ -498,11 +501,17 @@ static func _apply_two_qubit_gate(farm, position_a: Vector2i, position_b: Vector
 		var terminal_b = farm.plot_pool.get_terminal_at_grid_pos(position_b)
 
 		if terminal_a and terminal_a.is_bound and not terminal_a.is_measured:
-			biome_a = terminal_a.bound_biome
+			# Resolve biome from terminal's biome name
+			var biome_name_a = terminal_a.bound_biome_name
+			if biome_name_a != "" and farm.grid:
+				biome_a = farm.grid.biomes.get(biome_name_a, null)
 			reg_a = terminal_a.bound_register_id
 
 		if terminal_b and terminal_b.is_bound and not terminal_b.is_measured:
-			biome_b = terminal_b.bound_biome
+			# Resolve biome from terminal's biome name
+			var biome_name_b = terminal_b.bound_biome_name
+			if biome_name_b != "" and farm.grid:
+				biome_b = farm.grid.biomes.get(biome_name_b, null)
 			reg_b = terminal_b.bound_register_id
 
 	# V1 MODEL: Fall back to plot-based approach (Model C: use register_map)

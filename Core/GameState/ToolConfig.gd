@@ -499,7 +499,7 @@ static func get_tool_count() -> int:
 
 
 # ============================================================================
-# BACKWARD COMPATIBILITY - Legacy Submenu API (for FarmInputHandler/ActionValidator)
+# BACKWARD COMPATIBILITY - Legacy Submenu API (for ActionValidator)
 # ============================================================================
 
 ## Legacy submenu definitions (deprecated - use F-cycling in QuantumInstrumentInput)

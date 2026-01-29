@@ -231,7 +231,7 @@ func rebuild_quantum_operators() -> void:
 func _update_quantum_substrate(dt: float) -> void:
 	"""Evolve forge quantum state."""
 	if quantum_computer:
-		quantum_computer.evolve(dt)
+		quantum_computer.evolve(dt, max_evolution_dt)
 
 		# SEMANTIC TOPOLOGY: Record phase space trajectory
 		_record_attractor_snapshot()

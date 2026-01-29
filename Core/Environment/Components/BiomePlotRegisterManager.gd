@@ -141,7 +141,7 @@ func get_unbound_registers(plot_pool, biome) -> Array[int]:
 	for reg_id in range(num_qubits):
 		# Query PlotPool to check if register is bound to ANY terminal
 		# NOTE: PlotPool.is_register_bound() expects biome_name (String), not biome object
-		var biome_name = biome.biome_name if biome and "biome_name" in biome else ""
+		var biome_name = biome.get_biome_type() if biome and biome.has_method("get_biome_type") else ""
 		if not plot_pool or not plot_pool.is_register_bound(reg_id, biome_name):
 			unbound.append(reg_id)
 
@@ -197,8 +197,11 @@ func get_available_registers_v2(plot_pool, biome) -> Array[int]:
 	var num_qubits = quantum_computer.register_map.num_qubits
 	var available: Array[int] = []
 
+	# Get biome name for PlotPool query (expects String, not object)
+	var biome_name = biome.get_biome_type() if biome and biome.has_method("get_biome_type") else ""
+
 	for reg_id in range(num_qubits):
-		if not plot_pool.is_register_bound_v2(biome, reg_id):
+		if not plot_pool or not plot_pool.is_register_bound(reg_id, biome_name):
 			available.append(reg_id)
 
 	return available

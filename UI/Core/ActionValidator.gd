@@ -3,12 +3,12 @@ extends RefCounted
 
 ## ActionValidator - Pure validation functions for action availability
 ##
-## Extracts all _can_execute_* logic from FarmInputHandler.
+## Extracts all _can_execute_* logic from legacy input handlers.
 ## All methods are static with no side effects.
 ##
 ## Used by:
 ## - ActionPreviewRow for button highlighting
-## - FarmInputHandler for pre-execution validation
+## - QuantumInstrumentInput for pre-execution validation
 
 const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
 const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
@@ -51,6 +51,30 @@ static func can_execute_action(
 		return _can_execute_tool_action(
 			action_key, current_tool, farm, selected_plots, current_selection
 		)
+
+
+static func can_execute_action_name(
+	action_name: String,
+	farm,
+	selected_plots: Array[Vector2i],
+	current_selection: Vector2i
+) -> bool:
+	"""Check if a specific action name can succeed (bypasses ToolConfig lookup)."""
+	match action_name:
+		"explore":
+			return _can_execute_explore(farm, current_selection)
+		"measure":
+			return _can_execute_measure(farm, selected_plots)
+		"pop", "reap":
+			return _can_execute_pop(farm, selected_plots)
+		"inject_vocabulary":
+			return _can_execute_inject_vocabulary(farm, current_selection)
+		"remove_vocabulary":
+			return _can_execute_remove_vocabulary(farm, current_selection)
+		"explore_biome":
+			return _can_execute_explore_biome(farm)
+		_:
+			return true
 
 
 ## ============================================================================
@@ -156,7 +180,11 @@ static func _can_execute_tool_action(
 		# ═══════════════════════════════════════════════════════════════
 		"inject_vocabulary":
 			return _can_execute_inject_vocabulary(farm, current_selection)
-		"remove_vocabulary", "toggle_view", "cycle_biome":
+		"remove_vocabulary":
+			return _can_execute_remove_vocabulary(farm, current_selection)
+		"explore_biome":
+			return _can_execute_explore_biome(farm)
+		"toggle_view", "cycle_biome":
 			return true  # Available if plots selected
 		"system_reset", "system_snapshot", "system_debug":
 			return true  # Available if plots selected
@@ -194,8 +222,17 @@ static func _can_execute_explore(farm, current_selection: Vector2i) -> bool:
 		return false
 
 	# Must have unbound registers
-	var probabilities = biome.get_register_probabilities(farm.plot_pool)
-	return not probabilities.is_empty()
+	var available_registers = biome.get_available_registers_v2(farm.plot_pool) if biome.has_method("get_available_registers_v2") else []
+	var has_unbound = not available_registers.is_empty()
+
+	# Debug: Log availability
+	var tree = Engine.get_main_loop()
+	if tree and tree is SceneTree:
+		var verbose = tree.root.get_node_or_null("/root/VerboseConfig")
+		if verbose and not has_unbound:
+			verbose.debug("input", "🔍", "EXPLORE button disabled: no unbound registers in %s" % biome.get_biome_type())
+
+	return has_unbound
 
 
 static func _can_execute_measure(farm, selected_plots: Array[Vector2i]) -> bool:
@@ -314,18 +351,13 @@ static func _can_execute_inject_vocabulary(farm, current_selection: Vector2i) ->
 		return false
 
 	var pairs = _collect_injectable_pairs(farm, biome.quantum_computer)
-	for pair in pairs:
-		var north = pair.get("north", "")
-		var south = pair.get("south", "")
-		if north == "" or south == "":
-			continue
-		if biome.quantum_computer.register_map.has(north):
-			continue
-		if biome.quantum_computer.register_map.has(south):
-			continue
-		return true
-
-	return false
+	if pairs.is_empty():
+		return false
+		
+	# Check affordability for at least the first candidate pair
+	var first_pair = pairs[0]
+	var cost = EconomyConstants.get_action_cost("inject_vocabulary", {"south_emoji": first_pair.get("south", "")})
+	return EconomyConstants.can_afford(farm.economy, cost)
 
 
 static func _collect_injectable_pairs(farm_ref, quantum_computer = null) -> Array:
@@ -392,3 +424,27 @@ static func _can_execute_icon_assign(farm, selected_plots: Array[Vector2i], acti
 		return false
 
 	return true
+static func _can_execute_remove_vocabulary(farm, current_selection: Vector2i) -> bool:
+	"""Check if there is at least 2 qubits (minimum to remove one) and player can afford it."""
+	if not farm or not farm.grid or not farm.economy:
+		return false
+		
+	var biome = farm.grid.get_biome_for_plot(current_selection)
+	if not biome or not biome.quantum_computer:
+		return false
+		
+	var rm = biome.quantum_computer.register_map
+	if rm.num_qubits < 2:
+		return false
+		
+	var cost = EconomyConstants.get_action_cost("remove_vocabulary")
+	return EconomyConstants.can_afford(farm.economy, cost)
+
+
+static func _can_execute_explore_biome(farm) -> bool:
+	"""Check if player can afford to explore a new biome."""
+	if not farm or not farm.economy:
+		return false
+	
+	var cost = EconomyConstants.get_action_cost("explore_biome")
+	return EconomyConstants.can_afford(farm.economy, cost)

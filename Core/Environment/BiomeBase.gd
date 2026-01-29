@@ -19,7 +19,6 @@ extends Node
 const BiomeResourceRegistry = preload("res://Core/Environment/Components/BiomeResourceRegistry.gd")
 const BiomeBellGateTracker = preload("res://Core/Environment/Components/BiomeBellGateTracker.gd")
 const BiomeQuantumObserver = preload("res://Core/Environment/Components/BiomeQuantumObserver.gd")
-const BiomePlotRegisterManager = preload("res://Core/Environment/Components/BiomePlotRegisterManager.gd")
 const BiomeGateOperations = preload("res://Core/Environment/Components/BiomeGateOperations.gd")
 const BiomeQuantumSystemBuilder = preload("res://Core/Environment/Components/BiomeQuantumSystemBuilder.gd")
 const BiomeDensityMatrixMutator = preload("res://Core/Environment/Components/BiomeDensityMatrixMutator.gd")
@@ -47,7 +46,6 @@ const SemanticDrift = preload("res://Core/QuantumSubstrate/SemanticDrift.gd")
 var _resource_registry: BiomeResourceRegistry
 var _bell_gate_tracker: BiomeBellGateTracker
 var _quantum_observer: BiomeQuantumObserver
-var _register_manager: BiomePlotRegisterManager
 var _gate_operations: BiomeGateOperations
 var _system_builder: BiomeQuantumSystemBuilder
 var _density_mutator: BiomeDensityMatrixMutator
@@ -100,22 +98,23 @@ var quantum_evolution_enabled: bool = true
 # 1.0 = real-time, 0.5 = half-speed, 2.0 = double-speed
 var quantum_time_scale: float = 0.125  # Default to 1/8th real-time for detailed observation
 
+# Matrix substep granularity (controls numerical accuracy of evolution)
+# Smaller = more substeps = better accuracy but slower computation
+# Larger = fewer substeps = faster but less accurate
+# Range: 0.005 (very fine) to 0.05 (coarse)
+var max_evolution_dt: float = 0.02  # Default substep size
+
 # BUILD mode pause
 var evolution_paused: bool = false
 
 # Idle optimization
 var is_idle: bool = false
-var active_plot_count: int = 0
 
 # ============================================================================
 # FACADE PROPERTY ACCESSORS (for backward compatibility)
 # ============================================================================
 
 # Forward property access to components for backward compatibility
-var plot_registers: Dictionary:
-	get: return _register_manager.plot_registers if _register_manager else {}
-	set(v): if _register_manager: _register_manager.plot_registers = v
-
 var bell_gates: Array:
 	get: return _bell_gate_tracker.bell_gates if _bell_gate_tracker else []
 	set(v): if _bell_gate_tracker: _bell_gate_tracker.bell_gates = v
@@ -165,7 +164,6 @@ func _ready() -> void:
 	_resource_registry = BiomeResourceRegistry.new()
 	_bell_gate_tracker = BiomeBellGateTracker.new()
 	_quantum_observer = BiomeQuantumObserver.new()
-	_register_manager = BiomePlotRegisterManager.new()
 	_gate_operations = BiomeGateOperations.new()
 	_system_builder = BiomeQuantumSystemBuilder.new()
 	_density_mutator = BiomeDensityMatrixMutator.new()
@@ -173,7 +171,6 @@ func _ready() -> void:
 	# Forward signals from components FIRST (before _initialize_bath emits signals)
 	_bell_gate_tracker.bell_gate_created.connect(_on_bell_gate_created)
 	_resource_registry.resource_registered.connect(_on_resource_registered)
-	_register_manager.qubit_created.connect(_on_qubit_created)
 	_system_builder.coupling_updated.connect(_on_coupling_updated)
 
 	# Initialize biome-specific quantum computer via virtual method
@@ -183,7 +180,6 @@ func _ready() -> void:
 	# Wire component dependencies AFTER _initialize_bath() creates the real quantum_computer
 	if quantum_computer:
 		_quantum_observer.set_quantum_computer(quantum_computer)
-		_register_manager.set_quantum_computer(quantum_computer, get_biome_type())
 		_density_mutator.set_quantum_computer(quantum_computer)
 
 	# Initialize strange attractor tracking
@@ -196,7 +192,7 @@ func _ready() -> void:
 func _wire_component_dependencies() -> void:
 	"""Wire dependencies for components that need IconRegistry (call after _ready)"""
 	_system_builder.set_dependencies(quantum_computer, _resource_registry, _icon_registry)
-	_gate_operations.set_dependencies(quantum_computer, _register_manager, _bell_gate_tracker, time_tracker)
+	_gate_operations.set_dependencies(quantum_computer, null, _bell_gate_tracker, time_tracker)
 	_gate_operations.set_verbose_log_callback(_verbose_log)
 
 
@@ -209,9 +205,6 @@ func _on_bell_gate_created(positions: Array) -> void:
 
 func _on_resource_registered(emoji: String, is_producible: bool, is_consumable: bool) -> void:
 	resource_registered.emit(emoji, is_producible, is_consumable)
-
-func _on_qubit_created(position: Vector2i, qubit: Resource) -> void:
-	qubit_created.emit(position, qubit)
 
 func _on_coupling_updated(emoji_a: String, emoji_b: String, strength: float) -> void:
 	coupling_updated.emit(emoji_a, emoji_b, strength)
@@ -298,22 +291,6 @@ func get_drift_status() -> Dictionary:
 # ============================================================================
 # EVOLUTION CONTROL
 # ============================================================================
-
-func update_idle_status() -> void:
-	if active_plot_count == 0:
-		if not is_idle: is_idle = true
-	else:
-		if is_idle: is_idle = false
-
-
-func on_plot_planted(position: Vector2i) -> void:
-	active_plot_count += 1
-	is_idle = false
-
-
-func on_plot_harvested(position: Vector2i) -> void:
-	active_plot_count = max(0, active_plot_count - 1)
-
 
 func set_evolution_paused(paused: bool) -> void:
 	if evolution_paused == paused:
@@ -446,38 +423,50 @@ func get_coherence_with_other_registers(register_id: int) -> float:
 # FACADE: Plot Register Manager Methods
 # ============================================================================
 
-func allocate_register_for_plot(position: Vector2i, north_emoji: String = "🌾", south_emoji: String = "🌽") -> int:
-	return _register_manager.allocate_register_for_plot(position, north_emoji, south_emoji)
-
-func clear_subplot_for_plot(position: Vector2i) -> void:
-	_register_manager.clear_subplot_for_plot(position)
-
-func get_register_for_plot(position: Vector2i) -> QuantumRegister:
-	return _register_manager.get_register_for_plot(position)
-
-func get_component_for_plot(position: Vector2i) -> Dictionary:
-	return _register_manager.get_component_for_plot(position)
-
-func get_register_id_for_plot(position: Vector2i) -> int:
-	return _register_manager.get_register_id_for_plot(position)
-
-func clear_register_for_plot(position: Vector2i) -> void:
-	_register_manager.clear_register_for_plot(position)
-
-func get_unbound_registers(plot_pool = null) -> Array[int]:
-	return _register_manager.get_unbound_registers(plot_pool, self)
-
+## Get register probability for a specific register ID
 func get_register_probability(register_id: int) -> float:
 	return _quantum_observer.get_register_probability(register_id)
 
+## Get all unbound register IDs (available for new terminal binding)
+func get_unbound_registers(plot_pool = null) -> Array[int]:
+	"""Get all register IDs not currently bound to a terminal."""
+	if not quantum_computer or not quantum_computer.register_map:
+		return []
+
+	var num_qubits = quantum_computer.register_map.num_qubits
+	var unbound: Array[int] = []
+	var biome_name = get_biome_type() if has_method("get_biome_type") else ""
+
+	for reg_id in range(num_qubits):
+		if not plot_pool or not plot_pool.is_register_bound(reg_id, biome_name):
+			unbound.append(reg_id)
+
+	return unbound
+
+## Get probability distribution over all unbound registers
 func get_register_probabilities(plot_pool = null) -> Dictionary:
-	return _register_manager.get_register_probabilities(plot_pool, _quantum_observer, self)
+	"""Get probability distribution for weighted register selection."""
+	var probs: Dictionary = {}
+	var unbound = get_unbound_registers(plot_pool)
 
+	for reg_id in unbound:
+		if _quantum_observer:
+			probs[reg_id] = _quantum_observer.get_register_probability(reg_id)
+		else:
+			probs[reg_id] = 0.5
+
+	return probs
+
+## Get total number of registers in this biome
 func get_total_register_count() -> int:
-	return _register_manager.get_total_register_count()
+	if not quantum_computer or not quantum_computer.register_map:
+		return 0
+	return quantum_computer.register_map.num_qubits
 
+## Get registers not currently bound to any terminal (V2 Architecture)
 func get_available_registers_v2(plot_pool) -> Array[int]:
-	return _register_manager.get_available_registers_v2(plot_pool, self)
+	"""Get unbound registers for EXPLORE action."""
+	return get_unbound_registers(plot_pool)
 
 
 # ============================================================================
@@ -546,36 +535,8 @@ func drain_register_probability(register_id: int, is_north: bool, drain_factor: 
 
 
 # ============================================================================
-# COMMON QUANTUM OPERATIONS (Model C)
+# QUANTUM OPERATIONS
 # ============================================================================
-
-func create_quantum_state(position: Vector2i, north: String, south: String, _theta: float = PI/2) -> int:
-	return allocate_register_for_plot(position, north, south)
-
-func get_qubit(position: Vector2i) -> Resource:
-	return get_register_for_plot(position)
-
-func measure_qubit(position: Vector2i) -> String:
-	var reg = get_register_for_plot(position)
-	if not reg:
-		return ""
-	var outcome_emoji = quantum_computer.measure_axis(reg.north_emoji, reg.south_emoji)
-	var outcome = "north" if outcome_emoji == reg.north_emoji else "south"
-	reg.measurement_outcome = outcome
-	reg.has_been_measured = true
-	qubit_measured.emit(position, outcome)
-	return outcome
-
-func inspect_qubit(position: Vector2i) -> Dictionary:
-	var reg = get_register_for_plot(position)
-	if not reg:
-		return {"north": 0.0, "south": 0.0}
-	var p_north = quantum_computer.get_marginal(reg.register_id, 0)
-	var p_south = quantum_computer.get_marginal(reg.register_id, 1)
-	return {"north": p_north, "south": p_south}
-
-func clear_qubit(position: Vector2i) -> void:
-	clear_register_for_plot(position)
 
 func boost_coupling(emoji: String, target_emoji: String, factor: float = 1.5) -> bool:
 	var result = inject_coupling(emoji, target_emoji, factor)
@@ -785,8 +746,6 @@ func reset() -> void:
 	active_projections.clear()
 	if _bell_gate_tracker:
 		_bell_gate_tracker.clear()
-	if _register_manager:
-		_register_manager.clear()
 	time_tracker.reset()
 	if dynamics_tracker:
 		dynamics_tracker.clear_history()

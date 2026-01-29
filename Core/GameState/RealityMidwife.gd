@@ -15,7 +15,7 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 const MIDWIFE_EMOJI: String = EconomyConstants.MIDWIFE_EMOJI
 
 ## Starting midwife tokens
-const STARTING_TOKENS: int = 4
+const STARTING_TOKENS: int = 6
 
 ## Shop price for midwife tokens (in credits)
 const MIDWIFE_PRICE: int = 1000

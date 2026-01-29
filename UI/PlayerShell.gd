@@ -20,7 +20,7 @@ const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const LoggerConfigPanel = preload("res://UI/Panels/LoggerConfigPanel.gd")
 # QuantumHUDPanel REMOVED - content merged into InspectorOverlay (N key)
 const QuantumModeStatusIndicator = preload("res://UI/Panels/QuantumModeStatusIndicator.gd")
-const BiomeTabBarClass = preload("res://UI/BiomeTabBar.gd")
+const BiomeSelectionRowClass = preload("res://UI/Panels/BiomeSelectionRow.gd")
 
 ## Farm overlay keys (CVBN) - game content overlays
 ## These close each other but not shell menus
@@ -45,7 +45,7 @@ var action_preview_row: Control = null  # Cached reference from ActionBarManager
 var logger_config_panel: LoggerConfigPanel = null  # Logger configuration UI
 # quantum_hud_panel REMOVED - content merged into InspectorOverlay (N key)
 var quantum_mode_indicator: QuantumModeStatusIndicator = null  # Current quantum mode display
-var biome_tab_bar: BiomeTabBarClass = null  # Top bar for biome selection
+var biome_tab_bar: BiomeSelectionRowClass = null  # Top bar for biome selection
 
 ## Unified Overlay Stack Management (replaces modal_stack)
 var overlay_stack: OverlayStackManager = null
@@ -66,15 +66,24 @@ func _input(event: InputEvent) -> void:
 		var consumed = overlay_stack.route_input(event)
 		_verbose.debug("input", "→", "Overlay consumed: %s" % consumed)
 		if consumed:
-			get_viewport().set_input_as_handled()
+			_mark_input_handled()
 			return
 
 	# LAYER 2: Shell actions
 	if _handle_shell_action(event):
-		get_viewport().set_input_as_handled()
+		_mark_input_handled()
 		return
 
 	# LAYER 3: Fall through to Farm._unhandled_input()
+
+
+func _mark_input_handled() -> void:
+	# During restart PlayerShell can receive input while not in tree.
+	if not is_inside_tree():
+		return
+	var vp := get_viewport()
+	if vp:
+		vp.set_input_as_handled()
 
 
 func _handle_shell_action(event: InputEvent) -> bool:
@@ -254,15 +263,7 @@ func _toggle_build_play_mode() -> void:
 		if tool_row and tool_row.has_method("refresh_for_mode"):
 			tool_row.refresh_for_mode(new_mode)
 
-	# Notify FarmInputHandler (if available)
-	# Find FarmInputHandler in FarmUIContainer
-	if farm_ui_container:
-		var farm_view = farm_ui_container.get_node_or_null("FarmUI")
-		if farm_view:
-			for child in farm_view.get_children():
-				if child.has_method("on_mode_changed"):
-					child.on_mode_changed(new_mode)
-					break
+	# QuantumInstrumentInput handles mode changes for gameplay
 
 
 func _push_modal(modal: Control) -> void:
@@ -339,7 +340,7 @@ func _ready() -> void:
 	if tool_row and tool_row.has_signal("tool_selected"):
 		tool_row.tool_selected.connect(_on_tool_selected_from_bar)
 
-	# Connect action button signal - will be connected to FarmInputHandler later
+	# Connect action button signal - will be connected to QuantumInstrumentInput later
 	# (after farm setup completes and input_handler is available)
 
 	_verbose.info("ui", "✅", "Action bars created")
@@ -379,9 +380,9 @@ func _ready() -> void:
 	quantum_mode_indicator.position = Vector2(-200, 54)  # Below 50px resource panel
 	_verbose.info("ui", "✅", "Quantum mode indicator created")
 
-	# Create biome tab bar (top-center for biome selection)
-	biome_tab_bar = BiomeTabBarClass.new()
-	biome_tab_bar.name = "BiomeTabBar"
+	# Create biome selection row (top-center for biome selection)
+	biome_tab_bar = BiomeSelectionRowClass.new()
+	biome_tab_bar.name = "BiomeSelectionRow"
 	overlay_layer.add_child(biome_tab_bar)
 	# Position at top-center, below the ResourcePanel (50px min height + 4px gap)
 	biome_tab_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
@@ -410,10 +411,10 @@ func _connect_overlay_signals() -> void:
 			_restore_action_toolbar()
 		)
 		overlay_manager.quest_board.board_opened.connect(func():
-			_update_action_toolbar_for_quest()
+			_update_action_toolbar_for_overlay(overlay_manager.quest_board)
 		)
-		overlay_manager.quest_board.slot_selection_changed.connect(func(slot_state: int, is_locked: bool):
-			_update_action_toolbar_for_quest(slot_state, is_locked)
+		overlay_manager.quest_board.slot_selection_changed.connect(func(_slot_state: int, _is_locked: bool):
+			_update_action_toolbar_for_overlay(overlay_manager.quest_board)
 		)
 		_verbose.info("ui", "✅", "Quest board signals connected")
 
@@ -467,14 +468,6 @@ func load_farm_ui(farm_ui: Control) -> void:
 		push_error("FarmUI missing farm_setup_complete signal!")
 	else:
 		_verbose.info("ui", "⏳", "Waiting for BootManager to create QuantumInstrumentInput...")
-
-func connect_to_farm_input_handler() -> void:
-	"""DEPRECATED: Use connect_to_quantum_input() instead.
-	Kept for backwards compatibility with old FarmInputHandler.
-	"""
-	push_warning("connect_to_farm_input_handler is deprecated, use connect_to_quantum_input")
-	connect_to_quantum_input()
-
 
 func connect_to_quantum_input() -> void:
 	"""Connect to QuantumInstrumentInput after it's created.
@@ -606,10 +599,16 @@ func connect_to_quantum_input() -> void:
 
 ## ACTION TOOLBAR UPDATES (for quest board context)
 
-func _update_action_toolbar_for_quest(slot_state: int = 1, is_locked: bool = false) -> void:
-	"""Update action toolbar to show quest-specific actions"""
+func _update_action_toolbar_for_overlay(overlay: Control) -> void:
+	"""Update action toolbar to show context-specific actions from an overlay"""
 	if action_bar_manager:
-		action_bar_manager.update_for_quest_board(slot_state, is_locked)
+		action_bar_manager.update_for_overlay(overlay)
+
+
+func _update_action_toolbar_for_quest(_slot_state: int = 1, _is_locked: bool = false) -> void:
+	"""Legacy: Just triggers refresh if quest board is the active overlay"""
+	if overlay_manager and overlay_manager.quest_board:
+		_update_action_toolbar_for_overlay(overlay_manager.quest_board)
 
 
 func _restore_action_toolbar() -> void:
@@ -627,4 +626,3 @@ func _on_tool_selected_from_bar(tool_num: int) -> void:
 	# Forward to FarmUI if available
 	if current_farm_ui and current_farm_ui.has_method("_on_tool_selected"):
 		current_farm_ui._on_tool_selected(tool_num)
-

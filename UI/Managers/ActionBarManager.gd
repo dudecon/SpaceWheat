@@ -209,8 +209,14 @@ func update_for_submenu(submenu_name: String, submenu_info: Dictionary) -> void:
 		push_error("ActionBarManager: action_preview_row is null or doesn't have update_for_submenu method!")
 
 
+func update_for_overlay(overlay: Control) -> void:
+	"""Update action row for generic overlay mode"""
+	if action_preview_row and action_preview_row.has_method("update_for_overlay"):
+		action_preview_row.update_for_overlay(overlay)
+
+
 func update_for_quest_board(slot_state: int, is_locked: bool = false) -> void:
-	"""Update action row for quest board mode"""
+	"""Update action row for quest board mode (Legacy wrapper)"""
 	if action_preview_row and action_preview_row.has_method("update_for_quest_board"):
 		action_preview_row.update_for_quest_board(slot_state, is_locked)
 

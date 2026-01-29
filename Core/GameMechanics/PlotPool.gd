@@ -21,6 +21,7 @@ extends RefCounted
 signal terminal_bound(terminal: RefCounted, register_id: int)
 signal terminal_measured(terminal: RefCounted, outcome: String)
 signal terminal_unbound(terminal: RefCounted)
+signal terminal_unbound_at(grid_position: Vector2i, terminal_id: String)
 signal pool_exhausted()  # Emitted when all terminals are bound
 signal pool_available()  # Emitted when at least one terminal becomes available
 
@@ -83,29 +84,29 @@ func get_terminal(terminal_id: String) -> RefCounted:
 
 
 ## Get terminal bound to a specific register (queries Terminal state directly)
-func get_terminal_for_register(register_id: int, biome) -> RefCounted:
-	"""Query Terminal objects directly to find binding (not cached dictionary)"""
+func get_terminal_for_register(register_id: int, biome_name: String) -> RefCounted:
+	"""Query Terminal objects directly to find binding by biome NAME (not object reference)"""
 	for terminal in terminals:
-		if terminal.is_bound and terminal.bound_register_id == register_id and terminal.bound_biome == biome:
+		if terminal.is_bound and terminal.bound_register_id == register_id and terminal.bound_biome_name == biome_name:
 			return terminal
 	return null
 
 
 ## Bind a terminal to a register in a biome
 ## Returns true if binding succeeded, false if constraint violated
-func bind_terminal(terminal: RefCounted, register_id: int, biome, emoji_pair: Dictionary = {}) -> bool:
+## biome_name: String name of the biome (decoupled from object reference)
+func bind_terminal(terminal: RefCounted, register_id: int, biome_name: String, emoji_pair: Dictionary = {}) -> bool:
 	if terminal.is_bound:
 		push_warning("Terminal %s already bound" % terminal.terminal_id)
 		return false
 
 	# Check unique binding constraint - query Terminal state directly
-	if get_terminal_for_register(register_id, biome) != null:
-		var biome_name = biome.get_biome_type() if biome else "unknown"
+	if get_terminal_for_register(register_id, biome_name) != null:
 		push_warning("Register %d in %s already bound to terminal" % [register_id, biome_name])
 		return false
 
-	# Perform binding (delegates to Terminal)
-	terminal.bind_to_register(register_id, biome, emoji_pair)
+	# Perform binding (delegates to Terminal) - uses biome NAME, not object
+	terminal.bind_to_register(register_id, biome_name, emoji_pair)
 
 	terminal_bound.emit(terminal, register_id)
 
@@ -123,11 +124,15 @@ func unbind_terminal(terminal: RefCounted) -> void:
 
 	# Check if pool was exhausted BEFORE unbinding
 	var was_exhausted = get_unbound_terminals().is_empty()
+	var old_pos = terminal.grid_position
+	var old_id = terminal.terminal_id
 
 	# Perform unbinding (delegates to Terminal - this is the ONLY mutation point)
 	terminal.unbind()
 
 	terminal_unbound.emit(terminal)
+	if old_pos != Vector2i(-1, -1):
+		terminal_unbound_at.emit(old_pos, old_id)
 
 	# Emit pool_available if we just freed a terminal from exhaustion
 	if was_exhausted:
@@ -135,9 +140,9 @@ func unbind_terminal(terminal: RefCounted) -> void:
 
 
 ## Check if a register is currently bound (queries Terminal state directly)
-func is_register_bound(register_id: int, biome) -> bool:
+func is_register_bound(register_id: int, biome_name: String) -> bool:
 	"""Check if a register is bound to ANY terminal in this biome"""
-	return get_terminal_for_register(register_id, biome) != null
+	return get_terminal_for_register(register_id, biome_name) != null
 
 
 ## Check if a terminal is currently bound
@@ -254,17 +259,17 @@ func _to_string() -> String:
 
 
 ## Helper: Get all terminals bound in a specific biome
-func get_terminals_in_biome(biome) -> Array:
+func get_terminals_in_biome(biome_name: String) -> Array:
 	"""Get all terminals currently bound in a specific biome.
 
 	Args:
-		biome: BiomeBase instance to filter by
+		biome_name: Name of the biome to filter by (String, not object)
 
 	Returns:
 		Array of Terminal instances bound to this biome
 	"""
 	var result: Array = []
 	for terminal in terminals:
-		if terminal.is_bound and terminal.bound_biome == biome:
+		if terminal.is_bound and terminal.bound_biome_name == biome_name:
 			result.append(terminal)
 	return result

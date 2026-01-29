@@ -22,6 +22,7 @@ var action_buttons: Dictionary = {}  # "Q", "E", "R" -> {container, texture, lab
 var current_tool: int = 3  # Default to tool 3 (matches ToolConfig.current_group)
 var current_submenu: String = ""  # Active submenu name (empty = show tool actions)
 var current_submenu_actions: Dictionary = {}
+var active_overlay_node: Control = null  # Current overlay for context-aware QER actions
 
 # References for checking action availability
 var plot_grid_display = null  # Injected reference to PlotGridDisplay
@@ -218,98 +219,48 @@ func update_for_submenu(submenu_name: String, submenu_info: Dictionary) -> void:
 	_update_action_costs()
 
 
-func update_for_quest_board(slot_state: int, is_locked: bool = false) -> void:
-	"""Update action buttons to show quest-specific actions
-
-	Called when quest board is open and selection changes.
-	Shows context-aware quest actions based on slot state.
+func update_for_overlay(overlay: Control) -> void:
+	"""Switch to overlay mode: QER actions are projected from overlay state.
+	
+	Overlay must implement get_action_info(key) -> Dictionary.
 	"""
-	current_submenu = "quest_board"  # Mark as special mode
-	current_submenu_actions = {}
-
-	# Quest slot states (from QuestBoard)
-	const EMPTY = 0
-	const OFFERED = 1
-	const ACTIVE = 2
-	const READY = 3
-
-	var q_data = action_buttons["Q"]
-	var e_data = action_buttons["E"]
-	var r_data = action_buttons["R"]
-	q_data.base_label_offset = 0
-	e_data.base_label_offset = 0
-	r_data.base_label_offset = 0
-
-	# Hide all glyphs in quest board mode (text labels only)
-	q_data.icon.visible = false
-	e_data.icon.visible = false
-	r_data.icon.visible = false
-
-	match slot_state:
-		EMPTY:
-			# Empty slot - only R to generate
-			q_data.label.text = "[Q] -"
-			q_data.disabled = true
-			q_data.texture.modulate = disabled_color
-
-			e_data.label.text = "[E] -"
-			e_data.disabled = true
-			e_data.texture.modulate = disabled_color
-
-			r_data.label.text = "[R] 🔄 Generate"
-			r_data.disabled = false
-			r_data.texture.modulate = enabled_color
-
-		OFFERED:
-			# Offered quest - Q=Accept, E=Lock/Unlock, R=Reroll
-			q_data.label.text = "[Q] ✅ Accept"
-			q_data.disabled = false
-			q_data.texture.modulate = enabled_color
-
-			e_data.label.text = "[E] 🔒 %s" % ("Unlock" if is_locked else "Lock")
-			e_data.disabled = false
-			e_data.texture.modulate = button_color
-
-			r_data.label.text = "[R] 🔄 Reroll"
-			r_data.disabled = is_locked
-			r_data.texture.modulate = disabled_color if is_locked else button_color
-
-		ACTIVE:
-			# Active quest - Q=Complete, E=Abandon
-			q_data.label.text = "[Q] ✅ Complete"
-			q_data.disabled = false
-			q_data.texture.modulate = enabled_color
-
-			e_data.label.text = "[E] ❌ Abandon"
-			e_data.disabled = false
-			e_data.texture.modulate = Color(1.0, 0.4, 0.4)  # Red tint for danger
-
-			r_data.label.text = "[R] -"
-			r_data.disabled = true
-			r_data.texture.modulate = disabled_color
-
-		READY:
-			# Ready to complete - Q=Claim, E=Abandon
-			q_data.label.text = "[Q] 💰 CLAIM"
-			q_data.disabled = false
-			q_data.texture.modulate = Color(0.4, 1.0, 0.4)  # Bright green for reward
-
-			e_data.label.text = "[E] ❌ Abandon"
-			e_data.disabled = false
-			e_data.texture.modulate = Color(1.0, 0.4, 0.4)
-
-			r_data.label.text = "[R] -"
-			r_data.disabled = true
-			r_data.texture.modulate = disabled_color
+	active_overlay_node = overlay
+	current_submenu = "overlay"
+	
+	# Update button display from overlay action info
+	for action_key in ["Q", "E", "R"]:
+		if not action_buttons.has(action_key):
+			continue
+			
+		var btn_data = action_buttons[action_key]
+		var info = active_overlay_node.get_action_info(action_key)
+		
+		# Reset display
+		btn_data.icon.visible = false
+		btn_data.base_label_offset = 0
+		btn_data.label.offset_left = 0
+		
+		var label_text = info.get("label", "-")
+		var emoji = info.get("emoji", "")
+		var is_disabled = info.get("disabled", false)
+		btn_data.label.text = "[%s] %s %s" % [action_key, emoji, label_text]
+		btn_data.disabled = is_disabled
+		btn_data.texture.modulate = disabled_color if is_disabled else button_color
 
 	_update_action_costs()
 
 
 func restore_normal_mode() -> void:
-	"""Restore normal tool display (called when quest board closes)"""
-	if current_submenu == "quest_board":
-		current_submenu = ""
-		update_for_tool(current_tool)
+	"""Restore normal tool display (called when overlay closes)"""
+	active_overlay_node = null
+	current_submenu = ""
+	update_for_tool(current_tool)
+
+
+func update_for_quest_board(_slot_state: int, _is_locked: bool = false) -> void:
+	"""Legacy: Re-route to update_for_overlay if possible."""
+	if active_overlay_node:
+		update_for_overlay(active_overlay_node)
 
 
 func set_action_enabled(action_key: String, enabled: bool) -> void:
@@ -444,9 +395,10 @@ func _update_probe_preview() -> void:
 		action_buttons["Q"].label.text = "[Q] 🔍 Explore (%s %.0f%%)" % [emoji, prob]
 
 	# Get MEASURE preview - find active terminal
+	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else ""
 	var active_terminals = []
 	for terminal in farm.plot_pool.get_active_terminals():
-		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome.get_biome_type():
+		if terminal.bound_biome_name == biome_name:
 			active_terminals.append(terminal)
 
 	if not active_terminals.is_empty():
@@ -457,7 +409,7 @@ func _update_probe_preview() -> void:
 	# Get POP preview - find measured terminal
 	var measured_terminals = []
 	for terminal in farm.plot_pool.get_measured_terminals():
-		if terminal.bound_biome and terminal.bound_biome.get_biome_type() == biome.get_biome_type():
+		if terminal.bound_biome_name == biome_name:
 			measured_terminals.append(terminal)
 
 	if not measured_terminals.is_empty():
@@ -541,7 +493,7 @@ func _create_action_button(action_key: String) -> Dictionary:
 	cost_container.offset_right = -6 * scale_factor
 	cost_container.offset_top = 6 * scale_factor
 	cost_container.offset_bottom = -6 * scale_factor
-	cost_container.add_theme_constant_override("separation", int(6 * scale_factor))
+	cost_container.add_theme_constant_override("separation", int(2 * scale_factor))
 	cost_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cost_container.visible = false
 	cost_container.z_index = 5
@@ -580,7 +532,6 @@ func _create_action_button(action_key: String) -> Dictionary:
 		"disabled": false
 	}
 
-
 func _update_action_costs() -> void:
 	"""Update cost labels for Q/E/R actions based on selection."""
 	for action_key in ["Q", "E", "R"]:
@@ -589,21 +540,34 @@ func _update_action_costs() -> void:
 		var btn_data = action_buttons[action_key]
 		var action_info = _get_action_info(action_key)
 		var action_name = action_info.get("action", "")
+
+		# Handle combined reap/harvest_all display
+		if action_name == "reap" and action_info.get("shift_action", "") == "harvest_all":
+			var normal_cost = EconomyConstants.get_action_cost("reap")
+			var shift_cost = EconomyConstants.get_action_cost("harvest_all")
+			var has_cost = _set_combined_cost_display(btn_data, normal_cost, shift_cost)
+			_adjust_label_for_cost(btn_data, has_cost, 170)
+			continue
+
 		var cost = _get_cost_for_action(action_name, action_info)
 		var has_cost = _set_cost_display(btn_data, cost)
+		_adjust_label_for_cost(btn_data, has_cost)
 
-		var base_offset = btn_data.get("base_label_offset", 0)
-		if btn_data.has("label"):
-			btn_data.label.offset_left = base_offset
-			if has_cost:
-				btn_data.label.offset_right = -120 * scale_factor
-			else:
-				btn_data.label.offset_right = 0
+
+func _adjust_label_for_cost(btn_data: Dictionary, has_cost: bool, cost_width: int = 130) -> void:
+	var base_offset = btn_data.get("base_label_offset", 0)
+	if btn_data.has("label"):
+		btn_data.label.offset_left = base_offset
+		if has_cost:
+			btn_data.label.offset_right = -cost_width * scale_factor
+		else:
+			btn_data.label.offset_right = 0
 
 
 func _get_action_info(action_key: String) -> Dictionary:
-	if current_submenu == "quest_board":
-		return {}
+	if active_overlay_node and active_overlay_node.has_method("get_action_info"):
+		return active_overlay_node.get_action_info(action_key)
+	
 	if current_submenu != "" and current_submenu_actions:
 		return current_submenu_actions.get(action_key, {})
 	return ToolConfig.get_action(current_tool, action_key)
@@ -670,6 +634,52 @@ func _set_cost_display(btn_data: Dictionary, cost: Dictionary) -> bool:
 		container.visible = false
 		return false
 
+	_build_cost_entries(container, cost)
+	container.visible = true
+	return true
+
+
+func _set_combined_cost_display(btn_data: Dictionary, normal_cost: Dictionary, shift_cost: Dictionary) -> bool:
+	if not btn_data.has("cost_container"):
+		return false
+
+	var container: HBoxContainer = btn_data.cost_container
+	for child in container.get_children():
+		child.queue_free()
+
+	if normal_cost.is_empty() and shift_cost.is_empty():
+		container.visible = false
+		return false
+
+	# Build normal costs
+	_build_cost_entries(container, normal_cost)
+
+	# Slash separator
+	var slash = Label.new()
+	slash.text = "/"
+	slash.add_theme_font_size_override("font_size", int(18 * scale_factor))
+	slash.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	slash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(slash)
+
+	# Shift indicator (⇧)
+	var shift_icon = Label.new()
+	shift_icon.text = "⇧"
+	shift_icon.add_theme_font_size_override("font_size", int(18 * scale_factor))
+	shift_icon.add_theme_color_override("font_color", Color(0.8, 0.8, 1.0))
+	shift_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.add_child(shift_icon)
+
+	# Build shift costs
+	_build_cost_entries(container, shift_cost)
+
+	container.visible = true
+	# Increase container size for combined cost
+	container.custom_minimum_size.x = 160 * scale_factor
+	return true
+
+
+func _build_cost_entries(container: HBoxContainer, cost: Dictionary) -> void:
 	var keys = cost.keys()
 	keys.sort()
 	if keys.has(LindbladHandler.GEAR_COST_EMOJI):
@@ -681,7 +691,6 @@ func _set_cost_display(btn_data: Dictionary, cost: Dictionary) -> bool:
 		if amount == 0:
 			continue
 		var entry = HBoxContainer.new()
-		entry.layout_mode = 1
 		entry.add_theme_constant_override("separation", int(2 * scale_factor))
 		entry.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -705,9 +714,6 @@ func _set_cost_display(btn_data: Dictionary, cost: Dictionary) -> bool:
 		entry.add_child(display)
 
 		container.add_child(entry)
-
-	container.visible = true
-	return true
 
 
 func _resolve_selected_north_emoji() -> String:

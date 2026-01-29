@@ -49,7 +49,7 @@ const INITIAL_RESOURCES = {
 	"👑": 0,    # imperium
 	"💰": 0,    # credits (legacy)
 	# Reality Midwife tokens (tracked as emoji-credits)
-	EconomyConstants.MIDWIFE_EMOJI: 4,
+	EconomyConstants.MIDWIFE_EMOJI: 6,
 }
 
 ## ========================================

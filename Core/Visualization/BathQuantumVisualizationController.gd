@@ -128,6 +128,7 @@ func initialize() -> void:
 	_connect_to_biome_manager()
 
 	graph.set_process(true)
+	_sync_bound_terminals()
 
 	if _verbose:
 		_verbose.debug("viz", "✅", "BathQuantumViz: Ready (plot-driven mode - bubbles will spawn on demand)")
@@ -187,6 +188,12 @@ func connect_to_farm(farm) -> void:
 		if _verbose:
 			_verbose.debug("viz", "📡", "Passed plot_pool to QuantumForceGraph for measured state detection")
 
+	# Pass batched lookahead engine to graph for buffered rendering
+	if graph and "biome_evolution_batcher" in farm and farm.biome_evolution_batcher:
+		graph.biome_evolution_batcher = farm.biome_evolution_batcher
+		if _verbose:
+			_verbose.debug("viz", "📡", "Passed biome_evolution_batcher to QuantumForceGraph for lookahead rendering")
+
 	# Connect to terminal lifecycle signals (EXPLORE/MEASURE/POP)
 	if farm.has_signal("terminal_bound"):
 		farm.terminal_bound.connect(_on_terminal_bound)
@@ -208,6 +215,59 @@ func connect_to_farm(farm) -> void:
 			_verbose.debug("viz", "📡", "Connected to farm.terminal_released for bubble despawn")
 	else:
 		push_warning("BathQuantumViz: farm has no terminal_released signal")
+
+	if farm.has_signal("biome_loaded"):
+		farm.biome_loaded.connect(_on_biome_loaded)
+		if _verbose:
+			_verbose.debug("viz", "📡", "Connected to farm.biome_loaded for dynamic biomes")
+
+	# If visualization is already initialized, sync any bound terminals now.
+	if graph:
+		_sync_bound_terminals()
+
+
+func _on_biome_loaded(biome_name: String, biome_ref) -> void:
+	"""Handle dynamically loaded biome - register for visualization."""
+	add_biome(biome_name, biome_ref)
+	if graph:
+		graph.biomes[biome_name] = biome_ref
+		graph.update_layout(true)
+		graph.queue_redraw()
+	if _verbose:
+		_verbose.debug("viz", "🧭", "Dynamic biome registered for viz: %s" % biome_name)
+
+
+func _sync_bound_terminals() -> void:
+	"""Ensure bubbles exist for any terminals already bound before viz init."""
+	if not graph or not farm_ref or not farm_ref.plot_pool:
+		return
+
+	if not farm_ref.grid:
+		return
+
+	if not farm_ref.plot_pool.has_method("get_all_terminals"):
+		return
+
+	for terminal in farm_ref.plot_pool.get_all_terminals():
+		if not terminal or not terminal.is_bound:
+			continue
+		if graph.quantum_nodes_by_grid_pos.has(terminal.grid_position):
+			continue
+
+		var position = terminal.grid_position
+		var biome_name = farm_ref.grid.plot_biome_assignments.get(position, "")
+		if biome_name.is_empty():
+			continue
+
+		var plot = farm_ref.grid.get_plot(position)
+		_create_bubble_for_terminal(
+			biome_name,
+			position,
+			terminal.north_emoji if terminal.north_emoji else "?",
+			terminal.south_emoji if terminal.south_emoji else "?",
+			plot,
+			terminal
+		)
 
 func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dictionary) -> void:
 	"""Handle terminal bound event - spawn bubble when EXPLORE binds a terminal
@@ -264,6 +324,8 @@ func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dic
 
 	# Create bubble with terminal reference (enables state queries)
 	_create_bubble_for_terminal(biome_name, position, north_emoji, south_emoji, plot, terminal)
+	if graph:
+		graph.queue_redraw()
 
 
 func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: String, probability: float) -> void:

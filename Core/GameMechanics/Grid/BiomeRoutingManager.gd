@@ -46,17 +46,22 @@ func register_biome(biome_name: String, biome_instance) -> void:
 		_verbose.info("biome", "📍", "Biome registered: %s" % biome_name)
 
 
-func assign_plot_to_biome(position: Vector2i, biome_name: String) -> void:
-	"""Assign a specific plot to a biome
+func assign_plot_to_biome(position: Vector2i, biome_name: String) -> bool:
+	"""Assign a specific plot to a biome (graceful - skips unregistered biomes)
 
 	Called by Farm._ready() during initialization.
 	Configures which biome manages each plot's quantum evolution.
+
+	Returns true if assigned, false if biome not registered (deferred).
+	Graceful handling: unregistered biomes are skipped without error,
+	allowing plots to be assigned retroactively when biomes are explored.
 	"""
 	if not biomes.has(biome_name):
-		push_error("Cannot assign to unregistered biome: %s" % biome_name)
-		return
+		# GRACEFUL: Biome may be locked/not-yet-loaded - defer assignment
+		return false
 
 	plot_biome_assignments[position] = biome_name
+	return true
 
 
 func get_biome_for_plot(position: Vector2i):

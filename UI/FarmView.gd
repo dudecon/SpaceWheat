@@ -136,7 +136,7 @@ func _ready():
 		else:
 			_verbose.info("ui", "✅", "Touch: Tap-to-measure connected")
 
-	# Input is now handled by PlayerShell._input() → modal stack → FarmInputHandler._unhandled_input()
+	# Input is handled by PlayerShell._input() → modal stack → QuantumInstrumentInput
 	# No need for InputController anymore!
 	_verbose.info("ui", "✅", "Input routing handled by PlayerShell modal stack")
 
