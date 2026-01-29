@@ -328,8 +328,8 @@ func initialize_phase_lnn() -> void:
 		hidden_size,     # Hidden: sqrt(qubits) neurons
 		num_qubits       # Output: phase modulation per qubit
 	)
-	if _verbose and _verbose.should_log("phasic"):
-		_verbose.log(self, "🌀 Phasic shadow: GDScript LNN initialized (native disabled)")
+	if _verbose and _verbose.is_verbose("biome"):
+		_verbose.info("biome", "🌀", "Phasic shadow: GDScript LNN initialized (native disabled)")
 
 	phase_lnn_enabled = true
 
