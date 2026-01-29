@@ -17,17 +17,22 @@ void initialize_quantum_matrix_module(ModuleInitializationLevel p_level) {
     if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
         return;
     }
+
+    // Core CPU-based classes only
     ClassDB::register_class<QuantumMatrixNative>();
-    ClassDB::register_class<QuantumSparseMatrixNative>();
-    ClassDB::register_class<QuantumEvolutionEngine>();
-    ClassDB::register_class<NativeBubbleRenderer>();
     ClassDB::register_class<MultiBiomeLookaheadEngine>();
     ClassDB::register_class<QuantumSolverCPUNative>();
-    // DISABLED: LiquidNeuralNetNative
-    // Native LNN works fine (unit tests pass), but loading it triggers graphics
-    // driver crashes in WSL without GPU (signal 11 in swrast_dri.so).
-    // Re-enable when GPU is available or WSL graphics drivers are fixed.
-    // ClassDB::register_class<LiquidNeuralNetNative>();
+
+    // DISABLED: Graphics/GPU classes that crash in WSL without GPU
+    // - QuantumSparseMatrixNative (GPU-optimized)
+    // - QuantumEvolutionEngine (GPU pipeline)
+    // - NativeBubbleRenderer (GL rendering)
+    // - LiquidNeuralNetNative (loads GPU code during init)
+    //
+    // These cause signal 11 crashes in swrast_dri.so/libd3d12core.so
+    // when native extensions are loaded in WSL. Re-enable when:
+    // 1. Running on hardware with proper GPU support, or
+    // 2. WSL graphics drivers are fixed
 }
 
 void uninitialize_quantum_matrix_module(ModuleInitializationLevel p_level) {
