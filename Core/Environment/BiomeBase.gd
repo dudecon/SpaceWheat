@@ -96,8 +96,9 @@ var quantum_evolution_enabled: bool = true
 
 # Liquid Neural Net: Learns to modulate phases in the phasic shadow
 # Creates emergent intelligence in quantum evolution
+const ENABLE_PHASE_LNN = false  # Master kill-switch for main game
 var phase_lnn: LiquidNeuralNet = null  # Will be initialized when quantum_computer is ready
-var phase_lnn_enabled: bool = true  # Enable/disable phase modulation
+var phase_lnn_enabled: bool = false  # Enable/disable phase modulation
 
 # Quantum time scaling (affects simulation speed without changing render rate)
 # Lower = slower simulation, higher = faster simulation
@@ -307,6 +308,9 @@ func initialize_phase_lnn() -> void:
 
 	Uses C++ native implementation for 5000x speedup over pure GDScript.
 	"""
+	if not ENABLE_PHASE_LNN:
+		phase_lnn_enabled = false
+		return
 	if not quantum_computer or not quantum_computer.register_map:
 		return
 
@@ -314,8 +318,13 @@ func initialize_phase_lnn() -> void:
 	if num_qubits <= 0:
 		return
 
+	# Get Hilbert space dimension (2^num_qubits)
+	var dim = quantum_computer.register_map.dim()
+	if dim <= 0:
+		return
+
 	# Configuration
-	var hidden_size = max(4, num_qubits / 2)
+	var hidden_size = max(4, dim / 4)  # Hidden layer: 1/4 of input dimension
 
 	# DISABLED: Native C++ implementation
 	# The native LNN is causing crashes during initialization.
@@ -324,9 +333,9 @@ func initialize_phase_lnn() -> void:
 
 	# Fallback to GDScript implementation
 	phase_lnn = LiquidNeuralNet.new(
-		num_qubits,      # Input: one phase per qubit
-		hidden_size,     # Hidden: sqrt(qubits) neurons
-		num_qubits       # Output: phase modulation per qubit
+		dim,         # Input: one phase per basis state (diagonal element)
+		hidden_size, # Hidden: dim/4 neurons for capacity
+		dim          # Output: phase modulation per basis state
 	)
 
 	# Share LNN reference with QuantumComputer (will be used during evolve())

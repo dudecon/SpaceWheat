@@ -143,6 +143,10 @@ func _initialize_components():
 	input_handler = GraphInputScript.new()
 	node_manager = NodeManagerScript.new()
 
+	# Default: tether force off (visuals only)
+	if "enable_plot_tether_force" in force_system:
+		force_system.enable_plot_tether_force = false
+
 	# Connect input signals
 	input_handler.bubble_tapped.connect(_on_bubble_tapped)
 	input_handler.node_swiped_to.connect(_on_node_swiped_to)
@@ -257,7 +261,6 @@ func _build_context() -> Dictionary:
 		"node_by_plot_id": node_by_plot_id,
 		"quantum_nodes_by_grid_pos": quantum_nodes_by_grid_pos,
 		"all_plot_positions": all_plot_positions,
-		"plot_tether_colors": plot_tether_colors,
 		"sun_qubit_node": sun_qubit_node,
 		"biomes": biomes,
 		"active_biome": active_biome,
@@ -277,6 +280,7 @@ func _build_context() -> Dictionary:
 		"frame_count": frame_count,
 		"entanglement_particles": entanglement_particles,
 		"life_cycle_effects": life_cycle_effects,
+		"plot_tether_colors": plot_tether_colors,
 		"force_system": force_system,
 		"particle_life": PARTICLE_LIFE,
 		"particle_speed": PARTICLE_SPEED,
@@ -372,6 +376,12 @@ func set_active_biome(biome_name: String):
 	node_manager.filter_nodes_for_biome(quantum_nodes, _get_filter_biome())
 	update_layout(true)
 	biome_selected.emit(biome_name)
+
+
+func set_plot_tether_force_enabled(enabled: bool) -> void:
+	"""Toggle plot tether physics (visuals remain in edge renderer)."""
+	if "enable_plot_tether_force" in force_system:
+		force_system.enable_plot_tether_force = enabled
 
 
 func _get_filter_biome() -> String:

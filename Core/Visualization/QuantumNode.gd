@@ -270,9 +270,18 @@ func update_from_quantum_state():
 	emoji_north = emojis.get("north", emoji_north)
 	emoji_south = emojis.get("south", emoji_south)
 
+	# Prefer cached visualization metrics from QuantumComputer (fast path)
+	var qc = biome.quantum_computer
+	var metrics: Dictionary = {}
+	var metrics_ok = false
+	if qc and qc.has_method("get_viz_qubit_metrics") and qc.register_map and qc.register_map.has(emoji_north):
+		var qubit_index = qc.register_map.qubit(emoji_north)
+		metrics = qc.get_viz_qubit_metrics(qubit_index)
+		metrics_ok = not metrics.is_empty()
+
 	# 1. EMOJI OPACITY ← Normalized probabilities (θ-like)
-	var north_prob = biome.get_emoji_probability(emoji_north)
-	var south_prob = biome.get_emoji_probability(emoji_south)
+	var north_prob = metrics.get("p_north", biome.get_emoji_probability(emoji_north))
+	var south_prob = metrics.get("p_south", biome.get_emoji_probability(emoji_south))
 	var mass = north_prob + south_prob  # Total probability in our subspace
 
 	if mass > 0.001:
@@ -284,32 +293,37 @@ func update_from_quantum_state():
 		emoji_south_opacity = 0.1
 
 	# 2. COLOR HUE ← Coherence phase arg(ρ_{n,s}) (φ-like)
-	var coh = biome.get_emoji_coherence(emoji_north, emoji_south)
 	var coh_magnitude = 0.0
 	var coh_phase = 0.0
-	if coh:
-		coh_magnitude = coh.abs()
-		coh_phase = coh.arg()  # Returns angle in radians [-π, π]
-		# DEBUG: Log if we're getting real coherence (verbose filtered)
-		if is_transitioning_planted and coh_magnitude > 0.01:
-			var verbose = _get_verbose()
-			if verbose:
-				verbose.debug("quantum", "⚛️", "COHERENCE FOUND: |coh|=%.4f arg=%.2f° for %s/%s" % [coh_magnitude, rad_to_deg(coh_phase), emoji_north, emoji_south])
+	if metrics_ok:
+		coh_magnitude = metrics.get("coh_mag", 0.0)
+		coh_phase = metrics.get("coh_phase", 0.0)
 	else:
-		# DEBUG: Log when coherence is null (possible problem)
-		if is_transitioning_planted:
-			var verbose = _get_verbose()
-			if verbose:
-				verbose.debug("quantum", "⚠️", "COHERENCE NULL for %s/%s at %s" % [emoji_north, emoji_south, grid_position])
+		var coh = biome.get_emoji_coherence(emoji_north, emoji_south)
+		if coh:
+			coh_magnitude = coh.abs()
+			coh_phase = coh.arg()  # Returns angle in radians [-π, π]
+			# DEBUG: Log if we're getting real coherence (verbose filtered)
+			if is_transitioning_planted and coh_magnitude > 0.01:
+				var verbose = _get_verbose()
+				if verbose:
+					verbose.debug("quantum", "⚛️", "COHERENCE FOUND: |coh|=%.4f arg=%.2f° for %s/%s" % [coh_magnitude, rad_to_deg(coh_phase), emoji_north, emoji_south])
+		else:
+			# DEBUG: Log when coherence is null (possible problem)
+			if is_transitioning_planted:
+				var verbose = _get_verbose()
+				if verbose:
+					verbose.debug("quantum", "⚠️", "COHERENCE NULL for %s/%s at %s" % [emoji_north, emoji_south, grid_position])
 
 	# Map phase to hue [0, 1] for HSV color
-	var hue = (coh_phase + PI) / TAU  # Normalize to [0, 1]
-	var saturation = coh_magnitude  # More coherent = more saturated color
+	var hue = metrics.get("hue", (coh_phase + PI) / TAU)  # Normalize to [0, 1]
+	var saturation = metrics.get("saturation", coh_magnitude)  # More coherent = more saturated color
 	color = Color.from_hsv(hue, saturation * 0.8, 0.9, 0.8)
 
 	# 3. GLOW (energy) ← Purity Tr(ρ²)
 	# Pure state = 1.0 (bright glow), maximally mixed = 1/N (dim)
-	energy = biome.get_purity()
+	var purity = qc.get_viz_purity() if qc and qc.has_method("get_viz_purity") else -1.0
+	energy = purity if purity >= 0.0 else biome.get_purity()
 
 	# 4. PULSE RATE (coherence) ← |ρ_{n,s}| coherence magnitude
 	# High coherence = stable/slow pulse, low = jittery/fast

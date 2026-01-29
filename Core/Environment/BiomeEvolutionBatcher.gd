@@ -284,6 +284,7 @@ func _refill_all_lookahead_buffers():
 	# Distribute results to buffers
 	var results = result.get("results", [])
 	var mi_results = result.get("mi", [])
+	var bloch_results = result.get("bloch", [])
 
 	var inactive_count = 0
 	for i in range(biomes.size()):
@@ -300,6 +301,8 @@ func _refill_all_lookahead_buffers():
 				buffer_cursors[biome_name] = 0
 			if i < mi_results.size():
 				mi_cache[biome_name] = mi_results[i]
+			if i < bloch_results.size():
+				biome.quantum_computer._set_bloch_cache_from_packed(bloch_results[i])
 		else:
 			# Frozen buffer (repeat current state) for inactive/paused biomes
 			var frozen_steps: Array = []

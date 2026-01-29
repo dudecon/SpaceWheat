@@ -51,8 +51,15 @@ public:
     PackedFloat64Array compute_all_mutual_information(const PackedFloat64Array& rho_data, int num_qubits);
 
     // Combined evolution + MI computation (single call for both)
-    // Returns Dictionary with "rho" (evolved state) and "mi" (mutual information array)
+    // Returns Dictionary with "rho" (evolved state), "mi" (mutual information array),
+    // "purity" (Tr(rho^2)), "trace_re"/"trace_im" (Tr(rho)),
+    // and "bloch" (PackedFloat64Array of [x,y,z,r,theta,phi] per qubit)
     Dictionary evolve_with_mi(const PackedFloat64Array& rho_data, float dt, float max_dt, int num_qubits);
+
+    // Basic observables
+    double compute_purity(const Eigen::MatrixXcd& rho) const;
+    std::complex<double> compute_trace(const Eigen::MatrixXcd& rho) const;
+    PackedFloat64Array compute_bloch_metrics(const Eigen::MatrixXcd& rho, int num_qubits) const;
 
 protected:
     static void _bind_methods();

@@ -76,7 +76,8 @@ public:
      *              results[biome_id][step] = rho at t + step*dt
      *   "mi": Array<PackedFloat64Array>
      *         mi[biome_id] = mutual information array for last step
-     *         (used for force graph visualization)
+     *   "bloch": Array<PackedFloat64Array>
+     *         bloch[biome_id] = packed [x,y,z,r,theta,phi] per qubit for last step
      */
     Dictionary evolve_all_lookahead(const Array& biome_rhos, int steps,
                                     float dt, float max_dt);
@@ -94,7 +95,7 @@ public:
      * @param dt Time step per step
      * @param max_dt Maximum substep
      *
-     * @return Dictionary with "results" and "mi" for this biome only
+     * @return Dictionary with "results", "mi", and "bloch" for this biome only
      */
     Dictionary evolve_single_biome(int biome_id, const PackedFloat64Array& rho_packed,
                                    int steps, float dt, float max_dt);
@@ -108,7 +109,13 @@ private:
     std::vector<int> m_num_qubits;  // num_qubits per biome for MI
 
     // Helper: evolve one biome for multiple steps
-    std::pair<std::vector<PackedFloat64Array>, PackedFloat64Array>
+    struct BiomeStepResult {
+        std::vector<PackedFloat64Array> steps;
+        PackedFloat64Array mi;
+        PackedFloat64Array bloch;
+    };
+
+    BiomeStepResult
     _evolve_biome_steps(int biome_id, const PackedFloat64Array& rho_packed,
                         int steps, float dt, float max_dt);
 };

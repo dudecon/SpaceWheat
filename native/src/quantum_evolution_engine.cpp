@@ -425,5 +425,78 @@ Dictionary QuantumEvolutionEngine::evolve_with_mi(
     PackedFloat64Array mi_values = compute_all_mutual_information(evolved_rho, num_qubits);
     result["mi"] = mi_values;
 
+    // Compute purity and trace on the evolved state
+    Eigen::MatrixXcd rho = unpack_dense(evolved_rho);
+    result["purity"] = compute_purity(rho);
+    std::complex<double> tr = compute_trace(rho);
+    result["trace_re"] = tr.real();
+    result["trace_im"] = tr.imag();
+    result["bloch"] = compute_bloch_metrics(rho, num_qubits);
+
     return result;
+}
+
+double QuantumEvolutionEngine::compute_purity(const Eigen::MatrixXcd& rho) const {
+    // Tr(rho^2) = sum_ij |rho_ij|^2 for Hermitian rho
+    double purity = 0.0;
+    for (int i = 0; i < rho.rows(); i++) {
+        for (int j = 0; j < rho.cols(); j++) {
+            const auto& c = rho(i, j);
+            purity += std::norm(c);
+        }
+    }
+    return purity;
+}
+
+std::complex<double> QuantumEvolutionEngine::compute_trace(const Eigen::MatrixXcd& rho) const {
+    std::complex<double> tr(0.0, 0.0);
+    int n = std::min(rho.rows(), rho.cols());
+    for (int i = 0; i < n; i++) {
+        tr += rho(i, i);
+    }
+    return tr;
+}
+
+PackedFloat64Array QuantumEvolutionEngine::compute_bloch_metrics(
+    const Eigen::MatrixXcd& rho, int num_qubits) const {
+    // Returns packed [x,y,z,r,theta,phi] per qubit
+    PackedFloat64Array out;
+    if (num_qubits <= 0) {
+        return out;
+    }
+    out.resize(num_qubits * 6);
+    double* ptr = out.ptrw();
+
+    for (int q = 0; q < num_qubits; q++) {
+        Eigen::MatrixXcd reduced = partial_trace_single(rho, q, num_qubits);
+        // reduced is 2x2
+        std::complex<double> rho00 = reduced(0, 0);
+        std::complex<double> rho11 = reduced(1, 1);
+        std::complex<double> rho01 = reduced(0, 1);
+
+        double x = 2.0 * rho01.real();
+        double y = -2.0 * rho01.imag();
+        double z = rho00.real() - rho11.real();
+
+        double r = std::sqrt(x * x + y * y + z * z);
+        double theta = 0.0;
+        double phi = 0.0;
+        if (r > 1e-12) {
+            double cz = z / r;
+            if (cz > 1.0) cz = 1.0;
+            if (cz < -1.0) cz = -1.0;
+            theta = std::acos(cz);
+            phi = std::atan2(y, x);
+        }
+
+        int base = q * 6;
+        ptr[base + 0] = x;
+        ptr[base + 1] = y;
+        ptr[base + 2] = z;
+        ptr[base + 3] = r;
+        ptr[base + 4] = theta;
+        ptr[base + 5] = phi;
+    }
+
+    return out;
 }

@@ -119,9 +119,6 @@ func expand_quantum_system(north_emoji: String, south_emoji: String) -> Dictiona
 	var driven_configs = HamBuilder.get_driven_icons(all_icons, quantum_computer.register_map)
 	quantum_computer.set_driven_icons(driven_configs)
 
-	# 10. Set up native evolution engine
-	quantum_computer.setup_native_evolution()
-
 	var new_dim = quantum_computer.register_map.dim()
 
 	print("🔬 Expanded %s quantum system: %d -> %d qubits (%dD -> %dD)" % [
@@ -231,8 +228,6 @@ func build_operators_cached(biome_name: String, icons: Dictionary) -> void:
 		var driven_configs = HamBuilder.get_driven_icons(icons, quantum_computer.register_map)
 		quantum_computer.set_driven_icons(driven_configs)
 
-		# CRITICAL: Set up native evolution engine for batched performance
-		quantum_computer.setup_native_evolution()
 
 		if verbose:
 			var h_dim = quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0
@@ -268,5 +263,3 @@ func build_operators_cached(biome_name: String, icons: Dictionary) -> void:
 		# Save to cache for next time
 		cache.save(biome_name, cache_key, quantum_computer.hamiltonian, quantum_computer.lindblad_operators)
 
-		# CRITICAL: Set up native evolution engine (same as cache HIT path)
-		quantum_computer.setup_native_evolution()

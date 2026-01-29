@@ -1410,9 +1410,6 @@ func _rebuild_operators_after_shrink(biome) -> void:
 	var driven_configs = HamBuilder.get_driven_icons(all_icons, qc.register_map)
 	qc.set_driven_icons(driven_configs)
 
-	# Re-setup native evolution
-	qc.setup_native_evolution()
-
 
 ## ============================================================================
 ## HELPER FUNCTIONS

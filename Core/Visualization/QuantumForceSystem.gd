@@ -35,6 +35,8 @@ const CORRELATION_SCALING = 3.0  # How much MI affects clustering
 const MAX_BIOME_RADIUS = 250.0  # Maximum radius for mixed states
 const TETHER_SPRING = 0.06  # Strength of plot tether pull for farm-linked bubbles
 const TETHER_MAX_FORCE = 120.0  # Cap tether force to prevent snapping
+var enable_plot_tether_force: bool = false  # Apply only to active explored/measured nodes
+const MAX_TETHERED_NODES = 4  # Limit to visible explored/measured plots
 
 # Cached mutual information (expensive to compute)
 var _mi_cache: Dictionary = {}  # (qubit_a, qubit_b) -> float
@@ -58,6 +60,7 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 	var layout_calculator = ctx.get("layout_calculator")
 	var plot_pool = ctx.get("plot_pool")
 	var active_biome_name = ctx.get("filter_biome", ctx.get("active_biome", ""))  # "" means process all biomes
+	var tether_biome_name = ctx.get("active_biome", "")
 	var frame_count = ctx.get("frame_count", 0)
 
 	# Increment update counter for debugging
@@ -86,6 +89,7 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 	var nodes_skipped_inactive = 0
 	var nodes_skipped_behavior = 0
 	var nodes_skipped_lifeless = 0
+	var tethered_nodes = 0
 
 	for node in nodes:
 		# OPTIMIZATION: Skip force calculations for non-active biomes entirely
@@ -152,13 +156,14 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 		total_force += _calculate_repulsion_forces(node, active_nodes)
 
 		# 5. Plot tether force (keeps farm-linked bubbles near their plot anchors)
-		if node.has_farm_tether and node.classical_anchor != Vector2.ZERO:
+		if enable_plot_tether_force and tethered_nodes < MAX_TETHERED_NODES and _should_apply_plot_tether(node, plot_pool, tether_biome_name):
 			var to_anchor = node.classical_anchor - node.position
 			if to_anchor.length() > 1.0:
 				var tether_force = to_anchor * TETHER_SPRING
 				if tether_force.length() > TETHER_MAX_FORCE:
 					tether_force = tether_force.normalized() * TETHER_MAX_FORCE
 				total_force += tether_force
+				tethered_nodes += 1
 
 		# Apply forces
 		node.apply_force(total_force, delta)
@@ -319,6 +324,23 @@ func _update_positions(delta: float, nodes: Array) -> void:
 			continue  # HOVERING and FIXED don't move
 
 		node.update_position(delta)
+
+
+func _should_apply_plot_tether(node, plot_pool, active_biome_name: String) -> bool:
+	"""Apply tether only for explored/measured nodes in the active biome."""
+	if active_biome_name == "" or node.biome_name != active_biome_name:
+		return false
+	if not node.has_farm_tether:
+		return false
+	if node.classical_anchor == Vector2.ZERO:
+		return false
+	if _is_node_measured(node, plot_pool):
+		return true
+	if node.plot and "is_planted" in node.plot and node.plot.is_planted:
+		return true
+	if node.plot and "has_been_measured" in node.plot and node.plot.has_been_measured:
+		return true
+	return false
 
 
 func _update_mutual_information_cache(nodes: Array, biomes: Dictionary) -> void:
@@ -487,11 +509,9 @@ func _is_node_measured(node, plot_pool) -> bool:
 
 func _wrap_angle(angle: float) -> float:
 	"""Wrap angle to [-PI, PI]."""
-	while angle > PI:
-		angle -= TAU
-	while angle < -PI:
-		angle += TAU
-	return angle
+	if is_nan(angle) or is_inf(angle):
+		return 0.0
+	return fmod(angle + PI, TAU) - PI
 
 
 # ============================================================================

@@ -48,12 +48,6 @@ var lindblad_operators: Array = []            # Array of L_k matrices (ComplexMa
 var sparse_hamiltonian = null                 # SparseMatrix (auto-converted if sparse)
 var sparse_lindblad_operators: Array = []     # Array of SparseMatrix (auto-converted)
 
-## BATCHED NATIVE evolution engine (100x faster - eliminates GDScript↔C++ bridge overhead)
-## Set up via setup_native_evolution() after operators are configured
-var native_evolution_engine = null            # QuantumEvolutionEngine (native C++ class)
-static var _native_engine_available: bool = false
-static var _native_engine_checked: bool = false
-
 ## CACHED MUTUAL INFORMATION (computed in C++ during evolution at 5Hz)
 ## Format: {qubit_pair_index: mi_value} where index = i * num_qubits + j (upper triangular)
 ## Access via get_cached_mutual_information(qubit_a, qubit_b)
@@ -1075,6 +1069,7 @@ func _apply_phase_lnn(lnn: Object) -> void:
 	Args:
 		lnn: LiquidNeuralNet instance with forward(phases: PackedFloat64Array) method
 	"""
+	# Kill-switch: Can be disabled by setting phase_lnn = null or via BiomeBase.ENABLE_PHASE_LNN
 	if density_matrix == null or not lnn:
 		return
 
@@ -1158,34 +1153,7 @@ func evolve(dt: float, max_dt: float = 0.02, lnn: Object = null) -> void:
 		update_driven_self_energies(elapsed_time)
 
 	# ==========================================================================
-	# BATCHED NATIVE PATH: 100x faster (single C++ call with internal subcycling)
-	# ==========================================================================
-	if native_evolution_engine != null and native_evolution_engine.is_finalized():
-		var rho_packed = density_matrix._to_packed()
-
-		# Use evolve_with_mi if MI computation is enabled (computes both in one C++ call)
-		if _mi_compute_enabled and native_evolution_engine.has_method("evolve_with_mi"):
-			var result = native_evolution_engine.evolve_with_mi(rho_packed, dt, max_dt, register_map.num_qubits)
-			density_matrix._from_packed(result["rho"], dim)
-			_cached_mi_values = result["mi"]
-			_mi_last_compute_frame = Engine.get_process_frames()
-		else:
-			var result_packed = native_evolution_engine.evolve(rho_packed, dt, max_dt)
-			density_matrix._from_packed(result_packed, dim)
-
-		_renormalize()  # Critical: ensure Tr(ρ) = 1 after native evolution
-
-		# Apply phase modulation from LNN (phasic shadow)
-		if lnn:
-			_apply_phase_lnn(lnn)
-
-		var t1 = Time.get_ticks_usec()
-		if Engine.get_process_frames() % 60 == 0:
-			_log("trace", "quantum", "⏱️", "QC Evolve Trace (Native+LNN): Total %d us" % [t1 - t0])
-		return
-
-	# ==========================================================================
-	# FALLBACK: Per-operator sparse path (still fast, but more bridge overhead)
+	# EVOLUTION PATH: GDScript per-operator sparse path (CPU-optimized)
 	# ==========================================================================
 	# Subcycling for numerical stability: break large dt into smaller steps
 	if dt > max_dt:
@@ -1895,10 +1863,6 @@ func add_coupling(qubit_a: int, qubit_b: int, strength: float) -> Dictionary:
 	# Apply coupling directly to Hamiltonian
 	_add_zz_coupling_to_hamiltonian(qubit_a, qubit_b, strength)
 
-	# Rebuild native evolution engine if active
-	if native_evolution_engine != null:
-		setup_native_evolution()
-
 	_log("debug", "quantum", "⚛️", "Added ZZ coupling: qubit %d ↔ qubit %d (J=%.3f)" % [qubit_a, qubit_b, strength])
 	return {"success": true, "coupling_key": key}
 
@@ -2113,65 +2077,6 @@ func set_lindblad_operators(operators: Array) -> void:
 	_log("debug", "quantum", "⚡", "%d Lindblad ops → sparse: avg %.1f%% zeros, total nnz=%d" % [
 		operators.size(), avg_sparsity * 100, total_nnz])
 
-	# Auto-setup native evolution engine for maximum performance
-	setup_native_evolution()
-
-
-# ============================================================================
-# BATCHED NATIVE EVOLUTION (100x faster - eliminates bridge overhead)
-# ============================================================================
-
-static func _check_native_engine() -> void:
-	"""DISABLED: Native engine check removed due to GPU crash.
-
-	Checking for QuantumEvolutionEngine (even if not registered) can trigger
-	GPU driver initialization in WSL, causing signal 11 crashes.
-
-	This function is a no-op to preserve backward compatibility.
-	"""
-	if _native_engine_checked:
-		return
-	_native_engine_checked = true
-	_native_engine_available = false  # Never use native engine
-	# Static function can't use _log - logged once at startup via boot category by BootManager
-
-
-func setup_native_evolution() -> void:
-	"""DISABLED: Native batched evolution engine no longer available.
-
-	QuantumEvolutionEngine was a GPU-optimized native class that crashed
-	in WSL without GPU support. It has been removed from native registration.
-
-	The CPU-only GDScript evolution path in _evolve_step() is production-ready
-	and handles all quantum evolution needs.
-
-	This function is a no-op kept for backward compatibility.
-	"""
-	# Intentionally empty - evolution uses pure GDScript path via _evolve_step()
-	pass
-
-
-func _matrix_to_triplets(mat: ComplexMatrix) -> PackedFloat64Array:
-	"""Convert a ComplexMatrix to triplet format for native engine.
-
-	Triplet format: [row0, col0, re0, im0, row1, col1, re1, im1, ...]
-	Only includes non-zero elements (abs > 1e-15).
-	"""
-	var triplets = PackedFloat64Array()
-	var n = mat.n
-	var threshold = 1e-15
-
-	for i in range(n):
-		for j in range(n):
-			var c = mat.get_element(i, j)
-			if abs(c.re) > threshold or abs(c.im) > threshold:
-				triplets.append(float(i))  # row
-				triplets.append(float(j))  # col
-				triplets.append(c.re)      # real part
-				triplets.append(c.im)      # imaginary part
-
-	return triplets
-
 
 # ============================================================================
 # VISUALIZATION OBSERVABLES (Computed from packed density matrices)
@@ -2184,6 +2089,7 @@ func _matrix_to_triplets(mat: ComplexMatrix) -> PackedFloat64Array:
 var _viz_metrics_cache: Dictionary = {}
 var _viz_purity_cache: float = -1.0
 var _viz_cache_frame: int = -1
+var _viz_bloch_cache: Dictionary = {}
 
 
 func compute_viz_metrics_from_packed(packed: PackedFloat64Array) -> void:
@@ -2215,6 +2121,7 @@ func compute_viz_metrics_from_packed(packed: PackedFloat64Array) -> void:
 
 	# Compute purity
 	_viz_purity_cache = _compute_purity_from_packed(packed)
+	_viz_bloch_cache.clear()
 
 
 func compute_viz_metrics_from_live() -> void:
@@ -2233,6 +2140,30 @@ func compute_viz_metrics_from_live() -> void:
 	# Pack live state and compute
 	var packed = density_matrix._to_packed()
 	compute_viz_metrics_from_packed(packed)
+
+
+func _set_bloch_cache_from_packed(packed: PackedFloat64Array) -> void:
+	"""Populate Bloch cache from packed [x,y,z,r,theta,phi] per qubit."""
+	_viz_bloch_cache.clear()
+	if packed.is_empty():
+		return
+	var stride = 6
+	var num_qubits = register_map.num_qubits
+	if num_qubits <= 0:
+		return
+	var expected = num_qubits * stride
+	if packed.size() < expected:
+		return
+	for q in range(num_qubits):
+		var base = q * stride
+		_viz_bloch_cache[q] = {
+			"x": packed[base + 0],
+			"y": packed[base + 1],
+			"z": packed[base + 2],
+			"r": packed[base + 3],
+			"theta": packed[base + 4],
+			"phi": packed[base + 5],
+		}
 
 
 func _compute_qubit_metrics_from_packed(
@@ -2354,6 +2285,14 @@ func get_all_viz_metrics() -> Dictionary:
 		{qubit_index: {p_north, p_south, coh_re, coh_im, ...}, ...}
 	"""
 	return _viz_metrics_cache
+
+
+func get_viz_bloch(qubit_index: int) -> Dictionary:
+	"""Get cached Bloch metrics for a qubit.
+
+	Returns {x,y,z,r,theta,phi} or empty dict if not cached.
+	"""
+	return _viz_bloch_cache.get(qubit_index, {})
 
 
 func compute_emoji_opacities(qubit_index: int) -> Dictionary:

@@ -74,6 +74,7 @@ Dictionary MultiBiomeLookaheadEngine::evolve_all_lookahead(
     Dictionary result;
     Array all_results;  // Array<Array<PackedFloat64Array>>
     Array all_mi;       // Array<PackedFloat64Array>
+    Array all_bloch;    // Array<PackedFloat64Array>
 
     int num_biomes = static_cast<int>(biome_rhos.size());
 
@@ -90,20 +91,22 @@ Dictionary MultiBiomeLookaheadEngine::evolve_all_lookahead(
         PackedFloat64Array rho_packed = biome_rhos[biome_id];
 
         // Evolve this biome for all steps
-        auto [step_results, mi] = _evolve_biome_steps(biome_id, rho_packed, steps, dt, max_dt);
+        auto biome_result = _evolve_biome_steps(biome_id, rho_packed, steps, dt, max_dt);
 
         // Convert step_results to Godot Array
         Array biome_steps;
-        for (const auto& step_rho : step_results) {
+        for (const auto& step_rho : biome_result.steps) {
             biome_steps.push_back(step_rho);
         }
 
         all_results.push_back(biome_steps);
-        all_mi.push_back(mi);
+        all_mi.push_back(biome_result.mi);
+        all_bloch.push_back(biome_result.bloch);
     }
 
     result["results"] = all_results;
     result["mi"] = all_mi;
+    result["bloch"] = all_bloch;
 
     return result;
 }
@@ -121,30 +124,30 @@ Dictionary MultiBiomeLookaheadEngine::evolve_single_biome(
     }
 
     // Evolve this biome
-    auto [step_results, mi] = _evolve_biome_steps(biome_id, rho_packed, steps, dt, max_dt);
+    auto biome_result = _evolve_biome_steps(biome_id, rho_packed, steps, dt, max_dt);
 
     // Convert to Godot types
     Array biome_steps;
-    for (const auto& step_rho : step_results) {
+    for (const auto& step_rho : biome_result.steps) {
         biome_steps.push_back(step_rho);
     }
 
     result["results"] = biome_steps;
-    result["mi"] = mi;
+    result["mi"] = biome_result.mi;
+    result["bloch"] = biome_result.bloch;
 
     return result;
 }
 
-std::pair<std::vector<PackedFloat64Array>, PackedFloat64Array>
+MultiBiomeLookaheadEngine::BiomeStepResult
 MultiBiomeLookaheadEngine::_evolve_biome_steps(
     int biome_id, const PackedFloat64Array& rho_packed,
     int steps, float dt, float max_dt) {
 
-    std::vector<PackedFloat64Array> step_results;
-    PackedFloat64Array final_mi;
+    BiomeStepResult out;
 
     if (biome_id < 0 || biome_id >= static_cast<int>(m_engines.size())) {
-        return {step_results, final_mi};
+        return out;
     }
 
     Ref<QuantumEvolutionEngine> engine = m_engines[biome_id];
@@ -159,16 +162,20 @@ MultiBiomeLookaheadEngine::_evolve_biome_steps(
         PackedFloat64Array evolved_rho = engine->evolve(current_rho, dt, max_dt);
 
         // Store result
-        step_results.push_back(evolved_rho);
+        out.steps.push_back(evolved_rho);
 
         // Update for next step
         current_rho = evolved_rho;
     }
 
     // Compute MI for the final state (used for force graph)
-    if (num_qubits >= 2 && !step_results.empty()) {
-        final_mi = engine->compute_all_mutual_information(step_results.back(), num_qubits);
+    if (!out.steps.empty()) {
+        if (num_qubits >= 2) {
+            out.mi = engine->compute_all_mutual_information(out.steps.back(), num_qubits);
+        }
+        Eigen::MatrixXcd rho = engine->unpack_dense(out.steps.back());
+        out.bloch = engine->compute_bloch_metrics(rho, num_qubits);
     }
 
-    return {step_results, final_mi};
+    return out;
 }

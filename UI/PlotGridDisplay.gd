@@ -22,7 +22,6 @@ const PlotTile = preload("res://UI/PlotTile.gd")
 ## Handles selection, planting visualization, and signal updates
 ##
 ## Architecture: Plots are the FOUNDATION (fixed parametric positions)
-## QuantumForceGraph reads these positions and tethers quantum bubbles to them
 const GridConfig = preload("res://Core/GameState/GridConfig.gd")
 const BiomeLayoutCalculator = preload("res://Core/Visualization/BiomeLayoutCalculator.gd")
 const BiomeRegistry = preload("res://Core/Biomes/BiomeRegistry.gd")
