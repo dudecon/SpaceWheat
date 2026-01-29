@@ -61,10 +61,6 @@ var has_farm_tether: bool = false
 # Should NOT call update_from_quantum_state() which would zero out opacities
 var is_terminal_bubble: bool = false
 
-# V2 Architecture: Direct reference to the bound terminal (source of truth)
-# When set, emoji and measurement state are queried from here
-var terminal = null  # Terminal instance
-
 # V2 Architecture: Biome resolver callback (set by manager)
 # Callable that takes biome_name: String and returns BiomeBase or null
 # This decouples QuantumNode from scene tree for biome lookup

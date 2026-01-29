@@ -16,8 +16,8 @@ extends RefCounted
 ## REDESIGNED:
 ## - Food Web as Linked Orbits (was arrows, now knot topology)
 ##
-## REMOVED (no physics meaning):
-## - Tether Lines (replaced by MI-based position forces)
+## PLOT TETHERS (UI grounding):
+## - Plot anchor dots + tethers for farm-linked bubbles
 
 
 func draw(graph: Node2D, ctx: Dictionary) -> void:
@@ -28,6 +28,9 @@ func draw(graph: Node2D, ctx: Dictionary) -> void:
 	    ctx: Context dictionary
 	"""
 	# Order matters: back to front
+
+	# 0. Plot anchors + tethers (UI grounding for farm-linked bubbles)
+	_draw_plot_tethers(graph, ctx)
 
 	# 1. Mutual information web (faint background correlation structure)
 	_draw_mutual_information_web(graph, ctx)
@@ -49,6 +52,42 @@ func draw(graph: Node2D, ctx: Dictionary) -> void:
 
 	# 7. Entanglement clusters (multi-body groups)
 	_draw_entanglement_clusters(graph, ctx)
+
+
+func _draw_plot_tethers(graph: Node2D, ctx: Dictionary) -> void:
+	"""Draw tethers from quantum bubbles to their plot anchors."""
+	var quantum_nodes = ctx.get("quantum_nodes", [])
+	var plot_positions = ctx.get("all_plot_positions", {})
+	var plot_tether_colors = ctx.get("plot_tether_colors", {})
+
+	if plot_positions.is_empty():
+		return
+
+	var drawn_anchors: Dictionary = {}
+
+	for node in quantum_nodes:
+		if not node.visible or not node.has_farm_tether:
+			continue
+		if node.grid_position == Vector2i(-1, -1):
+			continue
+
+		var anchor_pos = plot_positions.get(node.grid_position, node.classical_anchor)
+		if anchor_pos == Vector2.ZERO:
+			continue
+
+		# Tether line (color can be overridden per plot)
+		var line_color = plot_tether_colors.get(node.grid_position, Color(0.8, 0.85, 0.9, 0.25))
+		var dist = node.position.distance_to(anchor_pos)
+		line_color.a *= clampf(1.0 - dist / 450.0, 0.2, 1.0)
+		_draw_dashed_line(graph, anchor_pos, node.position, line_color, 1.5, 6.0, 4.0)
+
+		# Anchor dot (draw once per plot)
+		if not drawn_anchors.has(node.grid_position):
+			drawn_anchors[node.grid_position] = true
+			var base = Color(0.08, 0.08, 0.1, 0.7)
+			var glow = Color(0.9, 0.9, 1.0, 0.6)
+			graph.draw_circle(anchor_pos, 7.0, base)
+			graph.draw_circle(anchor_pos, 3.0, glow)
 
 
 # ============================================================================

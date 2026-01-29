@@ -32,12 +32,17 @@ const DAMPING = 0.85  # Velocity damping per frame
 const BASE_DISTANCE = 120.0  # Base separation between uncorrelated bubbles
 const CORRELATION_SCALING = 3.0  # How much MI affects clustering
 const MAX_BIOME_RADIUS = 250.0  # Maximum radius for mixed states
+const TETHER_SPRING = 0.06  # Strength of plot tether pull for farm-linked bubbles
+const TETHER_MAX_FORCE = 120.0  # Cap tether force to prevent snapping
 
 # Cached mutual information (expensive to compute)
 var _mi_cache: Dictionary = {}  # (qubit_a, qubit_b) -> float
 var _mi_cache_frame: int = -1  # Frame when cache was last computed
 var _mi_throttle_hz: float = 5.0  # How often to recompute MI (Hz)
 var _time_since_mi_update: float = 0.0
+
+# Debug counter
+var _update_count: int = 0
 
 
 func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
@@ -52,6 +57,10 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 	var layout_calculator = ctx.get("layout_calculator")
 	var plot_pool = ctx.get("plot_pool")
 	var active_biome_name = ctx.get("filter_biome", ctx.get("active_biome", ""))  # "" means process all biomes
+	var frame_count = ctx.get("frame_count", 0)
+
+	# Increment update counter for debugging
+	_update_count += 1
 
 	# Throttle expensive MI computation (now just reads C++ cache, but still throttle)
 	_time_since_mi_update += delta
@@ -71,6 +80,12 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 
 
 	# Calculate and apply forces
+	var force_debug = (_update_count <= 3)  # Debug for first 3 update calls
+	var nodes_with_forces = 0
+	var nodes_skipped_inactive = 0
+	var nodes_skipped_behavior = 0
+	var nodes_skipped_lifeless = 0
+
 	for node in nodes:
 		# OPTIMIZATION: Skip force calculations for non-active biomes entirely
 		if active_biome_name != "" and node.biome_name != active_biome_name:
@@ -83,21 +98,29 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 
 		# FIXED PLOTS: Don't move at all (celestial bodies)
 		if quantum_behavior == 2:
+			nodes_skipped_behavior += 1
 			continue
 
 		# HOVERING PLOTS: Fixed relative to anchor (biome measurement plots)
 		if quantum_behavior == 1:
 			node.position = node.classical_anchor
+			nodes_skipped_behavior += 1
 			continue
 
 		# Skip unplanted nodes
 		if not _is_active_node(node):
+			nodes_skipped_inactive += 1
+			if force_debug and nodes_skipped_inactive == 1:
+				print("⚠️ Node skipped (inactive): biome='%s', emoji_north='%s', has_tether=%s, plot=%s" % [
+					node.biome_name, node.emoji_north, node.has_farm_tether, node.plot != null
+				])
 			continue
 
 		# LIFELESS NODES: No quantum data - freeze at anchor
 		if node.is_lifeless:
 			node.position = node.classical_anchor
 			node.velocity = Vector2.ZERO
+			nodes_skipped_lifeless += 1
 			continue
 
 		# Check if measured (v1 plot-based or v2 terminal-based)
@@ -127,9 +150,25 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 		# 4. Repulsion forces: prevent overlap
 		total_force += _calculate_repulsion_forces(node, active_nodes)
 
+		# 5. Plot tether force (keeps farm-linked bubbles near their plot anchors)
+		if node.has_farm_tether and node.classical_anchor != Vector2.ZERO:
+			var to_anchor = node.classical_anchor - node.position
+			if to_anchor.length() > 1.0:
+				var tether_force = to_anchor * TETHER_SPRING
+				if tether_force.length() > TETHER_MAX_FORCE:
+					tether_force = tether_force.normalized() * TETHER_MAX_FORCE
+				total_force += tether_force
+
 		# Apply forces
 		node.apply_force(total_force, delta)
 		node.apply_damping(DAMPING)
+		nodes_with_forces += 1
+
+	# Debug summary (first call only)
+	if force_debug or (nodes_skipped_inactive > 0 and _time_since_mi_update < 0.1):
+		print("🔍 Force system: %d active, %d inactive, %d behavior_blocked, %d lifeless" % [
+			nodes_with_forces, nodes_skipped_inactive, nodes_skipped_behavior, nodes_skipped_lifeless
+		])
 
 	# Update positions from velocities
 	_update_positions(delta, nodes)

@@ -204,6 +204,12 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 		else:
 			_verbose.warn("boot", "⚠️", "No biomes to inject - PlotGridDisplay will have no tiles")
 
+		# Wire plot positions to QuantumForceGraph for tethering
+		if quantum_viz and quantum_viz.graph and plot_grid_display.has_signal("plot_positions_changed"):
+			if not plot_grid_display.plot_positions_changed.is_connected(quantum_viz.graph.update_plot_positions):
+				plot_grid_display.plot_positions_changed.connect(quantum_viz.graph.update_plot_positions)
+				_verbose.info("boot", "📡", "PlotGridDisplay connected to QuantumForceGraph anchors")
+
 	# NOW add to tree - _ready() runs with all dependencies available
 	shell.load_farm_ui(farm_ui)
 	_verbose.info("boot", "✓", "FarmUI mounted in shell")

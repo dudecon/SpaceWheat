@@ -257,6 +257,7 @@ func _build_context() -> Dictionary:
 		"node_by_plot_id": node_by_plot_id,
 		"quantum_nodes_by_grid_pos": quantum_nodes_by_grid_pos,
 		"all_plot_positions": all_plot_positions,
+		"plot_tether_colors": plot_tether_colors,
 		"sun_qubit_node": sun_qubit_node,
 		"biomes": biomes,
 		"active_biome": active_biome,
@@ -414,6 +415,40 @@ func add_life_cycle_effect(effect_type: String, effect_data: Dictionary):
 func set_plot_tether_color(grid_pos: Vector2i, color: Color):
 	"""Set custom tether color for a plot (legacy compatibility)."""
 	plot_tether_colors[grid_pos] = color
+
+
+func update_plot_positions(plot_positions: Dictionary, biome_name: String = "") -> void:
+	"""Update plot anchors from PlotGridDisplay (screen-space coordinates).
+
+	Args:
+		plot_positions: Dictionary of Vector2i -> Vector2 (screen position)
+		biome_name: Optional biome name for logging/context
+	"""
+	if plot_positions.is_empty():
+		return
+
+	# Update global cache
+	for grid_pos in plot_positions.keys():
+		all_plot_positions[grid_pos] = plot_positions[grid_pos]
+
+	# Update node anchors
+	for node in quantum_nodes:
+		if node.grid_position == Vector2i(-1, -1):
+			continue
+		if not plot_positions.has(node.grid_position):
+			continue
+		var anchor_pos = plot_positions[node.grid_position]
+		node.classical_anchor = anchor_pos
+		# Keep measured nodes frozen at the new anchor position
+		var is_measured = node.is_terminal_measured() or (node.plot and node.plot.has_been_measured)
+		if is_measured:
+			node.frozen_anchor = anchor_pos
+			node.position = anchor_pos
+
+	if _verbose:
+		_verbose.debug("viz", "📌", "Plot anchors updated (%d) for biome '%s'" % [
+			plot_positions.size(), biome_name
+		])
 
 
 # ============================================================================

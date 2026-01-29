@@ -1063,15 +1063,18 @@ func _load_biome_dynamically(biome_name: String) -> bool:
 	if not already_loaded:
 		_register_biome_if_loaded(biome_name, biome, grid)
 		_assign_plots_for_biome(biome_name)
-		_register_biome_with_batcher(biome)
 
 		# Add metadata for UI systems
 		set_meta(biome_name.to_lower() + "_biome", biome)
 
-		# Rebuild quantum operators (similar to BootManager Stage 3A)
+		# CRITICAL: Rebuild quantum operators BEFORE registering with batcher
+		# The batcher immediately starts evolving, so operators must be ready
 		var icon_registry = get_node_or_null("/root/IconRegistry")
 		if icon_registry and biome.has_method("rebuild_quantum_operators"):
 			biome.rebuild_quantum_operators()
+
+		# NOW register with batcher (operators are ready)
+		_register_biome_with_batcher(biome)
 
 		print("🗺️ Dynamically loaded and registered biome: %s" % biome_name)
 		biome_loaded.emit(biome_name, biome)

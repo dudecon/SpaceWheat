@@ -57,6 +57,7 @@ var _skip_next_click: bool = false  # Skip click handler after multi-plot drag
 
 # Signals for selection state changes
 signal selection_count_changed(count: int)
+signal plot_positions_changed(positions: Dictionary, biome_name: String)
 
 # Rejection effects (for visual feedback when actions are rejected)
 var rejection_effects: Array[Dictionary] = []  # [{grid_pos, start_time, reason}]
@@ -372,6 +373,7 @@ func _update_layout_for_active_biome(biome_name: String) -> void:
 			))
 
 	# Apply positions to tiles
+	var biome_positions: Dictionary = {}
 	for i in range(plots_in_biome.size()):
 		if i >= screen_positions.size():
 			break
@@ -381,6 +383,7 @@ func _update_layout_for_active_biome(biome_name: String) -> void:
 
 		# Store in classical_plot_positions
 		classical_plot_positions[grid_pos] = screen_pos
+		biome_positions[grid_pos] = screen_pos
 
 		# If tile exists, reposition it (handles biome switching)
 		if tiles.has(grid_pos):
@@ -391,6 +394,7 @@ func _update_layout_for_active_biome(biome_name: String) -> void:
 			tile.position = local_pos - tile_size / 2.0
 
 	_verbose.debug("ui", "✅", "Positioned %d plots for '%s'" % [plots_in_biome.size(), biome_name])
+	plot_positions_changed.emit(biome_positions, biome_name)
 
 
 func _filter_tiles_for_biome(biome_name: String) -> void:
