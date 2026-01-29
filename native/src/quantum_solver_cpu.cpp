@@ -53,6 +53,9 @@ QuantumSolverCPU::QuantumSolverCPU(int dim)
         Eigen::setNbThreads(0);  // Auto-detect cores
     }
     #endif
+
+    // Initialize metrics
+    metrics.hilbert_dim = dim;
 }
 
 void QuantumSolverCPU::set_hamiltonian(const MatrixXcd& H_in) {

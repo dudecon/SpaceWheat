@@ -53,7 +53,7 @@ func set_hamiltonian(H: ComplexMatrix) -> void:
 	var idx = 0
 	for i in range(_dim):
 		for j in range(_dim):
-			var elem = H.get(i, j)
+			var elem = H.get_element(i, j)
 			_hamiltonian_flat[idx] = elem.re
 			idx += 1
 			_hamiltonian_flat[idx] = elem.im
@@ -76,7 +76,7 @@ func add_lindblad_operator(L: ComplexMatrix) -> void:
 	var idx = 0
 	for i in range(_dim):
 		for j in range(_dim):
-			var elem = L.get(i, j)
+			var elem = L.get_element(i, j)
 			L_flat[idx] = elem.re
 			idx += 1
 			L_flat[idx] = elem.im
@@ -230,7 +230,7 @@ func _matrix_to_flat(matrix: ComplexMatrix) -> PackedFloat64Array:
 	var idx = 0
 	for i in range(_dim):
 		for j in range(_dim):
-			var elem = matrix.get(i, j)
+			var elem = matrix.get_element(i, j)
 			result[idx] = elem.re
 			idx += 1
 			result[idx] = elem.im
@@ -247,4 +247,4 @@ func _flat_to_matrix(flat: PackedFloat64Array, matrix: ComplexMatrix) -> void:
 			idx += 1
 			var im = flat[idx]
 			idx += 1
-			matrix.set(i, j, Complex.new(re, im))
+			matrix.set_element(i, j, Complex.new(re, im))
