@@ -1,6 +1,6 @@
 #include "register_types.h"
 #include "quantum_matrix_native.h"
-#include "multi_biome_lookahead_engine.h"
+// #include "multi_biome_lookahead_engine.h"  // DISABLED: Crashes in WSL
 
 // DISABLED HEADERS: GPU-dependent and dead code classes
 // #include "quantum_sparse_native.h"
@@ -22,20 +22,19 @@ void initialize_quantum_matrix_module(ModuleInitializationLevel p_level) {
 
     // Core CPU-based classes only
     ClassDB::register_class<QuantumMatrixNative>();
-    ClassDB::register_class<MultiBiomeLookaheadEngine>();
+    // ClassDB::register_class<MultiBiomeLookaheadEngine>();  // DISABLED: Crashes in WSL
 
-    // DISABLED: Dead code classes no longer in use
+    // DISABLED: Causes crashes in WSL due to platform dependencies
+    // - MultiBiomeLookaheadEngine (platform-specific initialization)
     // - QuantumSolverCPUNative (replaced by integrated QuantumComputer._apply_phase_lnn)
     // - QuantumSparseMatrixNative (GPU-optimized)
     // - QuantumEvolutionEngine (GPU pipeline)
     // - NativeBubbleRenderer (GL rendering)
     // - LiquidNeuralNetNative (loads GPU code during init)
     //
-    // QuantumSolverCPU was a standalone solver that was never used in gameplay.
-    // LNN phase modulation is now integrated directly into QuantumComputer.evolve().
+    // All evolution now uses pure GDScript CPU path (QuantumComputer._evolve_step)
+    // ComplexMatrix native acceleration provides matrix operations only.
     // Keep C++ files for reference but don't register them.
-    //
-    // Graphics classes crash in WSL without GPU (swrast_dri.so/libd3d12core.so).
 }
 
 void uninitialize_quantum_matrix_module(ModuleInitializationLevel p_level) {
