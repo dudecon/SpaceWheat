@@ -168,12 +168,13 @@ func get_paired_emoji(emoji: String) -> String:
 
 
 func _update_quantum_substrate(dt: float) -> void:
-	"""Evolve quantum substrate under Lindblad dynamics + phasic shadow intelligence."""
-	if quantum_computer:
-		quantum_computer.evolve(dt, max_evolution_dt)
+	"""Evolve quantum substrate under Lindblad dynamics + phasic shadow intelligence.
 
-		# Apply learned phase modulation from phasic shadow (LNN intelligence)
-		apply_phase_modulation()
+	Integrates LNN phase modulation directly into evolution for atomic operation.
+	"""
+	if quantum_computer:
+		# Single atomic call: evolve + apply LNN phase modulation
+		quantum_computer.evolve(dt, max_evolution_dt, phase_lnn if phase_lnn_enabled else null)
 
 	# Apply semantic drift game mechanics (🌀 chaos vs ✨ stability)
 	super._update_quantum_substrate(dt)

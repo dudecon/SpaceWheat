@@ -328,53 +328,14 @@ func initialize_phase_lnn() -> void:
 		hidden_size,     # Hidden: sqrt(qubits) neurons
 		num_qubits       # Output: phase modulation per qubit
 	)
+
+	# Share LNN reference with QuantumComputer (will be used during evolve())
+	quantum_computer.phase_lnn = phase_lnn
+
 	if _verbose and _verbose.is_verbose("biome"):
 		_verbose.info("biome", "🌀", "Phasic shadow: GDScript LNN initialized (native disabled)")
 
 	phase_lnn_enabled = true
-
-
-func apply_phase_modulation() -> void:
-	"""Apply learned phase modulation from LNN to density matrix.
-
-	The phasic shadow (learned phases) modulates the quantum evolution,
-	creating an undercurrent of intelligence that shapes the system's behavior.
-	"""
-	if not phase_lnn or not phase_lnn_enabled or not quantum_computer:
-		return
-
-	# Extract current phases from density matrix
-	var phases = PackedFloat64Array()
-	var rho = quantum_computer.density_matrix
-	if not rho:
-		return
-
-	var dim = rho.n
-	var num_qubits = quantum_computer.register_map.num_qubits
-
-	# Extract phase from each qubit's diagonal element
-	# ρ_ii gives probability amplitude, arg(ρ_ii) gives phase
-	phases.resize(num_qubits)
-	for q in range(num_qubits):
-		var rho_ii = rho.get(2*q, 2*q)  # Diagonal elements
-		phases[q] = rho_ii.arg() if rho_ii else 0.0
-
-	# Forward pass through LNN: learn how to modulate phases
-	var phase_shifts = phase_lnn.forward(phases)
-
-	# Apply learned phase shifts to density matrix
-	# Modulate each basis state's phase by the learned signal
-	for i in range(dim):
-		for j in range(dim):
-			var element = rho.get(i, j)
-			if element:
-				# Apply learned phase shift (small perturbation)
-				var shift_mag = phase_shifts[i % num_qubits] * 0.01  # Small modulation
-				var phase_mod = Complex.new(cos(shift_mag), sin(shift_mag))
-				rho.set(i, j, element.multiply(phase_mod))
-
-	# Renormalize to preserve trace
-	rho._renormalize()
 
 
 # ============================================================================

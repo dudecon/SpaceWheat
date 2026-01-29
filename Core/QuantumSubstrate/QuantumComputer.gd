@@ -82,6 +82,11 @@ var sink_flux_per_emoji: Dictionary = {}  # emoji → float (accumulated flux)
 ## Tracks elapsed time to apply time-dependent drivers (e.g., sun oscillation)
 var elapsed_time: float = 0.0  # Total time elapsed since biome initialization
 
+## PHASE MODULATION VIA LEARNED NEURAL NETWORK (Phasic Shadow)
+## Optional LiquidNeuralNet that modulates density matrix phases during evolution
+## Inference happens atomically as part of evolve() call
+var phase_lnn = null  # LiquidNeuralNet reference (optional)
+
 # Performance: Purity cache (invalidated on density matrix changes)
 var _purity_cache: float = -1.0
 
@@ -1060,15 +1065,64 @@ func _reinitialize_mixed_state() -> void:
 				density_matrix.set_element(i, j, Complex.zero())
 
 
+func _apply_phase_lnn(lnn: Object) -> void:
+	"""Apply learned phase modulation from neural network to density matrix diagonal.
+
+	The LNN operates in the phasic shadow - it learns to modulate the phases of
+	the diagonal density matrix elements. This creates an undercurrent of learned
+	intelligence that shapes quantum evolution.
+
+	Args:
+		lnn: LiquidNeuralNet instance with forward(phases: PackedFloat64Array) method
+	"""
+	if density_matrix == null or not lnn:
+		return
+
+	var dim = register_map.dim()
+	if dim == 0:
+		return
+
+	# Extract current phases from density matrix diagonal
+	var phases = PackedFloat64Array()
+	phases.resize(dim)
+
+	for i in range(dim):
+		var diag_elem = density_matrix.get_element(i, i)
+		var phase = atan2(diag_elem.im, diag_elem.re)
+		phases[i] = phase
+
+	# Run LNN forward pass to get learned phase modulations
+	var modulated_phases = lnn.forward(phases)
+	if modulated_phases.is_empty():
+		return
+
+	# Apply phase shifts to density matrix diagonal
+	var data = density_matrix._data
+	for i in range(dim):
+		var old_elem = data[i * dim + i]
+		var magnitude = sqrt(old_elem.re * old_elem.re + old_elem.im * old_elem.im)
+
+		# Phase shift from LNN
+		var new_phase = modulated_phases[i]
+		var new_re = magnitude * cos(new_phase)
+		var new_im = magnitude * sin(new_phase)
+
+		data[i * dim + i] = Complex.new(new_re, new_im)
+
+	# Invalidate caches since we modified the state
+	_purity_cache = -1.0
+
+
 # ============================================================================
 # MODEL C: FULL LINDBLAD EVOLUTION
 # ============================================================================
 
-func evolve(dt: float, max_dt: float = 0.02) -> void:
+func evolve(dt: float, max_dt: float = 0.02, lnn: Object = null) -> void:
 	var t0 = Time.get_ticks_usec()
-	"""Evolve density matrix under Lindblad master equation.
+	"""Evolve density matrix under Lindblad master equation + optional phase modulation.
 
 	Implements: dρ/dt = -i[H,ρ] + Σ_k (L_k ρ L_k† - ½{L_k†L_k, ρ})
+	             + phase modulation via learned neural network (if lnn provided)
 
 	Uses first-order Euler integration: ρ(t+dt) = ρ(t) + dt * dρ/dt
 	With subcycling for numerical stability when dt is large.
@@ -1076,7 +1130,8 @@ func evolve(dt: float, max_dt: float = 0.02) -> void:
 	Args:
 	    dt: Time step (in game seconds, typically 1/60 for 60 FPS)
 	    max_dt: Maximum substep size for numerical integration (default 0.02)
-	            Smaller = more accurate but slower, Larger = faster but less accurate
+	    lnn: Optional LiquidNeuralNet for phase modulation in phasic shadow
+	         If provided, applies learned phase shifts to density matrix diagonal
 
 	Requires:
 	    - density_matrix initialized (via initialize_basis or allocate_axis)
@@ -1089,6 +1144,10 @@ func evolve(dt: float, max_dt: float = 0.02) -> void:
 	var dim = register_map.dim()
 	if dim == 0:
 		return
+
+	# Use provided lnn or fall back to instance variable
+	if lnn == null:
+		lnn = phase_lnn
 
 	# ACCUMULATE TIME for time-dependent drivers (sun oscillation, etc.)
 	elapsed_time += dt
@@ -1115,9 +1174,14 @@ func evolve(dt: float, max_dt: float = 0.02) -> void:
 			density_matrix._from_packed(result_packed, dim)
 
 		_renormalize()  # Critical: ensure Tr(ρ) = 1 after native evolution
+
+		# Apply phase modulation from LNN (phasic shadow)
+		if lnn:
+			_apply_phase_lnn(lnn)
+
 		var t1 = Time.get_ticks_usec()
 		if Engine.get_process_frames() % 60 == 0:
-			_log("trace", "quantum", "⏱️", "QC Evolve Trace (Native): Total %d us" % [t1 - t0])
+			_log("trace", "quantum", "⏱️", "QC Evolve Trace (Native+LNN): Total %d us" % [t1 - t0])
 		return
 
 	# ==========================================================================
@@ -1129,15 +1193,21 @@ func evolve(dt: float, max_dt: float = 0.02) -> void:
 		var sub_dt = dt / num_steps
 		for _i in range(num_steps):
 			_evolve_step(sub_dt)
+		# Apply phase modulation from LNN (phasic shadow)
+		if lnn:
+			_apply_phase_lnn(lnn)
 		var t1 = Time.get_ticks_usec()
 		if Engine.get_process_frames() % 60 == 0:
-			_log("trace", "quantum", "⏱️", "QC Evolve Trace (Fallback Subcycle %d): Total %d us" % [num_steps, t1 - t0])
+			_log("trace", "quantum", "⏱️", "QC Evolve Trace (Fallback Subcycle %d+LNN): Total %d us" % [num_steps, t1 - t0])
 		return
 
 	_evolve_step(dt)
+	# Apply phase modulation from LNN (phasic shadow)
+	if lnn:
+		_apply_phase_lnn(lnn)
 	var t1 = Time.get_ticks_usec()
 	if Engine.get_process_frames() % 60 == 0:
-		_log("trace", "quantum", "⏱️", "QC Evolve Trace (Fallback Single): Total %d us" % [t1 - t0])
+		_log("trace", "quantum", "⏱️", "QC Evolve Trace (Fallback Single+LNN): Total %d us" % [t1 - t0])
 
 
 func _evolve_step(dt: float) -> void:
