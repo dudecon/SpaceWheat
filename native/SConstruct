@@ -15,7 +15,19 @@ if env['platform'] != 'windows':
     env.Append(CXXFLAGS=['-O3'])
 
 # Source files
+# Exclude GPU-accelerated and disabled classes
 sources = Glob('src/*.cpp')
+# Remove disabled native classes that cause WSL crashes
+disabled = [
+    'src/liquid_neural_net.cpp',         # CPU LNN (unused - GDScript version used instead)
+    'src/liquid_neural_net_native.cpp',  # GPU-accelerated LNN
+    'src/quantum_evolution_engine.cpp',   # GPU evolution
+    'src/quantum_sparse_native.cpp',      # GPU sparse matrix
+    'src/batched_bubble_renderer.cpp',    # GPU bubble rendering
+    'src/quantum_solver_cpu_native.cpp',  # Unused native solver
+]
+for f in disabled:
+    sources = [s for s in sources if not str(s).endswith(f)]
 
 # Build shared library
 library = env.SharedLibrary(
