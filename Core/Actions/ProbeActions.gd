@@ -25,29 +25,6 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 ## ============================================================================
 
 static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
-	"""Execute EXPLORE action: discover a register in the quantum soup.
-
-	Algorithm:
-	1. Check cost (🍞 bread)
-	2. Get unbound terminal from pool
-	3. Get unbound registers with probabilities from biome
-	4. Weighted random selection (higher probability = more likely)
-	5. Bind terminal to selected register
-	6. Return result with emoji for bubble spawn
-
-	Args:
-		plot_pool: PlotPool instance
-		biome: BiomeBase instance (the quantum soup to probe)
-		economy: FarmEconomy instance (for cost deduction)
-
-	Returns:
-		Dictionary with keys:
-		- success: bool
-		- terminal: Terminal (if success)
-		- register_id: int (if success)
-		- emoji_pair: {north, south} (if success)
-		- error: String (if failure)
-	"""
 	# 0. Null checks for required parameters
 	if not plot_pool:
 		return {
@@ -171,36 +148,6 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 ## ============================================================================
 
 static func action_measure(terminal, biome) -> Dictionary:
-	"""Execute MEASURE action: sample from ensemble, record claim, drain ρ.
-
-	Ensemble Model:
-	- ρ represents a statistical ensemble of quantum systems
-	- MEASURE samples one outcome via Born rule
-	- The sampled probability is RECORDED (the "claim" for POP)
-	- ρ is DRAINED (probability reduced) but NOT fully collapsed
-	- Sun/pump can replenish drained probability over time
-
-	Algorithm:
-	1. Validate terminal state
-	2. Get current probability from ρ (this is the "claim")
-	3. Born rule sampling → outcome
-	4. Record the probability (stored on terminal)
-	5. DRAIN ρ (reduce probability by DRAIN_FACTOR)
-	6. Handle entangled registers (drain them too)
-	7. Mark terminal as measured
-
-	Args:
-		terminal: Terminal instance (must be bound)
-		biome: BiomeBase instance
-
-	Returns:
-		Dictionary with keys:
-		- success: bool
-		- outcome: String (emoji result)
-		- recorded_probability: float (the "claim" for POP)
-		- was_drained: bool
-		- error: String (if failure)
-	"""
 	# 0. Null checks - terminal and biome must exist
 	if not terminal:
 		return {
@@ -332,7 +279,6 @@ static func action_measure(terminal, biome) -> Dictionary:
 
 
 static func _check_entanglement(register_id: int, biome) -> bool:
-	"""Check if register has significant off-diagonal coherence (entanglement)."""
 	if not biome:
 		return false
 	if biome.has_method("get_coherence_with_other_registers"):
@@ -342,19 +288,6 @@ static func _check_entanglement(register_id: int, biome) -> bool:
 
 
 static func _drain_register(register_id: int, is_north: bool, biome) -> bool:
-	"""Drain probability from measured outcome in density matrix.
-
-	Ensemble Model: We're "extracting" copies from the ensemble that
-	were in the measured state. This reduces probability without full collapse.
-
-	Args:
-		register_id: Which register was measured
-		is_north: true if outcome was north emoji
-		biome: BiomeBase with density matrix
-
-	Returns:
-		true if drain was applied, false otherwise
-	"""
 	if not biome:
 		return false
 
@@ -376,11 +309,6 @@ static func _drain_register(register_id: int, is_north: bool, biome) -> bool:
 
 
 static func _collapse_density_matrix(register_id: int, is_north: bool, biome) -> void:
-	"""DEPRECATED: Use _drain_register for ensemble model.
-
-	Full collapse is reserved for GLOBAL HARVEST action.
-	Kept for backward compatibility.
-	"""
 	# For ensemble model, drain instead of collapse
 	_drain_register(register_id, is_north, biome)
 
@@ -390,7 +318,6 @@ static func _collapse_density_matrix(register_id: int, is_north: bool, biome) ->
 ## ============================================================================
 
 static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
-	"""Pop action: harvest the terminal and clean up relay."""
 	var harvest_result = _prepare_pop_result(terminal, plot_pool, economy, farm)
 	if not harvest_result.get("success", false):
 		return harvest_result
@@ -408,12 +335,6 @@ static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dict
 
 
 static func action_reap(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
-	"""Reap action: harvest the terminal and unbind it.
-
-	Costs 1 👥 labor to claim the harvest.
-	Harvests the recorded probability (captured at MEASURE time, after 50% drain).
-	Terminal is unbound after reaping, ready for a new EXPLORE.
-	"""
 	# Preflight: ensure terminal can be harvested before charging
 	var preflight = _prepare_pop_result(terminal, plot_pool, null, farm)
 	if not preflight.get("success", false):
@@ -453,7 +374,6 @@ static func action_reap(terminal, plot_pool, economy = null, farm = null) -> Dic
 
 
 static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
-	"""Shared harvesting logic used by both pop/reap."""
 	if not terminal:
 		return {
 			"success": false,
@@ -549,13 +469,6 @@ static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null
 ## ============================================================================
 
 static func action_harvest_global(biome, plot_pool = null, economy = null) -> Dictionary:
-	"""DEPRECATED - Not used in current gameplay loop.
-
-	Use action_harvest_all() instead, which operates on measured terminals
-	with Reality Midwife token multiplier.
-
-	This function is kept for backwards compatibility but should not be called.
-	"""
 	push_warning("ProbeActions.action_harvest_global() is deprecated - use action_harvest_all() instead")
 	return {
 		"success": false,
@@ -564,96 +477,6 @@ static func action_harvest_global(biome, plot_pool = null, economy = null) -> Di
 	}
 
 # Commented out old implementation - kept for reference
-"""
-static func action_harvest_global_OLD(biome, plot_pool = null, economy = null) -> Dictionary:
-	# Execute HARVEST: collapse entire ensemble, convert all probability to credits.
-
-	# This is the "end of turn" action - true projective measurement of
-	# the entire quantum system. Unlike MEASURE (which drains), HARVEST
-	# fully collapses ρ and ends the level.
-
-	# Algorithm:
-	# 1. Get all register probabilities from ρ
-	# 2. Convert each to credits: P × CONVERSION_RATE
-	# 3. Sum total credits
-	# 4. Collapse ρ (make diagonal / fully decohered)
-	# 5. Stop evolution
-	# 6. Signal level complete
-
-	# Args:
-	#	biome: BiomeBase instance
-	#	plot_pool: PlotPool instance (optional, to clean up terminals)
-	#	economy: FarmEconomy instance (optional, for credit tracking)
-
-	# Returns:
-	#	Dictionary with keys:
-	#	- success: bool
-	#	- total_credits: float
-	#	- harvested: Array[{register, outcome, probability, credits}]
-	#	- level_complete: bool
-	"""
-	if not biome:
-		return {
-			"success": false,
-			"error": "no_biome",
-			"message": "No biome to harvest."
-		}
-
-	var total_credits: float = 0.0
-	var harvested: Array = []
-
-	# 1. Get all register probabilities
-	var probabilities = biome.get_register_probabilities() if biome.has_method("get_register_probabilities") else {}
-
-	if probabilities.is_empty():
-		# Fallback: try to get register count and individual probabilities
-		var num_registers = biome.get_register_count() if biome.has_method("get_register_count") else 0
-		for reg_id in range(num_registers):
-			var prob = biome.get_register_probability(reg_id) if biome.has_method("get_register_probability") else 0.5
-			probabilities[reg_id] = prob
-
-	# 2. Convert each register to credits (10x probability)
-	for reg_id in probabilities:
-		var prob = probabilities[reg_id]
-		var credits = prob * EconomyConstants.QUANTUM_TO_CREDITS
-		total_credits += credits
-
-		# Get emoji for display
-		var emoji_pair = biome.get_register_emoji_pair(reg_id) if biome.has_method("get_register_emoji_pair") else {}
-		var outcome = emoji_pair.get("north", "?") if prob > 0.5 else emoji_pair.get("south", "?")
-
-		harvested.append({
-			"register": reg_id,
-			"outcome": outcome,
-			"probability": prob,
-			"credits": credits
-		})
-
-	# 3. Add total credits to economy
-	if economy:
-		if economy.has_method("add_resource"):
-			economy.add_resource("💰", int(total_credits), "global_harvest")
-
-	# 4. Collapse density matrix (full decoherence)
-	if biome.has_method("collapse_all_registers"):
-		biome.collapse_all_registers()
-	elif biome.has_method("decohere"):
-		biome.decohere()
-
-	# 5. Stop evolution
-	if biome.has_method("stop_evolution"):
-		biome.stop_evolution()
-
-	# 6. Clean up any bound terminals
-	if plot_pool and plot_pool.has_method("unbind_all_terminals"):
-		plot_pool.unbind_all_terminals()
-
-	return {
-		"success": true,
-		"total_credits": total_credits,
-		"harvested": harvested,
-		"level_complete": true
-	}
 
 
 ## ============================================================================
@@ -661,36 +484,6 @@ static func action_harvest_global_OLD(biome, plot_pool = null, economy = null) -
 ## ============================================================================
 
 static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dictionary:
-	"""Execute HARVEST ALL action: end of turn, pop all terminals, collect resources.
-
-	Harvests all bound terminals and applies Reality Midwife token multiplier.
-
-	System:
-	- Multiplier = token count (before cost deduction)
-	- Cost = 1 token (fixed cost, same as other actions)
-	- Resources = base × multiplier
-
-	Examples:
-	  1 token → 1x resources, costs 1, leaves 0
-	  2 tokens → 2x resources, costs 1, leaves 1
-	  3 tokens → 3x resources, costs 1, leaves 2
-	  5 tokens → 5x resources, costs 1, leaves 4
-
-	Args:
-		plot_pool: PlotPool instance with bound terminals
-		economy: FarmEconomy instance (optional, for credit tracking)
-		biome: BiomeBase instance (optional, for state snapshot)
-
-	Returns:
-		Dictionary with keys:
-		- success: bool
-		- state_saved: bool
-		- terminals_harvested: int
-		- midwife_multiplier: float (token count)
-		- token_cost: float (amount deducted)
-		- resource_totals: Dictionary of harvested resources
-		- bonus_applied: Dictionary of bonus resources
-	"""
 	# 0. Null check for plot_pool
 	if not plot_pool:
 		return {
@@ -839,19 +632,6 @@ static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dicti
 
 
 static func action_clear_all(plot_pool) -> Dictionary:
-	"""Clear all terminals: unbind without harvesting.
-
-	Releases all bound terminals and their registers without collecting resources.
-	Use this to reset the grid and start fresh exploration.
-
-	Args:
-		plot_pool: PlotPool instance
-
-	Returns:
-		Dictionary with keys:
-		- success: bool
-		- terminals_cleared: int (number of terminals unbound)
-	"""
 	if not plot_pool:
 		return {
 			"success": false,
@@ -882,10 +662,6 @@ static func action_clear_all(plot_pool) -> Dictionary:
 
 
 static func _save_density_matrices(biome) -> Dictionary:
-	"""Save density matrix state snapshot for all registers.
-
-	Returns a dictionary with serialized density matrix data.
-	"""
 	if not biome:
 		return {}
 
@@ -914,15 +690,6 @@ static func _save_density_matrices(biome) -> Dictionary:
 ## ============================================================================
 
 static func get_explore_preview(plot_pool, biome) -> Dictionary:
-	"""Get preview info for EXPLORE action (for UI display).
-
-	Returns:
-		Dictionary with:
-		- can_explore: bool
-		- available_terminals: int
-		- available_registers: int
-		- top_probabilities: Array[{emoji, probability}]
-	"""
 	var available_terminals = plot_pool.get_unbound_count()
 	var probabilities = biome.get_register_probabilities() if biome else {}
 
@@ -948,16 +715,6 @@ static func get_explore_preview(plot_pool, biome) -> Dictionary:
 
 
 static func get_measure_preview(terminal, biome) -> Dictionary:
-	"""Get preview info for MEASURE action (for UI display).
-
-	Returns:
-		Dictionary with:
-		- can_measure: bool
-		- north_emoji: String
-		- south_emoji: String
-		- north_probability: float
-		- south_probability: float
-	"""
 	if not terminal or not terminal.is_bound or terminal.is_measured:
 		return {
 			"can_measure": false,
@@ -979,14 +736,6 @@ static func get_measure_preview(terminal, biome) -> Dictionary:
 
 
 static func get_pop_preview(terminal: RefCounted) -> Dictionary:
-	"""Get preview info for POP action (for UI display).
-
-	Returns:
-		Dictionary with:
-		- can_pop: bool
-		- resource: String (emoji to harvest)
-		- probability: float (what probability was at measure time)
-	"""
 	if not terminal or not terminal.is_measured:
 		return {
 			"can_pop": false,
@@ -1007,12 +756,16 @@ static func get_pop_preview(terminal: RefCounted) -> Dictionary:
 
 static func _log(level: String, category: String, emoji: String, message: String) -> void:
 	var tree = Engine.get_main_loop()
-	if not tree: return
+	if not tree:
+		return
 	var verbose = tree.root.get_node_or_null("/root/VerboseConfig")
 	if not verbose:
-		if level == "error": push_error("[%s] %s" % [category.to_upper(), message])
-		elif level == "warn": push_warning("[%s] %s" % [category.to_upper(), message])
-		else: print("[%s] %s" % [category.to_upper(), message])
+		if level == "error":
+			push_error("[%s] %s" % [category.to_upper(), message])
+		elif level == "warn":
+			push_warning("[%s] %s" % [category.to_upper(), message])
+		else:
+			print("[%s] %s" % [category.to_upper(), message])
 		return
 
 	match level:

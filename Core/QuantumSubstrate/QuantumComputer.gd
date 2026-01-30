@@ -388,6 +388,79 @@ func get_marginal_coherence(_comp, reg_id: int) -> float:
 	var marginal = get_marginal_density_matrix(null, reg_id)
 	return marginal.get_element(0, 1).abs()
 
+
+func export_bloch_packet() -> PackedFloat64Array:
+	"""Export current state as visualization packet.
+
+	Standard format for the information railway:
+	QC.export_bloch_packet() → batcher buffers → viz_cache → UI
+
+	Returns packed array: [p0, p1, x, y, z, r, theta, phi] per qubit
+	"""
+	var num_qubits = register_map.num_qubits
+	var packet = PackedFloat64Array()
+	packet.resize(num_qubits * 8)
+
+	for q in range(num_qubits):
+		var marginal = get_marginal_density_matrix(null, q)
+		var base = q * 8
+
+		if not marginal:
+			# Fallback: uniform superposition
+			packet[base + 0] = 0.5  # p0
+			packet[base + 1] = 0.5  # p1
+			packet[base + 2] = 0.0  # x
+			packet[base + 3] = 0.0  # y
+			packet[base + 4] = 0.0  # z
+			packet[base + 5] = 0.0  # r
+			packet[base + 6] = PI / 2  # theta
+			packet[base + 7] = 0.0  # phi
+			continue
+
+		# Probabilities from diagonal
+		var p0 = marginal.get_element(0, 0).re
+		var p1 = marginal.get_element(1, 1).re
+
+		# Coherence from off-diagonal
+		var coh = marginal.get_element(0, 1)
+
+		# DEBUG: Log coherence values for first qubit every 100 frames
+		if q == 0 and Engine.get_process_frames() % 100 == 0:
+			_log("trace", "test", "⚛️", "Bloch q0: ρ₀₁=%.6f + %.6fi, |ρ₀₁|=%.6f" % [
+				coh.re if coh else 0.0,
+				coh.im if coh else 0.0,
+				coh.abs() if coh else 0.0
+			])
+
+		# Bloch coordinates
+		var theta = 0.0
+		var phi = 0.0
+		var r = 0.0
+
+		var p_total = p0 + p1
+		if p_total > 1e-10:
+			theta = 2.0 * acos(sqrt(clamp(p0 / p_total, 0.0, 1.0)))
+
+		if coh and coh.abs() > 1e-10:
+			phi = coh.arg()
+			r = 2.0 * coh.abs()
+
+		var x = sin(theta) * cos(phi) * r
+		var y = sin(theta) * sin(phi) * r
+		var z = cos(theta) * r
+
+		packet[base + 0] = p0
+		packet[base + 1] = p1
+		packet[base + 2] = x
+		packet[base + 3] = y
+		packet[base + 4] = z
+		packet[base + 5] = r
+		packet[base + 6] = theta
+		packet[base + 7] = phi
+
+	return packet
+
+
 ## ============================================================================
 ## PHASE 4: ENERGY TAP SINK FLUX TRACKING
 ## ============================================================================

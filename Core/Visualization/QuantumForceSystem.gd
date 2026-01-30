@@ -351,11 +351,30 @@ func _print_debug_info(nodes: Array, biomes: Dictionary) -> void:
 	# Sample actual populations from a few nodes
 	if nodes.size() > 0:
 		var sample_pops = []
+		var sample_radii = []
+		var sample_hues = []
+		var sample_phi = []
+		var sample_r_xy = []
 		for i in range(min(3, nodes.size())):
 			if i < nodes.size() and _is_active(nodes[i]):
-				sample_pops.append(nodes[i].emoji_north_opacity)
+				var n = nodes[i]
+				sample_pops.append("%.2f" % n.emoji_north_opacity)
+				sample_radii.append("%.1f" % n.radius)
+				sample_hues.append("%.2f" % n.color.h)
+				# Also get raw phi and r_xy from viz_cache
+				var biome = biomes.get(n.biome_name)
+				if biome and biome.viz_cache:
+					var qubit_idx = biome.viz_cache.get_qubit(n.emoji_north)
+					var snap = biome.viz_cache.get_snapshot(qubit_idx)
+					sample_phi.append("%.3f" % snap.get("phi", 0.0))
+					sample_r_xy.append("%.3f" % snap.get("r_xy", 0.0))
+				else:
+					sample_phi.append("N/A")
+					sample_r_xy.append("N/A")
 		if sample_pops.size() > 0:
-			print("Sample populations: %s" % str(sample_pops))
+			_test_log("Sample pops: %s | radii: %s | hues: %s | phi: %s | r_xy: %s" % [
+				str(sample_pops), str(sample_radii), str(sample_hues), str(sample_phi), str(sample_r_xy)
+			])
 
 	print("Caches: H-coupling=%d entries, MI=%d entries" % [
 		_coupling_cache.size(),
@@ -403,3 +422,13 @@ func _print_debug_info(nodes: Array, biomes: Dictionary) -> void:
 				])
 
 	print("=================================\n")
+
+
+func _test_log(message: String) -> void:
+	"""Log test/debug message with [TEST] prefix via VerboseConfig."""
+	var tree = Engine.get_main_loop()
+	if not tree:
+		return
+	var verbose = tree.root.get_node_or_null("/root/VerboseConfig")
+	if verbose:
+		verbose.trace("test", "📊", message)

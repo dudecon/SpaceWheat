@@ -306,8 +306,15 @@ func update_from_quantum_state():
 	# 2. COLOR HUE ← Coherence phase arg(ρ_{n,s}) (φ-like)
 	var coh_magnitude = 0.0
 	var coh_phase = 0.0
+	var x_val = snap.get("x", 0.0)
+	var y_val = snap.get("y", 0.0)
 	coh_magnitude = snap.get("r_xy", 0.0) * 0.5
 	coh_phase = snap.get("phi", 0.0)
+
+	# DEBUG: Log phi values occasionally (every 100 frames for first qubit)
+	if register_id == 0 and Engine.get_process_frames() % 100 == 0:
+		_test_log("trace", "🧬", "Node q%d: φ=%.4f, x=%.4f, y=%.4f, r_xy=%.4f, p0=%.3f" % [
+			register_id, coh_phase, x_val, y_val, coh_magnitude * 2.0, north_prob])
 
 	# Map phase to hue [0, 1] for HSV color
 	var hue = (coh_phase + PI) / TAU  # Normalize to [0, 1]
@@ -429,6 +436,16 @@ func get_glow_alpha() -> float:
 	NOTE: Berry phase has been moved to pulse rate animation.
 	"""
 	return energy * 0.5 + 0.3  # 0.3 to 0.8 range based on purity
+
+
+func _test_log(level: String, emoji: String, message: String) -> void:
+	"""Log test/debug messages with [TEST] prefix to VerboseConfig if available."""
+	var tree = Engine.get_main_loop()
+	if not tree:
+		return
+	var verbose = tree.root.get_node_or_null("/root/VerboseConfig")
+	if verbose:
+		verbose.trace("test", emoji, message)
 
 
 func get_berry_phase_glow() -> float:
