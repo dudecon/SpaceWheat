@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Faction Database v2.1
 ## Generated from Core/Factions/data/factions_merged.json
-## Contains 83 factions with rich flavor text, mottos, and lore
+## Contains 89 factions with rich flavor text, mottos, and lore
 
 ## Meta Information
 const VERSION = "v2.1"
@@ -97,9 +97,9 @@ const AXIAL_SPINE = {
 }
 
 ## Statistics
-const TOTAL_FACTIONS = 83
-const RINGS = ['center', 'first', 'outer', 'second', 'third']
-const DOMAINS = ['Art-Signal', 'Boundary', 'Civic', 'Civic/Administrative', 'Commerce', 'Criminal', 'Dissolution', 'Enforcement', 'Horror', 'Imperial/Executive', 'Imperial/Horror', 'Infrastructure', 'Infrastructure/Scavenger', 'Intelligence', 'Medicine', 'Military', 'Mystic', 'Mystic/Infrastructure', 'Navigation', 'Predation', 'Scavenger', 'Science', 'Science/Deep-Math']
+const TOTAL_FACTIONS = 89
+const RINGS = ['center', 'first', 'fourth', 'outer', 'second', 'third']
+const DOMAINS = ['Administration', 'Aristocracy', 'Art-Signal', 'Boundary', 'Civic', 'Civic/Administrative', 'Commerce', 'Criminal', 'Dissolution', 'Ecology', 'Enforcement', 'Horror', 'Imperial/Executive', 'Imperial/Horror', 'Infrastructure', 'Infrastructure/Scavenger', 'Intelligence', 'Knowledge', 'Labor', 'Medicine', 'Military', 'Mystic', 'Mystic/Infrastructure', 'Navigation', 'Predation', 'Scavenger', 'Science', 'Science/Deep-Math', 'Security']
 
 ## All Factions
 const ALL_FACTIONS = [
@@ -107,7 +107,7 @@ const ALL_FACTIONS = [
 		"name": "Black Horizon",
 		"domain": "Boundary",
 		"ring": "outer",
-		"bits": [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+		"bits": ["⚫", "🕳", "🪐", "🌀"],
 		"sig": ["⚫"],
 		"motto": null,
 		"description": "Not a faction—a boundary condition. The edge of the probability manifold where quantum states become undefined. Those who drift too far into shadow-configurations eventually feel its gravity. It doesn't want anything. It doesn't think. It's just the place where patterns stop being stable. The Cartographers map its edges. The Chorus sings at its threshold. No one maps its interior, because there is no interior—only the moment of crossing."
@@ -152,7 +152,7 @@ const ALL_FACTIONS = [
 		"name": "Cartographers of the Impossible",
 		"domain": "Navigation",
 		"ring": "second",
-		"bits": [],
+		"bits": ["🧭", "📍", "🗺", "🔭"],
 		"sig": ["🧭"],
 		"motto": "If it can be reached, it can be charted.",
 		"description": "They map what shouldn't be mappable. The fracture zones where space folds, the probability gradients where paths fork, the edges where the Black Horizon bleeds into observable reality. Their charts are paradoxes made legible, their compasses point toward things that exist only when observed. Nomads follow their markers through the fractures; most arrive somewhere. The Cartographers don't guarantee destinations—only that the journey can be recorded."
@@ -179,8 +179,8 @@ const ALL_FACTIONS = [
 		"name": "Chop Docs",
 		"domain": "Medicine",
 		"ring": "third",
-		"bits": [],
-		"sig": ["⚙️"],
+		"bits": ["⚙️", "💉", "🔧", "🦴"],
+		"sig": ["⚙", "️"],
 		"motto": "We fix what breaks. We break what pays.",
 		"description": "Back-alley surgeons and cybernetic salvagers. They buy what the Bone Merchants sell and install it in whoever can pay—or whoever can't refuse. Their clinics smell of antiseptic and desperation. The ⚙️ they work with comes from sources best not asked about, and the modifications they perform void warranties that were already void. In the megacity, everyone eventually needs their services."
 	},
@@ -188,10 +188,19 @@ const ALL_FACTIONS = [
 		"name": "Chorus of Oblivion",
 		"domain": "Dissolution",
 		"ring": "third",
-		"bits": [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+		"bits": ["🎶", "🔔", "🫥", "🕯"],
 		"sig": ["🎶"],
 		"motto": "Every name is just a song waiting to end.",
 		"description": "They sing the songs that unmake. Not destruction—dissolution. Their harmonies resonate at frequencies that loosen the bonds between self and memory, between name and named. They gather in the resonant canyons where acoustics amplify their work, performing requiems for identities that haven't died yet. The 🫥 is not their enemy—it's their congregation. Those who lose themselves to the music don't die. They simply stop being anyone in particular."
+	},
+	{
+		"name": "Chronicle Keepers",
+		"domain": "Knowledge",
+		"ring": "third",
+		"bits": ["🗃", "🪦", "🕰", "📖"],
+		"sig": ["🗃"],
+		"motto": "We remember what you filed.",
+		"description": "The Wardens sign, the Keepers remember. Every form processed, every life filed, every death stamped—they maintain the true archives, not the official ones. They know how many billions have passed through. They know the names the system discarded. Some call them historians. Some call them witnesses. The Throne tolerates them because even machines need error logs. They speak rarely, and when they do, functionaries go pale."
 	},
 	{
 		"name": "Clan of the Hidden Root",
@@ -215,7 +224,7 @@ const ALL_FACTIONS = [
 		"name": "Debt Wardens",
 		"domain": "Enforcement",
 		"ring": "third",
-		"bits": [],
+		"bits": ["⛓", "💸", "👥", "💀"],
 		"sig": ["⛓"],
 		"motto": "What is owed will be paid.",
 		"description": "They don't create debt—they enforce it. Every obligation in the megacity flows through their ledgers, every defaulted payment triggers their attention. They wear chains not as bondage but as credential, each link representing a contract they've collected. The masses fear them not because they're cruel, but because they're inevitable. Debt is patient. The Wardens are more patient still."
@@ -302,6 +311,15 @@ const ALL_FACTIONS = [
 		"description": "The aristocratic court that surrounds the Station Lords and reaches toward the Carrion Throne. They deal in marriages, alliances, favors, and elegant betrayals. Their gardens are famous; their parties are legendary; their enemies tend to suffer unfortunate accidents. Joining them means access to real power - and accepting that you are now part of the pattern that sustains the Throne. The rose has thorns for a reason."
 	},
 	{
+		"name": "Ink Wardens",
+		"domain": "Administration",
+		"ring": "third",
+		"bits": ["🖋", "📜", "🗃", "⛓"],
+		"sig": ["🖋"],
+		"motto": "Sign here.",
+		"description": "They do not make policy. They do not question orders. They sign where indicated, stamp what requires stamping, and file what must be filed. Each Warden processes thousands of lives per day—births, deaths, transfers, terminations—and feels nothing because feeling would make the work impossible. Their ink is mixed with binding agents that make signatures metaphysically enforceable. They are not cruel. Cruelty requires intention. They are simply thorough."
+	},
+	{
 		"name": "Iron Confessors",
 		"domain": "Mystic",
 		"ring": "second",
@@ -366,12 +384,12 @@ const ALL_FACTIONS = [
 	},
 	{
 		"name": "Laughing Court",
-		"domain": "Horror",
-		"ring": "third",
-		"bits": [0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0],
-		"sig": ["🤡", "🃏", "🍷", "🥂", "🎪"],
-		"motto": "The joke that tells itself.",
-		"description": "Memetic aristocrats whose infection spreads through joy. The laughter isn't about anything - it's a pure neural release that hijacks cognition and propagates. Their parties are legendary, their wine is excellent, and their guests sometimes don't stop laughing. Ever. The clown masks aren't symbolic; they're protective equipment. The wearers learned that from experience. The experience was hilarious. The experience was terminal."
+		"domain": "Aristocracy",
+		"ring": "second",
+		"bits": ["🎭", "🍷", "💃", "😂"],
+		"sig": ["🎭"],
+		"motto": "Isn't it all just delicious?",
+		"description": "They laugh at everything. The wine, the dancing, the clever wordplay—and yes, the reports from below. Millions processed? How droll. A quota increase? Delightful efficiency. They wear masks not to hide but to perform, because sincerity is gauche and earnestness is for the filed. Their parties last for weeks. Their jokes have layers that take years to unpack. They are not evil—evil is boring. They are simply so far removed from consequence that suffering has become aesthetic."
 	},
 	{
 		"name": "Ledger Bailiffs",
@@ -431,7 +449,7 @@ const ALL_FACTIONS = [
 		"name": "Memory Weavers",
 		"domain": "Predation",
 		"ring": "third",
-		"bits": [],
+		"bits": ["🕸", "🫥", "🪦", "🌑"],
 		"sig": ["🕸"],
 		"motto": "What you forget, we keep.",
 		"description": "Where the Chorus dissolves, the Weavers collect. They spin webs from the residue of unraveled identities—not to preserve, but to trap. Their silk is woven from half-remembered names, fragments of selves that almost were. Travelers who brush against their webs find themselves tangled in someone else's forgotten life, wearing memories that don't fit. The Weavers don't hunt. They simply wait for the Chorus to finish singing."
@@ -581,6 +599,15 @@ const ALL_FACTIONS = [
 		"description": "Technical school and manufacturing consortium for spacecraft propulsion and orbital mechanics. They train engineers, certify designs, and bridge the gap between laboratory research and the material needs of the fleet. Their graduates are in demand everywhere. Their bureaucracy is legendary. Getting a new propulsion system approved takes longer than designing it, but at least approved systems don't explode unexpectedly."
 	},
 	{
+		"name": "Rose Wardens",
+		"domain": "Security",
+		"ring": "second",
+		"bits": ["🌹", "🥀", "🌺", "⚔"],
+		"sig": ["🌹"],
+		"motto": "Every bloom has its price.",
+		"description": "Every rose has thorns, and the Wardens are the thorns. They tend the impossible gardens of the Gilded Rot—flowers that bloom on blood, hedges that grow from processed grief. Beautiful, silent, and absolutely lethal. They speak in flower arrangements. A white lily means your petition was denied. A red rose means you have three days. A black orchid means there is no appeal. The aristocracy barely notices them, which is exactly how they prefer it."
+	},
+	{
 		"name": "Sacred Flame Keepers",
 		"domain": "Mystic",
 		"ring": "second",
@@ -588,6 +615,15 @@ const ALL_FACTIONS = [
 		"sig": ["🔥", "🕯", "⛪", "🪵", "🧯"],
 		"motto": "The flame that never dies.",
 		"description": "Fire-priests who maintain flames that burn true in vacuum, in void, in places where combustion shouldn't be possible. Their altars hold fires that have burned continuously for generations - flames that remember, flames that judge, flames that consume lies while leaving truth untouched. The 🧯 isn't for putting out their fires. It's for putting out everyone else's, so only the sacred flames remain."
+	},
+	{
+		"name": "Salt Scribes",
+		"domain": "Commerce",
+		"ring": "third",
+		"bits": ["🧂", "🐚", "🪨", "📜"],
+		"sig": ["🧂"],
+		"motto": "What remains is what matters.",
+		"description": "Historians of the inevitable. While others mourn or celebrate collapse, the Scribes simply record it. They harvest shells from the stranded dead, scrape crystallized salt from drying pools, and maintain vast archives of 'what happened.' Their libraries smell of brine and chalk. They trade in outcomes—not predictions, but certainties. Need to know what a thing became? They have it catalogued. Their neutrality in the Submersed-Vortex tensions makes them essential intermediaries. They don't care about the politics of measurement. Only the residue."
 	},
 	{
 		"name": "Salt-Runners",
@@ -647,7 +683,7 @@ const ALL_FACTIONS = [
 		"name": "Station Lords",
 		"domain": "Infrastructure",
 		"ring": "second",
-		"bits": [1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],
+		"bits": ["🚀", "🏢", "💰", "🛂"],
 		"sig": ["🚀"],
 		"motto": "The sky has a toll.",
 		"description": "They control the skyports where ships dock and fortunes change hands. Every rocket that lands pays tribute; every cargo that launches pays more. They've turned the megacity's connection to the stars into a chokepoint, and they squeeze it with practiced efficiency. The pulse of arriving ships is the heartbeat of their power—irregular, but unstoppable."
@@ -752,6 +788,15 @@ const ALL_FACTIONS = [
 		"description": "The pharmaceutical and medical supply arm of imperial authority. They manufacture medicines, distribute supplies, and ensure that health infrastructure reaches every documented citizen. Their generosity comes with strings - dependency on their supply chains means dependency on the system. When settlements fall out of favor, shipments get delayed. When they comply, the medicine flows freely."
 	},
 	{
+		"name": "The Submersed",
+		"domain": "Ecology",
+		"ring": "third",
+		"bits": ["🌊", "🪸", "🦀", "🐠"],
+		"sig": ["🌊"],
+		"motto": "What connects, persists.",
+		"description": "Reef-tenders who move with the flood. They believe all things should remain connected, that isolation is death and measurement is murder. During high tide they sing to the corals and guide the crabs through quantum tunnels between pools. When the waters recede, they retreat to the deep channels and mourn what gets stranded. Their priests can hold their breath for hours—not because they must, but because surfacing means accepting separation."
+	},
+	{
 		"name": "The Vitreous Scrutiny",
 		"domain": "Science/Deep-Math",
 		"ring": "third",
@@ -773,7 +818,7 @@ const ALL_FACTIONS = [
 		"name": "Umbra Exchange",
 		"domain": "Intelligence",
 		"ring": "second",
-		"bits": [1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0],
+		"bits": ["🗝", "🕵️", "💀", "💰"],
 		"sig": ["🗝"],
 		"motto": "Everyone has a price. We know yours.",
 		"description": "Information brokers who trade in secrets, leverage, and lives. Their currency is knowing things others don't want known. The 🗝 they carry opens doors that don't officially exist; the 🕵️ they employ see through walls and lies alike. They don't take sides in the megacity's power struggles—they take percentages. Every faction owes them something, which means every faction fears them."
@@ -807,18 +852,18 @@ const ALL_FACTIONS = [
 	},
 	{
 		"name": "Void Serfs",
-		"domain": "Civic",
-		"ring": "second",
-		"bits": [0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0],
-		"sig": ["👥", "⛓", "🌑", "💸"],
-		"motto": "The darkness demands labor.",
-		"description": "Indentured workers bound to tasks in the shadow-spaces where normal crews won't go. Their chains aren't physical - they're documentary, economic, circumstantial. They work in extended night, in void-adjacent zones, in places where the 🌑 has weight. Some chose this to escape worse fates. Some were sold. Some were simply in the wrong place when the documentation was filed. The Lantern Cant negotiates their working conditions. It's unclear who benefits."
+		"domain": "Labor",
+		"ring": "fourth",
+		"bits": ["👥", "⛓", "💸", "💀"],
+		"sig": ["👥"],
+		"motto": "Please hold.",
+		"description": "Not a faction by choice—a faction by classification. They are the processed, the filed, the ones whose names appear on forms they never signed. They have no leaders because leaders get flagged for review. They have no rebellion because rebellion requires being seen, and they have been optimized for invisibility. Some escape into the cracks between filing systems. Most simply wait for their number to be called."
 	},
 	{
 		"name": "Void Troubadours",
 		"domain": "Art-Signal",
 		"ring": "second",
-		"bits": [1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+		"bits": ["🎸", "🎼", "💫", "🏮"],
 		"sig": ["🎸"],
 		"motto": "Even the void deserves a song.",
 		"description": "Musicians who play at the edge of nothing. Their instruments are strung with probability, their songs carry across distances that shouldn't exist. They perform for audiences that may or may not be there, in venues that flicker between real and theoretical. The 💫 follows them—or perhaps they follow it. Their music is the only thing that makes the void feel less empty, and the void seems grateful."
@@ -831,6 +876,15 @@ const ALL_FACTIONS = [
 		"sig": ["🌋", "🔥", "🪨", "💎", "🌫", "✨"],
 		"motto": "In fire, crystal.",
 		"description": "Masters of volcanic processes who harvest crystals from cooling magma. They read the earth's fire and know when to mine."
+	},
+	{
+		"name": "Vortex Readers",
+		"domain": "Mystic",
+		"ring": "third",
+		"bits": ["🌀", "🐙", "✨", "👁"],
+		"sig": ["🌀"],
+		"motto": "To see is to decide.",
+		"description": "Oracles of the spiral pools. They see measurement not as violence but as truth-making—the moment when possibility becomes fact. They train octopi as hunting-priests, believing that to consume something is to collapse its wavefunction into your own. The glowing pools at low tide are their temples. They read fortunes in what gets stranded, and their predictions are eerily accurate because they understand: observation creates outcome. The question is never 'what will happen' but 'what will we choose to see.'"
 	},
 	{
 		"name": "Wildfire",
