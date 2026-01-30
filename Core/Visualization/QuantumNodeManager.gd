@@ -13,13 +13,18 @@ const QuantumNode = preload("res://Core/Visualization/QuantumNode.gd")
 
 
 func create_quantum_nodes(ctx: Dictionary) -> Array:
-	"""Create quantum nodes from biomes and farm grid.
+	"""Create quantum nodes from quantum registers (first-class architecture).
 
 	Args:
 	    ctx: Context dictionary with {biomes, farm_grid, plot_pool, layout_calculator}
 
 	Returns:
 	    Array of created QuantumNode instances
+
+	NEW ARCHITECTURE:
+	  1. Create bubbles FROM quantum registers (primary source)
+	  2. Optionally overlay terminal/plot data (secondary game mechanics)
+	  3. Plots are UI-only, don't drive bubble creation
 	"""
 	var biomes = ctx.get("biomes", {})
 	var farm_grid = ctx.get("farm_grid")
@@ -27,45 +32,120 @@ func create_quantum_nodes(ctx: Dictionary) -> Array:
 	var layout_calculator = ctx.get("layout_calculator")
 
 	var nodes: Array = []
-	var node_by_plot_id: Dictionary = {}
-	var quantum_nodes_by_grid_pos: Dictionary = {}
-	var all_plot_positions: Dictionary = {}
+	var nodes_by_register: Dictionary = {}  # Key: "biome_name:register_id"
 
-	# Create nodes from farm grid plots
-	if farm_grid:
-		for grid_pos in farm_grid.plots:
-			var plot = farm_grid.plots[grid_pos]
-			if not plot:
-				continue
+	# PRIMARY: Create nodes from quantum registers (one bubble per register)
+	var total_registers = 0
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
+			print("  [QuantumNodeManager] Skipping biome %s (no viz_cache)" % biome_name)
+			continue
 
-			var node = _create_node_for_plot(plot, grid_pos, layout_calculator, biomes)
+		var num_registers = biome.viz_cache.get_num_qubits()
+		total_registers += num_registers
+		for register_id in range(num_registers):
+			var node = _create_node_for_register(biome_name, register_id, biomes, layout_calculator)
 			if node:
 				nodes.append(node)
-				node_by_plot_id[node.plot_id] = node
-				quantum_nodes_by_grid_pos[grid_pos] = node
-				all_plot_positions[grid_pos] = node.classical_anchor
+				var key = "%s:%d" % [biome_name, register_id]
+				nodes_by_register[key] = node
 
-	# Create nodes from plot pool terminals (v2 system)
+	print("  [QuantumNodeManager] Created %d bubbles from %d quantum registers" % [nodes.size(), total_registers])
+
+	# SECONDARY: Overlay terminal data on existing nodes (optional game mechanics)
 	if plot_pool and plot_pool.has_method("get_all_terminals"):
 		for terminal in plot_pool.get_all_terminals():
 			if not terminal.is_bound:
 				continue
 
-			var existing = quantum_nodes_by_grid_pos.get(terminal.grid_position)
-			if existing:
-				# Update existing node with terminal reference
-				existing.terminal = terminal
-				existing.has_farm_tether = true
-				existing.emoji_north = terminal.north_emoji if terminal.north_emoji else existing.emoji_north
-				existing.emoji_south = terminal.south_emoji if terminal.south_emoji else existing.emoji_south
-				continue
-
-			var node = _create_node_for_terminal(terminal, layout_calculator, biomes)
+			var key = "%s:%d" % [terminal.bound_biome_name, terminal.bound_register_id]
+			var node = nodes_by_register.get(key)
 			if node:
-				nodes.append(node)
-				quantum_nodes_by_grid_pos[terminal.grid_position] = node
+				# Attach terminal to existing bubble (game mechanic overlay)
+				node.terminal = terminal
+				node.grid_position = terminal.grid_position
+				node.has_farm_tether = true
+				# Emojis come from terminal binding for gameplay
+				node.emoji_north = terminal.north_emoji if terminal.north_emoji else node.emoji_north
+				node.emoji_south = terminal.south_emoji if terminal.south_emoji else node.emoji_south
 
 	return nodes
+
+
+func _create_node_for_register(biome_name: String, register_id: int, biomes: Dictionary, layout_calculator):
+	"""Create a QuantumNode directly from a quantum register (first-class architecture).
+
+	Args:
+	    biome_name: Name of the biome containing the register
+	    register_id: Index of the register/qubit in the quantum computer
+	    biomes: Dictionary of all biomes for resolver
+	    layout_calculator: For positioning bubbles
+
+	Returns:
+	    QuantumNode representing this quantum register
+	"""
+	var biome = biomes.get(biome_name)
+	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
+		return null
+
+	if register_id < 0 or register_id >= biome.viz_cache.get_num_qubits():
+		return null
+
+	# Calculate position from biome layout
+	var anchor_pos = Vector2.ZERO
+	var center_pos = Vector2.ZERO
+	var parametric_t = 0.5
+	var parametric_ring = 0.5
+
+	if layout_calculator:
+		center_pos = layout_calculator.graph_center
+		# Distribute registers evenly around biome oval
+		var num_registers = biome.viz_cache.get_num_qubits()
+		parametric_t = float(register_id) / float(num_registers) if num_registers > 0 else 0.5
+		parametric_ring = 0.7  # Place on outer ring by default
+
+		anchor_pos = layout_calculator.get_parametric_position(
+			biome_name,
+			parametric_t,
+			parametric_ring
+		)
+
+	# Create node (no plot, no terminal initially - pure quantum)
+	var node = QuantumNode.new(null, anchor_pos, Vector2i(-1, -1), center_pos)
+
+	# PRIMARY quantum reference (this is what makes it first-class)
+	node.biome_name = biome_name
+	node.register_id = register_id
+	node.plot_id = "%s_r%d" % [biome_name, register_id]  # Unique ID based on register
+
+	# Biome resolver for quantum state queries
+	node.biome_resolver = func(name: String): return biomes.get(name, null)
+
+	# Parametric coordinates for layout
+	node.parametric_t = parametric_t
+	node.parametric_ring = parametric_ring
+
+	# Get emojis from quantum register via biome
+	var axis = biome.viz_cache.get_axis(register_id) if biome.viz_cache else {}
+	node.emoji_north = axis.get("north", "")
+	node.emoji_south = axis.get("south", "")
+
+	# DEBUG: Check if emojis are set
+	if register_id == 0:  # Only print for first register per biome
+		print("    [DEBUG] Node for %s:r%d - north='%s', south='%s', biome_name='%s'" % [
+			biome_name, register_id, node.emoji_north, node.emoji_south, node.biome_name
+		])
+
+	# Not a terminal bubble (pure quantum visualization)
+	node.is_terminal_bubble = false
+	node.has_farm_tether = false
+
+	# Ensure node is visible and has physics enabled
+	node.visible = true
+	node.quantum_behavior = 0  # 0 = FLOATING (physics enabled)
+
+	return node
 
 
 func _create_node_for_plot(plot, grid_pos: Vector2i, layout_calculator, biomes: Dictionary):
@@ -212,20 +292,19 @@ func update_node_visuals(nodes: Array, ctx: Dictionary) -> void:
 	var biomes = ctx.get("biomes", {})
 	var time_accumulator = ctx.get("time_accumulator", 0.0)
 	var batcher = ctx.get("biome_evolution_batcher", null)
-	var lookahead_offset = int(ctx.get("lookahead_offset", 1))
-
-	# Cache purity per quantum source
-	var purity_cache: Dictionary = {}
-	var buffered_state_cache: Dictionary = {}
-	var buffered_purity_cache: Dictionary = {}
-	var buffered_register_cache: Dictionary = {}
 	var use_lookahead = batcher != null and batcher.lookahead_enabled
+	var lookahead_offset = ctx.get("lookahead_offset", 0)
 
 	for node in nodes:
 		# Trigger spawn animation for new nodes
 		if not node.is_spawning and node.visual_scale == 0.0:
-			if node.has_farm_tether and not node.emoji_north.is_empty():
+			# Pure quantum nodes (no plot, no terminal)
+			if not node.has_farm_tether and node.biome_name != "" and not node.emoji_north.is_empty():
 				node.start_spawn_animation(time_accumulator)
+			# Terminal nodes with farm tether
+			elif node.has_farm_tether and not node.emoji_north.is_empty():
+				node.start_spawn_animation(time_accumulator)
+			# Plot-based nodes
 			elif node.plot and node.plot.is_planted and node.plot.parent_biome and node.plot.bath_subplot_id >= 0:
 				node.start_spawn_animation(time_accumulator)
 
@@ -233,64 +312,65 @@ func update_node_visuals(nodes: Array, ctx: Dictionary) -> void:
 		if not node.is_terminal_bubble:
 			_update_node_visual_batched(
 				node,
-				purity_cache,
 				biomes,
-				batcher,
+				use_lookahead,
 				lookahead_offset,
-				buffered_state_cache,
-				buffered_purity_cache,
-				buffered_register_cache,
-				use_lookahead
+				batcher
 			)
 		else:
 			_update_terminal_visuals_from_buffer(
 				node,
 				biomes,
-				batcher,
+				use_lookahead,
 				lookahead_offset,
-				buffered_state_cache,
-				buffered_purity_cache,
-				buffered_register_cache,
-				use_lookahead
+				batcher
 			)
 
 
 func _update_node_visual_batched(
 	node,
-	purity_cache: Dictionary,
 	biomes: Dictionary,
-	batcher,
+	use_lookahead: bool,
 	lookahead_offset: int,
-	buffered_state_cache: Dictionary,
-	buffered_purity_cache: Dictionary,
-	buffered_register_cache: Dictionary,
-	use_lookahead: bool
+	batcher = null
 ) -> void:
 	"""Update single node's visuals with batched purity lookup."""
+	# PURE QUANTUM VISUALIZATION (no plot, no terminal - first-class quantum)
+	if not node.has_farm_tether and not node.plot and node.biome_name != "":
+		var biome = biomes.get(node.biome_name, null)
+		if biome and biome.viz_cache and node.register_id >= 0:
+			# Update from quantum state directly
+			node.update_from_quantum_state()
+			# Ensure node is visible
+			if node.visual_scale == 0.0:
+				node.visual_scale = 1.0
+				node.visual_alpha = 1.0
+			return
+		else:
+			_set_node_fallback(node)
+			return
+
 	# Terminal bubbles with no plot
 	if node.has_farm_tether and not node.plot:
 		if node.terminal and node.terminal.bound_biome_name != "":
+			if node.terminal.north_emoji != "":
+				node.emoji_north = node.terminal.north_emoji
+			if node.terminal.south_emoji != "":
+				node.emoji_south = node.terminal.south_emoji
 			# Resolve biome from name using the biomes dictionary
 			var biome = biomes.get(node.terminal.bound_biome_name, null)
-			if biome and biome.quantum_computer and not node.is_terminal_measured():
+			if biome and biome.viz_cache and not node.is_terminal_measured():
 				if use_lookahead and node.terminal and node.terminal.bound_register_id >= 0:
 					if _apply_buffered_metrics(
 						node,
 						biome,
 						node.terminal.bound_register_id,
-						batcher,
+						use_lookahead,
 						lookahead_offset,
-						buffered_state_cache,
-						buffered_purity_cache,
-						buffered_register_cache
+						batcher
 					):
 						return
-				var north_prob = biome.get_emoji_probability(node.emoji_north) if biome.has_method("get_emoji_probability") else 0.5
-				var south_prob = biome.get_emoji_probability(node.emoji_south) if biome.has_method("get_emoji_probability") else 0.5
-				var mass = north_prob + south_prob
-				if mass > 0.001:
-					node.emoji_north_opacity = north_prob / mass
-					node.emoji_south_opacity = south_prob / mass
+			_set_node_fallback(node)
 		return
 
 	# Guard: unplanted plot → invisible
@@ -310,79 +390,34 @@ func _update_node_visual_batched(
 		_set_node_fallback(node)
 		return
 
-	var qc = biome.quantum_computer
-	if not qc:
+	if not biome.viz_cache:
 		_set_node_fallback(node)
 		return
+
+	var emojis = node.plot.get_plot_emojis() if node.plot.has_method("get_plot_emojis") else {}
+	node.emoji_north = emojis.get("north", node.emoji_north)
+	node.emoji_south = emojis.get("south", node.emoji_south)
 
 	if use_lookahead and "register_id" in node.plot and node.plot.register_id >= 0:
 		if _apply_buffered_metrics(
 			node,
 			biome,
 			node.plot.register_id,
-			batcher,
+			use_lookahead,
 			lookahead_offset,
-			buffered_state_cache,
-			buffered_purity_cache,
-			buffered_register_cache
+			batcher
 		):
 			return
-
-	# Query quantum data
-	var emojis = node.plot.get_plot_emojis() if node.plot.has_method("get_plot_emojis") else {}
-	node.emoji_north = emojis.get("north", "")
-	node.emoji_south = emojis.get("south", "")
-
-	# 1. Emoji opacity ← Probabilities
-	var north_prob = qc.get_population(node.emoji_north) if qc.has_method("get_population") else 0.5
-	var south_prob = qc.get_population(node.emoji_south) if qc.has_method("get_population") else 0.5
-	var mass = north_prob + south_prob
-
-	if mass > 0.001:
-		node.emoji_north_opacity = north_prob / mass
-		node.emoji_south_opacity = south_prob / mass
-	else:
-		node.emoji_north_opacity = 0.1
-		node.emoji_south_opacity = 0.1
-
-	# 2. Color hue ← Coherence phase
-	var coh_magnitude = 0.0
-	var coh_phase = 0.0
-
-	if node.emoji_north != "" and node.emoji_south != "":
-		var coherence = biome.get_emoji_coherence(node.emoji_north, node.emoji_south) if biome.has_method("get_emoji_coherence") else null
-		if coherence:
-			coh_magnitude = coherence.abs()
-			coh_phase = atan2(coherence.im, coherence.re)
-	var hue = (coh_phase + PI) / TAU
-	var saturation = clampf(coh_magnitude * 2.0, 0.0, 1.0)
-	node.color = Color.from_hsv(hue, saturation * 0.8, 0.9, 0.8)
-
-	# 3. Glow (energy) ← Purity (cached)
-	var source_id = qc.get_instance_id()
-	if not purity_cache.has(source_id):
-		purity_cache[source_id] = qc.get_purity() if qc.has_method("get_purity") else 0.5
-	node.energy = purity_cache[source_id]
-
-	# 4. Pulse rate ← Coherence magnitude
-	node.coherence = coh_magnitude
-
-	# 5. Radius ← Mass
-	node.radius = lerpf(node.MIN_RADIUS, node.MAX_RADIUS, clampf(mass * 2.0, 0.0, 1.0))
-
-	# 6. Berry phase
-	node.berry_phase += node.energy * 0.01
+	_set_node_fallback(node)
+	return
 
 
 func _update_terminal_visuals_from_buffer(
 	node,
 	biomes: Dictionary,
-	batcher,
+	use_lookahead: bool,
 	lookahead_offset: int,
-	buffered_state_cache: Dictionary,
-	buffered_purity_cache: Dictionary,
-	buffered_register_cache: Dictionary,
-	use_lookahead: bool
+	batcher = null
 ) -> void:
 	"""Update terminal bubbles from lookahead buffer when available."""
 	if not node.terminal:
@@ -406,7 +441,8 @@ func _update_terminal_visuals_from_buffer(
 		return
 
 	var biome = biomes.get(node.terminal.bound_biome_name, null)
-	if not biome or not biome.quantum_computer:
+	if not biome or not biome.viz_cache:
+		_set_node_fallback(node)
 		return
 
 	if node.terminal.bound_register_id < 0:
@@ -416,96 +452,78 @@ func _update_terminal_visuals_from_buffer(
 		node,
 		biome,
 		node.terminal.bound_register_id,
-		batcher,
+		use_lookahead,
 		lookahead_offset,
-		buffered_state_cache,
-		buffered_purity_cache,
-		buffered_register_cache
+		batcher
 	):
 		return
 
-	# Fallback: basic opacities if viz cache unavailable
-	var north_prob = biome.get_emoji_probability(node.emoji_north) if biome.has_method("get_emoji_probability") else 0.5
-	var south_prob = biome.get_emoji_probability(node.emoji_south) if biome.has_method("get_emoji_probability") else 0.5
-	var mass = north_prob + south_prob
-	if mass > 0.001:
-		node.emoji_north_opacity = north_prob / mass
-		node.emoji_south_opacity = south_prob / mass
-	node.color = Color(0.7, 0.8, 0.9, 0.8)
-	node.energy = 0.5
-	node.coherence = 0.0
-	node.radius = lerpf(node.MIN_RADIUS, node.MAX_RADIUS, clampf(mass * 2.0, 0.0, 1.0))
+	_set_node_fallback(node)
 
 
 func _apply_buffered_metrics(
 	node,
 	biome,
 	register_id: int,
-	batcher,
+	use_lookahead: bool,
 	lookahead_offset: int,
-	buffered_state_cache: Dictionary,
-	buffered_purity_cache: Dictionary,
-	buffered_register_cache: Dictionary
+	batcher = null
 ) -> bool:
 	"""Apply lookahead buffer metrics to a node. Returns true if applied.
 
-	Delegates to QuantumComputer for all observable calculations.
-	The QC's viz_metrics_cache is populated by BiomeEvolutionBatcher during buffer advance.
+	Delegates to biome viz_cache populated by lookahead packets.
 	"""
-	var qc = biome.quantum_computer
-	if not qc:
+	if not biome or not biome.viz_cache:
 		return false
 
-	# Ensure QC has cached visualization metrics (populated by batcher)
-	var metrics = qc.get_viz_qubit_metrics(register_id)
-	if metrics.is_empty():
-		if batcher and batcher.has_method("get_buffered_state_offset"):
-			var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
-			if biome_name != "":
-				var packed = batcher.get_buffered_state_offset(biome_name, lookahead_offset)
-				if not packed.is_empty():
-					qc.compute_viz_metrics_from_packed(packed)
-		if metrics.is_empty():
-			qc.compute_viz_metrics_from_live()
-		metrics = qc.get_viz_qubit_metrics(register_id)
-		if metrics.is_empty():
-			return false
+	var snap: Dictionary = {}
+	if use_lookahead and batcher and batcher.has_method("get_viz_snapshot"):
+		var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
+		snap = batcher.get_viz_snapshot(biome_name, register_id, lookahead_offset)
+	else:
+		snap = biome.viz_cache.get_snapshot(register_id)
+	if snap.is_empty():
+		return false
 
-	# Apply emoji opacities from QC
-	var opacities = qc.compute_emoji_opacities(register_id)
-	node.emoji_north_opacity = opacities.get("north_opacity", 0.5)
-	node.emoji_south_opacity = opacities.get("south_opacity", 0.5)
+	var p0 = snap.get("p0", 0.5)
+	var p1 = snap.get("p1", 0.5)
+	var r_xy = snap.get("r_xy", 0.0)
+	var phi = snap.get("phi", 0.0)
+	var purity = snap.get("purity", -1.0)
 
-	# Apply color from QC (hue from phase, saturation from coherence magnitude)
-	node.color = qc.compute_bubble_color(register_id)
+	node.emoji_north_opacity = p0
+	node.emoji_south_opacity = p1
 
-	# Apply purity (energy/glow)
-	node.energy = qc.get_viz_purity()
+	var hue = (phi + PI) / TAU
+	node.color = Color.from_hsv(hue, r_xy * 0.8, 0.9, 0.8)
 
-	# Apply coherence magnitude
-	node.coherence = metrics.get("coh_mag", 0.0)
+	node.energy = purity if purity >= 0.0 else 0.5
+	node.coherence = r_xy * 0.5
 
-	# Apply radius from mass
-	node.radius = qc.compute_bubble_radius(register_id, node.MIN_RADIUS, node.MAX_RADIUS)
+	var mass = p0 + p1
+	# Radius represents probability mass (p0+p1), not purity
+	# Purity is encoded spatially via force system (pure → center, mixed → edge)
+	node.radius = lerpf(node.MIN_RADIUS, node.MAX_RADIUS * 0.7, clampf(mass * 2.0, 0.0, 1.0))
 
-	# Accumulate berry phase
-	node.berry_phase += node.energy * 0.01
+	# Berry phase accumulation DISABLED - should come from C++ geometric phase
+	# Real berry phase = ∮ ⟨ψ|i∇|ψ⟩·dλ computed during evolution path in C++
+	# node.berry_phase += node.energy * 0.01  # This was fake - not geometric phase!
 
 	return true
 
 
 func _set_node_fallback(node) -> void:
 	"""Set fallback visualization when quantum state is unavailable."""
-	node.energy = 1.0
-	node.coherence = 0.5
-	node.radius = node.MAX_RADIUS
-	node.color = Color(0.7, 0.8, 0.9, 0.8)
+	node.energy = 0.0
+	node.coherence = 0.0
+	node.radius = node.MIN_RADIUS
+	node.color = Color(0.4, 0.4, 0.5, 0.4)
 	if node.plot and node.plot.has_method("get_plot_emojis"):
 		var emojis = node.plot.get_plot_emojis()
 		node.emoji_north = emojis.get("north", "")
 		node.emoji_south = emojis.get("south", "")
-	node.emoji_north_opacity = 0.5
-	node.emoji_south_opacity = 0.5
+	node.emoji_north_opacity = 0.0
+	node.emoji_south_opacity = 0.0
 
 
 func update_animations(nodes: Array, time_accumulator: float, delta: float) -> void:

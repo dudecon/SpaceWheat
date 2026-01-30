@@ -63,8 +63,8 @@ func _initialize_bath() -> void:
 		var axis = axes[idx]
 		quantum_computer.allocate_axis(idx, axis["north"], axis["south"])
 
-	# Initialize to warm village with grain |00000⟩ = 🔥🌾⚙️🦠💰
-	quantum_computer.initialize_basis(0)
+	# Initialize to uniform superposition across all basis states
+	quantum_computer.initialize_uniform_superposition()
 
 	print("  📊 RegisterMap configured (5 qubits, 32 basis states)")
 

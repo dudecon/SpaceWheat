@@ -180,17 +180,8 @@ static func inspect_plot(farm, positions: Array[Vector2i]) -> Dictionary:
 		if biome:
 			info.biome_type = biome.get_biome_type() if biome.has_method("get_biome_type") else biome_name
 
-			# Get quantum state info if available
-			if biome.quantum_computer:
-				var qc = biome.quantum_computer
-				info.qubit_count = qc.num_qubits if qc.has_method("num_qubits") else -1
-
-				# Get probability for this plot's emoji
-				if plot.is_planted and plot.north_emoji != "":
-					if qc.register_map.has(plot.north_emoji):
-						var reg_id = qc.register_map.get(plot.north_emoji, -1)
-						if reg_id >= 0 and qc.has_method("get_register_probability"):
-							info.north_probability = qc.get_register_probability(reg_id)
+			# Get quantum state info (viz_cache-backed)
+			info.qubit_count = biome.get_total_register_count() if biome.has_method("get_total_register_count") else -1
 
 		# Get terminal info (v2 model)
 		if farm.plot_pool:
@@ -203,8 +194,17 @@ static func inspect_plot(farm, positions: Array[Vector2i]) -> Dictionary:
 				if terminal.is_measured:
 					info.measured_outcome = terminal.measured_outcome
 					info.measured_probability = terminal.measured_probability
+				if biome and terminal.is_bound:
+					info.north_probability = biome.get_register_probability(terminal.bound_register_id)
 			else:
 				info.has_terminal = false
+
+		# Plot fallback probability (if no terminal info)
+		if biome and (not info.get("has_terminal", false)) and plot.is_planted and plot.north_emoji != "":
+			if biome.viz_cache:
+				var reg_id = biome.viz_cache.get_qubit(plot.north_emoji)
+				if reg_id >= 0:
+					info.north_probability = biome.get_register_probability(reg_id)
 
 		inspections.append(info)
 
@@ -241,9 +241,8 @@ static func get_biome_list(farm) -> Dictionary:
 		if biome.producible_emojis:
 			info.producible_emojis = biome.producible_emojis
 
-		# Get qubit count
-		if biome.quantum_computer:
-			info.qubit_count = biome.quantum_computer.num_qubits if biome.quantum_computer.has_method("num_qubits") else -1
+		# Get qubit count (viz_cache-backed)
+		info.qubit_count = biome.get_total_register_count() if biome.has_method("get_total_register_count") else -1
 
 		biomes.append(info)
 
@@ -300,7 +299,8 @@ static func inject_vocabulary(farm, positions: Array[Vector2i], vocab_pair: Dict
 
 	if not biome:
 		return {"success": false, "error": "no_biome"}
-	if biome.quantum_computer and biome.quantum_computer.register_map.num_qubits >= EconomyConstants.MAX_BIOME_QUBITS:
+	var qubit_count = biome.get_total_register_count() if biome.has_method("get_total_register_count") else 0
+	if qubit_count >= EconomyConstants.MAX_BIOME_QUBITS:
 		return {
 			"success": false,
 			"error": "qubit_cap_reached",
@@ -406,10 +406,9 @@ static func get_biome_info(farm, positions: Array[Vector2i]) -> Dictionary:
 	var emojis: Array[String] = []
 	var qubit_count = 0
 
-	if biome.quantum_computer:
-		var coordinates = biome.quantum_computer.register_map.coordinates
-		emojis = coordinates.keys()
-		qubit_count = biome.quantum_computer.register_map.num_qubits
+	if biome.viz_cache and biome.viz_cache.has_metadata():
+		emojis = biome.viz_cache.get_emojis()
+		qubit_count = biome.get_total_register_count() if biome.has_method("get_total_register_count") else 0
 
 	return {
 		"success": true,

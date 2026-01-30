@@ -84,8 +84,10 @@ static func calculate_affinity_with_populations(vocab_pair: Dictionary, biome, p
 	if vocab_emojis.is_empty() or biome_emojis.is_empty():
 		return 0.0
 
-	# Get current quantum populations
-	var populations = biome.quantum_computer.get_all_populations()
+	# Get current quantum populations (viz_cache-backed)
+	var populations: Dictionary = {}
+	for emoji in biome_emojis:
+		populations[emoji] = biome.get_emoji_probability(emoji)
 
 	var total_weight = 0.0
 	var connection_count = 0
@@ -109,16 +111,12 @@ static func calculate_affinity_with_populations(vocab_pair: Dictionary, biome, p
 
 static func _get_biome_emojis(biome) -> Array[String]:
 	"""Get all emojis registered in biome's quantum computer."""
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return []
 
-	var emojis: Array[String] = []
-	var coordinates = biome.quantum_computer.register_map.coordinates
-
-	for emoji in coordinates.keys():
-		emojis.append(emoji)
-
-	return emojis
+	if biome.viz_cache:
+		return biome.viz_cache.get_emojis()
+	return []
 
 static func _get_icon_registry():
 	"""Get the icon registry from GameStateManager."""

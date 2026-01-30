@@ -30,6 +30,8 @@ const LindbladHandler = preload("res://UI/Handlers/LindbladHandler.gd")
 const ProbeHandler = preload("res://UI/Handlers/ProbeHandler.gd")
 const ActionValidator = preload("res://UI/Core/ActionValidator.gd")
 const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
+const GranularityController = preload("res://Core/Utils/GranularityController.gd")
+const GateSelectionSubmenu = preload("res://UI/Core/Submenus/GateSelectionSubmenu.gd")
 
 # Access autoloads safely
 @onready var _verbose = get_node("/root/VerboseConfig")
@@ -39,12 +41,12 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 # Row mappings: key -> slot index (T,Y,U,I,O,P)
 const BIOME_ROW = {"T": 0, "Y": 1, "U": 2, "I": 3, "O": 4, "P": 5}  # Biome selection (6 slots)
-const HOMEROW = {"J": 0, "K": 1, "L": 2, ";": 3}        # Plot selection (4 plots - PRIMARY INTERFACE)
+const HOMEROW = {"J": 0, "K": 1, "L": 2, ";": 3, "'": 4, "H": 5, "G": 6}        # Plot selection (dynamic)
 const SUBSPACE_ROW = {"M": 0, ",": 1, ".": 2, "/": 3}   # Reserved for future subspace navigation
 
 # Input action mappings for the rows (order must match BIOME_ROW: T,Y,U,I,O,P)
 const BIOME_ACTIONS = ["biome_0", "biome_1", "biome_2", "biome_3", "biome_4", "biome_5"]
-const HOMEROW_ACTIONS = ["plot_0", "plot_1", "plot_2", "plot_3"]
+const HOMEROW_ACTIONS = ["plot_0", "plot_1", "plot_2", "plot_3", "plot_4", "plot_5", "plot_6"]
 const SUBSPACE_ACTIONS = ["subspace_0", "subspace_1", "subspace_2", "subspace_3"]
 
 # Core state
@@ -74,6 +76,25 @@ signal plot_checked(grid_pos: Vector2i, is_checked: bool)  # Multi-select checkb
 func _ready() -> void:
 	add_to_group("quantum_instrument_input")
 	set_process_unhandled_key_input(true)
+
+	# Ensure extra plot action exists for 5th column (apostrophe)
+	if not InputMap.has_action("plot_4"):
+		InputMap.add_action("plot_4")
+		var ev = InputEventKey.new()
+		ev.keycode = KEY_APOSTROPHE
+		InputMap.action_add_event("plot_4", ev)
+
+	if not InputMap.has_action("plot_5"):
+		InputMap.add_action("plot_5")
+		var ev_h = InputEventKey.new()
+		ev_h.keycode = KEY_H
+		InputMap.action_add_event("plot_5", ev_h)
+
+	if not InputMap.has_action("plot_6"):
+		InputMap.add_action("plot_6")
+		var ev_g = InputEventKey.new()
+		ev_g.keycode = KEY_G
+		InputMap.action_add_event("plot_6", ev_g)
 
 	_verbose.info("input", "~", "QuantumInstrumentInput initialized (Homerow + Biome Selection)")
 
@@ -258,6 +279,26 @@ func _open_submenu_for_action(action_info: Dictionary) -> void:
 		else:
 			_verbose.warn("input", "📋", "Submenu is empty!")
 
+	# For gate_selection, generate dynamic submenu with selection context
+	elif submenu_name == "gate_selection":
+		_current_submenu = _generate_gate_selection_submenu()
+		_in_submenu = true
+		_submenu_page = 0
+		var selection_count = checked_plots.size()
+		_verbose.info("input", "⚛️", "Opened gate selection submenu (%d qubits selected)" % selection_count)
+		var submenu_actions = _current_submenu.get("actions", {})
+		submenu_changed.emit(submenu_name, submenu_actions)
+
+		# Debug: Print gate options
+		if not _current_submenu.is_empty():
+			var actions = _current_submenu.get("actions", {})
+			for key in ["Q", "E", "R"]:
+				if actions.has(key):
+					var action = actions[key]
+					var label = action.get("label", "")
+					var gate_type = action.get("gate_type", "")
+					_verbose.debug("input", "⚛️", "  %s: %s (%s)" % [key, label, gate_type])
+
 
 func _generate_vocab_injection_submenu() -> Dictionary:
 	"""Generate the vocab injection submenu dynamically."""
@@ -274,6 +315,25 @@ func _generate_vocab_injection_submenu() -> Dictionary:
 	return VocabInjectionSubmenu.generate_submenu(biome, farm, _submenu_page)
 
 
+func _generate_gate_selection_submenu() -> Dictionary:
+	"""Generate the gate selection submenu dynamically based on checked_plots."""
+	if not farm:
+		_verbose.warn("input", "⚛️", "Farm not available")
+		return {}
+
+	var biome = _get_current_biome()
+	if not biome:
+		_verbose.warn("input", "⚛️", "No current biome")
+		return {}
+
+	# Pass checked_plots as selection (preserves order)
+	var selection: Array = []
+	for pos in checked_plots:
+		selection.append(pos)
+
+	return GateSelectionSubmenu.generate_submenu(biome, farm, selection, _submenu_page)
+
+
 func _cycle_submenu_page() -> void:
 	"""Cycle to next page in paginated submenu (F key)."""
 	if _current_submenu.is_empty():
@@ -285,12 +345,21 @@ func _cycle_submenu_page() -> void:
 		return
 
 	_submenu_page = (_submenu_page + 1) % max_pages
-	_current_submenu = _generate_vocab_injection_submenu()
+	var submenu_name = _current_submenu.get("name", "")
+
+	# Regenerate based on submenu type
+	if submenu_name == "vocab_injection":
+		_current_submenu = _generate_vocab_injection_submenu()
+	elif submenu_name == "gate_selection":
+		_current_submenu = _generate_gate_selection_submenu()
+	else:
+		_verbose.warn("input", "📋", "Unknown submenu type for pagination: %s" % submenu_name)
+		return
+
 	var current_page = _current_submenu.get("page", 0)
 	var total_pages = _current_submenu.get("max_pages", 1)
 
 	_verbose.info("input", "📋", "Submenu page %d/%d" % [current_page + 1, total_pages])
-	var submenu_name = _current_submenu.get("name", "")
 	submenu_changed.emit(submenu_name, _current_submenu.get("actions", {}))
 
 
@@ -316,13 +385,28 @@ func _handle_submenu_action(action_key: String) -> void:
 		])
 		return  # Stay in submenu
 
+	# Check if option is disabled
+	if not action_data.get("enabled", true):
+		_verbose.info("input", "📋", "Option disabled: %s" % action_data.get("label", ""))
+		return  # Stay in submenu
+
 	var action = action_data.get("action", "")
+
+	# Handle vocab_injection submenu actions
 	if action == "inject_vocabulary":
 		var vocab_pair = action_data.get("vocab_pair", {})
 		var label = action_data.get("label", "")
 		if not vocab_pair.is_empty():
 			_verbose.info("input", "📋", "You selected: %s - injecting..." % label)
 			_execute_inject_vocabulary(vocab_pair)
+
+	# Handle gate_selection submenu actions
+	elif action == "build_gate":
+		var gate_type = action_data.get("gate_type", "bell")
+		var label = action_data.get("label", gate_type)
+		var qubits_required = action_data.get("qubits_required", 2)
+		_verbose.info("input", "⚛️", "Building %s gate (requires %d qubits)" % [label, qubits_required])
+		_execute_build_gate(gate_type)
 
 	# Exit submenu
 	_in_submenu = false
@@ -341,22 +425,26 @@ func _execute_inject_vocabulary(vocab_pair: Dictionary) -> void:
 	if not biome:
 		_verbose.warn("input", "+", "No biome for vocab injection")
 		return
-	if biome.quantum_computer and biome.quantum_computer.register_map.num_qubits >= EconomyConstants.MAX_BIOME_QUBITS:
+	if not biome.viz_cache or not biome.viz_cache.has_metadata():
+		_verbose.warn("input", "+", "Biome visualization data not ready")
+		return
+	var qubit_count = biome.get_total_register_count() if biome.has_method("get_total_register_count") else 0
+	if qubit_count >= EconomyConstants.MAX_BIOME_QUBITS:
 		_verbose.warn("input", "+", "Biome at max capacity (%d qubits)" % EconomyConstants.MAX_BIOME_QUBITS)
 		return
 
 	# Check if pair is already in biome
-	if biome.quantum_computer.register_map.has(vocab_pair.get("north", "")):
+	if _biome_has_emoji(biome, vocab_pair.get("north", "")):
 		_verbose.warn("input", "+", "%s already in biome" % vocab_pair.get("north", ""))
 		return
-	if biome.quantum_computer.register_map.has(vocab_pair.get("south", "")):
+	if _biome_has_emoji(biome, vocab_pair.get("south", "")):
 		_verbose.warn("input", "+", "%s already in biome" % vocab_pair.get("south", ""))
 		return
 
 	# 5. Check and deduct cost BEFORE expanding
 	var context = {"south_emoji": vocab_pair.get("south", "")}
 	cost = EconomyConstants.get_action_cost("inject_vocabulary", context)
-	if not EconomyConstants.try_action("inject_vocabulary", farm.economy, context):
+	if not farm or not farm.economy or not EconomyConstants.try_action("inject_vocabulary", farm.economy, context):
 		_verbose.warn("input", "+", "Insufficient funds for vocab injection (need %s)" % [cost])
 		return
 
@@ -379,6 +467,63 @@ func _execute_inject_vocabulary(vocab_pair: Dictionary) -> void:
 	else:
 		_verbose.warn("input", "+", "Vocab injection failed: %s" % result.get("error", "unknown"))
 		action_performed.emit("inject_vocabulary", result)
+
+
+func _execute_build_gate(gate_type: String) -> void:
+	"""Execute gate building with the specified gate type.
+
+	Args:
+		gate_type: Type of gate to build (bell, cnot, cz, swap, ghz, cluster)
+	"""
+	# Use checked_plots as selection (order preserved)
+	var positions: Array[Vector2i] = []
+	for pos in checked_plots:
+		positions.append(pos)
+
+	if positions.size() < 2:
+		_verbose.warn("input", "⚛️", "Need 2+ qubits selected for %s gate" % gate_type)
+		action_performed.emit("build_gate", {"success": false, "error": "need_more_qubits"})
+		return
+
+	var result: Dictionary = {}
+
+	match gate_type:
+		"bell":
+			# Bell pair (|00⟩+|11⟩)/√2 - uses first 2 positions
+			result = GateActionHandler.create_bell_pair(farm, positions.slice(0, 2))
+
+		"cnot":
+			# CNOT gate - first position is control, second is target
+			result = GateActionHandler.apply_cnot(farm, positions.slice(0, 2))
+
+		"cz":
+			# Controlled-Z - phase flip if both qubits are |1⟩
+			result = GateActionHandler.apply_cz(farm, positions.slice(0, 2))
+
+		"swap":
+			# SWAP gate - exchange qubit states
+			result = GateActionHandler.apply_swap(farm, positions.slice(0, 2))
+
+		"ghz":
+			# GHZ state - (|000...⟩+|111...⟩)/√2 for all selected qubits
+			result = GateActionHandler.create_ghz_state(farm, positions)
+
+		"cluster":
+			# Linear cluster state
+			result = GateActionHandler.cluster(farm, positions)
+
+		_:
+			_verbose.warn("input", "⚛️", "Unknown gate type: %s" % gate_type)
+			result = {"success": false, "error": "unknown_gate_type", "gate_type": gate_type}
+
+	if result.get("success", false):
+		_verbose.info("input", "⚛️", "Built %s gate on %d qubits" % [gate_type, positions.size()])
+		# Clear selections after successful gate build
+		clear_all_checks()
+	else:
+		_verbose.warn("input", "⚛️", "Failed to build %s: %s" % [gate_type, result.get("error", "unknown")])
+
+	action_performed.emit("build_gate", result)
 
 
 ## ============================================================================
@@ -426,11 +571,20 @@ func _select_plot(plot_idx: int, key: String) -> void:
 	"""Select a plot in the current biome.
 
 	Args:
-		plot_idx: Which plot (0-3) was selected (J=0, K=1, L=2, ;=3)
+		plot_idx: Which plot index was selected (0..N-1)
 		key: The key that was pressed (for chain tracking)
 	"""
 	if not _active_biome_mgr:
 		_verbose.warn("input", "~", "ActiveBiomeManager not available")
+		return
+
+	# Guard against out-of-range plot indices
+	if farm and farm.grid_config and plot_idx >= farm.grid_config.grid_width:
+		_verbose.debug("input", "•", "Plot %d outside grid width %d" % [plot_idx, farm.grid_config.grid_width])
+		return
+	var register_count = _get_active_biome_register_count()
+	if register_count > 0 and plot_idx >= register_count:
+		_verbose.debug("input", "•", "Plot %d exceeds registers (%d)" % [plot_idx, register_count])
 		return
 
 	# Get current active biome
@@ -601,6 +755,9 @@ func _perform_action(action_key: String) -> void:
 
 func _perform_shift_key_action(action_key: String) -> void:
 	"""Apply the Q/E/R action across all checked plots (multi-select batch operation).
+
+	For gate actions (Tool 1: Unitary), uses batch injection with single buffer invalidation.
+	Selection order is preserved - gates are applied in the order plots were checked.
 	"""
 	var current_group = ToolConfig.get_current_group()
 	var action_info = ToolConfig.get_action(current_group, action_key)
@@ -615,8 +772,8 @@ func _perform_shift_key_action(action_key: String) -> void:
 	var symbol = "⇧%s" % action_key
 	var log_label = action_info.get("shift_label", action_info.get("label", action_name))
 
-	# Use checked plots instead of entire homerow
-	var positions = checked_plots.duplicate()  # Duplicate to avoid modification during iteration
+	# Use checked plots instead of entire homerow (ORDER PRESERVED from selection)
+	var positions = checked_plots.duplicate()
 	if positions.is_empty():
 		_verbose.debug("input", "⚠️", "No plots checked - Shift+action requires checked plots")
 		return
@@ -624,13 +781,20 @@ func _perform_shift_key_action(action_key: String) -> void:
 	var original_selection = current_selection.duplicate()
 
 	# Special case: Global shift actions (execute once, not per plot)
-	# harvest_all and clear_all already iterate over the entire pool/grid
 	if action_name == "harvest_all" or action_name == "clear_all":
 		_verbose.info("input", symbol, "Executing global %s once (costs 1 🍼)" % log_label)
 		_run_action(action_name, symbol, log_label)
 		_restore_selection(original_selection)
 		return
 
+	# BATCH GATE PATH: For Tool 1 (Unitary) gate actions, use batch injection
+	# This applies all gates in selection order with SINGLE buffer invalidation
+	if _is_gate_action(action_name):
+		_perform_batch_gate_action(action_name, positions, symbol, log_label)
+		_restore_selection(original_selection)
+		return
+
+	# NON-GATE PATH: Loop through positions (old behavior)
 	_verbose.info("input", symbol, "Batch %s on %d checked plots" % [log_label, positions.size()])
 
 	for pos in positions:
@@ -647,7 +811,114 @@ func _perform_shift_key_action(action_key: String) -> void:
 		_refresh_plot_tiles([pos])
 	_restore_selection(original_selection)
 
-	# Note: harvest_all action handles clearing checkmarks internally
+
+func _is_gate_action(action_name: String) -> bool:
+	"""Check if action is a unitary gate operation (eligible for batch injection)."""
+	return action_name in ["hadamard", "rotate_up", "rotate_down"]
+
+
+func _perform_batch_gate_action(action_name: String, positions: Array, symbol: String, log_label: String) -> void:
+	"""Apply gate action to multiple qubits using batch injection.
+
+	Gates are applied in selection order (first checked = first gate applied).
+	Buffer invalidation happens ONCE at the end, not per-gate.
+
+	Args:
+		action_name: Gate action (hadamard, rotate_up, rotate_down)
+		positions: Array[Vector2i] of grid positions in selection order
+		symbol: Log symbol
+		log_label: Human-readable label
+	"""
+	const GateInjectorClass = preload("res://Core/QuantumSubstrate/GateInjector.gd")
+
+	# Determine gate name from action
+	var gate_name = _get_gate_name_for_action(action_name)
+	if gate_name == "":
+		_verbose.warn("input", "⚠️", "Unknown gate action: %s" % action_name)
+		return
+
+	# Collect gate operations in selection order
+	var gate_ops: Array = []
+	var order_log: Array = []
+
+	for pos in positions:
+		var biome = _get_biome_for_position(pos)
+		if not biome or not biome.quantum_computer:
+			continue
+
+		var qubit = _get_qubit_for_position(pos, biome)
+		if qubit < 0:
+			continue
+
+		gate_ops.append({
+			"biome": biome,
+			"qubit": qubit,
+			"gate_name": gate_name
+		})
+		order_log.append("q%d" % qubit)
+
+	if gate_ops.is_empty():
+		_verbose.warn("input", "⚠️", "No valid qubits for batch gate")
+		return
+
+	_verbose.info("input", symbol, "Batch %s on %d qubits (order: %s)" % [
+		log_label, gate_ops.size(), " → ".join(order_log)
+	])
+
+	# BATCH INJECTION: All gates applied, single buffer invalidation
+	var result = GateInjectorClass.inject_gate_batch(gate_ops, farm)
+
+	if result.success:
+		_verbose.info("input", "✓", "Applied %d gates, order preserved: %s" % [
+			result.applied_count, result.order
+		])
+	else:
+		_verbose.warn("input", "✗", "Batch gate failed: %s" % result.get("error", "unknown"))
+
+	action_performed.emit(action_name, result)
+	_refresh_plot_tiles(positions)
+
+
+func _get_gate_name_for_action(action_name: String) -> String:
+	"""Map action name to gate library name."""
+	match action_name:
+		"hadamard":
+			return "H"
+		"rotate_up", "rotate_down":
+			# Get axis from Tool 1 mode (X, Y, or Z)
+			var axis = ToolConfig.get_group_mode_name(1)
+			if axis == "":
+				axis = "X"
+			return "R" + axis.to_lower()  # Rx, Ry, or Rz
+		_:
+			return ""
+
+
+func _get_biome_for_position(pos: Vector2i):
+	"""Get biome for a grid position."""
+	if not farm or not farm.grid:
+		return null
+	var biome_name = farm.get_biome_for_row(pos.y) if farm.has_method("get_biome_for_row") else ""
+	if biome_name == "":
+		return null
+	return farm.grid.biomes.get(biome_name)
+
+
+func _get_qubit_for_position(pos: Vector2i, biome) -> int:
+	"""Get qubit index for a grid position via terminal binding."""
+	if not farm or not farm.plot_pool:
+		return -1
+
+	var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+	if terminal and terminal.is_bound:
+		return terminal.bound_register_id
+
+	# Fallback: try viz_cache lookup
+	var plot = farm.grid.get_plot(pos) if farm.grid else null
+	if plot and plot.is_planted and biome and biome.viz_cache:
+		return biome.viz_cache.get_qubit(plot.north_emoji)
+
+	return -1
 
 
 func _run_action(action_name: String, log_symbol: String, action_label: String) -> void:
@@ -868,6 +1139,11 @@ func _action_explore() -> Dictionary:
 	var biome = _get_current_biome()
 	if not biome:
 		return {"success": false, "error": "no_biome", "message": "No biome at selection"}
+	if not biome.viz_cache or not biome.viz_cache.has_metadata():
+		return {"success": false, "error": "no_viz_cache", "message": "Biome visualization data not ready"}
+
+	if not farm.economy:
+		return {"success": false, "error": "no_economy", "message": "Economy system not initialized"}
 
 	var grid_pos = _get_grid_position()
 	_verbose.debug("input", "?", "Explore at %s in %s" % [grid_pos, biome.name if biome else "null"])
@@ -921,7 +1197,7 @@ func _action_measure() -> Dictionary:
 
 func _action_reap() -> Dictionary:
 	"""Execute REAP action - harvest credits and unbind terminal."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.plot_pool or not farm.economy:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var grid_pos = _get_grid_position()
@@ -940,7 +1216,7 @@ func _action_reap() -> Dictionary:
 
 func _action_pop() -> Dictionary:
 	"""Execute POP action - harvest credits and unbind terminal."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.plot_pool or not farm.economy:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var grid_pos = _get_grid_position()
@@ -959,7 +1235,7 @@ func _action_pop() -> Dictionary:
 
 func _action_harvest_all() -> Dictionary:
 	"""Execute SHIFT+R/harvest_all: harvest density matrix, clear selections, unexplore plots."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.plot_pool or not farm.economy:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var biome = _get_current_biome()
@@ -1041,24 +1317,25 @@ func _action_inject_vocabulary() -> Dictionary:
 		return {"success": false, "error": "no_selection", "message": "No plot selected"}
 
 	var biome = _get_current_biome()
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return {"success": false, "error": "no_biome", "message": "No biome at selection"}
 	
-	if biome.quantum_computer.register_map.num_qubits >= EconomyConstants.MAX_BIOME_QUBITS:
+	var qubit_count = biome.get_total_register_count() if biome.has_method("get_total_register_count") else 0
+	if qubit_count >= EconomyConstants.MAX_BIOME_QUBITS:
 		return {
 			"success": false,
 			"error": "qubit_cap_reached",
 			"message": "Biome is at max capacity (%d qubits)" % EconomyConstants.MAX_BIOME_QUBITS
 		}
 
-	var candidate_pairs = _collect_injectable_pairs(farm, biome.quantum_computer)
-	var pair = _pick_injectable_pair(candidate_pairs, biome.quantum_computer)
+	var candidate_pairs = _collect_injectable_pairs(farm, biome)
+	var pair = _pick_injectable_pair(candidate_pairs, biome)
 	if pair.is_empty():
 		return {"success": false, "error": "no_available_pair", "message": "No injectable vocab pair for this biome"}
 
 	# CRITICAL: Check and spend cost BEFORE heavy expansion
 	var context = {"south_emoji": pair.get("south", "")}
-	if not EconomyConstants.try_action("inject_vocabulary", farm.economy, context):
+	if not farm or not farm.economy or not EconomyConstants.try_action("inject_vocabulary", farm.economy, context):
 		var cost = EconomyConstants.get_action_cost("inject_vocabulary", context)
 		return {
 			"success": false,
@@ -1160,7 +1437,6 @@ func _action_remove_vocabulary() -> Dictionary:
 
 	if result.get("success", false):
 		_reindex_bound_terminals(biome, target_qubit)
-		_reindex_plot_register_mapping(biome, target_qubit)
 		_verbose.info("input", "-", "Removed vocab %s/%s from %s" % [
 			pair_to_remove.get("north", "?"),
 			pair_to_remove.get("south", "?"),
@@ -1300,24 +1576,6 @@ func _reindex_bound_terminals(biome, removed_qubit: int) -> void:
 			terminal.bound_register_id -= 1
 
 
-func _reindex_plot_register_mapping(biome, removed_qubit: int) -> void:
-	if not farm or not farm.grid:
-		return
-	var mapping = farm.grid.plot_register_mapping
-	var qc_map = farm.grid.plot_to_biome_quantum_computer
-	if mapping.is_empty():
-		return
-	for pos in mapping.keys():
-		if qc_map and qc_map.get(pos) != biome.quantum_computer:
-			continue
-		var reg_id = mapping[pos]
-		if reg_id == removed_qubit:
-			mapping.erase(pos)
-			if qc_map:
-				qc_map.erase(pos)
-		elif reg_id > removed_qubit:
-			mapping[pos] = reg_id - 1
-
 
 func _trace_out_qubit(density_matrix, qubit_index: int, num_qubits: int):
 	"""Trace out a qubit from the density matrix (partial trace).
@@ -1438,6 +1696,21 @@ func _get_grid_position() -> Vector2i:
 	return Vector2i(plot_idx, biome_row)
 
 
+func _get_active_biome_register_count() -> int:
+	"""Get register (qubit) count for the currently active biome."""
+	if not farm or not farm.grid or not _active_biome_mgr:
+		return 0
+	var biome_name = _active_biome_mgr.get_active_biome()
+	if biome_name == "":
+		return 0
+	if not farm.grid.biomes.has(biome_name):
+		return 0
+	var biome = farm.grid.biomes[biome_name]
+	if biome and biome.quantum_computer and biome.quantum_computer.register_map:
+		return biome.quantum_computer.register_map.num_qubits
+	return 0
+
+
 func _get_selected_positions() -> Array[Vector2i]:
 	"""Get array of selected positions (currently just single selection)."""
 	var positions: Array[Vector2i] = []
@@ -1516,22 +1789,22 @@ func _restore_selection(previous_selection: Dictionary) -> void:
 			plot_grid_display.set_selected_plot(grid_pos)
 
 
-func _pick_injectable_pair(pairs: Array, quantum_computer) -> Dictionary:
+func _pick_injectable_pair(pairs: Array, biome) -> Dictionary:
 	for i in range(pairs.size() - 1, -1, -1):
 		var pair = pairs[i]
 		var north = pair.get("north", "")
 		var south = pair.get("south", "")
 		if north == "" or south == "":
 			continue
-		if quantum_computer.register_map.has(north):
+		if _biome_has_emoji(biome, north):
 			continue
-		if quantum_computer.register_map.has(south):
+		if _biome_has_emoji(biome, south):
 			continue
 		return {"north": north, "south": south}
 	return {}
 
 
-func _collect_injectable_pairs(farm_ref, quantum_computer = null) -> Array:
+func _collect_injectable_pairs(farm_ref, biome = null) -> Array:
 	var pairs: Array = []
 	if farm_ref and farm_ref.has_method("get_known_pairs"):
 		pairs.append_array(farm_ref.get_known_pairs())
@@ -1551,15 +1824,22 @@ func _collect_injectable_pairs(farm_ref, quantum_computer = null) -> Array:
 		var south = pair.get("south", "")
 		if north == "" or south == "" or north == south:
 			continue
-		if quantum_computer and quantum_computer.register_map:
-			if quantum_computer.register_map.has(north) or quantum_computer.register_map.has(south):
-				continue
+		if biome and (_biome_has_emoji(biome, north) or _biome_has_emoji(biome, south)):
+			continue
 		var key = "%s|%s" % [north, south]
 		if seen.has(key):
 			continue
 		seen[key] = true
 		filtered.append({"north": north, "south": south})
 	return filtered
+
+
+func _biome_has_emoji(biome, emoji: String) -> bool:
+	if not biome or emoji == "":
+		return false
+	if biome.viz_cache and biome.viz_cache.has_metadata():
+		return biome.viz_cache.get_qubit(emoji) >= 0
+	return false
 
 
 func _keycode_to_string(keycode: int) -> String:
@@ -1580,10 +1860,13 @@ func _keycode_to_string(keycode: int) -> String:
 		KEY_I: return "I"
 		KEY_O: return "O"
 		KEY_P: return "P"
+		KEY_H: return "H"
+		KEY_G: return "G"
 		KEY_J: return "J"
 		KEY_K: return "K"
 		KEY_L: return "L"
 		KEY_SEMICOLON: return ";"
+		KEY_APOSTROPHE: return "'"
 		KEY_M: return "M"
 		KEY_COMMA: return ","
 		KEY_PERIOD: return "."
@@ -1658,35 +1941,21 @@ func _decrease_simulation_speed() -> void:
 		_verbose.warn("input", "⚠️", "Cannot adjust granularity - no farm/grid")
 		return
 
-	# Get current granularity from first biome
-	var current_dt = 0.02
-	if farm.grid.biomes and not farm.grid.biomes.is_empty():
-		var first_biome = farm.grid.biomes.values()[0]
-		if "max_evolution_dt" in first_biome:
-			current_dt = first_biome.max_evolution_dt
-
-	# Halve the substep size = finer granularity (minimum 0.0001 = 0.1ms - ultra fine)
-	var new_dt = max(current_dt * 0.5, 0.0001)
-
-	# DEBUG
-	print("[INPUT] Granularity FINER: %.4f → %.4f" % [current_dt, new_dt])
-
-	# Apply to all biomes
-	var biome_count = 0
-	for biome in farm.grid.biomes.values():
-		if "max_evolution_dt" in biome:
-			biome.max_evolution_dt = new_dt
-			biome_count += 1
+	# Use shared granularity controller
+	var biomes = farm.grid.biomes.values()
+	var result = GranularityController.decrease_granularity(biomes)
 
 	# Update GameState so it's saved
 	var gsm = get_node_or_null("/root/GameStateManager")
 	if gsm and gsm.current_state:
 		if not ("max_evolution_dt" in gsm.current_state):
-			gsm.current_state.set("max_evolution_dt", new_dt)
+			gsm.current_state.set("max_evolution_dt", result.new_dt)
 		else:
-			gsm.current_state.max_evolution_dt = new_dt
+			gsm.current_state.max_evolution_dt = result.new_dt
 
-	_verbose.info("input", "🔬", "Matrix granularity: %.4fs → %.4fs (finer, %d biomes)" % [current_dt, new_dt, biome_count])
+	_verbose.info("input", "🔬", "Matrix granularity: %.4fs → %.4fs (finer, %d biomes)" % [
+		result.current_dt, result.new_dt, result.biome_count
+	])
 
 
 func _increase_simulation_speed() -> void:
@@ -1695,32 +1964,18 @@ func _increase_simulation_speed() -> void:
 		_verbose.warn("input", "⚠️", "Cannot adjust granularity - no farm/grid")
 		return
 
-	# Get current granularity from first biome
-	var current_dt = 0.02
-	if farm.grid.biomes and not farm.grid.biomes.is_empty():
-		var first_biome = farm.grid.biomes.values()[0]
-		if "max_evolution_dt" in first_biome:
-			current_dt = first_biome.max_evolution_dt
-
-	# Double the substep size = coarser granularity (maximum 1.0 = 1000ms - ultra coarse)
-	var new_dt = min(current_dt * 2.0, 1.0)
-
-	# DEBUG
-	print("[INPUT] Granularity COARSER: %.4f → %.4f" % [current_dt, new_dt])
-
-	# Apply to all biomes
-	var biome_count = 0
-	for biome in farm.grid.biomes.values():
-		if "max_evolution_dt" in biome:
-			biome.max_evolution_dt = new_dt
-			biome_count += 1
+	# Use shared granularity controller
+	var biomes = farm.grid.biomes.values()
+	var result = GranularityController.increase_granularity(biomes)
 
 	# Update GameState so it's saved
 	var gsm = get_node_or_null("/root/GameStateManager")
 	if gsm and gsm.current_state:
 		if not ("max_evolution_dt" in gsm.current_state):
-			gsm.current_state.set("max_evolution_dt", new_dt)
+			gsm.current_state.set("max_evolution_dt", result.new_dt)
 		else:
-			gsm.current_state.max_evolution_dt = new_dt
+			gsm.current_state.max_evolution_dt = result.new_dt
 
-	_verbose.info("input", "🔭", "Matrix granularity: %.4fs → %.4fs (coarser, %d biomes)" % [current_dt, new_dt, biome_count])
+	_verbose.info("input", "🔭", "Matrix granularity: %.4fs → %.4fs (coarser, %d biomes)" % [
+		result.current_dt, result.new_dt, result.biome_count
+	])

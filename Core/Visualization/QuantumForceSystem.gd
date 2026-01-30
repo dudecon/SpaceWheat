@@ -1,524 +1,283 @@
 class_name QuantumForceSystem
 extends RefCounted
 
-## Quantum Force System - Physics-Grounded Position Calculation
+## Quantum Force System - Physics-Grounded Bubble Dynamics
 ##
-## Replaces arbitrary parametric/tether positions with physics-meaningful forces:
+## Forces are derived from quantum observables:
 ##
-## 1. PURITY RADIAL FORCE: Tr(ρ²) determines distance from biome center
-##    - Pure states (Tr(ρ²)=1) → center of biome
-##    - Mixed states (Tr(ρ²)→0.5) → edge of biome
+## 1. HAMILTONIAN ATTRACTION: H coupling strength → base attraction
+##    Emojis connected by Hamiltonian off-diagonals attract
 ##
-## 2. PHASE ANGULAR FORCE: arg(ρ_01) determines angular position
-##    - Same-phase qubits cluster at similar angles
-##    - Enables visual identification of coherent groups
+## 2. MI BOOST: Mutual information amplifies attraction
+##    Correlated (entangled) pairs attract more strongly
 ##
-## 3. CORRELATION FORCE: I(A:B) mutual information determines separation
-##    - High mutual info (entangled) → cluster together
-##    - Low mutual info (independent) → spread apart
+## 3. REPULSION: Inverse-square prevents overlap
 ##
-## 4. REPULSION FORCE: Prevents overlap for visual clarity
+## 4. QUANTUM MOMENTUM: dP/dt drives velocity
+##    When populations oscillate, bubbles physically respond
+##
+## Color encodes phase (φ) - no angular force needed.
 
 
-# Physics-grounded force constants
-const PURITY_RADIAL_SPRING = 0.08  # Strength of purity-based radial force
-const PHASE_ANGULAR_SPRING = 0.04  # Strength of phase-based angular alignment
-const CORRELATION_SPRING = 0.12  # Strength of mutual information coupling
-const MI_SPRING = 0.18  # Direct MI-based attraction (NEW - stronger clustering)
-const REPULSION_STRENGTH = 1500.0  # Prevents overlap
-const MIN_DISTANCE = 15.0  # Minimum distance between nodes
-const DAMPING = 0.89  # Velocity damping per frame (10% loss)
+# === FORCE CONSTANTS ===
+const H_SPRING = 8.0           # Hamiltonian coupling → attraction strength
+const MI_MULTIPLIER = 2.0      # MI boosts H-spring (MI up to 2 bits → up to 4x boost)
+const REPULSION = 2500.0       # Inverse-square overlap prevention
+const MIN_DISTANCE = 20.0      # Minimum separation for repulsion calc
+const MOMENTUM_GAIN = 80.0     # dP/dt → velocity kick (ties to quantum dynamics)
+const DRAG = 0.92              # Linear velocity damping per frame
+const BASE_SEPARATION = 100.0  # Natural separation when no forces
 
-# Correlation-based distance scaling
-const BASE_DISTANCE = 120.0  # Base separation between uncorrelated bubbles
-const CORRELATION_SCALING = 3.0  # How much MI affects clustering
-const MAX_BIOME_RADIUS = 250.0  # Maximum radius for mixed states
-const TETHER_SPRING = 0.06  # Strength of plot tether pull for farm-linked bubbles
-const TETHER_MAX_FORCE = 120.0  # Cap tether force to prevent snapping
-var enable_plot_tether_force: bool = false  # Apply only to active explored/measured nodes
-const MAX_TETHERED_NODES = 4  # Limit to visible explored/measured plots
 
-# Cached mutual information (expensive to compute)
-var _mi_cache: Dictionary = {}  # (qubit_a, qubit_b) -> float
-var _mi_cache_frame: int = -1  # Frame when cache was last computed
-var _mi_throttle_hz: float = 5.0  # How often to recompute MI (Hz)
-var _time_since_mi_update: float = 0.0
-
-# Debug counter
-var _update_count: int = 0
+# === CACHED DATA ===
+var _coupling_cache: Dictionary = {}   # (node_a_id, node_b_id) → coupling_strength
+var _mi_cache: Dictionary = {}         # (node_a_id, node_b_id) → mutual_info
+var _prev_population: Dictionary = {}  # node_id → previous north_opacity (for dP/dt)
+var _cache_timer: float = 0.0
+const CACHE_INTERVAL = 0.1             # Refresh caches at 10Hz
 
 
 func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
-	"""Update forces and positions for all quantum nodes.
-
-	Args:
-	    delta: Time step
-	    nodes: Array of QuantumNode instances
-	    ctx: Context dictionary with {biomes, layout_calculator, time_accumulator, active_biome, etc.}
-	"""
+	"""Update forces and positions for all quantum nodes."""
 	var biomes = ctx.get("biomes", {})
 	var layout_calculator = ctx.get("layout_calculator")
-	var plot_pool = ctx.get("plot_pool")
-	var active_biome_name = ctx.get("filter_biome", ctx.get("active_biome", ""))  # "" means process all biomes
-	var tether_biome_name = ctx.get("active_biome", "")
-	var frame_count = ctx.get("frame_count", 0)
 
-	# Increment update counter for debugging
-	_update_count += 1
+	# Refresh caches periodically
+	_cache_timer += delta
+	if _cache_timer >= CACHE_INTERVAL:
+		_cache_timer = 0.0
+		_refresh_caches(nodes, biomes)
 
-	# Throttle expensive MI computation (now just reads C++ cache, but still throttle)
-	_time_since_mi_update += delta
-	if _time_since_mi_update >= 1.0 / _mi_throttle_hz:
-		_update_mutual_information_cache(nodes, biomes)
-		_time_since_mi_update = 0.0
-
-	# Build list of active (planted/visible) nodes for O(n²) calculations
-	# OPTIMIZATION: Only include nodes from active biome if specified
+	# Build active node list
 	var active_nodes: Array = []
 	for node in nodes:
-		if _is_active_node(node):
-			# Skip nodes from non-active biomes if filtering is enabled
-			if active_biome_name != "" and node.biome_name != active_biome_name:
-				continue
+		if _is_active(node):
 			active_nodes.append(node)
 
-
 	# Calculate and apply forces
-	var force_debug = (_update_count <= 3)  # Debug for first 3 update calls
-	var nodes_with_forces = 0
-	var nodes_skipped_inactive = 0
-	var nodes_skipped_behavior = 0
-	var nodes_skipped_lifeless = 0
-	var tethered_nodes = 0
-
-	for node in nodes:
-		# OPTIMIZATION: Skip force calculations for non-active biomes entirely
-		if active_biome_name != "" and node.biome_name != active_biome_name:
+	for node in active_nodes:
+		# Skip frozen nodes
+		if node.is_lifeless or _is_measured(node):
+			node.velocity = Vector2.ZERO
 			continue
 
 		var total_force = Vector2.ZERO
 
-		# Check plot's quantum behavior (FLOATING=0, HOVERING=1, FIXED=2)
-		var quantum_behavior = _get_quantum_behavior(node)
+		# 1. Hamiltonian + MI attraction to coupled nodes
+		total_force += _calc_coupling_forces(node, active_nodes, biomes)
 
-		# FIXED PLOTS: Don't move at all (celestial bodies)
-		if quantum_behavior == 2:
-			nodes_skipped_behavior += 1
+		# 2. Repulsion from all nodes
+		total_force += _calc_repulsion(node, active_nodes)
+
+		# 3. Quantum momentum from population change
+		total_force += _calc_momentum(node)
+
+		# Apply force (F = ma, mass = probability)
+		var mass = clampf(node.emoji_north_opacity + node.emoji_south_opacity, 0.1, 1.0)
+		node.velocity += (total_force / mass) * delta
+
+		# Apply drag
+		node.velocity *= DRAG
+
+	# Update positions
+	for node in active_nodes:
+		if not node.is_lifeless and not _is_measured(node):
+			node.position += node.velocity * delta
+
+
+func _calc_coupling_forces(node, active_nodes: Array, biomes: Dictionary) -> Vector2:
+	"""Calculate attraction from Hamiltonian couplings, boosted by MI."""
+	var force = Vector2.ZERO
+	var node_id = node.get_instance_id()
+
+	for other in active_nodes:
+		if other == node:
 			continue
+		if other.biome_name != node.biome_name:
+			continue  # Only couple within same biome
 
-		# HOVERING PLOTS: Fixed relative to anchor (biome measurement plots)
-		if quantum_behavior == 1:
-			node.position = node.classical_anchor
-			nodes_skipped_behavior += 1
-			continue
+		var other_id = other.get_instance_id()
+		var key = _cache_key(node_id, other_id)
 
-		# Skip unplanted nodes
-		if not _is_active_node(node):
-			nodes_skipped_inactive += 1
-			if force_debug and nodes_skipped_inactive == 1:
-				print("⚠️ Node skipped (inactive): biome='%s', emoji_north='%s', has_tether=%s, plot=%s" % [
-					node.biome_name, node.emoji_north, node.has_farm_tether, node.plot != null
-				])
-			continue
+		# Get cached coupling strength (from Hamiltonian)
+		var h_coupling = _coupling_cache.get(key, 0.0)
+		if h_coupling < 0.001:
+			continue  # No Hamiltonian connection
 
-		# LIFELESS NODES: No quantum data - freeze at anchor
-		if node.is_lifeless:
-			node.position = node.classical_anchor
-			node.velocity = Vector2.ZERO
-			nodes_skipped_lifeless += 1
-			continue
+		# Get MI boost
+		var mi = _mi_cache.get(key, 0.0)
+		var mi_boost = 1.0 + MI_MULTIPLIER * mi  # MI=0 → 1x, MI=2 → 5x
 
-		# Check if measured (v1 plot-based or v2 terminal-based)
-		var is_measured = _is_node_measured(node, plot_pool)
-
-		# MEASURED NODES: Freeze at frozen_anchor
-		if is_measured:
-			if node.frozen_anchor != Vector2.ZERO:
-				node.position = node.frozen_anchor
-			else:
-				node.position = node.classical_anchor
-			node.velocity = Vector2.ZERO
-			continue
-
-		# === PHYSICS-GROUNDED FORCES FOR UNMEASURED FLOATING NODES ===
-		var biome_center = _get_biome_center(node, layout_calculator)
-
-		# 1. Purity radial force: pure→center, mixed→edge
-		total_force += _calculate_purity_radial_force(node, biome_center, biomes)
-
-		# 2. Phase angular force: same-phase qubits cluster angularly
-		total_force += _calculate_phase_angular_force(node, biome_center, biomes)
-
-		# 3. Correlation forces: entangled bubbles attract
-		total_force += _calculate_correlation_forces(node, active_nodes, biomes)
-
-		# 4. Repulsion forces: prevent overlap
-		total_force += _calculate_repulsion_forces(node, active_nodes)
-
-		# 5. Plot tether force (keeps farm-linked bubbles near their plot anchors)
-		if enable_plot_tether_force and tethered_nodes < MAX_TETHERED_NODES and _should_apply_plot_tether(node, plot_pool, tether_biome_name):
-			var to_anchor = node.classical_anchor - node.position
-			if to_anchor.length() > 1.0:
-				var tether_force = to_anchor * TETHER_SPRING
-				if tether_force.length() > TETHER_MAX_FORCE:
-					tether_force = tether_force.normalized() * TETHER_MAX_FORCE
-				total_force += tether_force
-				tethered_nodes += 1
-
-		# Apply forces
-		node.apply_force(total_force, delta)
-		node.apply_damping(DAMPING)
-		nodes_with_forces += 1
-
-	# Debug summary (first call only)
-	if force_debug or (nodes_skipped_inactive > 0 and _time_since_mi_update < 0.1):
-		print("🔍 Force system: %d active, %d inactive, %d behavior_blocked, %d lifeless" % [
-			nodes_with_forces, nodes_skipped_inactive, nodes_skipped_behavior, nodes_skipped_lifeless
-		])
-
-	# Update positions from velocities
-	_update_positions(delta, nodes)
-
-
-func _calculate_purity_radial_force(node, biome_center: Vector2, biomes: Dictionary) -> Vector2:
-	"""Calculate radial force based on quantum purity.
-
-	Pure states (Tr(ρ²)=1) are pulled toward biome center.
-	Mixed states (Tr(ρ²)→0.5) drift toward biome edge.
-
-	Physics: Purity indicates how "quantum" the state is.
-	Pure states have maximum quantum information.
-	"""
-	if biome_center == Vector2.ZERO:
-		return Vector2.ZERO
-
-	# Get purity from node (already cached from visual update)
-	var purity = node.energy if node else 0.5
-	purity = clampf(purity, 0.5, 1.0)  # Normalize to valid range
-
-	# Target radius: pure → 0 (center), mixed → MAX_BIOME_RADIUS (edge)
-	# Linear mapping: r = (1 - purity) / 0.5 * MAX_RADIUS
-	var normalized_purity = (purity - 0.5) / 0.5  # 0 = maximally mixed, 1 = pure
-	var target_radius = (1.0 - normalized_purity) * MAX_BIOME_RADIUS * 0.8
-
-	# Current position relative to center
-	var to_center = biome_center - node.position
-	var current_radius = to_center.length()
-
-	if current_radius < 1.0:
-		return Vector2.ZERO
-
-	var direction = to_center.normalized()
-	var displacement = target_radius - current_radius
-
-	# Spring force toward target radius (negative displacement = pull in)
-	return direction * (-displacement) * PURITY_RADIAL_SPRING
-
-
-func _calculate_phase_angular_force(node, biome_center: Vector2, biomes: Dictionary) -> Vector2:
-	"""Calculate angular force based on coherence phase.
-
-	Qubits with similar phase cluster at similar angles around biome center.
-
-	Physics: The coherence phase arg(ρ_01) encodes the quantum phase relationship.
-	Qubits in similar superposition states cluster together.
-	"""
-	if biome_center == Vector2.ZERO:
-		return Vector2.ZERO
-
-	# Get target angle from hue (which encodes phase)
-	var target_angle = node.color.h * TAU  # Hue → angle
-
-	# Current angle relative to biome center
-	var to_node = node.position - biome_center
-	var current_radius = to_node.length()
-	if current_radius < 10.0:
-		return Vector2.ZERO  # Too close to center for angular force
-
-	var current_angle = atan2(to_node.y, to_node.x)
-
-	# Angular error (with wrapping)
-	var angular_error = _wrap_angle(target_angle - current_angle)
-
-	# Tangent direction (perpendicular to radius)
-	var tangent = Vector2(-to_node.y, to_node.x).normalized()
-
-	# Get coherence magnitude (stronger coherence = stronger angular force)
-	var coherence_magnitude = node.coherence if node else 0.0
-
-	return tangent * angular_error * PHASE_ANGULAR_SPRING * coherence_magnitude
-
-
-func _calculate_correlation_forces(node, active_nodes: Array, biomes: Dictionary) -> Vector2:
-	"""Calculate forces based on mutual information with other nodes.
-
-	High mutual information (entangled) → attractive force
-	Low mutual information (independent) → no force
-
-	Physics: Mutual information I(A:B) = S(A) + S(B) - S(AB) quantifies
-	total correlations. Entangled states have I(A:B) up to 2 bits.
-	"""
-	var total_force = Vector2.ZERO
-
-	for other_node in active_nodes:
-		if other_node == node:
-			continue
-
-		# Get mutual information between these nodes
-		var mi = _get_mutual_information(node, other_node, biomes)
-		if mi < 0.01:
-			continue  # Uncorrelated - no attraction
-
-		# Target distance decreases with mutual information
-		# MI = 0 → BASE_DISTANCE, MI = 2 → BASE_DISTANCE / (1 + 2*SCALING)
-		var target_distance = BASE_DISTANCE / (1.0 + CORRELATION_SCALING * mi)
-
-		# Current distance
-		var delta_pos = other_node.position - node.position
-		var current_distance = delta_pos.length()
-		if current_distance < 1.0:
+		# Direction and distance
+		var delta_pos = other.position - node.position
+		var distance = delta_pos.length()
+		if distance < 1.0:
 			continue
 
 		var direction = delta_pos.normalized()
-		var displacement = current_distance - target_distance
 
-		# Spring force: positive displacement = push apart, negative = pull together
-		# Two components:
-		# 1. CORRELATION_SPRING: Distance-based spring
-		# 2. MI_SPRING: Direct MI-based attraction (stronger clustering)
-		total_force += direction * displacement * CORRELATION_SPRING * mi
-		if displacement > 0.0:  # Only attractive force
-			total_force -= direction * displacement * MI_SPRING * mi * mi  # Quadratic in MI for stronger clustering
+		# Spring force toward coupled partner
+		# Target distance decreases with coupling strength
+		var target_dist = BASE_SEPARATION / (1.0 + h_coupling * 2.0)
+		var displacement = distance - target_dist
 
-	return total_force
+		# Attractive spring: F = k * displacement * coupling * mi_boost
+		force += direction * displacement * H_SPRING * h_coupling * mi_boost
+
+	return force
 
 
-func _calculate_repulsion_forces(node, active_nodes: Array) -> Vector2:
-	"""Calculate repulsion forces to prevent bubble overlap.
+func _calc_repulsion(node, active_nodes: Array) -> Vector2:
+	"""Inverse-square repulsion to prevent overlap."""
+	var force = Vector2.ZERO
 
-	Standard inverse-square repulsion for visual clarity.
-	"""
-	var repulsion = Vector2.ZERO
-
-	for other_node in active_nodes:
-		if other_node == node:
+	for other in active_nodes:
+		if other == node:
 			continue
 
-		var delta_pos = node.position - other_node.position
-		var distance = delta_pos.length()
+		var delta_pos = node.position - other.position
+		var distance = max(delta_pos.length(), MIN_DISTANCE)
 
-		if distance < MIN_DISTANCE:
-			distance = MIN_DISTANCE
+		# F = k / r²
+		var magnitude = REPULSION / (distance * distance)
+		force += delta_pos.normalized() * magnitude
 
-		var force_magnitude = REPULSION_STRENGTH / (distance * distance)
-		repulsion += delta_pos.normalized() * force_magnitude
-
-	return repulsion
+	return force
 
 
-func _update_positions(delta: float, nodes: Array) -> void:
-	"""Update node positions from velocities."""
-	for node in nodes:
-		var quantum_behavior = _get_quantum_behavior(node)
-		if quantum_behavior == 1 or quantum_behavior == 2:
-			continue  # HOVERING and FIXED don't move
+func _calc_momentum(node) -> Vector2:
+	"""Calculate momentum kick from population change rate (dP/dt).
 
-		node.update_position(delta)
-
-
-func _should_apply_plot_tether(node, plot_pool, active_biome_name: String) -> bool:
-	"""Apply tether only for explored/measured nodes in the active biome."""
-	if active_biome_name == "" or node.biome_name != active_biome_name:
-		return false
-	if not node.has_farm_tether:
-		return false
-	if node.classical_anchor == Vector2.ZERO:
-		return false
-	if _is_node_measured(node, plot_pool):
-		return true
-	if node.plot and "is_planted" in node.plot and node.plot.is_planted:
-		return true
-	if node.plot and "has_been_measured" in node.plot and node.plot.has_been_measured:
-		return true
-	return false
-
-
-func _update_mutual_information_cache(nodes: Array, biomes: Dictionary) -> void:
-	"""Update mutual information cache from native C++ computation.
-
-	MI is now computed in C++ during evolution (evolve_with_mi) at physics rate.
-	This function just reads the cached values - no expensive GDScript calculations.
+	When quantum state oscillates, the bubble should physically respond.
+	This ties the force graph animation to the quantum dynamics timescale.
 	"""
+	var node_id = node.get_instance_id()
+	var current_pop = node.emoji_north_opacity
+	var prev_pop = _prev_population.get(node_id, current_pop)
+
+	# Store for next frame
+	_prev_population[node_id] = current_pop
+
+	# dP/dt
+	var dP = current_pop - prev_pop
+	if abs(dP) < 0.001:
+		return Vector2.ZERO
+
+	# Kick in radial direction from biome center
+	# Positive dP (gaining north population) → outward kick
+	# Negative dP (losing north population) → inward kick
+	var direction = node.velocity.normalized() if node.velocity.length() > 1.0 else Vector2.RIGHT.rotated(randf() * TAU)
+
+	return direction * dP * MOMENTUM_GAIN
+
+
+func _refresh_caches(nodes: Array, biomes: Dictionary) -> void:
+	"""Refresh coupling and MI caches from viz_cache."""
+	_coupling_cache.clear()
 	_mi_cache.clear()
 
-	# Group nodes by biome (MI is only defined within same quantum computer)
-	var nodes_by_biome: Dictionary = {}
+	# Group nodes by biome
+	var by_biome: Dictionary = {}
 	for node in nodes:
-		if not _is_active_node(node):
+		if not _is_active(node):
 			continue
-		var biome_name = node.biome_name if node else ""
-		if biome_name.is_empty():
+		var bn = node.biome_name
+		if bn.is_empty():
 			continue
-		if not nodes_by_biome.has(biome_name):
-			nodes_by_biome[biome_name] = []
-		nodes_by_biome[biome_name].append(node)
+		if not by_biome.has(bn):
+			by_biome[bn] = []
+		by_biome[bn].append(node)
 
-	# Read cached MI for all pairs within each biome (computed in C++ during evolution)
-	for biome_name in nodes_by_biome:
+	# Cache couplings and MI for each biome
+	for biome_name in by_biome:
 		var biome = biomes.get(biome_name)
-		if not biome or not biome.quantum_computer:
+		if not biome or not biome.viz_cache:
 			continue
 
-		var biome_nodes = nodes_by_biome[biome_name]
-		var qc = biome.quantum_computer
+		var biome_nodes = by_biome[biome_name]
 
 		for i in range(biome_nodes.size()):
+			var node_a = biome_nodes[i]
+			var emoji_a = node_a.emoji_north
+			var qubit_a = biome.viz_cache.get_qubit(emoji_a)
+
+			# Get Hamiltonian couplings for this emoji
+			var h_couplings = biome.viz_cache.get_hamiltonian_couplings(emoji_a)
+
 			for j in range(i + 1, biome_nodes.size()):
-				var node_a = biome_nodes[i]
 				var node_b = biome_nodes[j]
+				var emoji_b = node_b.emoji_north
+				var qubit_b = biome.viz_cache.get_qubit(emoji_b)
 
-				# Get qubit indices
-				var qubit_a = _get_qubit_index(node_a, qc)
-				var qubit_b = _get_qubit_index(node_b, qc)
+				var key = _cache_key(node_a.get_instance_id(), node_b.get_instance_id())
 
-				if qubit_a < 0 or qubit_b < 0:
-					continue
+				# Hamiltonian coupling (check both directions)
+				var h_ab = abs(h_couplings.get(emoji_b, 0.0))
+				var h_ba_dict = biome.viz_cache.get_hamiltonian_couplings(emoji_b)
+				var h_ba = abs(h_ba_dict.get(emoji_a, 0.0))
+				var h_strength = max(h_ab, h_ba)
 
-				# Use CACHED MI from native C++ (computed during evolution)
-				# Falls back to GDScript if cache is empty
-				var mi = 0.0
-				if qc.has_method("get_cached_mutual_information"):
-					mi = qc.get_cached_mutual_information(qubit_a, qubit_b)
-				elif qc.has_method("get_mutual_information"):
-					mi = qc.get_mutual_information(qubit_a, qubit_b)
+				_coupling_cache[key] = h_strength
+				_coupling_cache[_cache_key(node_b.get_instance_id(), node_a.get_instance_id())] = h_strength
 
-				# Cache bidirectionally
-				var key_ab = "%s_%s" % [node_a.get_instance_id(), node_b.get_instance_id()]
-				var key_ba = "%s_%s" % [node_b.get_instance_id(), node_a.get_instance_id()]
-				_mi_cache[key_ab] = mi
-				_mi_cache[key_ba] = mi
+				# Mutual information
+				if qubit_a >= 0 and qubit_b >= 0:
+					var mi = biome.viz_cache.get_mutual_information(qubit_a, qubit_b)
+					_mi_cache[key] = mi
+					_mi_cache[_cache_key(node_b.get_instance_id(), node_a.get_instance_id())] = mi
 
 
-func _get_mutual_information(node_a, node_b, biomes: Dictionary) -> float:
-	"""Get cached mutual information between two nodes."""
-	var key = "%s_%s" % [node_a.get_instance_id(), node_b.get_instance_id()]
-	return _mi_cache.get(key, 0.0)
+func _cache_key(id_a: int, id_b: int) -> String:
+	return "%d_%d" % [id_a, id_b]
 
 
-func _get_qubit_index(node, qc) -> int:
-	"""Get qubit index for a node in the quantum computer."""
-	if not node or not qc:
-		return -1
-
-	# Try to get from plot's register
-	if node.plot and "register_id" in node.plot:
-		return node.plot.register_id
-
-	# Try from emoji
-	if node.emoji_north and qc.register_map and qc.register_map.has(node.emoji_north):
-		return qc.register_map.qubit(node.emoji_north)
-
-	return -1
-
-
-func _get_biome_center(node, layout_calculator) -> Vector2:
-	"""Get biome center for a node's biome."""
-	if not node or not layout_calculator:
-		return Vector2.ZERO
-
-	var biome_name = node.biome_name if node else ""
-	if biome_name.is_empty():
-		return Vector2.ZERO
-
-	var oval = layout_calculator.get_biome_oval(biome_name)
-	return oval.get("center", Vector2.ZERO)
-
-
-func _get_quantum_behavior(node) -> int:
-	"""Get quantum behavior flag.
-
-	Priority:
-	1. Node's direct quantum_behavior property (if set)
-	2. Plot's quantum_behavior (legacy compatibility)
-	3. Default: FLOATING (0) - forces active
-
-	Values:
-	- 0 = FLOATING: Forces active, normal physics
-	- 1 = HOVERING: Fixed to anchor (biome measurement plots)
-	- 2 = FIXED: Completely static (celestial bodies)
-	"""
-	if not node:
-		return 0
-
-	# Check node's direct property first (first-class quantum viz)
-	if "quantum_behavior" in node:
-		return node.quantum_behavior
-
-	# Fallback to plot property (legacy)
-	if node.plot and "quantum_behavior" in node.plot:
-		return node.plot.quantum_behavior
-
-	# Default: FLOATING (forces active)
-	return 0
-
-
-func _is_active_node(node) -> bool:
-	"""Check if node is active (should receive forces).
-
-	Active means the node has quantum data to visualize.
-	Priority (first match wins):
-	1. Direct quantum register (biome_name set) - PREFERRED
-	2. Terminal bubble (has terminal binding)
-	3. Plot bubble (has planted plot)
-	"""
+func _is_active(node) -> bool:
+	"""Node is active if it has biome assignment and emoji data."""
 	if not node:
 		return false
-
-	# First-class quantum visualization: has biome_name and emojis
-	if node.biome_name != "" and not node.emoji_north.is_empty():
-		return true
-
-	# v2 terminal bubbles
-	if node.has_farm_tether and not node.emoji_north.is_empty():
-		return true
-
-	# v1 plot bubbles
-	if node.plot and node.plot.is_planted:
-		return true
-
-	return false
+	return node.biome_name != "" and not node.emoji_north.is_empty()
 
 
-func _is_node_measured(node, plot_pool) -> bool:
-	"""Check if node has been measured."""
+func _is_measured(node) -> bool:
+	"""Check if node has been measured (frozen)."""
 	if not node:
 		return false
-
-	# v1: plot-based
+	# Terminal-based measurement
+	if node.terminal and node.terminal.is_measured:
+		return true
+	# Plot-based measurement (legacy)
 	if node.plot and node.plot.has_been_measured:
 		return true
-
-	# v2: terminal-based
-	if plot_pool and node.grid_position != Vector2i(-1, -1):
-		var terminal = plot_pool.get_terminal_at_grid_pos(node.grid_position) if plot_pool.has_method("get_terminal_at_grid_pos") else null
-		if terminal and terminal.is_measured:
-			return true
-
 	return false
 
 
-func _wrap_angle(angle: float) -> float:
-	"""Wrap angle to [-PI, PI]."""
-	if is_nan(angle) or is_inf(angle):
-		return 0.0
-	return fmod(angle + PI, TAU) - PI
-
-
-# ============================================================================
-# LEGACY COMPATIBILITY
-# ============================================================================
-# These methods maintain API compatibility with the old force system
+# === PUBLIC API FOR EDGE RENDERER ===
 
 func get_quantum_coupling_strength(node_a, node_b) -> float:
-	"""Legacy compatibility: Get coupling from mutual information."""
-	return _mi_cache.get("%s_%s" % [node_a.get_instance_id(), node_b.get_instance_id()], 0.0)
+	"""Get effective coupling strength between two nodes (for edge rendering).
+
+	Returns combined metric: Hamiltonian coupling × MI boost
+	This matches the force calculation in _calc_coupling_forces().
+	"""
+	if not node_a or not node_b:
+		return 0.0
+
+	# Different biomes don't couple
+	if node_a.biome_name != node_b.biome_name:
+		return 0.0
+
+	var node_a_id = node_a.get_instance_id()
+	var node_b_id = node_b.get_instance_id()
+	var key = _cache_key(node_a_id, node_b_id)
+
+	# Get Hamiltonian coupling from cache
+	var h_coupling = _coupling_cache.get(key, 0.0)
+	if h_coupling < 0.001:
+		return 0.0
+
+	# Get MI boost from cache
+	var mi = _mi_cache.get(key, 0.0)
+	var mi_boost = 1.0 + MI_MULTIPLIER * mi  # MI=0 → 1x, MI=2 → 5x
+
+	# Return combined strength (raw value, not spring force)
+	return h_coupling * mi_boost

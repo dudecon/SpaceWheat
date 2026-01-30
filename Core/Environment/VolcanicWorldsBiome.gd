@@ -7,20 +7,10 @@ const Icon = preload("res://Core/QuantumSubstrate/Icon.gd")
 ##
 ## Architecture: QuantumComputer with 3-qubit tensor product
 ##
-## Core Volcanic State (8D):
+## Axes:
 ##   Qubit 0 (Temperature): 🔥 Lava / 🪨 Basalt
 ##   Qubit 1 (Resource):    💎 Crystals / ⛏ Raw Ore
 ##   Qubit 2 (Phase):       🌫 Steam / ✨ Sparks
-##
-## Basis States (tensor product):
-##   |000⟩ = 🔥💎🌫 (Hot + Crystals + Steam) - active volcanic
-##   |001⟩ = 🔥💎✨ (Hot + Crystals + Sparks) - eruption
-##   |010⟩ = 🔥⛏🌫 (Hot + Ore + Steam) - mining opportunity
-##   |011⟩ = 🔥⛏✨ (Hot + Ore + Sparks) - dangerous
-##   |100⟩ = 🪨💎🌫 (Cool + Crystals + Steam) - formation zone
-##   |101⟩ = 🪨💎✨ (Cool + Crystals + Sparks) - stable harvest
-##   |110⟩ = 🪨⛏🌫 (Cool + Ore + Steam) - dormant
-##   |111⟩ = 🪨⛏✨ (Cool + Ore + Sparks) - quiet state
 ##
 ## Physics:
 ##   - Temperature gradients drive crystal formation
@@ -80,8 +70,8 @@ func _initialize_bath() -> void:
 	quantum_computer.allocate_axis(1, "💎", "⛏")   # Resource: Crystal/Ore
 	quantum_computer.allocate_axis(2, "🌫", "✨")  # Phase: Steam/Sparks
 
-	# Initialize to dormant volcanic state |110⟩ = 🪨⛏🌫 (cool, ore, steam)
-	quantum_computer.initialize_basis(6)
+	# Initialize to uniform superposition across all basis states
+	quantum_computer.initialize_uniform_superposition()
 
 	print("  📊 RegisterMap configured (3 qubits, 8 basis states)")
 

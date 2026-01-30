@@ -345,12 +345,14 @@ static func _can_execute_inject_vocabulary(farm, current_selection: Vector2i) ->
 		return false
 
 	var biome = farm.grid.get_biome_for_plot(current_selection)
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return false
-	if biome.quantum_computer.register_map.num_qubits >= EconomyConstants.MAX_BIOME_QUBITS:
+	if not biome.viz_cache or not biome.viz_cache.has_metadata():
+		return false
+	if _get_qubit_count(biome) >= EconomyConstants.MAX_BIOME_QUBITS:
 		return false
 
-	var pairs = _collect_injectable_pairs(farm, biome.quantum_computer)
+	var pairs = _collect_injectable_pairs(farm, biome)
 	if pairs.is_empty():
 		return false
 		
@@ -360,7 +362,7 @@ static func _can_execute_inject_vocabulary(farm, current_selection: Vector2i) ->
 	return EconomyConstants.can_afford(farm.economy, cost)
 
 
-static func _collect_injectable_pairs(farm_ref, quantum_computer = null) -> Array:
+static func _collect_injectable_pairs(farm_ref, biome = null) -> Array:
 	var pairs: Array = []
 	if farm_ref and farm_ref.has_method("get_known_pairs"):
 		pairs.append_array(farm_ref.get_known_pairs())
@@ -380,9 +382,8 @@ static func _collect_injectable_pairs(farm_ref, quantum_computer = null) -> Arra
 		var south = pair.get("south", "")
 		if north == "" or south == "" or north == south:
 			continue
-		if quantum_computer and quantum_computer.register_map:
-			if quantum_computer.register_map.has(north) or quantum_computer.register_map.has(south):
-				continue
+		if biome and (_biome_has_emoji(biome, north) or _biome_has_emoji(biome, south)):
+			continue
 		var key = "%s|%s" % [north, south]
 		if seen.has(key):
 			continue
@@ -413,14 +414,16 @@ static func _can_execute_icon_assign(farm, selected_plots: Array[Vector2i], acti
 		return false
 
 	var biome = farm.grid.get_biome_for_plot(selected_plots[0])
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return false
-	if biome.quantum_computer.register_map.num_qubits >= EconomyConstants.MAX_BIOME_QUBITS:
+	if not biome.viz_cache or not biome.viz_cache.has_metadata():
+		return false
+	if _get_qubit_count(biome) >= EconomyConstants.MAX_BIOME_QUBITS:
 		return false
 
-	if biome.quantum_computer.register_map.has(north):
+	if _biome_has_emoji(biome, north):
 		return false
-	if biome.quantum_computer.register_map.has(south):
+	if _biome_has_emoji(biome, south):
 		return false
 
 	return true
@@ -430,11 +433,12 @@ static func _can_execute_remove_vocabulary(farm, current_selection: Vector2i) ->
 		return false
 		
 	var biome = farm.grid.get_biome_for_plot(current_selection)
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return false
-		
-	var rm = biome.quantum_computer.register_map
-	if rm.num_qubits < 2:
+	if not biome.viz_cache or not biome.viz_cache.has_metadata():
+		return false
+
+	if _get_qubit_count(biome) < 2:
 		return false
 		
 	var cost = EconomyConstants.get_action_cost("remove_vocabulary")
@@ -445,6 +449,29 @@ static func _can_execute_explore_biome(farm) -> bool:
 	"""Check if player can afford to explore a new biome."""
 	if not farm or not farm.economy:
 		return false
+
+	if farm.has_method("can_explore_biome"):
+		var gate = farm.can_explore_biome()
+		if not gate.get("ok", false):
+			return false
 	
 	var cost = EconomyConstants.get_action_cost("explore_biome")
 	return EconomyConstants.can_afford(farm.economy, cost)
+
+
+static func _get_qubit_count(biome) -> int:
+	if not biome:
+		return 0
+	if biome.has_method("get_total_register_count"):
+		var count = biome.get_total_register_count()
+		if count > 0:
+			return count
+	return 0
+
+
+static func _biome_has_emoji(biome, emoji: String) -> bool:
+	if not biome or emoji == "":
+		return false
+	if biome.viz_cache:
+		return biome.viz_cache.get_qubit(emoji) >= 0
+	return false

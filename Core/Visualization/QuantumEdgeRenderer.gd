@@ -133,11 +133,9 @@ func _draw_mutual_information_web(graph: Node2D, ctx: Dictionary) -> void:
 	# Draw MI lines within each biome
 	for biome_name in nodes_by_biome:
 		var biome = biomes.get(biome_name)
-		if not biome or not biome.quantum_computer:
+		if not biome or not biome.viz_cache:
 			continue
-
 		var biome_nodes = nodes_by_biome[biome_name]
-		var qc = biome.quantum_computer
 
 		for i in range(biome_nodes.size()):
 			for j in range(i + 1, biome_nodes.size()):
@@ -149,17 +147,18 @@ func _draw_mutual_information_web(graph: Node2D, ctx: Dictionary) -> void:
 				if force_system:
 					mi = force_system.get_quantum_coupling_strength(node_a, node_b)
 				else:
-					# Fallback: compute directly
-					var qubit_a = _get_qubit_index(node_a, qc)
-					var qubit_b = _get_qubit_index(node_b, qc)
-					if qubit_a >= 0 and qubit_b >= 0 and qc.has_method("get_mutual_information"):
-						mi = qc.get_mutual_information(qubit_a, qubit_b)
+					# Fallback: use cached MI from payload
+					var qubit_a = _get_qubit_index(node_a, biome)
+					var qubit_b = _get_qubit_index(node_b, biome)
+					if qubit_a >= 0 and qubit_b >= 0:
+						mi = biome.viz_cache.get_mutual_information(qubit_a, qubit_b)
 
-				if mi < 0.01:
+				if mi < 0.001:  # Lowered threshold to show weak correlations
 					continue  # Skip uncorrelated pairs
 
 				# Alpha scales with MI (max MI = 2 for single qubits)
-				var alpha = clampf(mi / 2.0, 0.05, 0.6)
+				# Boost visibility for weak correlations
+				var alpha = clampf(mi / 0.5, 0.10, 0.7)  # More visible at low MI
 
 				# Color: orange-gold for correlations
 				var color = Color(0.9, 0.6, 0.2, alpha)
@@ -352,52 +351,11 @@ func _draw_linked_orbits(graph: Node2D, node_a, node_b, coupling: float, time: f
 # ============================================================================
 
 func _draw_coherence_web(graph: Node2D, ctx: Dictionary) -> void:
-	"""Draw thin lines showing all quantum correlations (off-diagonal ρ[i,j])."""
-	var quantum_nodes = ctx.get("quantum_nodes", [])
-	var biomes = ctx.get("biomes", {})
-	var active_biome = ctx.get("active_biome", "")
+	"""Draw thin lines showing all quantum correlations (off-diagonal ρ[i,j]).
 
-	for biome_name in biomes:
-		if active_biome != "" and biome_name != active_biome:
-			continue
-		var biome = biomes[biome_name]
-		if not biome or not biome.quantum_computer:
-			continue
-
-		var qc = biome.quantum_computer
-		if not qc.density_matrix or not qc.register_map:
-			continue
-
-		# Get emoji positions
-		var emoji_positions: Dictionary = {}
-		for node in quantum_nodes:
-			if node.biome_name == biome_name and node.emoji_north != "":
-				emoji_positions[node.emoji_north] = node.position
-
-		var emojis = qc.register_map.coordinates.keys()
-
-		for i in range(emojis.size()):
-			for j in range(i + 1, emojis.size()):
-				var emoji_a = emojis[i]
-				var emoji_b = emojis[j]
-
-				var pos_a = emoji_positions.get(emoji_a, Vector2.ZERO)
-				var pos_b = emoji_positions.get(emoji_b, Vector2.ZERO)
-
-				if pos_a == Vector2.ZERO or pos_b == Vector2.ZERO:
-					continue
-
-				var coherence = biome.get_emoji_coherence(emoji_a, emoji_b)
-				if not coherence:
-					continue
-
-				var coherence_mag = coherence.abs()
-				if coherence_mag < 0.01:
-					continue
-
-				var alpha = clampf(coherence_mag * 2.0, 0.05, 0.8)
-				var color = Color(0.8, 0.8, 1.0, alpha)
-				graph.draw_line(pos_a, pos_b, color, 1.0, true)
+	Disabled: coherence pair metrics are not provided by native viz cache.
+	"""
+	return
 
 
 # ============================================================================
@@ -410,17 +368,13 @@ func _draw_hamiltonian_coupling_web(graph: Node2D, ctx: Dictionary) -> void:
 	var biomes = ctx.get("biomes", {})
 	var active_biome = ctx.get("active_biome", "")
 
-	var icon_registry = graph.get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		return
-
 	var drawn_pairs: Dictionary = {}
 
 	for biome_name in biomes:
 		if active_biome != "" and biome_name != active_biome:
 			continue
 		var biome = biomes[biome_name]
-		if not biome or not biome.quantum_computer:
+		if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 			continue
 
 		var emoji_positions: Dictionary = {}
@@ -428,21 +382,18 @@ func _draw_hamiltonian_coupling_web(graph: Node2D, ctx: Dictionary) -> void:
 			if node.biome_name == biome_name and node.emoji_north != "":
 				emoji_positions[node.emoji_north] = node.position
 
-		var qc = biome.quantum_computer
-		if not qc.register_map:
+		if not biome.viz_cache or not biome.viz_cache.has_metadata():
 			continue
 
-		for emoji in qc.register_map.coordinates.keys():
-			var icon = icon_registry.get_icon(emoji)
-			if not icon:
-				continue
+		for emoji in biome.viz_cache.get_emojis():
+			var couplings = biome.viz_cache.get_hamiltonian_couplings(emoji)
 
 			var source_pos = emoji_positions.get(emoji, Vector2.ZERO)
 			if source_pos == Vector2.ZERO:
 				continue
 
-			for target_emoji in icon.hamiltonian_couplings:
-				var strength = icon.hamiltonian_couplings[target_emoji]
+			for target_emoji in couplings:
+				var strength = couplings[target_emoji]
 				if abs(strength) < 0.001:
 					continue
 
@@ -475,15 +426,11 @@ func _draw_lindblad_flow_arrows(graph: Node2D, ctx: Dictionary) -> void:
 	var time_accumulator = ctx.get("time_accumulator", 0.0)
 	var layout_calculator = ctx.get("layout_calculator")
 
-	var icon_registry = graph.get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		return
-
 	for biome_name in biomes:
 		if active_biome != "" and biome_name != active_biome:
 			continue
 		var biome = biomes[biome_name]
-		if not biome or not biome.quantum_computer:
+		if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 			continue
 
 		var oval = layout_calculator.get_biome_oval(biome_name) if layout_calculator else {}
@@ -497,19 +444,16 @@ func _draw_lindblad_flow_arrows(graph: Node2D, ctx: Dictionary) -> void:
 			if node.biome_name == biome_name and node.emoji_north != "":
 				emoji_positions[node.emoji_north] = node.position
 
-		var qc = biome.quantum_computer
-		if not qc.register_map:
+		if not biome.viz_cache or not biome.viz_cache.has_metadata():
 			continue
 
-		for emoji in qc.register_map.coordinates.keys():
-			var icon = icon_registry.get_icon(emoji)
-			if not icon:
-				continue
+		for emoji in biome.viz_cache.get_emojis():
+			var outgoing = biome.viz_cache.get_lindblad_outgoing(emoji)
 
 			var source_pos = emoji_positions.get(emoji, biome_center)
 
-			for target_emoji in icon.lindblad_outgoing:
-				var rate = icon.lindblad_outgoing[target_emoji]
+			for target_emoji in outgoing:
+				var rate = outgoing[target_emoji]
 				if rate < 0.001:
 					continue
 
@@ -677,15 +621,18 @@ func _is_active_node(node) -> bool:
 	return false
 
 
-func _get_qubit_index(node, qc) -> int:
-	"""Get qubit index for a node."""
-	if not node or not qc:
+func _get_qubit_index(node, biome) -> int:
+	"""Get qubit index for a node using cached viz metadata."""
+	if not node or not biome:
 		return -1
+
+	if "register_id" in node and node.register_id >= 0:
+		return node.register_id
 
 	if node.plot and "register_id" in node.plot:
 		return node.plot.register_id
 
-	if node.emoji_north and qc.register_map and qc.register_map.has(node.emoji_north):
-		return qc.register_map.qubit(node.emoji_north)
+	if node.emoji_north and ("viz_cache" in biome):
+		return biome.viz_cache.get_qubit(node.emoji_north)
 
 	return -1

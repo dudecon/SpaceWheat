@@ -39,6 +39,17 @@ static func _try_charge_lindblad_cost(farm, emoji: String, insufficient: Diction
 const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 
+static func _resolve_qubit_index(biome, emoji: String) -> int:
+	"""Resolve qubit index from viz_cache metadata."""
+	if not biome or emoji == "":
+		return -1
+	if biome.viz_cache and biome.viz_cache.has_metadata():
+		var q = biome.viz_cache.get_qubit(emoji)
+		if q >= 0:
+			return q
+	return -1
+
+
 ## ============================================================================
 ## LINDBLAD CONTROL OPERATIONS
 ## ============================================================================
@@ -86,7 +97,7 @@ static func lindblad_drive(farm, positions: Array[Vector2i]) -> Dictionary:
 			if plot and plot.is_planted:
 				emoji = plot.north_emoji if plot.north_emoji else ""
 
-		if emoji == "" or not biome.quantum_computer.register_map.has(emoji):
+		if _resolve_qubit_index(biome, emoji) < 0:
 			continue
 
 		biome.quantum_computer.apply_drive(emoji, drive_rate, dt)
@@ -145,11 +156,11 @@ static func lindblad_decay(farm, positions: Array[Vector2i]) -> Dictionary:
 			if plot and plot.is_planted:
 				emoji = plot.north_emoji if plot.north_emoji else ""
 
-		if emoji == "" or not biome.quantum_computer.register_map.has(emoji):
+		var qubit_idx = _resolve_qubit_index(biome, emoji)
+		if qubit_idx < 0:
 			continue
 
 		# Get qubit index and apply decay
-		var qubit_idx = biome.quantum_computer.register_map.qubit(emoji)
 		biome.quantum_computer.apply_decay(qubit_idx, decay_rate, dt)
 		success_count += 1
 		decayed_emojis[emoji] = decayed_emojis.get(emoji, 0) + 1
@@ -193,7 +204,7 @@ static func enable_persistent_drive(farm, positions: Array[Vector2i],
 			continue
 
 		var emoji = _resolve_north_emoji(farm, pos)
-		if emoji == "" or not biome.quantum_computer.register_map.has(emoji):
+		if _resolve_qubit_index(biome, emoji) < 0:
 			continue
 
 		var plot = farm.grid.get_plot(pos)
@@ -264,7 +275,7 @@ static func enable_persistent_decay(farm, positions: Array[Vector2i],
 			continue
 
 		var emoji = _resolve_north_emoji(farm, pos)
-		if emoji == "" or not biome.quantum_computer.register_map.has(emoji):
+		if _resolve_qubit_index(biome, emoji) < 0:
 			continue
 
 		var plot = farm.grid.get_plot(pos)
@@ -364,7 +375,7 @@ static func lindblad_transfer(farm, positions: Array[Vector2i]) -> Dictionary:
 			"message": "Both plots must have bound terminals"
 		}
 
-	if not biome.quantum_computer.register_map.has(emoji_from) or not biome.quantum_computer.register_map.has(emoji_to):
+	if _resolve_qubit_index(biome, emoji_from) < 0 or _resolve_qubit_index(biome, emoji_to) < 0:
 		return {
 			"success": false,
 			"error": "emojis_not_in_register",

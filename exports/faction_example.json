@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Verdant Covenant",
+    "description": "Example faction showing Hamiltonian and Lindblad structure.",
+    "domain": "nature",
+    "tags": ["example", "growth"],
+    "bits": ["🌿", "🪵", "🦋", "💧"],
+    "ring": ["🌿", "🪵", "🦋", "💧"],
+    "signature": "🌿",
+    "motto": "Growth through balance.",
+    "self_energies": {
+      "🌿": 0.6,
+      "🪵": 0.4
+    },
+    "hamiltonian": {
+      "🌿": {"🪵": 0.12},
+      "🦋": {"🌿": 0.05}
+    },
+    "lindblad_outgoing": {
+      "🌿": {"💧": 0.02}
+    },
+    "lindblad_incoming": {
+      "🌿": {"💧": 0.01}
+    },
+    "decay": {
+      "🪵": {"rate": 0.03, "target": "🍂"}
+    },
+    "alignment_couplings": {}
+  }
+]

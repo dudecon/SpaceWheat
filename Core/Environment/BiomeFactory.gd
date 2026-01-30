@@ -51,9 +51,8 @@ static func create(axes: Array[Dictionary], biome_name: String) -> Node:
 	var dim = 1 << axes.size()  # 2^num_qubits
 	quantum_computer.density_matrix = ComplexMatrix.zeros(dim)
 
-	# Initialize to ground state |11...1⟩ (all south poles)
-	var ground_index = (1 << axes.size()) - 1
-	quantum_computer.initialize_basis(ground_index)
+	# Initialize to uniform superposition across all basis states
+	quantum_computer.initialize_uniform_superposition()
 
 	print("🏭 Created quantum computer for '%s': %d qubits, %dD" %
 		  [biome_name, axes.size(), dim])

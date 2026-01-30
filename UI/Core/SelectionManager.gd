@@ -16,8 +16,8 @@ var plot_grid_display: Node = null
 var grid_config = null
 
 # Grid dimensions (fallback if grid_config is null)
-var grid_width: int = 6
-var grid_height: int = 4
+var grid_width: int = 0
+var grid_height: int = 0
 
 # Signals
 signal selection_changed(new_pos: Vector2i)

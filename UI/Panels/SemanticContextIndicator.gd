@@ -137,9 +137,9 @@ func _detect_axes():
 	"""Auto-detect phase space axes from biome's attractor analyzer"""
 	if current_biome and current_biome.attractor_analyzer:
 		emoji_axes = current_biome.attractor_analyzer.selected_emojis.duplicate()
-	elif current_biome and current_biome.quantum_computer:
-		# Fallback: use first 3 emojis from register map
-		var all_emojis = current_biome.quantum_computer.register_map.coordinates.keys()
+	elif current_biome and current_biome.viz_cache:
+		# Fallback: use first 3 emojis from viz_cache metadata
+		var all_emojis = current_biome.viz_cache.get_emojis()
 		emoji_axes.clear()
 		for i in range(min(3, all_emojis.size())):
 			emoji_axes.append(all_emojis[i])
@@ -148,7 +148,7 @@ func _detect_axes():
 func _update_display():
 	"""Update all UI elements"""
 	var biome = _get_current_biome()
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		_show_no_context()
 		return
 
@@ -162,9 +162,9 @@ func _update_display():
 
 	# Get current position in phase space
 	var position = Vector3(
-		biome.quantum_computer.get_population(emoji_axes[0]),
-		biome.quantum_computer.get_population(emoji_axes[1]),
-		biome.quantum_computer.get_population(emoji_axes[2])
+		biome.get_emoji_probability(emoji_axes[0]),
+		biome.get_emoji_probability(emoji_axes[1]),
+		biome.get_emoji_probability(emoji_axes[2])
 	)
 
 	# Detect region

@@ -50,11 +50,11 @@ static func get_biome_data(biome: BiomeBase, farm_grid) -> Dictionary:
 
 ## Get biome quantum purity (Tr(ρ²))
 static func _get_biome_purity(biome: BiomeBase) -> float:
-	if biome and biome.has_method("get_purity"):
-		return biome.get_purity()
-	if biome and "quantum_computer" in biome and biome.quantum_computer:
-		if biome.quantum_computer.has_method("get_purity"):
-			return biome.quantum_computer.get_purity()
+	var viz = _get_viz_cache(biome)
+	if viz:
+		var purity = viz.get_purity()
+		if purity >= 0.0:
+			return purity
 	return 0.5
 
 
@@ -93,13 +93,19 @@ static func get_emoji_energy_distribution(biome: BiomeBase) -> Array[Dictionary]
 	if not biome or not biome.producible_emojis:
 		return emoji_data
 
-	# Get energy distribution from quantum_computer
-	var qc = biome.quantum_computer if biome.quantum_computer else null
-	if not qc:
-		# No quantum computer - show equal distribution as placeholder
+	# Compute probabilities from cached C++ Bloch packet
+	var total_prob = 0.0
+	var emoji_probs = {}
+	for emoji in biome.producible_emojis:
+		var p = _get_emoji_probability(biome, emoji)
+		emoji_probs[emoji] = p
+		if p >= 0.0:
+			total_prob += p
+
+	# If cache not ready, show equal distribution as placeholder
+	if total_prob <= 0.0:
 		var count = biome.producible_emojis.size()
 		var percentage = 100.0 / count if count > 0 else 0.0
-
 		for emoji in biome.producible_emojis:
 			emoji_data.append({
 				"emoji": emoji,
@@ -109,20 +115,10 @@ static func get_emoji_energy_distribution(biome: BiomeBase) -> Array[Dictionary]
 			})
 		return emoji_data
 
-	# Calculate total energy for normalization
-	var total_energy = 0.0
-	var emoji_energies = {}
-
-	# Sum energy across all basis states containing each emoji
-	for emoji in biome.producible_emojis:
-		var emoji_energy = _get_emoji_basis_energy(biome, emoji)
-		emoji_energies[emoji] = emoji_energy
-		total_energy += emoji_energy
-
 	# Normalize to percentages
 	for emoji in biome.producible_emojis:
-		var energy = emoji_energies.get(emoji, 0.0)
-		var percentage = (energy / total_energy * 100.0) if total_energy > 0.0 else 0.0
+		var prob = maxf(emoji_probs.get(emoji, 0.0), 0.0)
+		var percentage = (prob / total_prob * 100.0) if total_prob > 0.0 else 0.0
 
 		emoji_data.append({
 			"emoji": emoji,
@@ -227,7 +223,7 @@ static func _get_biome_representative_emoji(biome: BiomeBase) -> String:
 
 static func _calculate_total_quantum_energy(biome: BiomeBase) -> float:
 	"""Sum total energy in quantum computer state"""
-	if not biome.quantum_computer:
+	if not biome:
 		return 0.0
 
 	# Sum energy from all active projections
@@ -248,29 +244,22 @@ static func _count_active_projections(biome: BiomeBase) -> int:
 	return 0
 
 
-static func _get_emoji_basis_energy(biome: BiomeBase, emoji: String) -> float:
-	"""Get energy associated with a specific emoji basis state
+static func _get_emoji_probability(biome: BiomeBase, emoji: String) -> float:
+	"""Get cached probability for a specific emoji pole, or -1 if unavailable."""
+	var viz = _get_viz_cache(biome)
+	if not viz:
+		return -1.0
+	var qubit_idx = viz.get_qubit(emoji)
+	var pole = viz.get_pole(emoji)
+	if qubit_idx < 0 or pole < 0:
+		return -1.0
 
-	Sums energy from all projections where this emoji appears
-	"""
-	var energy = 0.0
+	var snap = viz.get_snapshot(qubit_idx)
+	if snap.is_empty():
+		return -1.0
 
-	if not "active_projections" in biome:
-		return energy
-
-	for pos in biome.active_projections.keys():
-		var projection = biome.active_projections[pos]
-
-		if projection:
-			var north = projection.get("north_emoji", "")
-			var south = projection.get("south_emoji", "")
-
-			# If this emoji is in the projection, add its energy
-			if emoji == north or emoji == south:
-				if projection.has_method("get_quantum_energy"):
-					energy += projection.get_quantum_energy()
-
-	return energy
+	var p = snap.get("p0", 0.5) if pole == 0 else snap.get("p1", 0.5)
+	return clampf(p, 0.0, 1.0)
 
 
 static func _percentage_to_dots(percentage: float) -> int:
@@ -306,7 +295,8 @@ static func _count_entanglements(biome: BiomeBase) -> int:
 
 static func _get_quantum_mode(biome: BiomeBase) -> String:
 	"""Determine quantum evolution mode"""
-	if not biome.quantum_computer:
+	var viz = _get_viz_cache(biome)
+	if not viz or not viz.has_metadata():
 		return "None"
 	return "QuantumComputer"
 
@@ -349,24 +339,25 @@ static func get_quantum_detail(biome: BiomeBase) -> Dictionary:
 	if not biome:
 		return _empty_quantum_detail()
 
-	var qc = biome.quantum_computer if "quantum_computer" in biome else null
-	if not qc:
-		return _empty_quantum_detail()
+	var viz = _get_viz_cache(biome)
+	var purity = _get_biome_purity(biome)
+	var num_qubits = viz.get_num_qubits() if viz else 0
+	var dim = (1 << num_qubits) if num_qubits > 0 else 0
 
 	return {
-		"num_qubits": qc.register_map.num_qubits,
-		"dimension": qc.register_map.dim(),
-		"purity": qc.get_purity() if qc.has_method("get_purity") else 0.5,
-		"entropy": _estimate_entropy(qc),
-		"qubit_axes": _get_qubit_axes(qc),
-		"hamiltonian": _get_hamiltonian_info(qc),
-		"lindblad": _get_lindblad_info(qc),
-		"entanglement": _get_entanglement_info(qc),
-		"populations": _get_icon_populations(qc),
+		"num_qubits": num_qubits,
+		"dimension": dim,
+		"purity": purity,
+		"entropy": _estimate_entropy(purity, dim),
+		"qubit_axes": _get_qubit_axes(biome),
+		"hamiltonian": _get_hamiltonian_info(biome),
+		"lindblad": _get_lindblad_info(biome),
+		"entanglement": _get_entanglement_info(biome),
+		"populations": _get_icon_populations(biome),
 	}
 
 
-static func _get_icon_populations(qc) -> Dictionary:
+static func _get_icon_populations(biome: BiomeBase) -> Dictionary:
 	"""Get probability amplitudes for all registered icons.
 
 	This is the actual quantum state probability - the likelihood of
@@ -375,12 +366,18 @@ static func _get_icon_populations(qc) -> Dictionary:
 	Returns:
 		Dictionary: {emoji: probability} for all registered emojis
 	"""
-	if qc and qc.has_method("get_all_populations"):
-		return qc.get_all_populations()
-	return {}
+	var pops: Dictionary = {}
+	var viz = _get_viz_cache(biome)
+	if not viz:
+		return pops
+	for emoji in viz.get_emojis():
+		var p = _get_emoji_probability(biome, emoji)
+		if p >= 0.0:
+			pops[emoji] = p
+	return pops
 
 
-static func _get_qubit_axes(qc) -> Array:
+static func _get_qubit_axes(biome: BiomeBase) -> Array:
 	"""Get Bloch projection for each qubit axis
 
 	Returns array of:
@@ -396,30 +393,29 @@ static func _get_qubit_axes(qc) -> Array:
 	"""
 	var axes = []
 
-	if not qc or not qc.register_map:
+	var viz = _get_viz_cache(biome)
+	if not viz:
 		return axes
 
-	var rm = qc.register_map
-
-	for qubit_idx in range(rm.num_qubits):
-		var axis_info = rm.axis(qubit_idx)
+	for qubit_idx in range(viz.get_num_qubits()):
+		var axis_info = viz.get_axis(qubit_idx)
 		if axis_info.is_empty():
 			continue
 
 		var north = axis_info.get("north", "?")
 		var south = axis_info.get("south", "?")
 
-		# Get marginal probabilities
-		var p_north = qc.get_marginal(qubit_idx, 0) if qc.has_method("get_marginal") else 0.5
-		var p_south = qc.get_marginal(qubit_idx, 1) if qc.has_method("get_marginal") else 0.5
-
-		# Get coherence magnitude (off-diagonal element)
-		# Model C: Use get_coherence() directly on quantum computer
+		var p_north = 0.5
+		var p_south = 0.5
 		var coherence_mag = 0.0
-		if qc.has_method("get_coherence"):
-			var coh = qc.get_coherence(north, south)
-			if coh:
-				coherence_mag = sqrt(coh.re * coh.re + coh.im * coh.im)
+		var bloch = viz.get_bloch(qubit_idx)
+		if not bloch.is_empty():
+			p_north = bloch.get("p0", 0.5)
+			p_south = bloch.get("p1", 0.5)
+			var x = bloch.get("x", 0.0)
+			var y = bloch.get("y", 0.0)
+			# |rho_01| = 0.5 * sqrt(x^2 + y^2)
+			coherence_mag = 0.5 * sqrt(x * x + y * y)
 
 		# Calculate balance (-1 to +1, where +1 is full north)
 		var total = p_north + p_south
@@ -438,7 +434,7 @@ static func _get_qubit_axes(qc) -> Array:
 	return axes
 
 
-static func _get_hamiltonian_info(qc) -> Dictionary:
+static func _get_hamiltonian_info(biome: BiomeBase) -> Dictionary:
 	"""Extract Hamiltonian structure (self-energies and couplings)
 
 	Returns:
@@ -452,41 +448,43 @@ static func _get_hamiltonian_info(qc) -> Dictionary:
 		"couplings": [],
 	}
 
-	if not qc:
-		return info
-
-	# Get couplings from coupling_registry
-	if "coupling_registry" in qc and qc.coupling_registry:
-		for key in qc.coupling_registry.keys():
-			var coupling = qc.coupling_registry[key]
-			info["couplings"].append({
-				"a": coupling.get("a", -1),
-				"b": coupling.get("b", -1),
-				"J": coupling.get("J", 0.0),
-			})
-
-	# Get all couplings via method if available
-	if qc.has_method("get_all_couplings"):
-		var couplings = qc.get_all_couplings()
-		if couplings.size() > 0 and info["couplings"].is_empty():
-			info["couplings"] = couplings
+	# Get couplings from cached payload (emoji → emoji)
+	var viz = _get_viz_cache(biome)
+	if viz:
+		var seen_pairs: Dictionary = {}
+		for emoji in viz.get_emojis():
+			var couplings = viz.get_hamiltonian_couplings(emoji)
+			var qa = viz.get_qubit(emoji)
+			if qa < 0:
+				continue
+			for target in couplings:
+				var qb = viz.get_qubit(target)
+				if qb < 0:
+					continue
+				var pair = [emoji, target]
+				pair.sort()
+				var key = "%s_%s" % [pair[0], pair[1]]
+				if seen_pairs.has(key):
+					continue
+				seen_pairs[key] = true
+				info["couplings"].append({
+					"a": qa,
+					"b": qb,
+					"J": couplings[target],
+				})
 
 	# Extract self-energies from Hamiltonian diagonal
 	# (These are typically set by IconRegistry based on emoji physics)
-	if qc.hamiltonian and qc.register_map:
-		var rm = qc.register_map
-		for emoji in rm.coordinates.keys():
-			var q = rm.qubit(emoji)
-			var p = rm.pole(emoji)
-			if q >= 0:
-				# Self-energy is embedded in diagonal elements
-				# For now, mark as present (actual extraction would need full matrix analysis)
-				info["self_energies"][emoji] = 0.0  # Placeholder
+	if viz:
+		for emoji in viz.get_emojis():
+			# Self-energy is embedded in diagonal elements
+			# For now, mark as present (actual extraction would need full matrix analysis)
+			info["self_energies"][emoji] = 0.0  # Placeholder
 
 	return info
 
 
-static func _get_lindblad_info(qc) -> Array:
+static func _get_lindblad_info(biome: BiomeBase) -> Array:
 	"""Extract Lindblad dissipation channel information
 
 	Returns array of:
@@ -498,35 +496,23 @@ static func _get_lindblad_info(qc) -> Array:
 		}
 	"""
 	var channels = []
-
-	if not qc:
+	var viz = _get_viz_cache(biome)
+	if not viz:
 		return channels
-
-	# Check for gated Lindblad configs (these have structured data)
-	if "gated_lindblad_configs" in qc and qc.gated_lindblad_configs:
-		for config in qc.gated_lindblad_configs:
+	for emoji in viz.get_emojis():
+		var outgoing = viz.get_lindblad_outgoing(emoji)
+		for target in outgoing:
 			channels.append({
-				"type": "gated",
-				"description": config.get("description", "Conditional dissipation"),
-				"rate": config.get("rate", 0.0),
-				"gate": config.get("gate", ""),
-			})
-
-	# Count raw Lindblad operators
-	if "lindblad_operators" in qc and qc.lindblad_operators:
-		var num_ops = qc.lindblad_operators.size()
-		if num_ops > 0 and channels.is_empty():
-			channels.append({
-				"type": "raw",
-				"description": "%d Lindblad operators" % num_ops,
-				"rate": 0.0,
+				"type": "outgoing",
+				"description": "%s → %s" % [emoji, target],
+				"rate": outgoing[target],
 				"gate": "",
 			})
 
 	return channels
 
 
-static func _get_entanglement_info(qc) -> Dictionary:
+static func _get_entanglement_info(biome: BiomeBase) -> Dictionary:
 	"""Extract entanglement structure
 
 	Returns:
@@ -541,40 +527,66 @@ static func _get_entanglement_info(qc) -> Dictionary:
 		"component_sizes": [],
 		"is_fully_entangled": true,
 	}
-
-	if not qc:
+	var viz = _get_viz_cache(biome)
+	if not viz:
+		return info
+	var n = viz.get_num_qubits()
+	if n <= 0:
 		return info
 
-	# Check components
-	if "components" in qc and qc.components:
-		info["num_components"] = qc.components.size()
-		for comp_id in qc.components.keys():
-			var comp = qc.components[comp_id]
-			if comp and "register_ids" in comp:
-				info["component_sizes"].append(comp.register_ids.size())
+	# Build adjacency based on MI threshold
+	var threshold = 0.05
+	var adjacency: Array = []
+	adjacency.resize(n)
+	for i in range(n):
+		adjacency[i] = []
+	for i in range(n):
+		for j in range(i + 1, n):
+			var mi = viz.get_mutual_information(i, j)
+			if mi > threshold:
+				adjacency[i].append(j)
+				adjacency[j].append(i)
 
-		info["is_fully_entangled"] = (info["num_components"] == 1)
+	# Connected components
+	var visited: Array = []
+	visited.resize(n)
+	visited.fill(false)
+	var component_sizes: Array = []
+	for i in range(n):
+		if visited[i]:
+			continue
+		var queue: Array = [i]
+		visited[i] = true
+		var size = 0
+		while not queue.is_empty():
+			var cur = queue.pop_back()
+			size += 1
+			for neighbor in adjacency[cur]:
+				if not visited[neighbor]:
+					visited[neighbor] = true
+					queue.append(neighbor)
+		component_sizes.append(size)
+
+	info["num_components"] = component_sizes.size()
+	info["component_sizes"] = component_sizes
+	info["is_fully_entangled"] = (info["num_components"] == 1)
 
 	return info
 
 
-static func _estimate_entropy(qc) -> float:
+static func _estimate_entropy(purity: float, dim: int) -> float:
 	"""Estimate von Neumann entropy from purity
 
 	For a maximally mixed state: S = log(d)
 	For a pure state: S = 0
 	Using approximation: S ≈ -log(Tr(ρ²)) for rough estimate
 	"""
-	if not qc or not qc.has_method("get_purity"):
-		return 0.0
-
-	var purity = qc.get_purity()
 	if purity <= 0.0 or purity > 1.0:
 		return 0.0
-
 	# Rough entropy estimate: S ≈ -log₂(purity)
 	# Normalized to [0, 1] where 1 = maximally mixed
-	var dim = qc.register_map.dim() if qc.register_map else 2
+	if dim <= 1:
+		return 0.0
 	var max_entropy = log(dim) / log(2)  # log₂(d)
 
 	if purity >= 1.0:
@@ -582,6 +594,12 @@ static func _estimate_entropy(qc) -> float:
 
 	var entropy_estimate = -log(purity) / log(2)
 	return clamp(entropy_estimate / max_entropy, 0.0, 1.0)
+
+
+static func _get_viz_cache(biome: BiomeBase):
+	if biome and "viz_cache" in biome:
+		return biome.viz_cache
+	return null
 
 
 static func _empty_quantum_detail() -> Dictionary:

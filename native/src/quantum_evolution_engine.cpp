@@ -1,9 +1,37 @@
 #include "quantum_evolution_engine.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/variant.hpp>
 #include <cmath>
 
 using namespace godot;
+
+namespace {
+inline void cap_trace_and_clamp_diag(Eigen::MatrixXcd &rho) {
+    const double eps = 1e-12;
+    const int dim = std::min(rho.rows(), rho.cols());
+    double trace = 0.0;
+
+    for (int i = 0; i < dim; i++) {
+        std::complex<double> diag = rho(i, i);
+        double re = diag.real();
+        if (re < 0.0) {
+            rho(i, i) = std::complex<double>(0.0, 0.0);
+            re = 0.0;
+        } else if (std::abs(diag.imag()) > eps) {
+            rho(i, i) = std::complex<double>(re, 0.0);
+        }
+        trace += re;
+    }
+
+    if (std::isfinite(trace) && trace > 1.0 + eps) {
+        rho *= (1.0 / trace);
+    }
+}
+}  // namespace
 
 void QuantumEvolutionEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_dimension", "dim"),
@@ -34,6 +62,26 @@ void QuantumEvolutionEngine::_bind_methods() {
                          &QuantumEvolutionEngine::compute_all_mutual_information);
     ClassDB::bind_method(D_METHOD("evolve_with_mi", "rho_data", "dt", "max_dt", "num_qubits"),
                          &QuantumEvolutionEngine::evolve_with_mi);
+
+    // Basic observables from packed data
+    ClassDB::bind_method(D_METHOD("compute_purity_from_packed", "rho_data"),
+                         &QuantumEvolutionEngine::compute_purity_from_packed);
+    ClassDB::bind_method(D_METHOD("compute_bloch_metrics_from_packed", "rho_data", "num_qubits"),
+                         &QuantumEvolutionEngine::compute_bloch_metrics_from_packed);
+
+    // Eigenstate analysis methods
+    ClassDB::bind_method(D_METHOD("compute_eigenstates", "rho_data"),
+                         &QuantumEvolutionEngine::compute_eigenstates);
+    ClassDB::bind_method(D_METHOD("compute_dominant_eigenvector", "rho_data"),
+                         &QuantumEvolutionEngine::compute_dominant_eigenvector);
+    ClassDB::bind_method(D_METHOD("compute_eigenvalues", "rho_data"),
+                         &QuantumEvolutionEngine::compute_eigenvalues);
+    ClassDB::bind_method(D_METHOD("compute_cos2_similarity", "state_a", "state_b"),
+                         &QuantumEvolutionEngine::compute_cos2_similarity);
+    ClassDB::bind_method(D_METHOD("compute_batch_eigenstates", "biome_rhos"),
+                         &QuantumEvolutionEngine::compute_batch_eigenstates);
+    ClassDB::bind_method(D_METHOD("compute_eigenstate_similarity_matrix", "eigenvectors"),
+                         &QuantumEvolutionEngine::compute_eigenstate_similarity_matrix);
 }
 
 QuantumEvolutionEngine::QuantumEvolutionEngine()
@@ -173,6 +221,7 @@ PackedFloat64Array QuantumEvolutionEngine::evolve_step(const PackedFloat64Array&
     // Euler integration: ρ(t+dt) = ρ(t) + dt * dρ/dt
     // =========================================================================
     rho += static_cast<double>(dt) * drho;
+    cap_trace_and_clamp_diag(rho);
 
     return pack_dense(rho);
 }
@@ -217,6 +266,7 @@ PackedFloat64Array QuantumEvolutionEngine::evolve(const PackedFloat64Array& rho_
 
         // Euler step
         rho += static_cast<double>(sub_dt) * drho;
+        cap_trace_and_clamp_diag(rho);
     }
 
     return pack_dense(rho);
@@ -457,14 +507,25 @@ std::complex<double> QuantumEvolutionEngine::compute_trace(const Eigen::MatrixXc
     return tr;
 }
 
+double QuantumEvolutionEngine::compute_purity_from_packed(const PackedFloat64Array& rho_data) const {
+    Eigen::MatrixXcd rho = unpack_dense(rho_data);
+    return compute_purity(rho);
+}
+
+PackedFloat64Array QuantumEvolutionEngine::compute_bloch_metrics_from_packed(
+    const PackedFloat64Array& rho_data, int num_qubits) const {
+    Eigen::MatrixXcd rho = unpack_dense(rho_data);
+    return compute_bloch_metrics(rho, num_qubits);
+}
+
 PackedFloat64Array QuantumEvolutionEngine::compute_bloch_metrics(
     const Eigen::MatrixXcd& rho, int num_qubits) const {
-    // Returns packed [x,y,z,r,theta,phi] per qubit
+    // Returns packed [p0,p1,x,y,z,r,theta,phi] per qubit
     PackedFloat64Array out;
     if (num_qubits <= 0) {
         return out;
     }
-    out.resize(num_qubits * 6);
+    out.resize(num_qubits * 8);
     double* ptr = out.ptrw();
 
     for (int q = 0; q < num_qubits; q++) {
@@ -474,9 +535,11 @@ PackedFloat64Array QuantumEvolutionEngine::compute_bloch_metrics(
         std::complex<double> rho11 = reduced(1, 1);
         std::complex<double> rho01 = reduced(0, 1);
 
+        double p0 = rho00.real();
+        double p1 = rho11.real();
         double x = 2.0 * rho01.real();
         double y = -2.0 * rho01.imag();
-        double z = rho00.real() - rho11.real();
+        double z = p0 - p1;
 
         double r = std::sqrt(x * x + y * y + z * z);
         double theta = 0.0;
@@ -489,14 +552,397 @@ PackedFloat64Array QuantumEvolutionEngine::compute_bloch_metrics(
             phi = std::atan2(y, x);
         }
 
-        int base = q * 6;
-        ptr[base + 0] = x;
-        ptr[base + 1] = y;
-        ptr[base + 2] = z;
-        ptr[base + 3] = r;
-        ptr[base + 4] = theta;
-        ptr[base + 5] = phi;
+        int base = q * 8;
+        ptr[base + 0] = p0;
+        ptr[base + 1] = p1;
+        ptr[base + 2] = x;
+        ptr[base + 3] = y;
+        ptr[base + 4] = z;
+        ptr[base + 5] = r;
+        ptr[base + 6] = theta;
+        ptr[base + 7] = phi;
     }
 
     return out;
+}
+
+Dictionary QuantumEvolutionEngine::compute_coupling_payload(const Dictionary& metadata) const {
+    Dictionary payload;
+    Dictionary hamiltonian_map;
+    Dictionary lindblad_map;
+    Dictionary sink_fluxes;
+
+    if (metadata.is_empty()) {
+        return payload;
+    }
+
+    Dictionary emoji_to_qubit = metadata.get("emoji_to_qubit", Dictionary());
+    Dictionary emoji_to_pole = metadata.get("emoji_to_pole", Dictionary());
+    Array emoji_list = metadata.get("emoji_list", Array());
+    int num_qubits = metadata.get("num_qubits", 0);
+
+    if (num_qubits <= 0 || emoji_list.is_empty()) {
+        return payload;
+    }
+
+    const int dim = m_dim;
+    const double eps = 1e-12;
+
+    auto compute_indices = [&](int q_a, int p_a, int q_b, int p_b, int &i, int &j) {
+        int shift_a = num_qubits - 1 - q_a;
+        int shift_b = num_qubits - 1 - q_b;
+        i = 0;
+        if (p_a != 0) {
+            i |= (1 << shift_a);
+        }
+        if (q_b != q_a && p_b != 0) {
+            i |= (1 << shift_b);
+        }
+        j = i ^ (1 << shift_a);
+        if (q_b != q_a) {
+            j ^= (1 << shift_b);
+        }
+    };
+
+    for (int idx_a = 0; idx_a < emoji_list.size(); idx_a++) {
+        Variant emoji_a_var = emoji_list[idx_a];
+        if (emoji_a_var.get_type() != Variant::STRING) {
+            continue;
+        }
+        String emoji_a = emoji_a_var;
+        int q_a = emoji_to_qubit.get(emoji_a, -1);
+        int p_a = emoji_to_pole.get(emoji_a, -1);
+        if (q_a < 0 || p_a < 0) {
+            continue;
+        }
+
+        Dictionary h_targets;
+        Dictionary l_targets;
+        double sink = 0.0;
+
+        for (int idx_b = 0; idx_b < emoji_list.size(); idx_b++) {
+            Variant emoji_b_var = emoji_list[idx_b];
+            if (emoji_b_var.get_type() != Variant::STRING) {
+                continue;
+            }
+            String emoji_b = emoji_b_var;
+            int q_b = emoji_to_qubit.get(emoji_b, -1);
+            int p_b = emoji_to_pole.get(emoji_b, -1);
+            if (q_b < 0 || p_b < 0) {
+                continue;
+            }
+
+            if (q_a == q_b && p_a == p_b) {
+                continue;
+            }
+
+            int i = 0;
+            int j = 0;
+            compute_indices(q_a, p_a, q_b, p_b, i, j);
+            if (i < 0 || j < 0 || i >= dim || j >= dim) {
+                continue;
+            }
+
+            if (m_has_hamiltonian) {
+                std::complex<double> h_val = m_hamiltonian(i, j);
+                double h_strength = std::abs(h_val);
+                if (h_strength > eps) {
+                    h_targets[emoji_b] = h_strength;
+                }
+            }
+
+            double rate = 0.0;
+            for (const auto &L : m_lindblads) {
+                if (L.rows() <= j || L.cols() <= i) {
+                    continue;
+                }
+                std::complex<double> l_val = L.coeff(j, i);
+                if (std::abs(l_val) > eps) {
+                    rate += std::norm(l_val);
+                }
+            }
+            if (rate > eps) {
+                l_targets[emoji_b] = rate;
+                sink += rate;
+            }
+        }
+
+        if (!h_targets.is_empty()) {
+            hamiltonian_map[emoji_a] = h_targets;
+        }
+        if (!l_targets.is_empty()) {
+            lindblad_map[emoji_a] = l_targets;
+        }
+        if (sink > eps) {
+            sink_fluxes[emoji_a] = sink;
+        }
+    }
+
+    payload["hamiltonian"] = hamiltonian_map;
+    payload["lindblad"] = lindblad_map;
+    payload["sink_fluxes"] = sink_fluxes;
+    return payload;
+}
+
+// ============================================================================
+// EIGENSTATE ANALYSIS (CPU-only, Eigen SelfAdjointEigenSolver)
+// ============================================================================
+
+Dictionary QuantumEvolutionEngine::compute_eigenstates(const PackedFloat64Array& rho_data) const {
+    Dictionary result;
+
+    if (m_dim <= 0) {
+        result["error"] = "dimension not set";
+        return result;
+    }
+
+    // Unpack density matrix
+    Eigen::MatrixXcd rho = unpack_dense(rho_data);
+
+    // Density matrices are Hermitian, use SelfAdjointEigenSolver for efficiency
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXcd> solver(rho);
+
+    if (solver.info() != Eigen::Success) {
+        result["error"] = "eigenvalue computation failed";
+        return result;
+    }
+
+    // Eigenvalues are returned in ascending order by Eigen
+    Eigen::VectorXd eigenvalues = solver.eigenvalues().real();
+    Eigen::MatrixXcd eigenvectors = solver.eigenvectors();
+
+    // Find dominant eigenvalue (largest)
+    int dominant_idx = m_dim - 1;  // Last one is largest for SelfAdjoint solver
+    double dominant_eigenvalue = eigenvalues(dominant_idx);
+    Eigen::VectorXcd dominant_vec = eigenvectors.col(dominant_idx);
+
+    // Pack eigenvalues (descending order for convenience)
+    PackedFloat64Array packed_eigenvalues;
+    packed_eigenvalues.resize(m_dim);
+    double* ev_ptr = packed_eigenvalues.ptrw();
+    for (int i = 0; i < m_dim; i++) {
+        ev_ptr[i] = eigenvalues(m_dim - 1 - i);  // Reverse to descending
+    }
+
+    // Pack dominant eigenvector as [re0, im0, re1, im1, ...]
+    PackedFloat64Array packed_dominant;
+    packed_dominant.resize(m_dim * 2);
+    double* dom_ptr = packed_dominant.ptrw();
+    for (int i = 0; i < m_dim; i++) {
+        dom_ptr[i * 2] = dominant_vec(i).real();
+        dom_ptr[i * 2 + 1] = dominant_vec(i).imag();
+    }
+
+    result["eigenvalues"] = packed_eigenvalues;
+    result["dominant_eigenvector"] = packed_dominant;
+    result["dominant_eigenvalue"] = dominant_eigenvalue;
+    result["dimension"] = m_dim;
+
+    return result;
+}
+
+PackedFloat64Array QuantumEvolutionEngine::compute_dominant_eigenvector(const PackedFloat64Array& rho_data) const {
+    PackedFloat64Array result;
+
+    if (m_dim <= 0) {
+        return result;
+    }
+
+    Eigen::MatrixXcd rho = unpack_dense(rho_data);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXcd> solver(rho);
+
+    if (solver.info() != Eigen::Success) {
+        return result;
+    }
+
+    // Get dominant eigenvector (last column, largest eigenvalue)
+    int dominant_idx = m_dim - 1;
+    Eigen::VectorXcd dominant_vec = solver.eigenvectors().col(dominant_idx);
+
+    // Pack as [re0, im0, re1, im1, ...]
+    result.resize(m_dim * 2);
+    double* ptr = result.ptrw();
+    for (int i = 0; i < m_dim; i++) {
+        ptr[i * 2] = dominant_vec(i).real();
+        ptr[i * 2 + 1] = dominant_vec(i).imag();
+    }
+
+    return result;
+}
+
+PackedFloat64Array QuantumEvolutionEngine::compute_eigenvalues(const PackedFloat64Array& rho_data) const {
+    PackedFloat64Array result;
+
+    if (m_dim <= 0) {
+        return result;
+    }
+
+    Eigen::MatrixXcd rho = unpack_dense(rho_data);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXcd> solver(rho);
+
+    if (solver.info() != Eigen::Success) {
+        return result;
+    }
+
+    // Pack eigenvalues in descending order
+    Eigen::VectorXd eigenvalues = solver.eigenvalues().real();
+    result.resize(m_dim);
+    double* ptr = result.ptrw();
+    for (int i = 0; i < m_dim; i++) {
+        ptr[i] = eigenvalues(m_dim - 1 - i);  // Descending
+    }
+
+    return result;
+}
+
+double QuantumEvolutionEngine::compute_cos2_similarity(
+    const PackedFloat64Array& state_a, const PackedFloat64Array& state_b) const {
+    // cos²(θ) = |⟨ψ_a|ψ_b⟩|² for quantum state overlap
+    // States packed as [re0, im0, re1, im1, ...]
+
+    if (state_a.size() != state_b.size() || state_a.is_empty()) {
+        return 0.0;
+    }
+
+    int dim = state_a.size() / 2;
+    const double* ptr_a = state_a.ptr();
+    const double* ptr_b = state_b.ptr();
+
+    // Compute complex inner product ⟨a|b⟩ = Σ conj(a_i) * b_i
+    std::complex<double> inner_product(0.0, 0.0);
+    for (int i = 0; i < dim; i++) {
+        std::complex<double> a_i(ptr_a[i * 2], ptr_a[i * 2 + 1]);
+        std::complex<double> b_i(ptr_b[i * 2], ptr_b[i * 2 + 1]);
+        inner_product += std::conj(a_i) * b_i;
+    }
+
+    // |⟨a|b⟩|²
+    return std::norm(inner_product);
+}
+
+Dictionary QuantumEvolutionEngine::compute_batch_eigenstates(const Dictionary& biome_rhos) const {
+    // Compute eigenstates for multiple biomes in a single call
+    // Input: {biome_name: rho_packed, ...}
+    // Output: {biome_name: {eigenvalues, dominant_eigenvector, dominant_eigenvalue}, ...}
+
+    Dictionary results;
+    Array keys = biome_rhos.keys();
+
+    for (int i = 0; i < keys.size(); i++) {
+        String biome_name = keys[i];
+        Variant rho_var = biome_rhos[biome_name];
+
+        if (rho_var.get_type() != Variant::PACKED_FLOAT64_ARRAY) {
+            continue;
+        }
+
+        PackedFloat64Array rho_data = rho_var;
+
+        // Temporarily set dimension from data size
+        // rho is dim×dim complex, packed as dim*dim*2 floats
+        int data_size = rho_data.size();
+        int dim_squared_2 = data_size;
+        int dim_squared = dim_squared_2 / 2;
+        int dim = static_cast<int>(std::sqrt(static_cast<double>(dim_squared)));
+
+        if (dim * dim * 2 != data_size || dim <= 0) {
+            Dictionary err;
+            err["error"] = "invalid rho dimensions";
+            results[biome_name] = err;
+            continue;
+        }
+
+        // Unpack and compute
+        Eigen::MatrixXcd rho(dim, dim);
+        const double* ptr = rho_data.ptr();
+        for (int r = 0; r < dim; r++) {
+            for (int c = 0; c < dim; c++) {
+                int idx = (r * dim + c) * 2;
+                rho(r, c) = std::complex<double>(ptr[idx], ptr[idx + 1]);
+            }
+        }
+
+        Eigen::SelfAdjointEigenSolver<Eigen::MatrixXcd> solver(rho);
+
+        if (solver.info() != Eigen::Success) {
+            Dictionary err;
+            err["error"] = "eigenvalue computation failed";
+            results[biome_name] = err;
+            continue;
+        }
+
+        Eigen::VectorXd eigenvalues = solver.eigenvalues().real();
+        int dominant_idx = dim - 1;
+        Eigen::VectorXcd dominant_vec = solver.eigenvectors().col(dominant_idx);
+
+        // Pack results
+        PackedFloat64Array packed_eigenvalues;
+        packed_eigenvalues.resize(dim);
+        double* ev_ptr = packed_eigenvalues.ptrw();
+        for (int j = 0; j < dim; j++) {
+            ev_ptr[j] = eigenvalues(dim - 1 - j);
+        }
+
+        PackedFloat64Array packed_dominant;
+        packed_dominant.resize(dim * 2);
+        double* dom_ptr = packed_dominant.ptrw();
+        for (int j = 0; j < dim; j++) {
+            dom_ptr[j * 2] = dominant_vec(j).real();
+            dom_ptr[j * 2 + 1] = dominant_vec(j).imag();
+        }
+
+        Dictionary biome_result;
+        biome_result["eigenvalues"] = packed_eigenvalues;
+        biome_result["dominant_eigenvector"] = packed_dominant;
+        biome_result["dominant_eigenvalue"] = eigenvalues(dominant_idx);
+        biome_result["dimension"] = dim;
+        biome_result["purity"] = compute_purity(rho);
+
+        results[biome_name] = biome_result;
+    }
+
+    return results;
+}
+
+PackedFloat64Array QuantumEvolutionEngine::compute_eigenstate_similarity_matrix(
+    const Array& eigenvectors) const {
+    // Compute pairwise cos² similarities for an array of eigenvectors
+    // Returns upper triangular matrix in packed form: [sim_01, sim_02, ..., sim_12, ...]
+
+    int n = eigenvectors.size();
+    int num_pairs = n * (n - 1) / 2;
+
+    PackedFloat64Array result;
+    result.resize(num_pairs);
+
+    if (n < 2) {
+        return result;
+    }
+
+    double* ptr = result.ptrw();
+    int idx = 0;
+
+    for (int i = 0; i < n; i++) {
+        Variant vi = eigenvectors[i];
+        if (vi.get_type() != Variant::PACKED_FLOAT64_ARRAY) {
+            for (int j = i + 1; j < n; j++) {
+                ptr[idx++] = 0.0;
+            }
+            continue;
+        }
+        PackedFloat64Array state_i = vi;
+
+        for (int j = i + 1; j < n; j++) {
+            Variant vj = eigenvectors[j];
+            if (vj.get_type() != Variant::PACKED_FLOAT64_ARRAY) {
+                ptr[idx++] = 0.0;
+                continue;
+            }
+            PackedFloat64Array state_j = vj;
+
+            ptr[idx++] = compute_cos2_similarity(state_i, state_j);
+        }
+    }
+
+    return result;
 }

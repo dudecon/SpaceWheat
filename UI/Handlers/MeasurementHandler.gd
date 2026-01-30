@@ -127,10 +127,10 @@ static func batch_measure(farm, positions: Array[Vector2i]) -> Dictionary:
 
 		# Record outcome probability for value calculation
 		var probability = 0.5
-		if biome.quantum_computer.has_method("get_register_probability"):
-			var reg_id = biome.quantum_computer.register_map.get(north_emoji, -1)
+		if biome.viz_cache:
+			var reg_id = biome.viz_cache.get_qubit(north_emoji)
 			if reg_id >= 0:
-				probability = biome.quantum_computer.get_register_probability(reg_id)
+				probability = biome.get_register_probability(reg_id)
 
 		results.append({
 			"position": pos,

@@ -227,7 +227,7 @@ func offer_quest_emergent(faction: Dictionary, biome) -> Dictionary:
 
 	# Generate via abstract machinery + theming (with vocabulary constraint!)
 	# Note: bath parameter is null (deprecated - removed from architecture)
-	var quest = QuestTheming.generate_quest(faction, null, player_vocab, bias_emojis)
+	var quest = QuestTheming.generate_quest(faction, biome, player_vocab, bias_emojis)
 
 	# Check for vocabulary mismatch error
 	if quest.is_empty() or quest.has("error"):
@@ -272,7 +272,7 @@ func offer_all_faction_quests(biome) -> Array:
 	for faction in FactionDatabase.ALL_FACTIONS:
 		# Use full generate_quest pipeline (handles vocabulary filtering!)
 		# Note: bath parameter is null (deprecated)
-		var quest = QuestTheming.generate_quest(faction, null, player_vocab, bias_emojis)
+		var quest = QuestTheming.generate_quest(faction, biome, player_vocab, bias_emojis)
 
 		# Skip factions with no vocabulary overlap
 		if quest.is_empty() or quest.has("error"):

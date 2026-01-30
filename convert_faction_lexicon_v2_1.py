@@ -100,7 +100,7 @@ def convert_json_to_gdscript(json_path: Path, output_path: Path):
     gd_lines.append("extends RefCounted")
     gd_lines.append("")
     gd_lines.append("## Faction Database v2.1")
-    gd_lines.append("## Generated from Core/Factions/data/factions.json")
+    gd_lines.append("## Generated from Core/Factions/data/factions_merged.json")
     gd_lines.append(f"## Contains {len(factions)} factions with rich flavor text, mottos, and lore")
     gd_lines.append("")
 
@@ -275,7 +275,7 @@ def convert_json_to_gdscript(json_path: Path, output_path: Path):
 if __name__ == "__main__":
     # Get paths
     script_dir = Path(__file__).parent
-    json_path = script_dir / "Core" / "Factions" / "data" / "factions.json"
+    json_path = script_dir / "Core" / "Factions" / "data" / "factions_merged.json"
     output_path = script_dir / "Core" / "Quests" / "FactionDatabaseV2.gd"
 
     # Check if input exists

@@ -83,6 +83,15 @@ func _safe_load_biome(script_path: String, biome_name: String):
 	return biome
 
 
+func _load_and_register_biome(script_path: String, biome_name: String):
+	"""Load biome, register to grid, and refresh grid sizing (boot-time helper)."""
+	var biome = _safe_load_biome(script_path, biome_name)
+	if biome and grid:
+		_register_biome_if_loaded(biome_name, biome, grid)
+		refresh_grid_for_biomes()
+	return biome
+
+
 func _register_biome_if_loaded(biome_name: String, biome, grid_ref) -> void:
 	"""Register a biome with the grid only if it loaded successfully."""
 	if biome == null:
@@ -141,6 +150,14 @@ func _setup_biome_evolution_batcher() -> void:
 # Biome availability (may fail to load if icon dependencies are missing)
 var biome_enabled: bool = false
 
+# Dynamic grid sizing
+const DEFAULT_PLOTS_PER_BIOME = 4
+const MAX_PLOTS_PER_BIOME = 7  # J K L ; ' H G
+
+# Dynamic row mappings (built from explored biome order)
+var biome_row_map: Dictionary = {}  # biome_name -> row index
+var row_biome_map: Dictionary = {}  # row index -> biome_name
+
 # PHASE 6 (PARAMETRIC): Infrastructure building costs
 # Plant costs are queried from biome capabilities, not hard-coded here
 # Costs are in emoji-credits (1 quantum unit = 10 credits)
@@ -171,6 +188,7 @@ const GATHER_ACTIONS = {
 signal state_changed(state_data: Dictionary)
 signal action_result(action: String, success: bool, message: String)
 signal action_rejected(action: String, position: Vector2i, reason: String)  # For visual/audio feedback
+signal grid_resized(new_config)  # Emitted when grid dimensions change
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TERMINAL LIFECYCLE SIGNALS (EXPLORE/MEASURE/POP actions)
@@ -288,19 +306,20 @@ func _ready():
 	# Ensure IconRegistry exists (for test mode where autoloads don't exist)
 	_ensure_iconregistry()
 
-	# Create grid configuration (single source of truth for grid layout)
-	grid_config = _create_grid_config()
-	var validation = grid_config.validate()
-	if not validation.success:
-		push_error("GridConfig validation failed:")
-		for error in validation.errors:
-			push_error("  - %s" % error)
-		return
-
-
 	# Create core systems
 	economy = FarmEconomy.new()
 	add_child(economy)
+
+	# Start with empty grid (0x0) and expand as biomes load
+	grid_config = _create_empty_grid_config()
+	grid = FarmGrid.new(grid_config.grid_width, grid_config.grid_height)
+	add_child(grid)
+
+	# v2 Architecture: Create terminal pool for EXPLORE/MEASURE/POP actions
+	var total_plots = grid_config.grid_width * grid_config.grid_height
+	plot_pool = PlotPoolClass.new(total_plots)
+	if grid:
+		grid.set_plot_pool(plot_pool)
 
 	# Create environmental simulations (six biomes for multi-biome support)
 	# GRACEFUL LOADING: Each biome loads independently - failed biomes are skipped
@@ -311,22 +330,24 @@ func _ready():
 	# Other biomes are loaded dynamically when explored via 4E action
 	var observation_frame = get_node_or_null("/root/ObservationFrame")
 	var unlocked_biomes = ["StarterForest", "Village"]  # Default
-	if observation_frame:
+	if observation_frame and observation_frame.has_method("get_explored_biomes"):
+		unlocked_biomes = observation_frame.get_explored_biomes()
+	elif observation_frame and observation_frame.has_method("get_unlocked_biomes"):
 		unlocked_biomes = observation_frame.get_unlocked_biomes()
 
 	# Load unlocked biomes
 	if "StarterForest" in unlocked_biomes:
-		starter_forest_biome = _safe_load_biome("res://Core/Environment/StarterForestBiome.gd", "StarterForest")
+		starter_forest_biome = _load_and_register_biome("res://Core/Environment/StarterForestBiome.gd", "StarterForest")
 	if "Village" in unlocked_biomes:
-		village_biome = _safe_load_biome("res://Core/Environment/VillageBiome.gd", "Village")
+		village_biome = _load_and_register_biome("res://Core/Environment/VillageBiome.gd", "Village")
 	if "BioticFlux" in unlocked_biomes:
-		biotic_flux_biome = _safe_load_biome("res://Core/Environment/BioticFluxBiome.gd", "BioticFlux")
+		biotic_flux_biome = _load_and_register_biome("res://Core/Environment/BioticFluxBiome.gd", "BioticFlux")
 	if "StellarForges" in unlocked_biomes:
-		stellar_forges_biome = _safe_load_biome("res://Core/Environment/StellarForgesBiome.gd", "StellarForges")
+		stellar_forges_biome = _load_and_register_biome("res://Core/Environment/StellarForgesBiome.gd", "StellarForges")
 	if "FungalNetworks" in unlocked_biomes:
-		fungal_networks_biome = _safe_load_biome("res://Core/Environment/FungalNetworksBiome.gd", "FungalNetworks")
+		fungal_networks_biome = _load_and_register_biome("res://Core/Environment/FungalNetworksBiome.gd", "FungalNetworks")
 	if "VolcanicWorlds" in unlocked_biomes:
-		volcanic_worlds_biome = _safe_load_biome("res://Core/Environment/VolcanicWorldsBiome.gd", "VolcanicWorlds")
+		volcanic_worlds_biome = _load_and_register_biome("res://Core/Environment/VolcanicWorldsBiome.gd", "VolcanicWorlds")
 
 	# Enable biome features if at least one biome loaded
 	if _loaded_biome_count > 0:
@@ -340,8 +361,23 @@ func _ready():
 
 	# Icon system now managed by faction-based IconRegistry
 
-	# Create grid AFTER biome (or fallback) - pass dimensions to constructor
-	grid = FarmGrid.new(grid_config.grid_width, grid_config.grid_height)
+	# Grid already created (empty) - resize after biomes load
+	refresh_grid_for_biomes()
+
+	# Validate grid configuration now that biomes are loaded
+	if grid_config.grid_width > 0 and grid_config.grid_height > 0:
+		var validation = grid_config.validate()
+		if not validation.success:
+			push_error("GridConfig validation failed:")
+			for error in validation.errors:
+				push_error("  - %s" % error)
+			return
+
+	# Persist grid dimensions into GameState (source of truth for saves)
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm and gsm.current_state:
+		gsm.current_state.grid_width = grid_config.grid_width
+		gsm.current_state.grid_height = grid_config.grid_height
 
 	# PERFORMANCE: Connect grid signals to invalidate mushroom cache
 	grid.plot_planted.connect(func(_pos): invalidate_mushroom_cache())
@@ -360,13 +396,6 @@ func _ready():
 		_register_biome_if_loaded("VolcanicWorlds", volcanic_worlds_biome, grid)
 		_register_biome_if_loaded("StarterForest", starter_forest_biome, grid)
 		_register_biome_if_loaded("Village", village_biome, grid)
-
-	add_child(grid)
-
-	# v2 Architecture: Create terminal pool for EXPLORE/MEASURE/POP actions
-	# Pool size = total plots (12) to allow one terminal per plot position
-	var total_plots = grid_config.grid_width * grid_config.grid_height
-	plot_pool = PlotPoolClass.new(total_plots)
 
 	# Register loaded biomes as metadata for UI systems (QuantumForceGraph visualization)
 	set_meta("grid", grid)
@@ -393,10 +422,7 @@ func _ready():
 	# Get persistent vocabulary evolution from GameStateManager
 	# The vocabulary persists across farms/biomes and travels with the player
 	# Safe access for headless mode where get_tree() may return null
-	var tree = get_tree()
-	var game_state_mgr = null
-	if tree and tree.root and tree.root.get_child_count() > 0:
-		game_state_mgr = tree.root.get_child(0)
+	var game_state_mgr = get_node_or_null("/root/GameStateManager")
 	if game_state_mgr and game_state_mgr.has_method("get_vocabulary_evolution"):
 		vocabulary_evolution = game_state_mgr.get_vocabulary_evolution()
 	else:
@@ -418,9 +444,13 @@ func _ready():
 
 	# Initialize biome evolution batcher for smooth frame times
 	_setup_biome_evolution_batcher()
+	if _verbose:
+		_verbose.info("boot", "🧭", "Farm _ready checkpoint: after batcher")
 
 	# Create UI State abstraction layer (Phase 2 integration)
 	ui_state = FarmUIState.new()
+	if _verbose:
+		_verbose.info("boot", "🧭", "Farm _ready checkpoint: UIState created")
 
 	# Connect economy signals to both state_changed AND ui_state (de-slopped)
 	var economy_signals = ["wheat_changed", "credits_changed", "flour_changed", "flower_changed", "labor_changed"]
@@ -437,6 +467,8 @@ func _ready():
 
 	# Populate UIState with initial farm state
 	ui_state.refresh_all(self)
+	if _verbose:
+		_verbose.info("boot", "🧭", "Farm _ready checkpoint: UIState refreshed")
 
 
 ## ============================================================================
@@ -606,9 +638,11 @@ func enable_simulation() -> void:
 		for biome in all_biomes:
 			if biome and not biome.get_meta("batched_evolution", false):
 				biome.set_process(true)
-		_verbose.info("boot", "✓", "All biome processing enabled (batched biomes use BiomeEvolutionBatcher)")
+		if _verbose:
+			_verbose.info("boot", "✓", "All biome processing enabled (batched biomes use BiomeEvolutionBatcher)")
 
-	_verbose.info("boot", "✓", "Farm simulation process enabled")
+	if _verbose:
+		_verbose.info("boot", "✓", "Farm simulation process enabled")
 
 
 func _process(delta: float):
@@ -799,77 +833,63 @@ func _process_mushroom_composting(delta: float):
 
 ## GRID CONFIGURATION (Phase 2 → Single-Biome View → Quantum Instrument)
 ##
-## NEW ARCHITECTURE: Each biome has 4 independent plots (16 total).
+## NEW ARCHITECTURE: Each biome has N independent plots (dynamic).
 ## Only one biome visible at a time.
-## Three keyboard rows select plots with directional navigation:
-##   7890 = UP row (parent biome)
-##   UIOP = NEUTRAL row (current biome)
-##   JKL; = DOWN row (child biome)
-## Biome row mapping: BioticFlux=0, StellarForges=1, FungalNetworks=2, VolcanicWorlds=3
+## Homerow keys select plots within the current biome.
+##
+## Grid dimensions are derived from:
+##   width  = max plot count across loadable biomes (min 5)
+##   height = number of explored biomes loaded into the farm
 
-const BIOME_ROW_MAP: Dictionary = {
-	"BioticFlux": 0,
-	"StellarForges": 1,
-	"FungalNetworks": 2,
-	"VolcanicWorlds": 3,
-	"StarterForest": 4,
-	"Village": 5,
-}
-
-const ROW_BIOME_MAP: Dictionary = {
-	0: "BioticFlux",
-	1: "StellarForges",
-	2: "FungalNetworks",
-	3: "VolcanicWorlds",
-	4: "StarterForest",
-	5: "Village",
-}
+const HOMEROW_KEYS: Array[String] = ["J", "K", "L", ";", "'", "H", "G"]
 
 func _create_grid_config() -> GridConfig:
 	"""Create grid configuration - single source of truth for layout
 
-	Quantum Instrument Layout: 6 biomes × 4 plots = 24 total plots
-	Each biome uses y-coordinate as biome identifier:
-	  - BioticFlux: y=0, positions (0,0) through (3,0)
-	  - StellarForges: y=1, positions (0,1) through (3,1)
-	  - FungalNetworks: y=2, positions (0,2) through (3,2)
-	  - VolcanicWorlds: y=3, positions (0,3) through (3,3)
-	  - StarterForest: y=4, positions (0,4) through (3,4)
-	  - Village: y=5, positions (0,5) through (3,5)
+	Quantum Instrument Layout: dynamic grid
+	  width  = max plot count across loadable biomes (min 5)
+	  height = explored biomes count
 
 	Keyboard layout:
-	  JKL; = 4 plots in current biome
-	  T/Y = biome switching (StarterForest/Village)
+	  Homerow keys map to columns 0..N-1 (N=grid_width)
 	"""
 	var config = GridConfig.new()
-	config.grid_width = 4   # 4 plots per biome
-	config.grid_height = 6  # 6 biomes
+	var explored_biomes = _get_loaded_biomes_in_order()
+	if explored_biomes.is_empty():
+		return _create_empty_grid_config()
+	var grid_width = _get_max_biome_plot_count(explored_biomes)
+	var grid_height = explored_biomes.size()
+	config.grid_width = grid_width
+	config.grid_height = grid_height
+
+	# Build dynamic row maps based on explored biome order
+	_rebuild_biome_row_maps(explored_biomes)
 
 	# Create keyboard layout configuration
 	var keyboard = KeyboardLayoutConfig.new()
 
-	# JKL; → positions 0-3 (within active biome, y determined at runtime)
-	# For keyboard layout, we map to y=0 (BioticFlux) as default
-	# The actual position used depends on ObservationFrame.neutral_biome
-	var neutral_keys = ["j", "k", "l", ";"]
-	for i in range(4):
+	# Homerow → positions 0..N-1 (within active biome, y determined at runtime)
+	var neutral_keys = []
+	for i in range(grid_width):
+		var key_label = HOMEROW_KEYS[i] if i < HOMEROW_KEYS.size() else str(i + 1)
+		neutral_keys.append(key_label)
 		var pos = Vector2i(i, 0)  # Default to y=0, remapped at runtime
 		keyboard.action_to_position["plot_neutral_" + str(i)] = pos
-		keyboard.position_to_label[pos] = neutral_keys[i].to_upper()
+		keyboard.position_to_label[pos] = key_label.to_upper()
 		# Also add labels for other biome rows (same x position, different y)
-		for biome_row in range(1, 4):
-			keyboard.position_to_label[Vector2i(i, biome_row)] = neutral_keys[i].to_upper()
+		for biome_row in range(1, grid_height):
+			keyboard.position_to_label[Vector2i(i, biome_row)] = key_label.to_upper()
 
 	config.keyboard_layout = keyboard
 
 	# =========================================================================
-	# PLOT CONFIGURATIONS - 4 plots per biome, 24 total (6 biomes)
+	# PLOT CONFIGURATIONS - N plots per biome, dynamic total
 	# Each biome has independent quantum state and plots
 	# =========================================================================
 
-	for biome_name in BIOME_ROW_MAP.keys():
-		var biome_row = BIOME_ROW_MAP[biome_name]
-		for i in range(4):
+	for biome_name in explored_biomes:
+		var biome_row = biome_row_map[biome_name]
+		for i in range(grid_width):
 			var plot = PlotConfig.new()
 			plot.position = Vector2i(i, biome_row)
 			plot.is_active = true
@@ -884,14 +904,181 @@ func _create_grid_config() -> GridConfig:
 	return config
 
 
+func _create_empty_grid_config() -> GridConfig:
+	"""Create an empty grid config (0x0) before any biomes are loaded."""
+	var config = GridConfig.new()
+	config.grid_width = 0
+	config.grid_height = 0
+	if config.plots is Array:
+		config.plots.clear()
+	var keyboard = KeyboardLayoutConfig.new()
+	config.keyboard_layout = keyboard
+	if config.biome_assignments is Dictionary:
+		config.biome_assignments.clear()
+	return config
+
+
+func _get_explored_biomes() -> Array[String]:
+	"""Get explored biomes (preferred terminology)."""
+	var observation_frame = get_node_or_null("/root/ObservationFrame")
+	if observation_frame and observation_frame.has_method("get_explored_biomes"):
+		return observation_frame.get_explored_biomes()
+	if observation_frame and observation_frame.has_method("get_unlocked_biomes"):
+		return observation_frame.get_unlocked_biomes()
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm and gsm.current_state and "unlocked_biomes" in gsm.current_state:
+		return gsm.current_state.unlocked_biomes
+	return ["StarterForest", "Village"]
+
+
+func _get_loaded_biomes_in_order() -> Array[String]:
+	"""Return explored biomes filtered to those currently loaded (in order)."""
+	var explored = _get_explored_biomes()
+	var loaded: Array[String] = []
+	for biome_name in explored:
+		if _is_biome_loaded(biome_name):
+			loaded.append(biome_name)
+	return loaded
+
+
+func _is_biome_loaded(biome_name: String) -> bool:
+	"""Check if a biome instance is loaded on this Farm."""
+	if grid and grid.biomes and grid.biomes.has(biome_name):
+		return grid.biomes[biome_name] != null
+	match biome_name:
+		"StarterForest":
+			return starter_forest_biome != null
+		"Village":
+			return village_biome != null
+		"BioticFlux":
+			return biotic_flux_biome != null
+		"StellarForges":
+			return stellar_forges_biome != null
+		"FungalNetworks":
+			return fungal_networks_biome != null
+		"VolcanicWorlds":
+			return volcanic_worlds_biome != null
+		_:
+			return false
+
+
+func _get_loadable_biomes() -> Array[String]:
+	"""Get loadable biomes (icon build succeeded)."""
+	var observation_frame = get_node_or_null("/root/ObservationFrame")
+	if observation_frame and observation_frame.has_method("get_loadable_biomes"):
+		return observation_frame.get_loadable_biomes()
+	# Fallback to explored list if loadable list not available
+	return _get_explored_biomes()
+
+
+func _get_max_biome_plot_count(biome_names: Array[String]) -> int:
+	"""Compute max plot count across biome layouts (fallback to DEFAULT_PLOTS_PER_BIOME)."""
+	var max_count = 0
+	for name in biome_names:
+		var biome = _get_loaded_biome_ref(name)
+		if biome and biome.quantum_computer and biome.quantum_computer.register_map:
+			var count = biome.quantum_computer.register_map.num_qubits
+			if count > max_count:
+				max_count = count
+			continue
+		# Fallback: use biome registry plot_layout if biome not loaded yet
+		var biome_registry = load("res://Core/Biomes/BiomeRegistry.gd").new()
+		var biome_data = biome_registry.get_by_name(name)
+		if biome_data and "plot_layout" in biome_data:
+			var count2 = biome_data.plot_layout.size()
+			if count2 > max_count:
+				max_count = count2
+	if max_count <= 0:
+		max_count = DEFAULT_PLOTS_PER_BIOME
+	return min(max_count, MAX_PLOTS_PER_BIOME)
+
+
+func _get_loaded_biome_ref(biome_name: String):
+	if grid and grid.biomes and grid.biomes.has(biome_name):
+		return grid.biomes[biome_name]
+	match biome_name:
+		"StarterForest":
+			return starter_forest_biome
+		"Village":
+			return village_biome
+		"BioticFlux":
+			return biotic_flux_biome
+		"StellarForges":
+			return stellar_forges_biome
+		"FungalNetworks":
+			return fungal_networks_biome
+		"VolcanicWorlds":
+			return volcanic_worlds_biome
+		_:
+			return null
+
+
+func _rebuild_biome_row_maps(biome_list: Array[String]) -> void:
+	"""Rebuild row mappings based on explored biome order."""
+	biome_row_map.clear()
+	row_biome_map.clear()
+	for i in range(biome_list.size()):
+		var biome_name = biome_list[i]
+		biome_row_map[biome_name] = i
+		row_biome_map[i] = biome_name
+
+
+func refresh_grid_for_biomes() -> bool:
+	"""Rebuild grid_config and resize grid/plot_pool if dimensions changed."""
+	var new_config = _create_grid_config()
+	if not new_config:
+		return false
+	if new_config.grid_width == 0 or new_config.grid_height == 0:
+		# No biomes loaded yet
+		grid_config = new_config
+		return false
+
+	var resized = false
+	if not grid_config or new_config.grid_width != grid_config.grid_width or new_config.grid_height != grid_config.grid_height:
+		resized = true
+
+	grid_config = new_config
+
+	if resized and grid:
+		if grid.has_method("resize_grid"):
+			grid.resize_grid(grid_config.grid_width, grid_config.grid_height)
+		else:
+			grid.grid_width = grid_config.grid_width
+			grid.grid_height = grid_config.grid_height
+
+		# Ensure plots exist for new positions
+		for plot_cfg in grid_config.get_all_active_plots():
+			grid.get_plot(plot_cfg.position)
+
+		# Resize terminal pool to match new grid size
+		if plot_pool:
+			plot_pool.resize(grid_config.grid_width * grid_config.grid_height)
+
+	# Re-assign plot-to-biome mappings (safe even if unchanged)
+	if grid and grid.has_method("assign_plot_to_biome"):
+		for pos in grid_config.biome_assignments:
+			grid.assign_plot_to_biome(pos, grid_config.biome_assignments[pos])
+
+	# Persist dimensions into GameState if available
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if gsm and gsm.current_state:
+		gsm.current_state.grid_width = grid_config.grid_width
+		gsm.current_state.grid_height = grid_config.grid_height
+
+	if resized:
+		grid_resized.emit(grid_config)
+
+	return resized
+
+
 func get_biome_row(biome_name: String) -> int:
 	"""Get the row (y-coordinate) for a biome"""
-	return BIOME_ROW_MAP.get(biome_name, 0)
+	return biome_row_map.get(biome_name, 0)
 
 
 func get_biome_for_row(row: int) -> String:
 	"""Get the biome name for a row (y-coordinate)"""
-	return ROW_BIOME_MAP.get(row, "BioticFlux")
+	return row_biome_map.get(row, "")
 
 
 func get_biomes() -> Array:
@@ -917,8 +1104,9 @@ func get_plot_position_for_active_biome(plot_index: int) -> Vector2i:
 	Used by input handling to map plot keys to the correct biome's plots.
 	Now uses ObservationFrame as the source of truth for active biome.
 	"""
-	# Clamp plot_index to valid range (0-3)
-	plot_index = clampi(plot_index, 0, 3)
+	# Clamp plot_index to valid range (0..grid_width-1)
+	var max_index = grid_config.grid_width - 1 if grid_config else 3
+	plot_index = clampi(plot_index, 0, max_index)
 
 	# Try ObservationFrame first, fall back to ActiveBiomeManager
 	var observation_frame = get_node_or_null("/root/ObservationFrame")
@@ -936,6 +1124,24 @@ func get_plot_position_for_active_biome(plot_index: int) -> Vector2i:
 
 ## Public API - Game Operations
 
+func can_explore_biome() -> Dictionary:
+	"""Check if a new biome can be explored (slots + availability)."""
+	var observation_frame = get_node_or_null("/root/ObservationFrame")
+	if not observation_frame:
+		return {"ok": false, "message": "ObservationFrame not available"}
+
+	var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+	if not biome_mgr:
+		return {"ok": false, "message": "ActiveBiomeManager not available"}
+	if biome_mgr.has_method("has_open_biome_slot") and not biome_mgr.has_open_biome_slot():
+		return {"ok": false, "message": "Biome slots full"}
+
+	var unexplored = observation_frame.get_unexplored_biomes()
+	if unexplored.is_empty():
+		return {"ok": false, "message": "All biomes already explored!"}
+
+	return {"ok": true, "unexplored": unexplored}
+
 func explore_biome() -> Dictionary:
 	"""Explore and unlock a random new biome (4E action)
 
@@ -947,13 +1153,19 @@ func explore_biome() -> Dictionary:
 	"""
 	print("🗺️ explore_biome() called!")
 
+	var gate = can_explore_biome()
+	if not gate.get("ok", false):
+		var msg = gate.get("message", "Biome exploration blocked")
+		print("❌ %s" % msg)
+		return {"success": false, "blocked": true, "message": msg}
+
 	var observation_frame = get_node_or_null("/root/ObservationFrame")
 	if not observation_frame:
 		print("❌ ObservationFrame not found")
 		return {"success": false, "message": "ObservationFrame not available"}
 
 	# Get unexplored biomes
-	var unexplored = observation_frame.get_unexplored_biomes()
+	var unexplored = gate.get("unexplored", observation_frame.get_unexplored_biomes())
 	print("🗺️ Unexplored biomes: %s" % str(unexplored))
 
 	if unexplored.is_empty():
@@ -971,6 +1183,9 @@ func explore_biome() -> Dictionary:
 		print("❌ Failed to unlock biome")
 		return {"success": false, "message": "Failed to unlock biome"}
 	print("✅ Biome unlocked successfully")
+
+	# Expand grid to accommodate newly explored biome
+	refresh_grid_for_biomes()
 
 	# Load the new biome
 	print("🗺️ Loading biome dynamically...")
@@ -1013,6 +1228,9 @@ func _load_biome_dynamically(biome_name: String) -> bool:
 	if not boot_manager:
 		push_error("BootManager not found")
 		return false
+
+	# Ensure grid is sized for the newly explored biome
+	refresh_grid_for_biomes()
 
 	var result = boot_manager.load_biome(biome_name, self)
 	if not result.get("success", false):
@@ -1198,9 +1416,12 @@ func measure_plot(pos: Vector2i) -> String:
 	if not outcome and not biome_enabled:
 		outcome = "🌾" if randf() > 0.5 else "👥"
 
-	plot_measured.emit(pos, outcome)
-	_emit_state_changed()
-	action_result.emit("measure", true, "Measured: %s collapsed!" % outcome)
+	if outcome != "":
+		plot_measured.emit(pos, outcome)
+		_emit_state_changed()
+		action_result.emit("measure", true, "Measured: %s collapsed!" % outcome)
+	else:
+		action_result.emit("measure", false, "Measurement failed")
 	return outcome
 
 
@@ -1213,12 +1434,6 @@ func harvest_plot(pos: Vector2i) -> Dictionary:
 	if not grid or not economy:
 		return {"success": false}
 
-	var plot = grid.get_plot(pos)
-	if not plot or not plot.is_planted:
-		action_result.emit("harvest", false, "Plot not ready to harvest")
-		return {"success": false}
-
-	# Note: has_been_measured check removed - BasePlot.harvest() handles auto-measure
 	var harvest_data = grid.harvest_wheat(pos)
 
 	if harvest_data.get("success", false):
@@ -1241,15 +1456,11 @@ func measure_all() -> int:
 	Returns: number of plots measured
 	"""
 	var measured_count = 0
-
-	for y in range(grid.grid_height):
-		for x in range(grid.grid_width):
-			var pos = Vector2i(x, y)
-			var plot = grid.get_plot(pos)
-
-			if plot and plot.is_planted and not plot.has_been_measured:
-				measure_plot(pos)
-				measured_count += 1
+	if plot_pool:
+		for terminal in plot_pool.get_active_terminals():
+			if terminal.grid_position != Vector2i(-1, -1):
+				if measure_plot(terminal.grid_position) != "":
+					measured_count += 1
 
 	action_result.emit("measure_all", true, "Measured %d plots" % measured_count)
 	return measured_count
@@ -1261,14 +1472,10 @@ func harvest_all() -> int:
 	Returns: number of plots harvested
 	"""
 	var harvested_count = 0
-
-	for y in range(grid.grid_height):
-		for x in range(grid.grid_width):
-			var pos = Vector2i(x, y)
-			var plot = grid.get_plot(pos)
-
-			if plot and plot.is_planted and plot.has_been_measured:
-				var result = harvest_plot(pos)
+	if plot_pool:
+		for terminal in plot_pool.get_measured_terminals():
+			if terminal.grid_position != Vector2i(-1, -1):
+				var result = harvest_plot(terminal.grid_position)
 				if result.get("success", false):
 					harvested_count += 1
 

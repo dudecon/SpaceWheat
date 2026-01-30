@@ -119,6 +119,9 @@ func expand_quantum_system(north_emoji: String, south_emoji: String) -> Dictiona
 	var driven_configs = HamBuilder.get_driven_icons(all_icons, quantum_computer.register_map)
 	quantum_computer.set_driven_icons(driven_configs)
 
+	# Reset to uniform superposition after expanding basis
+	quantum_computer.initialize_uniform_superposition()
+
 	var new_dim = quantum_computer.register_map.dim()
 
 	print("🔬 Expanded %s quantum system: %d -> %d qubits (%dD -> %dD)" % [
@@ -262,4 +265,3 @@ func build_operators_cached(biome_name: String, icons: Dictionary) -> void:
 
 		# Save to cache for next time
 		cache.save(biome_name, cache_key, quantum_computer.hamiltonian, quantum_computer.lindblad_operators)
-

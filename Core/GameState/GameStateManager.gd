@@ -10,11 +10,13 @@ const GameState = preload("res://Core/GameState/GameState.gd")
 const VocabularyEvolution = preload("res://Core/QuantumSubstrate/VocabularyEvolution.gd")
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const QuantumRigorConfig = preload("res://Core/GameState/QuantumRigorConfig.gd")
+const Farm = preload("res://Core/Farm.gd")
 
 # Signals
 signal emoji_discovered(emoji: String)
 signal pair_discovered(north: String, south: String)
 signal factions_unlocked(factions: Array)
+signal farm_ready(farm: Node, state: GameState)
 
 # Save configuration
 const SAVE_DIR = "user://saves/"
@@ -54,6 +56,76 @@ func _ready():
 		vocabulary_evolution._ready()
 		add_child(vocabulary_evolution)
 		_verbose.info("quest", "📚", "Persistent VocabularyEvolution initialized")
+
+
+## ============================================================================
+## SESSION BOOTSTRAP (GSM owns Farm lifecycle)
+## ============================================================================
+
+func start_session(load_slot: int = -1, scenario_id: String = "default", reset_farm: bool = true) -> Node:
+	"""Start or load a session and ensure Farm exists (headless-safe).
+
+	Order:
+	1) Load or create GameState
+	2) Ensure Farm exists (create if missing)
+	3) Wait for Farm _ready
+	4) Apply state to Farm
+	"""
+	var state: GameState = null
+	if load_slot >= 0:
+		state = load_game_state(load_slot)
+		if not state:
+			state = new_game(scenario_id)
+	else:
+		state = new_game(scenario_id)
+
+	current_state = state
+	current_scenario_id = state.scenario_id if state else scenario_id
+
+	if reset_farm and active_farm:
+		active_farm.queue_free()
+		active_farm = null
+
+	if not active_farm:
+		active_farm = _create_farm()
+
+	if active_farm:
+		await _await_farm_ready(active_farm)
+
+	if state:
+		apply_state_to_game(state)
+
+	farm_ready.emit(active_farm, state)
+	return active_farm
+
+
+func _create_farm() -> Node:
+	"""Create and attach a Farm node to the scene tree."""
+	var farm = Farm.new()
+	farm.name = "Farm"
+	var root = get_tree().root if get_tree() else null
+	if root:
+		# Avoid add_child during parent setup (boot-time safety)
+		root.call_deferred("add_child", farm)
+	else:
+		add_child(farm)
+	return farm
+
+
+func _await_farm_ready(farm: Node) -> void:
+	"""Wait until Farm is in-tree and fully initialized."""
+	var attempts = 0
+	while farm and not farm.is_inside_tree() and attempts < 10:
+		await get_tree().process_frame
+		attempts += 1
+	if farm and farm.has_signal("ready"):
+		# Avoid hanging if Farm is already ready
+		if not farm.is_node_ready():
+			await farm.ready
+	var tries = 0
+	while farm and (farm.get("economy") == null or farm.get("grid") == null) and tries < 10:
+		await get_tree().process_frame
+		tries += 1
 
 
 ## Player Vocabulary Discovery
@@ -283,8 +355,13 @@ func load_and_apply(slot: int) -> bool:
 		return false
 
 	if not active_farm:
-		push_error("No active game to apply state to!")
-		return false
+		# Create farm if missing (headless-safe load)
+		active_farm = _create_farm()
+		# Defer apply until Farm has initialized
+		call_deferred("_apply_loaded_state_deferred", state)
+		current_state = state
+		current_scenario_id = state.scenario_id
+		return true
 
 	apply_state_to_game(state)
 	current_state = state
@@ -292,6 +369,13 @@ func load_and_apply(slot: int) -> bool:
 	# NOTE: Don't update last_saved_slot here - only update on actual save
 	# This ensures "Reload Last Save" reloads the last SAVED file, not last LOADED file
 	return true
+
+
+func _apply_loaded_state_deferred(state: GameState) -> void:
+	if not active_farm or not state:
+		return
+	await _await_farm_ready(active_farm)
+	apply_state_to_game(state)
 
 
 func reload_last_save() -> bool:
@@ -914,14 +998,21 @@ func apply_state_to_game(state: GameState):
 
 	# Apply Plot Configuration (from Farm.grid)
 	var grid = farm.grid
+	# Ensure grid is sized for explored biomes before applying plots
+	if farm.has_method("refresh_grid_for_biomes"):
+		farm.refresh_grid_for_biomes()
+		grid = farm.grid
+	# Track and summarize out-of-bounds plots
+	var oob_count = 0
+	var oob_first_pos = null
 	for plot_data in state.plots:
 		var pos = plot_data["position"]
 
 		# Phase 4: Bounds checking - skip out-of-bounds plots
 		if pos.x < 0 or pos.x >= grid.grid_width or pos.y < 0 or pos.y >= grid.grid_height:
-			push_warning("Skipping out-of-bounds plot at %s (grid is %dx%d)" % [
-				pos, grid.grid_width, grid.grid_height
-			])
+			oob_count += 1
+			if oob_first_pos == null:
+				oob_first_pos = pos
 			continue
 
 		var plot = grid.get_plot(pos)
@@ -956,6 +1047,12 @@ func apply_state_to_game(state: GameState):
 			# This keeps the save format simple and maintains deterministic behavior through
 			# the infrastructure model (entanglement gates persist, qubits regenerate).
 
+	# Summarize out-of-bounds plots (if any)
+	if oob_count > 0:
+		_verbose.debug("save", "🧹", "Skipped %d out-of-bounds plots (grid %dx%d). First: %s" % [
+			oob_count, grid.grid_width, grid.grid_height, str(oob_first_pos)
+		])
+
 	# Apply Goals
 	var goals = farm.goals
 	goals.current_goal_index = state.current_goal_index
@@ -984,11 +1081,11 @@ func apply_state_to_game(state: GameState):
 	_reconnect_plots_to_projections(farm, state)
 
 	# Apply Icon Activation (Phase 1: Now from Farm simulation layer)
-	if farm.biotic_icon and farm.biotic_icon.has_method("set_activation"):
+	if "biotic_icon" in farm and farm.biotic_icon and farm.biotic_icon.has_method("set_activation"):
 		farm.biotic_icon.set_activation(state.biotic_activation)
-	if farm.chaos_icon and farm.chaos_icon.has_method("set_activation"):
+	if "chaos_icon" in farm and farm.chaos_icon and farm.chaos_icon.has_method("set_activation"):
 		farm.chaos_icon.set_activation(state.chaos_activation)
-	if farm.imperium_icon and farm.imperium_icon.has_method("set_activation"):
+	if "imperium_icon" in farm and farm.imperium_icon and farm.imperium_icon.has_method("set_activation"):
 		farm.imperium_icon.set_activation(state.imperium_activation)
 
 	# Restore Vocabulary Evolution State (PERSISTED - player's discovered vocabulary)

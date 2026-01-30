@@ -245,30 +245,20 @@ func _find_node_recursive(node: Node, target_name: String) -> Node:
 func set_biome(b) -> void:
 	"""Set the biome to inspect."""
 	biome = b
-	if biome and "quantum_computer" in biome:
-		quantum_computer = biome.quantum_computer
-	elif biome and biome.has_method("get_quantum_computer"):
-		quantum_computer = biome.get_quantum_computer()
 	_refresh_data()
 
 
 func _refresh_data() -> void:
-	"""Refresh register data from quantum computer."""
+	"""Refresh register data from viz_cache."""
 	register_data.clear()
 
-	if not quantum_computer:
+	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 		return
 
-	var rho = quantum_computer.get_density_matrix()
-	if not rho:
-		return
-
-	var dim = rho.n  # ComplexMatrix uses .n for dimension
-	var register_map = quantum_computer.register_map if quantum_computer.has("register_map") else null
-
-	for i in range(dim):
-		var diag = rho.get_element(i, i)
-		var prob = diag.re if diag else 0.0
+	var num_qubits = biome.viz_cache.get_num_qubits()
+	for i in range(num_qubits):
+		var snap = biome.viz_cache.get_snapshot(i)
+		var prob = snap.get("p0", 0.5) if not snap.is_empty() else 0.0
 
 		var reg_info = {
 			"index": i,
@@ -277,26 +267,19 @@ func _refresh_data() -> void:
 			"coherence": 0.0
 		}
 
-		# Try to get emoji from register map
-		if register_map and register_map.has_method("get_register"):
-			var reg = register_map.get_register(i)
-			if reg:
-				reg_info["emoji"] = reg.get("north_emoji", reg.get("north", "?"))
+		# Emoji from viz_cache axis metadata
+		var axis = biome.viz_cache.get_axis(i)
+		if axis:
+			reg_info["emoji"] = axis.get("north", "?")
 
-		# Calculate coherence (sum of off-diagonal magnitudes)
-		var coh = 0.0
-		for j in range(dim):
-			if j != i:
-				var off_diag = rho.get_element(i, j)
-				if off_diag:
-					coh += sqrt(off_diag.re * off_diag.re + off_diag.im * off_diag.im)
-		reg_info["coherence"] = coh
+		# Coherence proxy from Bloch snapshot (r_xy)
+		reg_info["coherence"] = snap.get("r_xy", 0.0) if not snap.is_empty() else 0.0
 
 		register_data.append(reg_info)
 
 	# Set up selectable items and grid
 	selectable_count = register_data.size()
-	grid_columns = mini(dim, 8)
+	grid_columns = mini(num_qubits, 8)
 	grid_rows = ceili(float(register_data.size()) / grid_columns) if grid_columns > 0 else 1
 
 

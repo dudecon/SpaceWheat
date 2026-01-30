@@ -2,103 +2,249 @@
   {
     "name": "StarterForest",
     "description": "A quiet forest edge where celestial cycles drive life. Sun and moon oscillate above while creatures and plants dance between survival and growth.",
-    "image_path": "res://assets/biomes/starter_forest.png",
-    "music_path": "res://assets/music/starter_forest.ogg",
+    "image_path": "res://Assets/Biomes/Starter_Forest.png",
+    "music_path": "res://Assets/Audio/Music/Peripheral Arbor.mp3",
     "discovered": true,
     "plot_layout": [
-      {"x": 0.50, "y": 0.38},
-      {"x": 0.62, "y": 0.50},
-      {"x": 0.50, "y": 0.62},
-      {"x": 0.38, "y": 0.50}
+      {
+        "x": 0.5,
+        "y": 0.38
+      },
+      {
+        "x": 0.62,
+        "y": 0.5
+      },
+      {
+        "x": 0.5,
+        "y": 0.62
+      },
+      {
+        "x": 0.38,
+        "y": 0.5
+      }
     ],
-    "emojis": ["☀", "🌙", "🐺", "🐇", "🦅", "🦌", "🌲", "🍂", "🌱", "🌿"],
+    "emojis": [
+      "☀",
+      "🌙",
+      "🐺",
+      "🐇",
+      "🦅",
+      "🦌",
+      "🌲",
+      "🍂",
+      "🌱",
+      "🌿"
+    ],
     "native_factions": [],
-    "tags": ["starter", "forest", "ecosystem"],
+    "tags": [
+      "starter",
+      "forest",
+      "ecosystem"
+    ],
     "icon_components": {}
   },
   {
     "name": "Village",
     "description": "A farming settlement where fire and ice oscillate in hearths, labor produces bread, and gears grind flour into commerce.",
-    "image_path": "res://assets/biomes/village.png",
-    "music_path": "res://assets/music/village.ogg",
+    "image_path": "res://Assets/Biomes/Village.png",
+    "music_path": "res://Assets/Audio/Music/Heisenberg Township, Poppenoff-ulation.mp3",
     "discovered": true,
     "plot_layout": [
-      {"x": 0.40, "y": 0.40},
-      {"x": 0.60, "y": 0.40},
-      {"x": 0.60, "y": 0.60},
-      {"x": 0.40, "y": 0.60}
+      {
+        "x": 0.4,
+        "y": 0.4
+      },
+      {
+        "x": 0.6,
+        "y": 0.4
+      },
+      {
+        "x": 0.6,
+        "y": 0.6
+      },
+      {
+        "x": 0.4,
+        "y": 0.6
+      }
     ],
-    "emojis": ["🔥", "❄️", "👥", "🍞", "⚙️", "💨", "💰", "🧺"],
+    "emojis": [
+      "🔥",
+      "❄️",
+      "👥",
+      "🍞",
+      "⚙️",
+      "💨",
+      "💰",
+      "🧺"
+    ],
     "native_factions": [],
-    "tags": ["starter", "civilization", "domestic"],
+    "tags": [
+      "starter",
+      "civilization",
+      "domestic"
+    ],
     "icon_components": {}
   },
   {
     "name": "BioticFlux",
     "description": "The quantum heart of the ecosystem. Sun and moon cycle through wheat and mushroom growth, while matter flows through detritus and death.",
-    "image_path": "res://assets/biomes/biotic_flux.png",
-    "music_path": "res://assets/music/biotic_flux.ogg",
+    "image_path": "res://Assets/Biomes/Quantum_Fields.png",
+    "music_path": "res://Assets/Audio/Music/Entropic Bread Rise.mp3",
     "discovered": false,
     "plot_layout": [
-      {"x": 0.38, "y": 0.50},
-      {"x": 0.46, "y": 0.42},
-      {"x": 0.54, "y": 0.58},
-      {"x": 0.62, "y": 0.50}
+      {
+        "x": 0.38,
+        "y": 0.5
+      },
+      {
+        "x": 0.46,
+        "y": 0.42
+      },
+      {
+        "x": 0.54,
+        "y": 0.58
+      },
+      {
+        "x": 0.62,
+        "y": 0.5
+      }
     ],
-    "emojis": ["☀", "🌙", "🌾", "🍄", "🍂", "💀"],
+    "emojis": [
+      "☀",
+      "🌙",
+      "🌾",
+      "🍄",
+      "🍂",
+      "💀"
+    ],
     "native_factions": [],
-    "tags": ["ecosystem", "natural", "quantum"],
+    "tags": [
+      "ecosystem",
+      "natural",
+      "quantum"
+    ],
     "icon_components": {}
   },
   {
     "name": "StellarForges",
     "description": "Industrial space. Energy cycles through power and storage while production shifts between active fabrication and raw materials, outputting rockets and saucers.",
-    "image_path": "res://assets/biomes/stellar_forges.png",
-    "music_path": "res://assets/music/stellar_forges.ogg",
+    "image_path": "res://Assets/Biomes/Stellar_Forges.png",
+    "music_path": "res://Assets/Audio/Music/Black Horizon Whisper.mp3",
     "discovered": false,
     "plot_layout": [
-      {"x": 0.35, "y": 0.45},
-      {"x": 0.45, "y": 0.55},
-      {"x": 0.55, "y": 0.45},
-      {"x": 0.65, "y": 0.55}
+      {
+        "x": 0.35,
+        "y": 0.45
+      },
+      {
+        "x": 0.45,
+        "y": 0.55
+      },
+      {
+        "x": 0.55,
+        "y": 0.45
+      },
+      {
+        "x": 0.65,
+        "y": 0.55
+      }
     ],
-    "emojis": ["⚡", "🔋", "⚙", "🔩", "🚀", "🛸"],
+    "emojis": [
+      "⚡",
+      "🔋",
+      "⚙",
+      "🔩",
+      "🚀",
+      "🛸"
+    ],
     "native_factions": [],
-    "tags": ["industrial", "space", "quantum"],
+    "tags": [
+      "industrial",
+      "space",
+      "quantum"
+    ],
     "icon_components": {}
   },
   {
     "name": "FungalNetworks",
     "description": "Networked fungal colonies thrive in moonlight and moisture, spreading through insects and spores, cycling between health and death.",
-    "image_path": "res://assets/biomes/fungal_networks.png",
-    "music_path": "res://assets/music/fungal_networks.ogg",
+    "image_path": "res://Assets/Biomes/Fungal_Networks.png",
+    "music_path": "res://Assets/Audio/Music/Fungal Lattice Symphony.mp3",
     "discovered": false,
     "plot_layout": [
-      {"x": 0.50, "y": 0.40},
-      {"x": 0.58, "y": 0.50},
-      {"x": 0.50, "y": 0.60},
-      {"x": 0.42, "y": 0.50}
+      {
+        "x": 0.5,
+        "y": 0.4
+      },
+      {
+        "x": 0.58,
+        "y": 0.5
+      },
+      {
+        "x": 0.5,
+        "y": 0.6
+      },
+      {
+        "x": 0.42,
+        "y": 0.5
+      }
     ],
-    "emojis": ["🦗", "🐜", "🍄", "🦠", "🧫", "🍂", "🌙", "☀"],
+    "emojis": [
+      "🦗",
+      "🐜",
+      "🍄",
+      "🦠",
+      "🧫",
+      "🍂",
+      "🌙",
+      "☀"
+    ],
     "native_factions": [],
-    "tags": ["fungal", "network", "microbial"],
+    "tags": [
+      "fungal",
+      "network",
+      "microbial"
+    ],
     "icon_components": {}
   },
   {
     "name": "VolcanicWorlds",
     "description": "Extreme geology. Fire forges stone into crystal while mining and steam shape the environment into glowing vitality.",
-    "image_path": "res://assets/biomes/volcanic_worlds.png",
-    "music_path": "res://assets/music/volcanic_worlds.ogg",
+    "image_path": "res://Assets/Biomes/Volcanic_Worlds.png",
+    "music_path": "res://Assets/Audio/Music/Yeast Prophet_s Eclipse.mp3",
     "discovered": false,
     "plot_layout": [
-      {"x": 0.42, "y": 0.42},
-      {"x": 0.58, "y": 0.42},
-      {"x": 0.50, "y": 0.58},
-      {"x": 0.50, "y": 0.50}
+      {
+        "x": 0.42,
+        "y": 0.42
+      },
+      {
+        "x": 0.58,
+        "y": 0.42
+      },
+      {
+        "x": 0.5,
+        "y": 0.58
+      },
+      {
+        "x": 0.5,
+        "y": 0.5
+      }
     ],
-    "emojis": ["🔥", "🪨", "💎", "⛏", "🌫", "✨"],
+    "emojis": [
+      "🔥",
+      "🪨",
+      "💎",
+      "⛏",
+      "🌫",
+      "✨"
+    ],
     "native_factions": [],
-    "tags": ["volcanic", "mineral", "harsh"],
+    "tags": [
+      "volcanic",
+      "mineral",
+      "harsh"
+    ],
     "icon_components": {}
   }
 ]

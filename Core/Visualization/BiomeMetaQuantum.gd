@@ -108,7 +108,7 @@ func _rebuild_meta_hamiltonian() -> void:
 	# Diagonal: expected energy per biome
 	for i in range(mini(biomes.size(), META_DIM)):
 		var biome = biomes[i]
-		if not biome or not biome.quantum_computer:
+		if not biome:
 			continue
 
 		var expected_energy = _compute_expected_energy(biome)
@@ -123,25 +123,14 @@ func _rebuild_meta_hamiltonian() -> void:
 
 
 func _compute_expected_energy(biome) -> float:
-	"""Compute ⟨E⟩ = Tr(H ρ) for a biome."""
-	var qc = biome.quantum_computer
-	if not qc or not qc.hamiltonian or not qc.density_matrix:
+	"""Approximate ⟨E⟩ from cached C++ observables (lightweight)."""
+	if not biome or not ("viz_cache" in biome):
 		return 0.0
-
-	var H = qc.hamiltonian
-	var rho = qc.density_matrix
-	var dim = H.n
-
-	# Tr(H ρ) = Σ_ij H_ij ρ_ji
-	var trace_sum = 0.0
-	for i in range(dim):
-		for j in range(dim):
-			var h_ij = H.get_element(i, j)
-			var rho_ji = rho.get_element(j, i)
-			# Real part of H_ij × ρ_ji
-			trace_sum += h_ij.re * rho_ji.re - h_ij.im * rho_ji.im
-
-	return trace_sum
+	var purity = biome.viz_cache.get_purity()
+	if purity < 0.0:
+		return 0.0
+	# Use purity as a proxy for "activity energy" (0..1)
+	return clampf(purity, 0.0, 1.0)
 
 
 func _compute_biome_coupling(biome_a, biome_b) -> float:
@@ -171,12 +160,13 @@ func _compute_biome_coupling(biome_a, biome_b) -> float:
 			coupling += overlap * 0.1
 
 	# 2. Purity similarity
-	var qc_a = biome_a.quantum_computer
-	var qc_b = biome_b.quantum_computer
-
-	if qc_a and qc_b:
-		var purity_a = qc_a.get_purity() if qc_a.has_method("get_purity") else 0.5
-		var purity_b = qc_b.get_purity() if qc_b.has_method("get_purity") else 0.5
+	if biome_a and biome_b and ("viz_cache" in biome_a) and ("viz_cache" in biome_b):
+		var purity_a = biome_a.viz_cache.get_purity()
+		var purity_b = biome_b.viz_cache.get_purity()
+		if purity_a < 0.0:
+			purity_a = 0.5
+		if purity_b < 0.0:
+			purity_b = 0.5
 
 		# Similar purity → stronger coupling
 		var purity_similarity = 1.0 - abs(purity_a - purity_b)

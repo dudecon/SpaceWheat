@@ -1,0 +1,27 @@
+[
+  {
+    "name": "ExampleBiome",
+    "description": "Example biome showing required and optional fields.",
+    "image_path": "res://assets/biomes/example_biome.png",
+    "music_path": "res://assets/music/example_biome.ogg",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.45, "y": 0.45},
+      {"x": 0.55, "y": 0.45},
+      {"x": 0.55, "y": 0.55},
+      {"x": 0.45, "y": 0.55}
+    ],
+    "emojis": ["🌿", "🪵", "🦋", "💧"],
+    "native_factions": ["Verdant Covenant"],
+    "tags": ["example", "forest"],
+    "icon_components": {
+      "🌿": {
+        "self_energy": 0.6,
+        "hamiltonian": {"🪵": 0.12},
+        "lindblad_outgoing": {"💧": 0.02},
+        "lindblad_incoming": {"💧": 0.01},
+        "decay": {"rate": 0.03, "target": "🍂"}
+      }
+    }
+  }
+]

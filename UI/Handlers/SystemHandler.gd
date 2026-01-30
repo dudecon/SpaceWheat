@@ -212,28 +212,37 @@ static func peek_state(farm, positions: Array[Vector2i]) -> Dictionary:
 	var peek_results: Array = []
 
 	for pos in positions:
-		var plot = farm.grid.get_plot(pos)
-		if not plot or not plot.is_planted:
-			continue
-
 		var biome = farm.grid.get_biome_for_plot(pos)
-		if not biome or not biome.quantum_computer:
+		if not biome:
 			continue
 
-		var emoji = plot.north_emoji if plot.north_emoji else ""
+		var emoji = ""
+		var register_id = -1
 
-		# Get component and register for this emoji
-		if biome.quantum_computer.register_map.coordinates.has(emoji):
-			var reg_id = biome.quantum_computer.register_map.coordinates[emoji]
-			var comp = biome.quantum_computer._get_component_for_register(reg_id)
-			if comp:
-				var dist = biome.quantum_computer.inspect_register_distribution(comp, reg_id)
-				peek_results.append({
-					"position": pos,
-					"emoji": emoji,
-					"north_probability": dist.get("north", 0.5),
-					"south_probability": dist.get("south", 0.5)
-				})
+		if farm.plot_pool:
+			var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+			if terminal and terminal.is_bound:
+				emoji = terminal.north_emoji
+				register_id = terminal.bound_register_id
+
+		if register_id < 0:
+			var plot = farm.grid.get_plot(pos)
+			if not plot or not plot.is_planted:
+				continue
+			emoji = plot.north_emoji if plot.north_emoji else ""
+			if biome.viz_cache:
+				register_id = biome.viz_cache.get_qubit(emoji)
+
+		if register_id < 0:
+			continue
+
+		var north_prob = biome.get_register_probability(register_id)
+		peek_results.append({
+			"position": pos,
+			"emoji": emoji,
+			"north_probability": north_prob,
+			"south_probability": 1.0 - north_prob
+		})
 
 	return {
 		"success": peek_results.size() > 0,

@@ -161,14 +161,17 @@ func measure_plot(pos: Vector2i) -> String:
 	var result = farm_grid.measure_plot(pos)
 
 	# Emit visual effect request
-	if get_tile_callback.is_valid():
+	if result != "" and get_tile_callback.is_valid():
 		var tile = get_tile_callback.call(pos)
 		if tile:
 			var effect_pos = tile.global_position + tile.size / 2
 			visual_effect_requested.emit("measure", effect_pos, {"color": Color(0.7, 0.3, 1.0)})
 
-	action_feedback.emit("⚛️ Measured: %s collapsed!" % result, true)
-	print("👁️ Measured at %s -> %s" % [pos, result])
+	if result != "":
+		action_feedback.emit("⚛️ Measured: %s collapsed!" % result, true)
+		print("👁️ Measured at %s -> %s" % [pos, result])
+	else:
+		action_feedback.emit("⚛️ Measurement failed", false)
 
 	_trigger_updates()
 	return result
@@ -225,30 +228,26 @@ func harvest_all() -> Dictionary:
 	var total_harvested = 0
 	var harvest_count = 0
 
-	# Iterate through all plots
-	var grid_size = farm_grid.grid_width
-	for y in range(grid_size):
-		for x in range(grid_size):
-			var pos = Vector2i(x, y)
-			var plot = farm_grid.get_plot(pos)
+	if farm_grid.plot_pool:
+		for terminal in farm_grid.plot_pool.get_measured_terminals():
+			if terminal.grid_position == Vector2i(-1, -1):
+				continue
+			var pos = terminal.grid_position
+			var harvest_data = farm_grid.harvest_wheat(pos)
+			if harvest_data.get("success", false):
+				harvest_count += 1
+				total_harvested += harvest_data.get("yield", 0)
 
-			# Harvest if planted AND measured (quantum-only mechanics)
-			if plot and plot.is_planted and plot.has_been_measured:
-				var harvest_data = farm_grid.harvest_wheat(pos)
-				if harvest_data["success"]:
-					harvest_count += 1
-					total_harvested += harvest_data["yield"]
+				# Record each harvest
+				economy.record_harvest(harvest_data.get("yield", 0))
+				goals.record_harvest(harvest_data.get("yield", 0))
 
-					# Record each harvest
-					economy.record_harvest(harvest_data["yield"])
-					goals.record_harvest(harvest_data["yield"])
-
-					# Emit visual effect request
-					if get_tile_callback.is_valid():
-						var tile = get_tile_callback.call(pos)
-						if tile:
-							var effect_pos = tile.global_position + tile.size / 2
-							visual_effect_requested.emit("harvest", effect_pos, {"color": Color(1.0, 0.9, 0.3)})
+				# Emit visual effect request
+				if get_tile_callback.is_valid():
+					var tile = get_tile_callback.call(pos)
+					if tile:
+						var effect_pos = tile.global_position + tile.size / 2
+						visual_effect_requested.emit("harvest", effect_pos, {"color": Color(1.0, 0.9, 0.3)})
 
 	if harvest_count > 0:
 		# Check contracts

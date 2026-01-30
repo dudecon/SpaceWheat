@@ -268,8 +268,8 @@ func load_from_dict(data: Dictionary) -> void:
 	name = data.get("name", "")
 	description = data.get("description", "")
 	ring = data.get("ring", "center")
-	signature = data.get("signature", [])
-	tags = data.get("tags", [])
+	signature = _coerce_string_array(data.get("signature", data.get("sig", [])))
+	tags = _coerce_string_array(data.get("tags", []))
 
 	self_energies = data.get("self_energies", {})
 
@@ -285,6 +285,16 @@ func load_from_dict(data: Dictionary) -> void:
 	alignment_couplings = data.get("alignment_couplings", {})
 	bell_activated_features = data.get("bell_activated_features", {})
 	decoherence_coupling = data.get("decoherence_coupling", {})
+
+
+func _coerce_string_array(value) -> Array:
+	if value is Array:
+		return value
+	if value is String:
+		# Treat single-string signatures/tags as a single entry.
+		# Avoid splitting into codepoints (emoji graphemes can be multi-codepoint).
+		return [value]
+	return []
 
 
 ## Helper: Serialize hamiltonian (convert Vector2 to [real, imag])

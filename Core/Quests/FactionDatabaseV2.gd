@@ -2,8 +2,8 @@ class_name FactionDatabaseV2
 extends RefCounted
 
 ## Faction Database v2.1
-## Generated from Core/Factions/data/factions.json
-## Contains 79 factions with rich flavor text, mottos, and lore
+## Generated from Core/Factions/data/factions_merged.json
+## Contains 83 factions with rich flavor text, mottos, and lore
 
 ## Meta Information
 const VERSION = "v2.1"
@@ -97,20 +97,20 @@ const AXIAL_SPINE = {
 }
 
 ## Statistics
-const TOTAL_FACTIONS = 79
+const TOTAL_FACTIONS = 83
 const RINGS = ['center', 'first', 'outer', 'second', 'third']
-const DOMAINS = ['Art-Signal', 'Civic', 'Civic/Administrative', 'Commerce', 'Criminal', 'Horror', 'Imperial/Executive', 'Imperial/Horror', 'Infrastructure', 'Infrastructure/Scavenger', 'Military', 'Mystic', 'Mystic/Infrastructure', 'Scavenger', 'Science', 'Science/Deep-Math']
+const DOMAINS = ['Art-Signal', 'Boundary', 'Civic', 'Civic/Administrative', 'Commerce', 'Criminal', 'Dissolution', 'Enforcement', 'Horror', 'Imperial/Executive', 'Imperial/Horror', 'Infrastructure', 'Infrastructure/Scavenger', 'Intelligence', 'Medicine', 'Military', 'Mystic', 'Mystic/Infrastructure', 'Navigation', 'Predation', 'Scavenger', 'Science', 'Science/Deep-Math']
 
 ## All Factions
 const ALL_FACTIONS = [
 	{
 		"name": "Black Horizon",
-		"domain": "Horror",
+		"domain": "Boundary",
 		"ring": "outer",
 		"bits": [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-		"sig": ["⚫", "🕳", "🪐", "🌀"],
+		"sig": ["⚫"],
 		"motto": null,
-		"description": "Not a faction - a boundary condition. The edge of the probability manifold where quantum states become undefined. Those who drift too far into shadow-configurations eventually feel its gravity. It doesn't want anything. It doesn't think. It's just the place where patterns stop being stable. The Carrion Throne's greatest achievement is maintaining enough order that most citizens never feel its pull. The greatest failure is that some citizens seek it anyway."
+		"description": "Not a faction—a boundary condition. The edge of the probability manifold where quantum states become undefined. Those who drift too far into shadow-configurations eventually feel its gravity. It doesn't want anything. It doesn't think. It's just the place where patterns stop being stable. The Cartographers map its edges. The Chorus sings at its threshold. No one maps its interior, because there is no interior—only the moment of crossing."
 	},
 	{
 		"name": "Bone Merchants",
@@ -149,6 +149,15 @@ const ALL_FACTIONS = [
 		"description": "Nomadic explorers who chart probability-space - not just where things are, but where they might be, where they were, where they could become. Their maps show routes that only exist sometimes, destinations that move, shortcuts through configurations that shouldn't connect. They trade in coordinates the way others trade in currency. The map they don't sell is the one that shows the way to the Black Horizon."
 	},
 	{
+		"name": "Cartographers of the Impossible",
+		"domain": "Navigation",
+		"ring": "second",
+		"bits": [],
+		"sig": ["🧭"],
+		"motto": "If it can be reached, it can be charted.",
+		"description": "They map what shouldn't be mappable. The fracture zones where space folds, the probability gradients where paths fork, the edges where the Black Horizon bleeds into observable reality. Their charts are paradoxes made legible, their compasses point toward things that exist only when observed. Nomads follow their markers through the fractures; most arrive somewhere. The Cartographers don't guarantee destinations—only that the journey can be recorded."
+	},
+	{
 		"name": "Celestial Archons",
 		"domain": "Mystic",
 		"ring": "outer",
@@ -167,13 +176,22 @@ const ALL_FACTIONS = [
 		"description": "Revolutionary militants who believe the current order must burn for something better to grow. They sabotage, they fight, they die for ideals they describe in terms that sound beautiful and vague. The Carrion Throne has tried to exterminate them for generations. They keep returning - not the same individuals, but the same ember, waiting for tinder. Some are heroes. Some are terrorists. History will decide, assuming history survives."
 	},
 	{
+		"name": "Chop Docs",
+		"domain": "Medicine",
+		"ring": "third",
+		"bits": [],
+		"sig": ["⚙️"],
+		"motto": "We fix what breaks. We break what pays.",
+		"description": "Back-alley surgeons and cybernetic salvagers. They buy what the Bone Merchants sell and install it in whoever can pay—or whoever can't refuse. Their clinics smell of antiseptic and desperation. The ⚙️ they work with comes from sources best not asked about, and the modifications they perform void warranties that were already void. In the megacity, everyone eventually needs their services."
+	},
+	{
 		"name": "Chorus of Oblivion",
-		"domain": "Horror",
+		"domain": "Dissolution",
 		"ring": "third",
 		"bits": [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],
-		"sig": ["🎶", "🔔", "🫥", "🪦", "🕸", "🕯"],
-		"motto": "The song that unmakes the singer.",
-		"description": "A cosmic choir whose music erases identity. Their hymns dissolve the boundaries between individual and void, singer and song, existence and oblivion. Listeners report profound peace. Listeners report hearing music that hasn't been performed yet. Listeners sometimes forget their own names. The 🕯 bridges them to mystic tradition - they're not nihilists, they're *devotees*. Devotees of an ending that sounds beautiful."
+		"sig": ["🎶"],
+		"motto": "Every name is just a song waiting to end.",
+		"description": "They sing the songs that unmake. Not destruction—dissolution. Their harmonies resonate at frequencies that loosen the bonds between self and memory, between name and named. They gather in the resonant canyons where acoustics amplify their work, performing requiems for identities that haven't died yet. The 🫥 is not their enemy—it's their congregation. Those who lose themselves to the music don't die. They simply stop being anyone in particular."
 	},
 	{
 		"name": "Clan of the Hidden Root",
@@ -192,6 +210,15 @@ const ALL_FACTIONS = [
 		"sig": ["⭐", "🫧", "🕳", "⚱"],
 		"motto": "It waits beneath the pressure.",
 		"description": "Worshippers of something that collapsed into the void - a star, a civilization, a god, something that fell and kept falling. They conduct rituals at the edge of the Black Horizon, send offerings into the depths, and wait for signals from below. The bubbles (🫧) are their communication - messages rising from the drowned. The ⚱️ holds ashes of those who went deeper. The ashes sometimes move. No occult sight needed - what they worship is too deep for eyes to reach."
+	},
+	{
+		"name": "Debt Wardens",
+		"domain": "Enforcement",
+		"ring": "third",
+		"bits": [],
+		"sig": ["⛓"],
+		"motto": "What is owed will be paid.",
+		"description": "They don't create debt—they enforce it. Every obligation in the megacity flows through their ledgers, every defaulted payment triggers their attention. They wear chains not as bondage but as credential, each link representing a contract they've collected. The masses fear them not because they're cruel, but because they're inevitable. Debt is patient. The Wardens are more patient still."
 	},
 	{
 		"name": "Engram Freighters",
@@ -399,6 +426,15 @@ const ALL_FACTIONS = [
 		"sig": ["💰", "💾", "📼", "🧩", "🗝"],
 		"motto": "Your past is our inventory.",
 		"description": "Dealers in recorded experience - not just data, but the lived texture of memory itself. They buy recollections from the desperate, sell them to the curious, and archive everything that passes through their hands. The 🗝 marks the locked memories - things people paid to forget, things the Throne wants suppressed, things too dangerous to release. Somewhere in their vaults is every secret ever sold."
+	},
+	{
+		"name": "Memory Weavers",
+		"domain": "Predation",
+		"ring": "third",
+		"bits": [],
+		"sig": ["🕸"],
+		"motto": "What you forget, we keep.",
+		"description": "Where the Chorus dissolves, the Weavers collect. They spin webs from the residue of unraveled identities—not to preserve, but to trap. Their silk is woven from half-remembered names, fragments of selves that almost were. Travelers who brush against their webs find themselves tangled in someone else's forgotten life, wearing memories that don't fit. The Weavers don't hunt. They simply wait for the Chorus to finish singing."
 	},
 	{
 		"name": "Millwright's Union",
@@ -609,12 +645,12 @@ const ALL_FACTIONS = [
 	},
 	{
 		"name": "Station Lords",
-		"domain": "Civic",
-		"ring": "first",
+		"domain": "Infrastructure",
+		"ring": "second",
 		"bits": [1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],
-		"sig": ["👥", "🚢", "🛂", "📜", "🏢", "📘"],
-		"motto": "Order requires administration. Administration requires us.",
-		"description": "Mid-level administrators who control transit, residency, and labor allocation for their jurisdictions. They answer to the Carrion Throne through channels so bureaucratic that most have never seen a direct order - just policy updates that arrive like weather. Some are tyrants; some are reformers; all are trapped in systems larger than themselves. The player deals with them daily. They deal with the Throne so the player doesn't have to."
+		"sig": ["🚀"],
+		"motto": "The sky has a toll.",
+		"description": "They control the skyports where ships dock and fortunes change hands. Every rocket that lands pays tribute; every cargo that launches pays more. They've turned the megacity's connection to the stars into a chokepoint, and they squeeze it with practiced efficiency. The pulse of arriving ships is the heartbeat of their power—irregular, but unstoppable."
 	},
 	{
 		"name": "Swift Herd",
@@ -735,12 +771,12 @@ const ALL_FACTIONS = [
 	},
 	{
 		"name": "Umbra Exchange",
-		"domain": "Criminal",
+		"domain": "Intelligence",
 		"ring": "second",
 		"bits": [1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0],
-		"sig": ["🌑", "🕵️", "💰", "🗝", "🧿", "⛓"],
-		"motto": "Everything has a price. We know it.",
-		"description": "The shadow market. They fence stolen goods, launder currency, broker information, and provide services that legal economies can't acknowledge. The 🧿 in their sigil marks their connection to the occult underworld - they trade in secrets that have weight. The ⛓ marks their connection to labor extraction. Not cruel, exactly. Just utterly transactional. Everything is for sale, including you."
+		"sig": ["🗝"],
+		"motto": "Everyone has a price. We know yours.",
+		"description": "Information brokers who trade in secrets, leverage, and lives. Their currency is knowing things others don't want known. The 🗝 they carry opens doors that don't officially exist; the 🕵️ they employ see through walls and lies alike. They don't take sides in the megacity's power struggles—they take percentages. Every faction owes them something, which means every faction fears them."
 	},
 	{
 		"name": "Veiled Sisters",
@@ -783,9 +819,9 @@ const ALL_FACTIONS = [
 		"domain": "Art-Signal",
 		"ring": "second",
 		"bits": [1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-		"sig": ["🎸", "🎼", "💫", "🏮"],
+		"sig": ["🎸"],
 		"motto": "Even the void deserves a song.",
-		"description": "Traveling performers who bring music to the furthest settlements, the loneliest outposts, the places where entertainment never reaches. Their shows are legendary - part concert, part therapy, part something harder to name. They've performed at the edge of the Black Horizon and come back with songs that shouldn't be possible. Audiences weep without knowing why."
+		"description": "Musicians who play at the edge of nothing. Their instruments are strung with probability, their songs carry across distances that shouldn't exist. They perform for audiences that may or may not be there, in venues that flicker between real and theoretical. The 💫 follows them—or perhaps they follow it. Their music is the only thing that makes the void feel less empty, and the void seems grateful."
 	},
 	{
 		"name": "Volcanic Foundry",

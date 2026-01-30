@@ -8,8 +8,25 @@ extends RefCounted
 ## - Explicit parameters (no implicit state)
 ## - Dictionary returns with {success: bool, ...data, error?: String}
 ## - Single responsibility per method
+##
+## Gate Injection:
+## All gate operations go through GateInjector to ensure the C++ lookahead
+## buffer is invalidated after density matrix mutations. This prevents
+## stale pre-computed evolution frames from being rendered.
 
 const QuantumGateLibrary = preload("res://Core/QuantumSubstrate/QuantumGateLibrary.gd")
+const GateInjector = preload("res://Core/QuantumSubstrate/GateInjector.gd")
+
+
+static func _resolve_register_id(biome, emoji: String) -> int:
+	"""Resolve register id from viz_cache metadata."""
+	if not biome or emoji == "":
+		return -1
+	if biome.viz_cache:
+		var q = biome.viz_cache.get_qubit(emoji)
+		if q >= 0:
+			return q
+	return -1
 
 
 ## ============================================================================
@@ -174,16 +191,75 @@ static func create_bell_pair(farm, positions: Array[Vector2i]) -> Dictionary:
 	}
 
 
+static func create_ghz_state(farm, positions: Array[Vector2i]) -> Dictionary:
+	"""Create GHZ state - maximally entangled n-qubit state.
+
+	Creates (|000...0⟩ + |111...1⟩)/√2 for all selected positions.
+	Uses H on first qubit, then CNOT from first to each subsequent qubit.
+	"""
+	if positions.size() < 2:
+		return {
+			"success": false,
+			"error": "need_two_positions",
+			"message": "Select 2+ plots for GHZ state"
+		}
+
+	# Step 1: Apply Hadamard to first qubit
+	var h_result = _apply_single_qubit_gate(farm, positions[0], "H")
+	if not h_result.success:
+		return {
+			"success": false,
+			"error": "hadamard_failed",
+			"message": "Failed to apply Hadamard to control qubit"
+		}
+
+	# Step 2: Apply CNOT from first qubit to each subsequent qubit
+	var cnot_count = 0
+	for i in range(1, positions.size()):
+		var cnot_result = _apply_two_qubit_gate(farm, positions[0], positions[i], "CNOT")
+		if cnot_result.success:
+			cnot_count += 1
+
+	if cnot_count == 0:
+		return {
+			"success": false,
+			"error": "cnot_failed",
+			"message": "Failed to apply any CNOT gates"
+		}
+
+	var zeros = "0".repeat(positions.size())
+	var ones = "1".repeat(positions.size())
+
+	return {
+		"success": true,
+		"positions": positions,
+		"qubit_count": positions.size(),
+		"cnot_applied": cnot_count,
+		"state": "GHZ |%s⟩+|%s⟩)/√2" % [zeros, ones]
+	}
+
+
 ## ============================================================================
 ## ENTANGLEMENT OPERATIONS
 ## ============================================================================
 
 static func cluster(farm, positions: Array[Vector2i]) -> Dictionary:
-	"""Build entanglement cluster between terminals at selected positions.
+	"""Create linear cluster state from selected positions.
 
-	Creates linear chain: plot[0] <-> plot[1] <-> plot[2] <-> ...
+	A cluster state is a highly entangled state used in measurement-based
+	quantum computing. The linear cluster has graph structure:
+
+	    q[0] — q[1] — q[2] — ... — q[n-1]
+
+	where edges represent CZ gates applied after H on all qubits.
+
+	Preparation (respects selection order):
+	1. Apply H to ALL selected qubits → |+⟩⊗n
+	2. Apply CZ between adjacent pairs: (0,1), (1,2), ..., (n-2,n-1)
+
+	The selection order determines the linear chain topology.
 	"""
-	if not farm or not farm.grid or not farm.plot_pool:
+	if not farm or not farm.grid:
 		return {
 			"success": false,
 			"error": "farm_not_ready",
@@ -194,49 +270,51 @@ static func cluster(farm, positions: Array[Vector2i]) -> Dictionary:
 		return {
 			"success": false,
 			"error": "need_two_positions",
-			"message": "Need at least 2 plots for cluster"
+			"message": "Need at least 2 plots for cluster state"
 		}
 
-	# Get biome from first plot
-	var biome = farm.grid.get_biome_for_plot(positions[0])
-	if not biome or not biome.quantum_computer:
-		return {
-			"success": false,
-			"error": "no_quantum_computer",
-			"message": "Could not access biome quantum computer"
-		}
-
-	# Collect terminals at these positions
-	var terminals: Array = []
+	# Step 1: Apply Hadamard to ALL qubits (creates |+⟩⊗n)
+	var h_count = 0
+	var h_order: Array = []
 	for pos in positions:
-		var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
-		if terminal and terminal.is_bound and not terminal.is_measured:
-			terminals.append(terminal)
+		var h_result = _apply_single_qubit_gate(farm, pos, "H")
+		if h_result.success:
+			h_count += 1
+			h_order.append(h_result.get("register_id", -1))
 
-	if terminals.size() < 2:
+	if h_count < 2:
 		return {
 			"success": false,
-			"error": "not_enough_terminals",
-			"message": "Need at least 2 active terminals. EXPLORE first."
+			"error": "hadamard_failed",
+			"message": "Failed to apply H to enough qubits (need 2+, got %d)" % h_count
 		}
 
-	# Create entanglements between adjacent terminals
-	var success_count = 0
-	var entanglements: Array = []
+	# Step 2: Apply CZ between adjacent pairs in selection order
+	# This creates the linear graph structure: 0-1-2-...-n
+	var cz_count = 0
+	var cz_edges: Array = []
 
-	for i in range(terminals.size() - 1):
-		var reg_a = terminals[i].bound_register_id
-		var reg_b = terminals[i + 1].bound_register_id
+	for i in range(positions.size() - 1):
+		var cz_result = _apply_two_qubit_gate(farm, positions[i], positions[i + 1], "CZ")
+		if cz_result.success:
+			cz_count += 1
+			cz_edges.append([cz_result.get("register_a", -1), cz_result.get("register_b", -1)])
 
-		if biome.quantum_computer.entangle_plots(reg_a, reg_b):
-			success_count += 1
-			entanglements.append([reg_a, reg_b])
+	if cz_count == 0:
+		return {
+			"success": false,
+			"error": "cz_failed",
+			"message": "Failed to apply any CZ gates"
+		}
 
 	return {
-		"success": success_count > 0,
-		"entanglements": entanglements,
-		"terminal_count": terminals.size(),
-		"entanglement_count": success_count
+		"success": true,
+		"positions": positions,
+		"qubit_count": positions.size(),
+		"h_applied": h_count,
+		"cz_applied": cz_count,
+		"cz_edges": cz_edges,
+		"state": "Linear cluster state (%d qubits, %d edges)" % [h_count, cz_count]
 	}
 
 
@@ -422,16 +500,14 @@ static func _apply_single_qubit_gate(farm, position: Vector2i, gate_name: String
 				biome = farm.grid.biomes.get(biome_name, null)
 			register_id = terminal.bound_register_id
 
-	# V1 MODEL: Fall back to plot-based approach (Model C: use register_map)
+	# V1 MODEL: Fall back to plot-based approach (viz_cache mapping)
 	if register_id < 0 and farm.grid:
 		var plot = farm.grid.get_plot(position)
 		if plot and plot.is_planted:
 			biome = farm.grid.get_biome_for_plot(position)
-			# Model C: Look up qubit via register_map using plot's emoji
-			if biome and biome.quantum_computer and plot.north_emoji:
-				var emoji = plot.north_emoji
-				if biome.quantum_computer.register_map.has(emoji):
-					register_id = biome.quantum_computer.register_map.qubit(emoji)
+			# Resolve qubit via viz_cache metadata
+			if biome and plot.north_emoji:
+				register_id = _resolve_register_id(biome, plot.north_emoji)
 
 	# Validate biome and register
 	if not biome or not biome.quantum_computer or register_id < 0:
@@ -467,13 +543,15 @@ static func _apply_single_qubit_gate(farm, position: Vector2i, gate_name: String
 			"message": "Density matrix not initialized"
 		}
 
-	var success = biome.quantum_computer.apply_gate(register_id, gate_matrix)
+	# Use GateInjector to apply gate + invalidate lookahead buffer
+	var inject_result = GateInjector.inject_gate(biome, register_id, gate_matrix, farm)
 
 	return {
-		"success": success,
+		"success": inject_result.success,
 		"gate": gate_name,
 		"register_id": register_id,
-		"position": position
+		"position": position,
+		"gate_injected": inject_result.get("gate_injected", false)
 	}
 
 
@@ -514,26 +592,22 @@ static func _apply_two_qubit_gate(farm, position_a: Vector2i, position_b: Vector
 				biome_b = farm.grid.biomes.get(biome_name_b, null)
 			reg_b = terminal_b.bound_register_id
 
-	# V1 MODEL: Fall back to plot-based approach (Model C: use register_map)
+	# V1 MODEL: Fall back to plot-based approach (viz_cache mapping)
 	if (reg_a < 0 or reg_b < 0) and farm.grid:
 		var plot_a = farm.grid.get_plot(position_a)
 		var plot_b = farm.grid.get_plot(position_b)
 
 		if plot_a and plot_a.is_planted and reg_a < 0:
 			biome_a = farm.grid.get_biome_for_plot(position_a)
-			# Model C: Look up qubit via register_map
-			if biome_a and biome_a.quantum_computer and plot_a.north_emoji:
-				var emoji_a = plot_a.north_emoji
-				if biome_a.quantum_computer.register_map.has(emoji_a):
-					reg_a = biome_a.quantum_computer.register_map.qubit(emoji_a)
+			# Resolve qubit via viz_cache metadata
+			if biome_a and plot_a.north_emoji:
+				reg_a = _resolve_register_id(biome_a, plot_a.north_emoji)
 
 		if plot_b and plot_b.is_planted and reg_b < 0:
 			biome_b = farm.grid.get_biome_for_plot(position_b)
-			# Model C: Look up qubit via register_map
-			if biome_b and biome_b.quantum_computer and plot_b.north_emoji:
-				var emoji_b = plot_b.north_emoji
-				if biome_b.quantum_computer.register_map.has(emoji_b):
-					reg_b = biome_b.quantum_computer.register_map.qubit(emoji_b)
+			# Resolve qubit via viz_cache metadata
+			if biome_b and plot_b.north_emoji:
+				reg_b = _resolve_register_id(biome_b, plot_b.north_emoji)
 
 	# Both positions must have valid registers in the SAME biome
 	if biome_a != biome_b or not biome_a or not biome_a.quantum_computer:
@@ -575,13 +649,15 @@ static func _apply_two_qubit_gate(farm, position_a: Vector2i, position_b: Vector
 			"message": "Density matrix not initialized"
 		}
 
-	var success = biome_a.quantum_computer.apply_gate_2q(reg_a, reg_b, gate_matrix)
+	# Use GateInjector to apply 2-qubit gate + invalidate lookahead buffer
+	var inject_result = GateInjector.inject_gate_2q(biome_a, reg_a, reg_b, gate_matrix, farm)
 
 	return {
-		"success": success,
+		"success": inject_result.success,
 		"gate": gate_name,
 		"register_a": reg_a,
 		"register_b": reg_b,
 		"position_a": position_a,
-		"position_b": position_b
+		"position_b": position_b,
+		"gate_injected": inject_result.get("gate_injected", false)
 	}

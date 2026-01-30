@@ -42,61 +42,100 @@ func _ready():
 
 
 func _initialize_bath() -> void:
-	"""Initialize QuantumComputer for Starter Forest biome (5 qubits)."""
-	print("🌲 Initializing Starter Forest QuantumComputer...")
-
-	# Create QuantumComputer with RegisterMap
-	quantum_computer = QuantumComputer.new("StarterForest")
-
-	# Allocate 5 qubits with emoji axes
-	quantum_computer.allocate_axis(0, "☀", "🌙")   # Celestial: Sun/Moon
-	quantum_computer.allocate_axis(1, "🐺", "🐇")  # Predator/Prey: Wolf/Rabbit
-	quantum_computer.allocate_axis(2, "🦅", "🦌")  # Apex/Herbivore: Eagle/Deer
-	quantum_computer.allocate_axis(3, "🌲", "🍂")  # Forest Lifecycle: Tree/Decay
-	quantum_computer.allocate_axis(4, "🌱", "🌿")  # Growth: Seedling/Vegetation
-
-	# Initialize to day state with balanced ecosystem |00000⟩ = ☀🐺🦅🌲🌱
-	quantum_computer.initialize_basis(0)
-
-	print("  📊 RegisterMap configured (5 qubits, 32 basis states)")
-
-	# Get Icons from IconRegistry
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if not icon_registry:
-		push_error("🌲 IconRegistry not available!")
+	"""Initialize QuantumComputer using new BiomeBuilder architecture.
+	
+	NEW ARCHITECTURE:
+	- Factions → Hamiltonian (coherent, universal laws)
+	- Biome → Lindblad (dissipative, environmental context)
+	- Icons = Hamiltonian only (no Lindblad terms)
+	"""
+	print("🌲 Initializing Starter Forest QuantumComputer (NEW ARCHITECTURE)...")
+	
+	# Define quantum axes (emoji pairs)
+	var emoji_pairs = [
+		{"north": "☀", "south": "🌙"},   # Celestial: Sun/Moon
+		{"north": "🐺", "south": "🐇"},  # Predator/Prey: Wolf/Rabbit
+		{"north": "🦅", "south": "🦌"},  # Apex/Herbivore: Eagle/Deer
+		{"north": "🌲", "south": "🍂"},  # Forest Lifecycle: Tree/Decay
+		{"north": "🌱", "south": "🌿"},  # Growth: Seedling/Vegetation
+	]
+	
+	# Define biome-specific Lindblad (environmental dissipation)
+	var lindblad_spec = _create_forest_lindblad_spec()
+	
+	# Get faction standings (empty = all factions at full strength)
+	# TODO: In future, get this from ObservationFrame or faction reputation system
+	var faction_standings = {}
+	
+	# Build quantum system using unified builder
+	var BiomeBuilder = load("res://Core/Biomes/BiomeBuilder.gd")
+	var result = BiomeBuilder.build_biome_quantum_system(
+		"StarterForest",
+		emoji_pairs,
+		faction_standings,
+		lindblad_spec
+	)
+	
+	if not result.success:
+		push_error("🌲 Failed to build StarterForest quantum system: %s" % result.error)
 		return
-
-	# Get or create Icons for forest emojis
-	var forest_emojis = ["☀", "🌙", "🐺", "🐇", "🦅", "🦌", "🌲", "🍂", "🌱", "🌿"]
-	var icons = {}
-
-	for emoji in forest_emojis:
-		var icon = icon_registry.get_icon(emoji)
-		if not icon:
-			# Create basic forest icon if not found
-			icon = _create_forest_emoji_icon(emoji)
-			icon_registry.register_icon(icon)
-		icons[emoji] = icon
-
-	# Configure forest-specific dynamics
-	_configure_forest_dynamics(icons, icon_registry)
-
-	# Build operators using cached method
-	build_operators_cached("StarterForestBiome", icons)
-
-	print("  ✅ Hamiltonian: %dx%d matrix" % [
-		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0,
-		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0
+	
+	# Install the built quantum computer
+	quantum_computer = result.quantum_computer
+	
+	print("  ✅ Hamiltonian: %dx%d matrix (from factions)" % [
+		quantum_computer.hamiltonian.n,
+		quantum_computer.hamiltonian.n
 	])
-	print("  ✅ Lindblad: %d operators + %d gated configs" % [
+	print("  ✅ Lindblad: %d operators + %d gated (from biome)" % [
 		quantum_computer.lindblad_operators.size(),
-		quantum_computer.gated_lindblad_configs.size()])
-	print("  🌲 Starter Forest QuantumComputer ready!")
-
+		quantum_computer.gated_lindblad_configs.size()
+	])
+	print("  🌲 Starter Forest QuantumComputer ready! (H=factions, L=biome)")
+	
 	# Initialize phasic shadow: liquid neural net in phase space
 	initialize_phase_lnn()
 	if phase_lnn:
 		print("  🌀 Phasic shadow initialized (LNN in phase space)")
+
+
+func _create_forest_lindblad_spec() -> BiomeLindblad:
+	"""Define StarterForest environmental dissipation (Lindblad terms).
+	
+	These are BIOME-SPECIFIC irreversible flows that don't exist in factions.
+	Factions define what emojis ARE (Hamiltonian), biomes define how they FLOW (Lindblad).
+	"""
+	var biome_lindblad_script = load("res://Core/Biomes/BiomeLindblad.gd")
+	var L = biome_lindblad_script.new()
+	
+	# ═══════════════════════════════════════════════════════════════
+	# ENVIRONMENTAL PUMPS (Celestial drives growth)
+	# ═══════════════════════════════════════════════════════════════
+	
+	# Sun pumps seedlings (photosynthesis)
+	L.add_pump("🌱", "☀", 0.03)
+	
+	# Moon enhances wolf hunting (nocturnal predation)
+	L.add_pump("🐺", "🌙", 0.015)
+	
+	# ═══════════════════════════════════════════════════════════════
+	# ENVIRONMENTAL DRAINS (Decay and consumption)
+	# ═══════════════════════════════════════════════════════════════
+	
+	# Trees decay to leaf litter (forest aging)
+	L.add_drain("🌲", "🍂", 0.1)
+	
+	# Decay fertilizes seedlings (nutrient cycling)
+	L.add_pump("🌱", "🍂", 0.03)
+	
+	# ═══════════════════════════════════════════════════════════════
+	# EXPONENTIAL DECAY PROCESSES
+	# ═══════════════════════════════════════════════════════════════
+	
+	# Trees have intrinsic decay (old growth → deadwood)
+	L.add_decay("🌲", "🍂", 0.1)
+	
+	return L
 
 
 func _create_forest_emoji_icon(emoji: String) -> Icon:
@@ -181,19 +220,43 @@ func _update_quantum_substrate(dt: float) -> void:
 
 
 func _rebuild_quantum_operators_impl() -> void:
-	"""Rebuild operators when IconRegistry changes."""
-	var icon_registry = get_node_or_null("/root/IconRegistry")
-	if not icon_registry or not quantum_computer:
+	"""Rebuild operators when faction standings change (LIVE REBUILD).
+	
+	INVARIANT: Uses the SAME BiomeBuilder machinery as boot initialization.
+	This ensures boot and live-rebuild have identical behavior.
+	"""
+	if not quantum_computer:
 		return
-
-	var forest_emojis = ["☀", "🌙", "🐺", "🐇", "🦅", "🦌", "🌲", "🍂", "🌱", "🌿"]
-	var icons = {}
-
-	for emoji in forest_emojis:
-		var icon = icon_registry.get_icon(emoji)
-		if icon:
-			icons[emoji] = icon
-
-	if icons.size() > 0:
-		_configure_forest_dynamics(icons, icon_registry)
-		build_operators_cached("StarterForestBiome", icons)
+	
+	print("🔧 Rebuilding StarterForest operators (faction standings changed)...")
+	
+	# Get current faction standings (TODO: hook into reputation system)
+	var faction_standings = {}
+	
+	# Rebuild Icons (Hamiltonian-only) using BiomeBuilder
+	var BiomeBuilder = load("res://Core/Biomes/BiomeBuilder.gd")
+	var new_icons = BiomeBuilder.rebuild_icons_for_standings(
+		quantum_computer.register_map,
+		faction_standings
+	)
+	
+	if new_icons.is_empty():
+		push_warning("🌲 Rebuild failed: No icons could be built")
+		return
+	
+	# Rebuild Hamiltonian (universal dynamics change with faction power)
+	var HamBuilder = load("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
+	var verbose = get_node_or_null("/root/VerboseConfig")
+	quantum_computer.hamiltonian = HamBuilder.build(new_icons, quantum_computer.register_map, verbose)
+	
+	# Lindblad stays the same (environmental context unchanged)
+	# Only Hamiltonian is rebuilt when faction standings change
+	
+	# Update time-dependent drivers
+	var driven_configs = HamBuilder.get_driven_icons(new_icons, quantum_computer.register_map)
+	quantum_computer.set_driven_icons(driven_configs)
+	
+	print("  ✅ Hamiltonian rebuilt (%dx%d), Lindblad unchanged" % [
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0,
+		quantum_computer.hamiltonian.n if quantum_computer.hamiltonian else 0
+	])

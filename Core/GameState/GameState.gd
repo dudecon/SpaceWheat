@@ -21,12 +21,12 @@ extends Resource
 @export var scenario_id: String = "default"
 @export var save_timestamp: int = 0  # Unix timestamp
 @export var game_time: float = 0.0  # Total playtime
-@export var quantum_time_scale: float = 0.125  # Simulation speed multiplier (0.001-16.0)
+@export var quantum_time_scale: float = 0.03125  # Simulation speed multiplier (0.001-16.0) - Start 4x slower for observation
 @export var save_version: int = 1  # Phase 4: Save format version (increment when format changes)
 
 ## Grid Dimensions (for variable-sized farms)
-@export var grid_width: int = 6
-@export var grid_height: int = 1
+@export var grid_width: int = 0
+@export var grid_height: int = 0
 
 ## Quantum Energy Economy - All resources are emoji-quantum currencies
 ## Starting with minimal amounts forces strategic gameplay

@@ -6,7 +6,9 @@
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include "quantum_evolution_engine.h"
+#include "liquid_neural_net.h"
 #include <vector>
+#include <memory>
 
 namespace godot {
 
@@ -55,6 +57,25 @@ public:
      */
     int get_biome_count() const;
 
+    /**
+     * Enable phase-shadow LNN for a biome.
+     * Creates a LiquidNeuralNet that modulates density matrix phases.
+     *
+     * @param biome_id Which biome to enable LNN for
+     * @param hidden_size Number of hidden neurons (typically dim/4)
+     */
+    void enable_biome_lnn(int biome_id, int hidden_size);
+
+    /**
+     * Disable phase-shadow LNN for a biome.
+     */
+    void disable_biome_lnn(int biome_id);
+
+    /**
+     * Check if LNN is enabled for a biome.
+     */
+    bool is_lnn_enabled(int biome_id) const;
+
     // ========================================================================
     // BATCHED EVOLUTION (single call for ALL biomes, ALL steps)
     // ========================================================================
@@ -75,12 +96,34 @@ public:
      *   "results": Array<Array<PackedFloat64Array>>
      *              results[biome_id][step] = rho at t + step*dt
      *   "mi": Array<PackedFloat64Array>
-     *         mi[biome_id] = mutual information array for last step
-     *   "bloch": Array<PackedFloat64Array>
-     *         bloch[biome_id] = packed [x,y,z,r,theta,phi] per qubit for last step
+     *         mi[biome_id] = mutual information array for last step (compat)
+     *   "mi_steps": Array<Array<PackedFloat64Array>>
+     *         mi_steps[biome_id][step] = mutual information array for step
+     *   "bloch_steps": Array<Array<PackedFloat64Array>>
+     *         bloch_steps[biome_id][step] = packed [p0,p1,x,y,z,r,theta,phi] per qubit
+     *   "purity_steps": Array<Array<float>>
+     *         purity_steps[biome_id][step] = Tr(rho^2)
+     *   "metadata": Array<Dictionary>
+     *         metadata[biome_id] = emoji/axis mapping payload
+     *   "couplings": Array<Dictionary>
+     *         couplings[biome_id] = hamiltonian/lindblad/sink flux payload
+     *   "icon_maps": Array<Dictionary>
+     *         icon_maps[biome_id] = cumulative emoji probability map (sorted)
      */
     Dictionary evolve_all_lookahead(const Array& biome_rhos, int steps,
                                     float dt, float max_dt);
+
+    /**
+     * Store per-biome metadata payload (emoji mapping, axes, etc.).
+     * This is returned verbatim in evolve_* results.
+     */
+    void set_biome_metadata(int biome_id, const Dictionary& metadata);
+
+    /**
+     * Store per-biome coupling payload (hamiltonian/lindblad/sink flux).
+     * This is returned verbatim in evolve_* results.
+     */
+    void set_biome_couplings(int biome_id, const Dictionary& couplings);
 
     // ========================================================================
     // SINGLE-BIOME EVOLUTION (for on-demand refill after user action)
@@ -95,7 +138,8 @@ public:
      * @param dt Time step per step
      * @param max_dt Maximum substep
      *
-     * @return Dictionary with "results", "mi", and "bloch" for this biome only
+     * @return Dictionary with "results", "mi", "mi_steps", "bloch_steps", "purity_steps",
+     *         and "icon_map" for this biome only
      */
     Dictionary evolve_single_biome(int biome_id, const PackedFloat64Array& rho_packed,
                                    int steps, float dt, float max_dt);
@@ -107,17 +151,30 @@ private:
     // Registered biome engines (created during register_biome)
     std::vector<Ref<QuantumEvolutionEngine>> m_engines;
     std::vector<int> m_num_qubits;  // num_qubits per biome for MI
+    std::vector<Dictionary> m_metadata;
+    std::vector<Dictionary> m_couplings;
+
+    // Phase-shadow LNN (one per biome, nullptr if disabled)
+    std::vector<std::unique_ptr<LiquidNeuralNet>> m_lnns;
+
+    // Apply LNN phase modulation to density matrix diagonal
+    void _apply_lnn_phase_modulation(int biome_id, PackedFloat64Array& rho_packed);
 
     // Helper: evolve one biome for multiple steps
     struct BiomeStepResult {
         std::vector<PackedFloat64Array> steps;
-        PackedFloat64Array mi;
-        PackedFloat64Array bloch;
+        std::vector<PackedFloat64Array> mi_steps;
+        std::vector<PackedFloat64Array> bloch_steps;
+        std::vector<double> purity_steps;
+        Dictionary icon_map;
     };
 
     BiomeStepResult
     _evolve_biome_steps(int biome_id, const PackedFloat64Array& rho_packed,
                         int steps, float dt, float max_dt);
+
+    Dictionary _build_icon_map(int biome_id,
+                               const std::vector<PackedFloat64Array>& bloch_steps);
 };
 
 }  // namespace godot

@@ -224,6 +224,22 @@ func get_slot_count() -> int:
 	return BIOME_KEY_ORDER.size()
 
 
+func get_open_slot_count() -> int:
+	"""Number of unassigned biome slots available."""
+	if _slot_assignment.size() != BIOME_KEY_ORDER.size():
+		_rebuild_slot_assignment()
+	var open_count = 0
+	for slot in _slot_assignment:
+		if slot == "":
+			open_count += 1
+	return open_count
+
+
+func has_open_biome_slot() -> bool:
+	"""True if there is at least one unassigned biome slot."""
+	return get_open_slot_count() > 0
+
+
 func get_biome_order() -> Array[String]:
 	"""Get the current unlocked biome order."""
 	return BIOME_ORDER.duplicate()

@@ -21,11 +21,17 @@ const TRACKS: Dictionary = {
 	"fungal_lattice": "res://Assets/Audio/Music/Fungal Lattice Symphony.mp3",
 	"black_horizon": "res://Assets/Audio/Music/Black Horizon Whisper.mp3",
 	"entropic_bread": "res://Assets/Audio/Music/Entropic Bread Rise.mp3",
+	"entropy_garden": "res://Assets/Audio/Music/Entropy Garden.mp3",
 	"yeast_prophet": "res://Assets/Audio/Music/Yeast Prophet_s Eclipse.mp3",
 	"end_credits": "res://Assets/Audio/Music/SpaceWheat (End Credits).mp3",
 	"heisenberg_township": "res://Assets/Audio/Music/Heisenberg Township, Poppenoff-ulation.mp3",
 	"peripheral_arbor": "res://Assets/Audio/Music/Peripheral Arbor.mp3",
 	"afterbirth_arbor": "res://Assets/Audio/Music/Afterbirth Arbor.mp3",
+	"bureaucratic_abyss": "res://Assets/Audio/Music/Bureaucratic Abyss.mp3",
+	"horizon_fracture": "res://Assets/Audio/Music/Horizon Fracture.mp3",
+	"echoing_chasm": "res://Assets/Audio/Music/Echoing Chasm.mp3",
+	"tidal_pools": "res://Assets/Audio/Music/Tidal Pools.mp3",
+	"cyberdebt_megacity": "res://Assets/Audio/Music/CyberDebt Megacity.mp3",
 }
 
 ## Biome to track mapping
@@ -33,14 +39,31 @@ const BIOME_TRACKS: Dictionary = {
 	"BioticFlux": "quantum_harvest",
 	"StellarForges": "black_horizon",
 	"FungalNetworks": "fungal_lattice",
-	"VolcanicWorlds": "entropic_bread",
+	"VolcanicWorlds": "yeast_prophet",
 	"StarterForest": "peripheral_arbor",
 	"Village": "heisenberg_township",
+	"CyberDebtMegacity": "cyberdebt_megacity",
+	"EchoingChasm": "echoing_chasm",
+	"HorizonFracture": "horizon_fracture",
+	# New biomes from biomes_merged.json
+	"BureaucraticAbyss": "bureaucratic_abyss",
+	"TidalPools": "tidal_pools",
+	"GildedRot": "yeast_prophet",  # Dark/decadent vibe matches
+}
+
+## Icon (emoji) to track mapping
+## Used for faction/quest board and icon-specific music
+const ICON_TRACKS: Dictionary = {
+	# TODO: Map emojis to music tracks
+	# Example:
+	# "🌾": "quantum_harvest",
+	# "🍄": "fungal_lattice",
+	# "🔥": "entropic_bread",
 }
 
 ## Menu/special tracks
 const MENU_TRACK: String = "end_credits"
-const FALLBACK_TRACK: String = "afterbirth_arbor"
+const FALLBACK_TRACK: String = "entropy_garden"
 
 ## Crossfade duration in seconds
 const CROSSFADE_DURATION: float = 0.8
@@ -65,6 +88,30 @@ var _health_check_timer: float = 0.0  # 10Hz health check
 var _stream_cache: Dictionary = {}
 var _disabled: bool = false
 
+## IconMap-driven music mode
+var iconmap_mode_enabled: bool = false  # Enable quantum state-driven music selection (disabled by default)
+
+## Portfolio-driven music mode (blends economy resources with IconMap)
+var portfolio_mode_enabled: bool = false  # Enable resource portfolio influence (disabled by default)
+const PORTFOLIO_BLEND_WEIGHT: float = 0.3  # How much portfolio contributes (0.0-1.0), rest is IconMap
+
+# Sampling: accumulate and evaluate every 1 second
+var _iconmap_sample_timer: float = 0.0
+const ICONMAP_SAMPLE_INTERVAL: float = 1.0  # Sample and evaluate every 1 second
+
+# Rate limiting: switch tracks at most once per 10 seconds
+var _iconmap_last_switch_time: float = -100.0  # Time of last track switch (start allows immediate)
+const ICONMAP_MIN_SWITCH_INTERVAL: float = 10.0  # Minimum seconds between track switches
+
+# Accumulator for smoothing (rolling window)
+var _iconmap_accumulator: Dictionary = {}  # emoji -> accumulated weight
+var _iconmap_sample_count: int = 0
+const ICONMAP_MAX_SAMPLES: int = 10  # Rolling window size
+
+# Thresholds
+const ICONMAP_MIN_SIMILARITY: float = 0.05  # Only switch if similarity > 5%
+const ICONMAP_HYSTERESIS: float = 0.03  # New track must be 3% better to switch
+
 
 func _ready() -> void:
 	if _is_headless():
@@ -81,23 +128,29 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	"""Monitor playback health at 10Hz - restart if it unexpectedly stops"""
+	"""Monitor playback health and sample IconMap for dynamic music selection."""
 	if _disabled:
 		return
 
 	_health_check_timer += delta
-	if _health_check_timer < 0.1:  # 10Hz = check every 0.1 seconds
-		return
-	_health_check_timer = 0.0
+	if _health_check_timer >= 0.1:  # 10Hz health check
+		_health_check_timer = 0.0
+		# If we should be playing music but aren't, restart it
+		if not _current_track.is_empty() and not _active_player.playing and (_crossfade_tween == null or not _crossfade_tween.is_valid()):
+			push_warning("MusicManager: Playback stopped unexpectedly, restarting track: %s" % _current_track)
+			var stream = _get_or_load_stream(_current_track)
+			if stream:
+				_active_player.stream = stream
+				_active_player.volume_db = _volume_to_db(_volume)
+				_active_player.play()
 
-	# If we should be playing music but aren't, restart it
-	if not _current_track.is_empty() and not _active_player.playing and (_crossfade_tween == null or not _crossfade_tween.is_valid()):
-		push_warning("MusicManager: Playback stopped unexpectedly, restarting track: %s" % _current_track)
-		var stream = _get_or_load_stream(_current_track)
-		if stream:
-			_active_player.stream = stream
-			_active_player.volume_db = _volume_to_db(_volume)
-			_active_player.play()
+	# Dynamic music selection (IconMap and/or Portfolio)
+	if iconmap_mode_enabled or portfolio_mode_enabled:
+		_iconmap_sample_timer += delta
+		if _iconmap_sample_timer >= ICONMAP_SAMPLE_INTERVAL:
+			_iconmap_sample_timer = 0.0
+			_accumulate_music_samples()
+			_evaluate_iconmap_decision()  # Evaluate every sample, rate-limit switches
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -150,7 +203,298 @@ func _connect_biome_manager() -> void:
 
 
 func _on_biome_changed(new_biome: String, _old_biome: String) -> void:
+	# In iconmap mode, let the quantum state drive music (don't auto-switch on biome change)
+	if iconmap_mode_enabled:
+		# Reset accumulator - don't mix data from different biomes
+		_reset_iconmap_accumulator()
+		# Start fresh accumulation
+		_iconmap_sample_timer = ICONMAP_SAMPLE_INTERVAL  # Force immediate sample
+		return
 	play_biome_track(new_biome)
+
+
+func _accumulate_music_samples() -> void:
+	"""Accumulate samples from IconMap and/or Portfolio for music selection.
+
+	Called every ICONMAP_SAMPLE_INTERVAL (1 second).
+	Maintains a rolling window of ICONMAP_MAX_SAMPLES for smoothing.
+	IconMap and Portfolio are independent - either can contribute alone.
+	"""
+	var had_iconmap := false
+	var had_portfolio := false
+
+	# If at max samples, decay existing values to make room (exponential moving average)
+	if _iconmap_sample_count >= ICONMAP_MAX_SAMPLES:
+		var decay: float = float(ICONMAP_MAX_SAMPLES - 1) / float(ICONMAP_MAX_SAMPLES)
+		for emoji in _iconmap_accumulator.keys():
+			_iconmap_accumulator[emoji] *= decay
+		_iconmap_sample_count = ICONMAP_MAX_SAMPLES - 1
+
+	# Try to accumulate IconMap sample
+	if iconmap_mode_enabled:
+		had_iconmap = _accumulate_iconmap_sample()
+
+	# Accumulate portfolio sample (independent of IconMap success)
+	if portfolio_mode_enabled:
+		had_portfolio = _accumulate_portfolio_sample()
+
+	# Only count as a sample if we got data from at least one source
+	if had_iconmap or had_portfolio:
+		_iconmap_sample_count += 1
+
+	# Verbose logging
+	if VerboseConfig:
+		var biome_name := ""
+		if ActiveBiomeManager:
+			biome_name = ActiveBiomeManager.get_active_biome()
+		var top_emojis := _get_top_accumulated_emojis(3)
+		var sources: Array = []
+		if had_iconmap:
+			sources.append("IconMap")
+		if had_portfolio:
+			sources.append("Portfolio")
+		var mode_str := "+".join(sources) if not sources.is_empty() else "(no data)"
+		VerboseConfig.debug("music", "🎵", "%s sample #%d from %s: %s" % [
+			mode_str, _iconmap_sample_count, biome_name if not biome_name.is_empty() else "?", top_emojis
+		])
+
+
+func _accumulate_iconmap_sample() -> bool:
+	"""Accumulate a single IconMap sample from the active biome.
+
+	Returns true if data was accumulated, false if no IconMap data available.
+	"""
+	if not ActiveBiomeManager:
+		return false
+
+	var biome_name: String = ActiveBiomeManager.get_active_biome()
+	if biome_name.is_empty():
+		return false
+
+	# Get the biome instance from FarmGrid
+	var farm = get_node_or_null("/root/Farm")
+	if not farm or not farm.grid:
+		return false
+
+	var biome = farm.grid.biomes.get(biome_name)
+	if not biome or not biome.viz_cache:
+		return false
+
+	# Extract IconMap from viz_cache
+	var icon_map: Dictionary = biome.viz_cache.get_icon_map()
+	if icon_map.is_empty():
+		return false
+
+	var by_emoji: Dictionary = icon_map.get("by_emoji", {})
+	if by_emoji.is_empty():
+		return false
+
+	# Accumulate IconMap data
+	for emoji in by_emoji.keys():
+		var weight: float = float(by_emoji[emoji])
+		if _iconmap_accumulator.has(emoji):
+			_iconmap_accumulator[emoji] += weight
+		else:
+			_iconmap_accumulator[emoji] = weight
+
+	return true
+
+
+func _accumulate_portfolio_sample() -> bool:
+	"""Accumulate economy resources into the music selection vector.
+
+	Blends resource amounts with IconMap samples using PORTFOLIO_BLEND_WEIGHT.
+	Resources are normalized by total holdings to create a portfolio distribution.
+	Returns true if data was accumulated, false otherwise.
+	"""
+	var farm = get_node_or_null("/root/Farm")
+	if not farm:
+		return false
+
+	var economy = farm.get_node_or_null("FarmEconomy")
+	if not economy or not economy.has_method("get_all_resources"):
+		return false
+
+	var resources: Dictionary = economy.get_all_resources()
+	if resources.is_empty():
+		return false
+
+	# Compute total resource value for normalization
+	var total: float = 0.0
+	for emoji in resources.keys():
+		var val = resources[emoji]
+		if val > 0:
+			total += float(val)
+
+	if total < 1.0:
+		return false  # No meaningful resources
+
+	# Add normalized portfolio to accumulator, scaled by blend weight
+	# IconMap contributes (1 - PORTFOLIO_BLEND_WEIGHT), portfolio contributes PORTFOLIO_BLEND_WEIGHT
+	var scale: float = PORTFOLIO_BLEND_WEIGHT / (1.0 - PORTFOLIO_BLEND_WEIGHT + 0.001)
+
+	var portfolio_emojis: Array = []
+	for emoji in resources.keys():
+		var val = resources[emoji]
+		if val > 0:
+			var normalized_weight: float = float(val) / total * scale
+			if _iconmap_accumulator.has(emoji):
+				_iconmap_accumulator[emoji] += normalized_weight
+			else:
+				_iconmap_accumulator[emoji] = normalized_weight
+			portfolio_emojis.append(emoji)
+
+	if VerboseConfig and not portfolio_emojis.is_empty():
+		var top_3 := _get_top_portfolio_emojis(resources, 3)
+		VerboseConfig.debug("music", "💰", "Portfolio contribution: %s (weight %.0f%%)" % [
+			top_3, PORTFOLIO_BLEND_WEIGHT * 100
+		])
+
+	return not portfolio_emojis.is_empty()
+
+
+func _get_top_portfolio_emojis(resources: Dictionary, count: int) -> String:
+	"""Get string of top N emojis from portfolio for logging."""
+	var pairs: Array = []
+	for emoji in resources.keys():
+		var val = resources[emoji]
+		if val > 0:
+			pairs.append({"emoji": emoji, "amount": val})
+	pairs.sort_custom(func(a, b): return a["amount"] > b["amount"])
+
+	var parts: Array = []
+	for i in range(min(count, pairs.size())):
+		parts.append("%s:%d" % [pairs[i]["emoji"], pairs[i]["amount"]])
+	return " ".join(parts)
+
+
+func _evaluate_iconmap_decision() -> void:
+	"""Evaluate accumulated IconMap data and decide whether to switch tracks.
+
+	Called every ICONMAP_SAMPLE_INTERVAL (1 second).
+	Uses rolling average over last ICONMAP_MAX_SAMPLES.
+	Rate-limits actual switches to once per ICONMAP_MIN_SWITCH_INTERVAL.
+	"""
+	if _iconmap_sample_count < 3:
+		return  # Not enough samples yet
+
+	# Compute averaged IconMap from accumulator
+	var averaged_iconmap: Dictionary = {}
+	for emoji in _iconmap_accumulator.keys():
+		averaged_iconmap[emoji] = _iconmap_accumulator[emoji] / float(_iconmap_sample_count)
+
+	# Get similarities
+	var similarities := get_iconmap_similarities(averaged_iconmap)
+	if similarities.is_empty():
+		return
+
+	var best = similarities[0]
+	if best["similarity"] < ICONMAP_MIN_SIMILARITY:
+		return  # No strong match
+
+	var best_track: String = best["track"]
+
+	# If we're already playing the best track, nothing to do
+	if best_track == _current_track:
+		return
+
+	# Hysteresis: find similarity of current track and require new to be better by threshold
+	var current_similarity: float = 0.0
+	for sim in similarities:
+		if sim["track"] == _current_track:
+			current_similarity = sim["similarity"]
+			break
+
+	# Only switch if new track is significantly better
+	if best["similarity"] <= current_similarity + ICONMAP_HYSTERESIS:
+		return  # Not enough improvement
+
+	# Rate limit: check if enough time has passed since last switch
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if now - _iconmap_last_switch_time < ICONMAP_MIN_SWITCH_INTERVAL:
+		if VerboseConfig:
+			VerboseConfig.debug("music", "⏳", "IconMap wants %s (%.1f%%) but rate-limited (%.1fs left)" % [
+				best_track,
+				best["similarity"] * 100,
+				ICONMAP_MIN_SWITCH_INTERVAL - (now - _iconmap_last_switch_time)
+			])
+		return  # Too soon since last switch
+
+	# Switch!
+	_iconmap_last_switch_time = now
+
+	if VerboseConfig:
+		var top_emojis := _get_top_accumulated_emojis(4)
+		VerboseConfig.info("music", "🎶", "IconMap switch: %s → %s (%.1f%% via %s) | Top: %s" % [
+			_current_track if not _current_track.is_empty() else "(none)",
+			best_track,
+			best["similarity"] * 100,
+			best["biome"],
+			top_emojis
+		])
+
+	crossfade_to(best_track)
+
+
+func _reset_iconmap_accumulator() -> void:
+	"""Clear the IconMap accumulator for fresh sampling."""
+	_iconmap_accumulator.clear()
+	_iconmap_sample_count = 0
+
+
+func _get_top_accumulated_emojis(count: int) -> String:
+	"""Get string of top N emojis from accumulator for logging."""
+	if _iconmap_accumulator.is_empty() or _iconmap_sample_count == 0:
+		return "(empty)"
+
+	# Sort by accumulated weight
+	var pairs: Array = []
+	for emoji in _iconmap_accumulator.keys():
+		pairs.append({"emoji": emoji, "weight": _iconmap_accumulator[emoji]})
+	pairs.sort_custom(func(a, b): return a["weight"] > b["weight"])
+
+	# Build string
+	var parts: Array = []
+	for i in range(min(count, pairs.size())):
+		var avg: float = pairs[i]["weight"] / float(_iconmap_sample_count)
+		parts.append("%s:%.2f" % [pairs[i]["emoji"], avg])
+
+	return " ".join(parts)
+
+
+func set_iconmap_mode(enabled: bool) -> void:
+	"""Enable or disable IconMap-driven music selection.
+
+	When enabled, music selection is driven by the quantum state (IconMap) of the
+	active biome. Samples are accumulated every 1 second with decisions on each sample.
+	Actual track switches are rate-limited to once per ICONMAP_MIN_SWITCH_INTERVAL.
+
+	When disabled, music is selected based on biome identity (BIOME_TRACKS).
+	"""
+	iconmap_mode_enabled = enabled
+	_iconmap_sample_timer = 0.0
+	_iconmap_last_switch_time = -100.0  # Allow immediate switch on enable
+	_reset_iconmap_accumulator()
+
+
+func is_iconmap_mode() -> bool:
+	"""Check if IconMap-driven music mode is enabled."""
+	return iconmap_mode_enabled
+
+
+func set_portfolio_mode(enabled: bool) -> void:
+	"""Enable or disable portfolio (economy resource) influence on music selection.
+
+	When enabled, the player's resource holdings are blended into the music
+	selection vector using PORTFOLIO_BLEND_WEIGHT. This makes music respond
+	to what you have, not just where you are.
+	"""
+	portfolio_mode_enabled = enabled
+
+
+func is_portfolio_mode() -> bool:
+	"""Check if portfolio-driven music influence is enabled."""
+	return portfolio_mode_enabled
 
 
 
@@ -159,12 +503,119 @@ func _on_biome_changed(new_biome: String, _old_biome: String) -> void:
 ## ============================================================================
 
 func play_biome_track(biome_name: String) -> void:
-	"""Play the track associated with a biome"""
+	"""Play the track associated with a biome.
+
+	If the biome has a dedicated track in BIOME_TRACKS, play it directly.
+	Otherwise, parametrically select the best matching track using cos² similarity.
+	"""
 	if _disabled:
 		return
 
-	var track_key = BIOME_TRACKS.get(biome_name, FALLBACK_TRACK)
-	crossfade_to(track_key)
+	# Check for dedicated track first
+	if BIOME_TRACKS.has(biome_name):
+		crossfade_to(BIOME_TRACKS[biome_name])
+		return
+
+	# No dedicated track - use parametric selection based on biome vector
+	_ensure_cache_loaded()
+	if _biome_vectors.has(biome_name):
+		var best_track := _select_track_for_biome_vector(biome_name)
+		if not best_track.is_empty():
+			crossfade_to(best_track)
+			return
+
+	# Ultimate fallback
+	crossfade_to(FALLBACK_TRACK)
+
+
+func _select_track_for_biome_vector(biome_name: String) -> String:
+	"""Find best matching track for a biome using its emoji vector.
+
+	Compares the biome's vector against all OTHER biomes that have dedicated tracks,
+	returning the track with highest cos² similarity.
+	"""
+	_ensure_cache_loaded()
+
+	if not _biome_vectors.has(biome_name):
+		return ""
+
+	var source_data: Dictionary = _biome_vectors[biome_name]
+	var source_emojis: Array = source_data["emojis"]
+	var source_weights: Array = source_data["weights"]
+
+	var best_track := ""
+	var best_similarity := -1.0
+
+	# Compare against biomes that have dedicated tracks
+	for target_biome in BIOME_TRACKS.keys():
+		if target_biome == biome_name:
+			continue  # Skip self
+		if not _biome_vectors.has(target_biome):
+			continue
+
+		var target_data: Dictionary = _biome_vectors[target_biome]
+		var target_emojis: Array = target_data["emojis"]
+		var target_weights: Array = target_data["weights"]
+
+		# Build lookup for target
+		var target_map: Dictionary = {}
+		for i in range(target_emojis.size()):
+			target_map[target_emojis[i]] = float(target_weights[i])
+
+		# Compute dot product
+		var dot := 0.0
+		for i in range(source_emojis.size()):
+			var emoji: String = source_emojis[i]
+			if target_map.has(emoji):
+				dot += float(source_weights[i]) * target_map[emoji]
+
+		var cos2: float = dot * dot
+
+		if cos2 > best_similarity:
+			best_similarity = cos2
+			best_track = BIOME_TRACKS[target_biome]
+
+	return best_track
+
+
+func play_icon_track(icon: String) -> void:
+	"""Play the track associated with an icon/emoji.
+
+	If the icon has a dedicated track in ICON_TRACKS, play it directly.
+	Otherwise, parametrically select the best matching track using the icon's
+	faction associations from _icon_vectors.
+
+	Args:
+		icon: Emoji string (e.g., "🌾", "🍄")
+	"""
+	if _disabled:
+		return
+
+	# Check for dedicated track first
+	var track_key = ICON_TRACKS.get(icon, "")
+	if not track_key.is_empty():
+		crossfade_to(track_key)
+		return
+
+	# No dedicated track - use parametric selection based on icon's faction associations
+	_ensure_cache_loaded()
+	if _icon_vectors.has(icon):
+		var icon_data: Dictionary = _icon_vectors[icon]
+		var icon_emojis: Array = icon_data["emojis"]
+		var icon_weights: Array = icon_data["weights"]
+
+		# Build an iconmap from this icon's associations
+		var icon_map: Dictionary = {}
+		for i in range(icon_emojis.size()):
+			icon_map[icon_emojis[i]] = icon_weights[i]
+
+		# Use the iconmap similarity to find best biome
+		var similarities := get_iconmap_similarities(icon_map)
+		if not similarities.is_empty() and similarities[0]["similarity"] > 0.01:
+			crossfade_to(similarities[0]["track"])
+			return
+
+	# No match found - don't change music (could also use FALLBACK_TRACK)
 
 
 func play_track(track_key: String, instant: bool = false) -> void:
@@ -216,6 +667,8 @@ func crossfade_to(track_key: String) -> void:
 	if not stream:
 		return
 
+	var previous_track := _current_track
+
 	# Cancel any existing crossfade
 	if _crossfade_tween and _crossfade_tween.is_valid():
 		_crossfade_tween.kill()
@@ -244,6 +697,11 @@ func crossfade_to(track_key: String) -> void:
 
 	_current_track = track_key
 	track_changed.emit(track_key)
+
+	# Info log for all track changes
+	if VerboseConfig:
+		var from_str := previous_track if not previous_track.is_empty() else "(none)"
+		VerboseConfig.info("music", "🎶", "Now playing: %s (was: %s)" % [track_key, from_str])
 
 
 func stop(fade_out: bool = true) -> void:
@@ -407,3 +865,393 @@ func _load_volume_preference() -> void:
 
 func _is_headless() -> bool:
 	return OS.has_feature("headless") or DisplayServer.get_name() == "headless"
+
+
+## ============================================================================
+## ICONMAP-BASED MUSIC SELECTION (Cached)
+## ============================================================================
+## Uses cos²(θ) similarity between IconMap state and biome vectors to select
+## the most harmonically appropriate track based on current quantum state.
+##
+## Vectors are computed from biomes_merged.json and cached. Cache auto-rebuilds
+## when source files change.
+
+const BIOMES_JSON_PATH := "res://Core/Biomes/data/biomes_merged.json"
+const FACTIONS_JSON_PATH := "res://Core/Factions/data/factions_merged.json"
+const CACHE_PATH := "user://cache/music_vectors.json"
+
+## Cached data (loaded on demand, rebuilt when sources change)
+var _emoji_index: Array = []  # Unified emoji space
+var _biome_vectors: Dictionary = {}  # biome_name -> {emojis: [], weights: []}
+var _icon_vectors: Dictionary = {}  # emoji -> {emojis: [], weights: []} for ICON_TRACKS fallback
+var _cache_loaded: bool = false
+var _source_hashes: Dictionary = {}  # path -> hash for change detection
+
+
+func _ensure_cache_loaded() -> void:
+	"""Lazy-load the vector cache, rebuilding if sources changed."""
+	if _cache_loaded:
+		return
+
+	var needs_rebuild := false
+
+	# Check if cache exists
+	if not FileAccess.file_exists(CACHE_PATH):
+		needs_rebuild = true
+	else:
+		# Load cache and check source hashes
+		var cache := _load_cache()
+		if cache.is_empty():
+			needs_rebuild = true
+		else:
+			_source_hashes = cache.get("source_hashes", {})
+			if _check_sources_changed():
+				needs_rebuild = true
+			else:
+				# Cache is valid, use it
+				_emoji_index = cache.get("emoji_index", [])
+				_biome_vectors = cache.get("biome_vectors", {})
+				_icon_vectors = cache.get("icon_vectors", {})
+				_cache_loaded = true
+				return
+
+	if needs_rebuild:
+		_rebuild_cache()
+
+	_cache_loaded = true
+
+
+func _check_sources_changed() -> bool:
+	"""Check if source JSON files have changed since cache was built."""
+	var sources := [BIOMES_JSON_PATH, FACTIONS_JSON_PATH]
+	for path in sources:
+		var current_hash := _compute_file_hash(path)
+		var cached_hash: String = _source_hashes.get(path, "")
+		if current_hash != cached_hash:
+			return true
+	return false
+
+
+func _compute_file_hash(path: String) -> String:
+	"""Compute a simple hash of file contents for change detection."""
+	if not FileAccess.file_exists(path):
+		return ""
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return ""
+	var content := file.get_as_text()
+	file.close()
+	# Use content length + first/last 100 chars as quick hash
+	var hash_str := "%d:%s:%s" % [
+		content.length(),
+		content.substr(0, 100),
+		content.substr(max(0, content.length() - 100))
+	]
+	return hash_str.md5_text()
+
+
+func _load_cache() -> Dictionary:
+	"""Load cached vectors from disk."""
+	if not FileAccess.file_exists(CACHE_PATH):
+		return {}
+	var file := FileAccess.open(CACHE_PATH, FileAccess.READ)
+	if not file:
+		return {}
+	var text := file.get_as_text()
+	file.close()
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		return {}
+	return json.data if json.data is Dictionary else {}
+
+
+func _save_cache() -> void:
+	"""Save computed vectors to disk cache."""
+	# Ensure cache directory exists
+	var dir := DirAccess.open("user://")
+	if dir and not dir.dir_exists("cache"):
+		dir.make_dir("cache")
+
+	var cache := {
+		"source_hashes": _source_hashes,
+		"emoji_index": _emoji_index,
+		"biome_vectors": _biome_vectors,
+		"icon_vectors": _icon_vectors,
+		"built_at": Time.get_datetime_string_from_system()
+	}
+
+	var file := FileAccess.open(CACHE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(cache, "\t"))
+		file.close()
+
+
+func _rebuild_cache() -> void:
+	"""Rebuild vector cache from source JSON files."""
+	print("MusicManager: Rebuilding vector cache...")
+
+	# Reset
+	_emoji_index = []
+	_biome_vectors = {}
+	_icon_vectors = {}
+	_source_hashes = {}
+
+	# Build from biomes
+	var biomes := _load_json_array(BIOMES_JSON_PATH)
+	_source_hashes[BIOMES_JSON_PATH] = _compute_file_hash(BIOMES_JSON_PATH)
+
+	# Build from factions (for icon vectors)
+	var factions := _load_json_array(FACTIONS_JSON_PATH)
+	_source_hashes[FACTIONS_JSON_PATH] = _compute_file_hash(FACTIONS_JSON_PATH)
+
+	# Collect all emojis into unified index
+	var emoji_set: Dictionary = {}
+
+	for biome in biomes:
+		for emoji in biome.get("emojis", []):
+			emoji_set[emoji] = true
+		for emoji in biome.get("icon_components", {}).keys():
+			emoji_set[emoji] = true
+
+	for faction in factions:
+		for emoji in faction.get("signature", []):
+			emoji_set[emoji] = true
+		for emoji in faction.get("hamiltonian", {}).keys():
+			emoji_set[emoji] = true
+
+	_emoji_index = emoji_set.keys()
+	_emoji_index.sort()
+
+	# Build biome vectors
+	for biome in biomes:
+		var name: String = biome.get("name", "")
+		if name.is_empty():
+			continue
+
+		var vec := _build_normalized_vector(
+			biome.get("emojis", []),
+			biome.get("icon_components", {})
+		)
+		_biome_vectors[name] = vec
+
+	# Build icon vectors from factions (aggregate by emoji)
+	var emoji_aggregates: Dictionary = {}  # emoji -> {emojis: Set, weights: Dict}
+
+	for faction in factions:
+		var signature: Array = faction.get("signature", [])
+		var hamiltonian: Dictionary = faction.get("hamiltonian", {})
+		var self_energies: Dictionary = faction.get("self_energies", {})
+
+		# Each emoji in the signature gets associated with all other emojis in this faction
+		for emoji in signature:
+			if not emoji_aggregates.has(emoji):
+				emoji_aggregates[emoji] = {"emojis": {}, "weights": {}}
+
+			# Add all signature emojis
+			for other in signature:
+				emoji_aggregates[emoji]["emojis"][other] = true
+				var weight: float = emoji_aggregates[emoji]["weights"].get(other, 0.0)
+				emoji_aggregates[emoji]["weights"][other] = weight + 1.0
+
+			# Add hamiltonian connections with their strengths
+			if hamiltonian.has(emoji):
+				var targets: Dictionary = hamiltonian[emoji]
+				for target in targets.keys():
+					emoji_aggregates[emoji]["emojis"][target] = true
+					var val = targets[target]
+					var strength := 0.0
+					if val is float or val is int:
+						strength = abs(float(val))
+					elif val is Array and val.size() > 0:
+						strength = abs(float(val[0]))
+					var existing: float = emoji_aggregates[emoji]["weights"].get(target, 0.0)
+					emoji_aggregates[emoji]["weights"][target] = existing + strength
+
+	# Normalize icon vectors
+	for emoji in emoji_aggregates.keys():
+		var agg: Dictionary = emoji_aggregates[emoji]
+		var emojis: Array = agg["emojis"].keys()
+		var weights: Array = []
+		for e in emojis:
+			weights.append(agg["weights"].get(e, 1.0))
+
+		# Normalize
+		var norm := 0.0
+		for w in weights:
+			norm += w * w
+		norm = sqrt(norm)
+		if norm > 0.001:
+			for i in range(weights.size()):
+				weights[i] /= norm
+
+		_icon_vectors[emoji] = {"emojis": emojis, "weights": weights}
+
+	# Save to disk
+	_save_cache()
+	print("MusicManager: Cache rebuilt - %d biomes, %d icons, %d emoji dimensions" % [
+		_biome_vectors.size(), _icon_vectors.size(), _emoji_index.size()
+	])
+
+
+func _build_normalized_vector(emojis: Array, icon_components: Dictionary) -> Dictionary:
+	"""Build a normalized vector from emoji list and icon_components weights."""
+	var result_emojis: Array = []
+	var result_weights: Array = []
+
+	# Start with equal weights for all emojis
+	var weight_map: Dictionary = {}
+	for emoji in emojis:
+		weight_map[emoji] = 1.0
+
+	# Override with self_energy from icon_components if available
+	for emoji in icon_components.keys():
+		var comp = icon_components[emoji]
+		var weight := 1.0
+		if comp is Dictionary and comp.has("self_energy"):
+			weight = abs(float(comp["self_energy"])) + 0.1
+		weight_map[emoji] = weight
+
+	# Convert to arrays
+	for emoji in weight_map.keys():
+		result_emojis.append(emoji)
+		result_weights.append(weight_map[emoji])
+
+	# Normalize
+	var norm := 0.0
+	for w in result_weights:
+		norm += w * w
+	norm = sqrt(norm)
+	if norm > 0.001:
+		for i in range(result_weights.size()):
+			result_weights[i] /= norm
+
+	return {"emojis": result_emojis, "weights": result_weights}
+
+
+func _load_json_array(path: String) -> Array:
+	"""Load a JSON file that contains an array."""
+	if not FileAccess.file_exists(path):
+		return []
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return []
+	var text := file.get_as_text()
+	file.close()
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		return []
+	return json.data if json.data is Array else []
+
+
+func rebuild_vector_cache() -> void:
+	"""Force rebuild of vector cache. Call this after modifying biomes/factions."""
+	_cache_loaded = false
+	_rebuild_cache()
+	_cache_loaded = true
+
+
+func get_cache_info() -> Dictionary:
+	"""Get information about the current cache state."""
+	_ensure_cache_loaded()
+	return {
+		"biome_count": _biome_vectors.size(),
+		"icon_count": _icon_vectors.size(),
+		"emoji_dimensions": _emoji_index.size(),
+		"cache_path": CACHE_PATH,
+		"source_hashes": _source_hashes
+	}
+
+
+func select_music_by_iconmap(icon_map: Dictionary) -> void:
+	"""Select music track based on IconMap state using cos² similarity.
+
+	Args:
+		icon_map: Dictionary of emoji -> probability/weight from current quantum state
+	"""
+	if _disabled or icon_map.is_empty():
+		return
+
+	_ensure_cache_loaded()
+
+	var best_biome := ""
+	var best_similarity := -1.0
+
+	# Normalize the icon_map to unit vector
+	var icon_norm := 0.0
+	for emoji in icon_map.keys():
+		var val: float = float(icon_map[emoji])
+		icon_norm += val * val
+	icon_norm = sqrt(icon_norm)
+	if icon_norm < 0.001:
+		return  # No meaningful state
+
+	# Compare against each biome vector
+	for biome_name in _biome_vectors.keys():
+		var biome_data: Dictionary = _biome_vectors[biome_name]
+		var emojis: Array = biome_data["emojis"]
+		var weights: Array = biome_data["weights"]
+
+		# Compute dot product (only non-zero where both have the emoji)
+		var dot := 0.0
+		for i in range(emojis.size()):
+			var emoji: String = emojis[i]
+			if icon_map.has(emoji):
+				var icon_weight: float = float(icon_map[emoji]) / icon_norm
+				dot += icon_weight * float(weights[i])
+
+		# cos² similarity
+		var cos2: float = dot * dot
+
+		if cos2 > best_similarity:
+			best_similarity = cos2
+			best_biome = biome_name
+
+	# Only switch if we have a meaningful match
+	if best_biome != "" and best_similarity > 0.01:
+		var track_key: String = BIOME_TRACKS.get(best_biome, FALLBACK_TRACK)
+		if track_key != _current_track:
+			crossfade_to(track_key)
+
+
+func get_iconmap_similarities(icon_map: Dictionary) -> Array:
+	"""Get similarity scores for all biomes against an IconMap.
+
+	Returns: Array of {biome: String, similarity: float, track: String} sorted by similarity
+	"""
+	var results: Array = []
+
+	if icon_map.is_empty():
+		return results
+
+	_ensure_cache_loaded()
+
+	# Normalize the icon_map
+	var icon_norm := 0.0
+	for emoji in icon_map.keys():
+		var val: float = float(icon_map[emoji])
+		icon_norm += val * val
+	icon_norm = sqrt(icon_norm)
+	if icon_norm < 0.001:
+		return results
+
+	for biome_name in _biome_vectors.keys():
+		var biome_data: Dictionary = _biome_vectors[biome_name]
+		var emojis: Array = biome_data["emojis"]
+		var weights: Array = biome_data["weights"]
+
+		var dot := 0.0
+		for i in range(emojis.size()):
+			var emoji: String = emojis[i]
+			if icon_map.has(emoji):
+				var icon_weight: float = float(icon_map[emoji]) / icon_norm
+				dot += icon_weight * float(weights[i])
+
+		var cos2: float = dot * dot
+		results.append({
+			"biome": biome_name,
+			"similarity": cos2,
+			"track": BIOME_TRACKS.get(biome_name, FALLBACK_TRACK)
+		})
+
+	results.sort_custom(func(a, b): return a["similarity"] > b["similarity"])
+	return results

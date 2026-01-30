@@ -934,6 +934,8 @@ func _on_restart_pressed() -> void:
 	# Ensure BootManager allows a fresh boot after scene reload.
 	var boot_mgr = get_node_or_null("/root/BootManager")
 	if boot_mgr:
+		boot_mgr._core_booted = false
+		boot_mgr._ui_booted = false
 		boot_mgr._booted = false
 		boot_mgr.is_ready = false
 		_verbose.info("ui", "✓", "BootManager reset for restart")
@@ -957,9 +959,11 @@ func _on_dev_restart_pressed() -> void:
 	# Reset BootManager so boot() will run again
 	var boot_mgr = get_node_or_null("/root/BootManager")
 	if boot_mgr:
+		boot_mgr._core_booted = false
+		boot_mgr._ui_booted = false
 		boot_mgr._booted = false
 		boot_mgr.is_ready = false
-		_verbose.info("ui", "✓", "BootManager reset (_booted=false)")
+		_verbose.info("ui", "✓", "BootManager reset (_core_booted=false, _ui_booted=false)")
 
 	# Reset GameStateManager
 	var gsm = get_node_or_null("/root/GameStateManager")

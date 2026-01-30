@@ -3,6 +3,8 @@
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/packed_float64_array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/array.hpp>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <vector>
@@ -53,13 +55,39 @@ public:
     // Combined evolution + MI computation (single call for both)
     // Returns Dictionary with "rho" (evolved state), "mi" (mutual information array),
     // "purity" (Tr(rho^2)), "trace_re"/"trace_im" (Tr(rho)),
-    // and "bloch" (PackedFloat64Array of [x,y,z,r,theta,phi] per qubit)
+    // and "bloch" (PackedFloat64Array of [p0,p1,x,y,z,r,theta,phi] per qubit)
     Dictionary evolve_with_mi(const PackedFloat64Array& rho_data, float dt, float max_dt, int num_qubits);
 
     // Basic observables
     double compute_purity(const Eigen::MatrixXcd& rho) const;
     std::complex<double> compute_trace(const Eigen::MatrixXcd& rho) const;
     PackedFloat64Array compute_bloch_metrics(const Eigen::MatrixXcd& rho, int num_qubits) const;
+    double compute_purity_from_packed(const PackedFloat64Array& rho_data) const;
+    PackedFloat64Array compute_bloch_metrics_from_packed(const PackedFloat64Array& rho_data, int num_qubits) const;
+    Dictionary compute_coupling_payload(const Dictionary& metadata) const;
+
+    // Eigenstate analysis (CPU-only, uses Eigen)
+    // Returns Dictionary with "eigenvalues", "dominant_eigenvector", "dominant_eigenvalue"
+    Dictionary compute_eigenstates(const PackedFloat64Array& rho_data) const;
+
+    // Returns just the dominant eigenvector (largest eigenvalue) as PackedFloat64Array [re0, im0, re1, im1, ...]
+    PackedFloat64Array compute_dominant_eigenvector(const PackedFloat64Array& rho_data) const;
+
+    // Returns all eigenvalues sorted descending as PackedFloat64Array
+    PackedFloat64Array compute_eigenvalues(const PackedFloat64Array& rho_data) const;
+
+    // Compute cos²(θ) = |⟨ψ₁|ψ₂⟩|² similarity between two state vectors
+    // state_a and state_b are packed as [re0, im0, re1, im1, ...]
+    double compute_cos2_similarity(const PackedFloat64Array& state_a, const PackedFloat64Array& state_b) const;
+
+    // Batch eigenstate analysis: returns Dictionary with biome_name -> eigenstate data
+    // Input: Dictionary of biome_name -> rho_packed
+    Dictionary compute_batch_eigenstates(const Dictionary& biome_rhos) const;
+
+    // Compute pairwise cos² similarity matrix for multiple eigenstates
+    // Input: Array of PackedFloat64Array eigenvectors
+    // Returns: PackedFloat64Array in upper triangular order [sim_01, sim_02, ..., sim_12, ...]
+    PackedFloat64Array compute_eigenstate_similarity_matrix(const Array& eigenvectors) const;
 
 protected:
     static void _bind_methods();

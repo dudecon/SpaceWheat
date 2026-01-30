@@ -2,7 +2,7 @@ extends Node
 
 ## BootManager - Manages the boot sequence - ensures proper initialization order
 ## Available globally as autoload singleton
-## Call BootManager.boot() once to transition from Phase 2 to Phase 3
+## Core boot happens before UI; UI can be attached later.
 
 # Access autoloads safely
 @onready var _verbose = get_node("/root/VerboseConfig")
@@ -12,7 +12,9 @@ signal visualization_ready
 signal ui_ready
 signal game_ready
 
-var _booted: bool = false
+var _core_booted: bool = false
+var _ui_booted: bool = false
+var _booted: bool = false  # Full boot (core + UI)
 var is_ready: bool = false  # Public flag for checking boot completion
 var _current_stage: String = ""
 
@@ -21,17 +23,54 @@ func _ready() -> void:
 	_verbose.info("boot", "🔧", "BootManager autoload ready")
 
 ## Main boot sequence entry point - call after farm and shell are created
-func boot(farm: Node, shell: Node, quantum_viz: Node) -> void:
-	if _booted:
-		push_warning("Boot already completed!")
-		return
+func boot_core(load_slot: int = -1, scenario_id: String = "default", headless: bool = false) -> Node:
+	"""Boot core systems and ensure Farm exists (no UI)."""
+	if _core_booted:
+		return get_node_or_null("/root/GameStateManager").active_farm if get_node_or_null("/root/GameStateManager") else null
 
 	_verbose.info("boot", "🚀", "======================================================================")
-	_verbose.info("boot", "🚀", "BOOT SEQUENCE STARTING")
+	_verbose.info("boot", "🚀", "BOOT CORE STARTING")
 	_verbose.info("boot", "🚀", "======================================================================")
+
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if not gsm:
+		push_warning("BootManager: GameStateManager not found")
+		return null
+
+	var farm = await gsm.start_session(load_slot, scenario_id)
+	if not farm:
+		push_warning("BootManager: Farm not available after start_session")
+		return null
 
 	# Stage 3A: Core Systems
 	_stage_core_systems(farm)
+
+	# Stage 3D: Start Simulation (core runs even without UI)
+	_stage_start_simulation(farm)
+
+	_core_booted = true
+
+	# Headless or no UI expected → finalize boot here
+	if headless:
+		_booted = true
+		is_ready = true
+		_verbose.info("boot", "✅", "BOOT CORE COMPLETE (headless) - GAME READY")
+		game_ready.emit()
+
+	return farm
+
+
+func boot_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
+	"""Boot visualization + UI after core is ready."""
+	if _ui_booted:
+		return
+	if not farm:
+		push_warning("BootManager: boot_ui called with null farm")
+		return
+
+	_verbose.info("boot", "🚀", "======================================================================")
+	_verbose.info("boot", "🚀", "BOOT UI STARTING")
+	_verbose.info("boot", "🚀", "======================================================================")
 
 	# Stage 3B: Visualization
 	_stage_visualization(farm, quantum_viz)
@@ -39,17 +78,18 @@ func boot(farm: Node, shell: Node, quantum_viz: Node) -> void:
 	# Stage 3C: UI (async - must await to ensure QuantumInstrumentInput is created)
 	await _stage_ui(farm, shell, quantum_viz)
 
-	# Stage 3D: Start Simulation
-	_stage_start_simulation(farm)
+	_ui_booted = true
 
-	_booted = true
-	is_ready = true  # Set flag before emitting signal
+	if _core_booted:
+		# Stage 3E: Music (cherry on top - after all UI is ready)
+		_stage_music(farm)
 
-	_verbose.info("boot", "✅", "======================================================================")
-	_verbose.info("boot", "✅", "BOOT SEQUENCE COMPLETE - GAME READY")
-	_verbose.info("boot", "✅", "======================================================================")
-
-	game_ready.emit()
+		_booted = true
+		is_ready = true  # Set flag before emitting signal
+		_verbose.info("boot", "✅", "======================================================================")
+		_verbose.info("boot", "✅", "BOOT SEQUENCE COMPLETE - GAME READY")
+		_verbose.info("boot", "✅", "======================================================================")
+		game_ready.emit()
 
 ## Stage 3A: Initialize core systems
 func _stage_core_systems(farm: Node) -> void:
@@ -107,26 +147,13 @@ func _stage_core_systems(farm: Node) -> void:
 	if farm.has_method("finalize_setup"):
 		farm.finalize_setup()
 
-	# Start music after biomes are loaded (no biomes => no music).
-	var music = get_node_or_null("/root/MusicManager")
-	if music:
-		if has_biomes:
-			var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
-			var active_biome = biome_mgr.get_active_biome() if biome_mgr and biome_mgr.has_method("get_active_biome") else ""
-			if active_biome != "":
-				music.play_biome_track(active_biome)
-			else:
-				music.stop()
-		else:
-			music.stop()
+	# Prime lookahead buffers so viz_cache is populated before visualization starts.
+	if ("biome_evolution_batcher" in farm) and farm.biome_evolution_batcher:
+		if farm.biome_evolution_batcher.has_method("prime_lookahead_buffers"):
+			farm.biome_evolution_batcher.prime_lookahead_buffers()
+			_verbose.info("boot", "✓", "Lookahead buffers primed")
 
-	# CRITICAL: Set active_farm in GameStateManager for save/load to work
-	var game_state_mgr = get_node_or_null("/root/GameStateManager")
-	if game_state_mgr:
-		game_state_mgr.active_farm = farm
-		_verbose.info("boot", "✓", "GameStateManager.active_farm set")
-	else:
-		push_warning("GameStateManager not found - save/load will not work!")
+	# NOTE: Music moved to Stage 3E (_stage_music) - runs after all UI is ready
 
 	_verbose.info("boot", "✓", "Core systems ready")
 	core_systems_ready.emit()
@@ -140,6 +167,21 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 		_verbose.warn("boot", "⚠️", "QuantumViz is null - skipping visualization")
 		visualization_ready.emit()
 		return
+
+	# Register biomes with visualization (payload should already be primed)
+	if farm.biome_enabled:
+		if farm.biotic_flux_biome:
+			quantum_viz.add_biome("BioticFlux", farm.biotic_flux_biome)
+		if farm.stellar_forges_biome:
+			quantum_viz.add_biome("StellarForges", farm.stellar_forges_biome)
+		if farm.fungal_networks_biome:
+			quantum_viz.add_biome("FungalNetworks", farm.fungal_networks_biome)
+		if farm.volcanic_worlds_biome:
+			quantum_viz.add_biome("VolcanicWorlds", farm.volcanic_worlds_biome)
+		if farm.starter_forest_biome:
+			quantum_viz.add_biome("StarterForest", farm.starter_forest_biome)
+		if farm.village_biome:
+			quantum_viz.add_biome("Village", farm.village_biome)
 
 	# Initialize the visualization engine (may fail gracefully if no biomes)
 	quantum_viz.initialize()
@@ -265,6 +307,44 @@ func _stage_start_simulation(farm: Node) -> void:
 	# (done separately to avoid input during boot)
 	_verbose.info("boot", "✓", "Input system enabled")
 	_verbose.info("boot", "✓", "Ready to accept player input")
+
+
+## Stage 3E: Start music (cherry on top - after all UI is ready)
+func _stage_music(farm: Node) -> void:
+	_current_stage = "MUSIC"
+	_verbose.info("boot", "📍", "Stage 3E: Music")
+
+	var music = get_node_or_null("/root/MusicManager")
+	if not music:
+		_verbose.warn("boot", "⚠️", "MusicManager not found - skipping music")
+		return
+
+	# Check if we have biomes loaded
+	var has_biomes = farm and farm.grid and farm.grid.biomes and not farm.grid.biomes.is_empty()
+
+	if has_biomes:
+		# In iconmap mode, let the dynamic system handle music selection
+		# Just start accumulating - music will play once enough samples are gathered
+		if music.iconmap_mode_enabled:
+			_verbose.info("boot", "🎵", "IconMap mode active - dynamic music selection will begin shortly")
+			# Play fallback until iconmap system has enough data
+			music.crossfade_to(music.FALLBACK_TRACK)
+		else:
+			var biome_mgr = get_node_or_null("/root/ActiveBiomeManager")
+			var active_biome = ""
+			if biome_mgr and biome_mgr.has_method("get_active_biome"):
+				active_biome = biome_mgr.get_active_biome()
+
+			if active_biome != "":
+				music.play_biome_track(active_biome)
+				_verbose.info("boot", "🎵", "Playing biome track for: %s" % active_biome)
+			else:
+				music.crossfade_to(music.FALLBACK_TRACK)
+				_verbose.info("boot", "🎵", "Playing fallback track")
+	else:
+		# No biomes - stop any music
+		music.stop()
+		_verbose.info("boot", "🔇", "No biomes loaded - music stopped")
 
 
 ## ============================================================================
@@ -404,4 +484,8 @@ func _get_biome_script_path(biome_name: String) -> String:
 		"VolcanicWorlds":
 			return "res://Core/Environment/VolcanicWorldsBiome.gd"
 		_:
+			# Fallback: data-driven biomes from registry
+			var registry = load("res://Core/Biomes/BiomeRegistry.gd").new()
+			if registry.get_by_name(biome_name):
+				return "res://Core/Environment/DataDrivenBiome.gd"
 			return ""

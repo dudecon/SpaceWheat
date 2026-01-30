@@ -239,10 +239,30 @@ static func action_measure(terminal, biome) -> Dictionary:
 			"blocked": true
 		}
 
-	# 2. Get current probability from ρ (this becomes our "claim")
+	# 2. Get current probability snapshot from lookahead packet (viz_cache)
 	var register_id = terminal.bound_register_id
 	var north_prob = biome.get_register_probability(register_id) if biome else 0.5
 	var south_prob = 1.0 - north_prob
+	var snapshot: Dictionary = {}
+	var measured_purity = biome.get_purity() if biome else 1.0
+
+	if biome and biome.viz_cache:
+		var bloch = biome.viz_cache.get_bloch(register_id)
+		if not bloch.is_empty():
+			snapshot = bloch.duplicate()
+		var snap = biome.viz_cache.get_snapshot(register_id)
+		for k in snap.keys():
+			snapshot[k] = snap[k]
+		var has_p0 = snap.has("p0")
+		var has_p1 = snap.has("p1")
+		if has_p0:
+			north_prob = snap.get("p0", north_prob)
+		if has_p1:
+			south_prob = snap.get("p1", south_prob)
+		elif has_p0:
+			south_prob = 1.0 - north_prob
+		if snap.has("purity") and snap.get("purity", -1.0) >= 0.0:
+			measured_purity = snap.get("purity", measured_purity)
 
 	# 3. Born rule sampling
 	var outcome: String
@@ -281,10 +301,7 @@ static func action_measure(terminal, biome) -> Dictionary:
 			entangled_drains.append(ent_reg_id)
 
 	# 8. Mark terminal as measured with RECORDED probability
-	var measured_purity = 1.0
-	if biome and biome.quantum_computer:
-		measured_purity = biome.quantum_computer.get_purity()
-	terminal.mark_measured(outcome, recorded_probability, measured_purity)
+	terminal.mark_measured(outcome, recorded_probability, measured_purity, snapshot)
 
 	# 9. FREE THE REGISTER - allow another terminal to bind to it
 	# Terminal keeps its measurement snapshot for REAP to harvest
@@ -699,8 +716,8 @@ static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dicti
 		# Get purity bonus from biome (use first available biome if terminal not bound)
 		var terminal_biome = biome
 		var purity = 1.0
-		if terminal_biome and terminal_biome.quantum_computer:
-			purity = terminal_biome.quantum_computer.get_purity()
+		if terminal_biome:
+			purity = terminal_biome.get_purity()
 
 		# Harvest BOTH emojis weighted by probability
 		var north_credits = int(north_prob * purity * 10)  # Scale by 10 for meaningful amounts

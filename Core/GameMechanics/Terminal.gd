@@ -57,6 +57,7 @@ var measured_probability: float = 0.0
 var measured_purity: float = 1.0
 var measured_register_id: int = -1
 var measured_biome_name: String = ""
+var measured_snapshot: Dictionary = {}
 
 ## Frozen screen position (set on MEASURE, used by visualization)
 ## When measured, bubble should snap to this position instead of floating
@@ -109,6 +110,7 @@ func unbind() -> void:
 	measured_purity = 1.0
 	measured_register_id = -1
 	measured_biome_name = ""
+	measured_snapshot.clear()
 	current_emoji = ""
 	north_emoji = ""
 	south_emoji = ""
@@ -120,7 +122,7 @@ func unbind() -> void:
 
 
 ## Mark this terminal as measured with the given outcome
-func mark_measured(outcome: String, probability: float = 0.0, purity: float = 1.0) -> void:
+func mark_measured(outcome: String, probability: float = 0.0, purity: float = 1.0, snapshot: Dictionary = {}) -> void:
 	if not is_bound:
 		push_warning("Cannot measure unbound terminal %s" % terminal_id)
 		return
@@ -132,6 +134,7 @@ func mark_measured(outcome: String, probability: float = 0.0, purity: float = 1.
 	measured_purity = purity
 	measured_register_id = bound_register_id
 	measured_biome_name = bound_biome_name
+	measured_snapshot = snapshot.duplicate() if snapshot else {}
 
 	measured.emit(outcome)
 	state_changed.emit(self)
@@ -174,6 +177,7 @@ func clear_measurement() -> void:
 	measured_purity = 1.0
 	measured_register_id = -1
 	measured_biome_name = ""
+	measured_snapshot.clear()
 	current_emoji = north_emoji if north_emoji != "" else "?"
 	frozen_position = Vector2.ZERO
 	state_changed.emit(self)
@@ -193,6 +197,7 @@ func get_state() -> Dictionary:
 		"is_measured": is_measured,
 		"measured_outcome": measured_outcome,
 		"measured_probability": measured_probability,
+		"measured_snapshot": measured_snapshot,
 		"current_emoji": current_emoji,
 		"north_emoji": north_emoji,
 		"south_emoji": south_emoji,

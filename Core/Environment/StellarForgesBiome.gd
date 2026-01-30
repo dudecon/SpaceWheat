@@ -7,20 +7,10 @@ const Icon = preload("res://Core/QuantumSubstrate/Icon.gd")
 ##
 ## Architecture: QuantumComputer with 3-qubit tensor product
 ##
-## Core Forge State (8D):
+## Axes:
 ##   Qubit 0 (Energy):     ⚡ Power / 🔋 Storage
 ##   Qubit 1 (Production): ⚙ Fabrication / 🔩 Raw Materials
 ##   Qubit 2 (Output):     🚀 Rocket / 🛸 Saucer
-##
-## Basis States (tensor product):
-##   |000⟩ = ⚡⚙🚀 (Powered + Fabricating + Rockets) - peak production
-##   |001⟩ = ⚡⚙🛸 (Powered + Fabricating + Saucers)
-##   |010⟩ = ⚡🔩🚀 (Powered + Raw + Rockets)
-##   |011⟩ = ⚡🔩🛸 (Powered + Raw + Saucers)
-##   |100⟩ = 🔋⚙🚀 (Stored + Fabricating + Rockets)
-##   |101⟩ = 🔋⚙🛸 (Stored + Fabricating + Saucers)
-##   |110⟩ = 🔋🔩🚀 (Stored + Raw + Rockets)
-##   |111⟩ = 🔋🔩🛸 (Stored + Raw + Saucers) - idle state
 ##
 ## Physics:
 ##   - Energy oscillation drives production cycles
@@ -78,8 +68,8 @@ func _initialize_bath() -> void:
 	quantum_computer.allocate_axis(1, "⚙", "🔩")  # Production: Active/Raw
 	quantum_computer.allocate_axis(2, "🚀", "🛸")  # Output: Rocket/Saucer
 
-	# Initialize to powered idle state |010⟩ = ⚡🔩🚀 (energy ready, raw materials)
-	quantum_computer.initialize_basis(2)
+	# Initialize to uniform superposition across all basis states
+	quantum_computer.initialize_uniform_superposition()
 
 	print("  📊 RegisterMap configured (3 qubits, 8 basis states)")
 

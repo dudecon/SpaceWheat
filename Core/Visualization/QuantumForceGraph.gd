@@ -85,7 +85,7 @@ var chaos_icon = null
 var imperium_icon = null
 
 var biome_evolution_batcher = null
-var lookahead_offset: int = 1
+var lookahead_offset: int = 0  # 0 = render current frame; set >0 to preview lookahead
 
 var center_position: Vector2 = Vector2.ZERO
 var graph_radius: float = 250.0
@@ -193,10 +193,11 @@ func _process(delta: float):
 	
 	if frame_count % 60 == 0:
 		if _verbose:
-			var result = "QFG Process Trace: Total %d us (Viewport: %d, Context: %d, Visuals: %d, Anims: %d, Forces: %d, Particles: %d)" % [
-				t7 - t0, t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5
-			]
-			_verbose.trace("viz", "⏱️", result)
+			var total_us = t7 - t0
+			var total_ms = total_us / 1000.0
+			_verbose.debug("trace", "⏱️", "QFG: %.2fms (Viewport: %.2f, Context: %.2f, Visuals: %.2f, Forces: %.2f)" % [
+				total_ms, (t1 - t0) / 1000.0, (t2 - t1) / 1000.0, (t3 - t2) / 1000.0, (t5 - t4) / 1000.0
+			])
 
 
 func _draw():
@@ -234,23 +235,15 @@ func _draw():
 		_draw_debug_overlay()
 	var t_end = Time.get_ticks_usec()
 
-	# Performance logging (every 60 frames ~ 1 second at 60 FPS)
+	# Performance logging (every 60 frames)
 	if frame_count % 60 == 0:
 		var total_ms = (t_end - t_start) / 1000.0
-		var ctx_ms = (t_ctx - t_start) / 1000.0
-		var region_ms = (t_region - t_ctx) / 1000.0
-		var infra_ms = (t_infra - t_region) / 1000.0
-		var edge_ms = (t_edge - t_infra) / 1000.0
-		var effects_ms = (t_effects - t_edge) / 1000.0
 		var bubble_ms = (t_bubble - t_effects) / 1000.0
 		var sun_ms = (t_sun - t_bubble) / 1000.0
-		var debug_ms = (t_end - t_sun) / 1000.0
 
-		# Use 'trace' category (WARN by default, only shown if explicitly enabled at DEBUG level)
 		if _verbose:
-			_verbose.debug("trace", "🎨", "QuantumForceGraph Draw: %.2fms total (Ctx=%.2f Region=%.2f Infra=%.2f Edge=%.2f Effects=%.2f Bubble=%.2f Sun=%.2f Debug=%.2f) [%d nodes]" % [
-				total_ms, ctx_ms, region_ms, infra_ms, edge_ms, effects_ms, bubble_ms, sun_ms, debug_ms,
-				quantum_nodes.size()
+			_verbose.debug("trace", "🎨", "Draw: %.2fms (Bubbles: %.2fms, Sun: %.2fms) [%d nodes]" % [
+				total_ms, bubble_ms, sun_ms, quantum_nodes.size()
 			])
 
 
@@ -304,6 +297,13 @@ func setup(p_biomes: Dictionary, p_farm_grid = null, p_plot_pool = null):
 	farm_grid = p_farm_grid
 	plot_pool = p_plot_pool
 
+	# Connect to PlotPool signals for dynamic updates (optional game mechanic overlay)
+	if plot_pool:
+		if not plot_pool.terminal_bound.is_connected(_on_terminal_bound):
+			plot_pool.terminal_bound.connect(_on_terminal_bound)
+		if not plot_pool.terminal_unbound.is_connected(_on_terminal_unbound):
+			plot_pool.terminal_unbound.connect(_on_terminal_unbound)
+
 	# Find special biomes
 	for biome_name in biomes:
 		var biome = biomes[biome_name]
@@ -319,7 +319,7 @@ func setup(p_biomes: Dictionary, p_farm_grid = null, p_plot_pool = null):
 	# Update layout
 	update_layout(true)
 
-	# Create nodes
+	# Create nodes from quantum registers (first-class architecture)
 	rebuild_nodes()
 
 
@@ -327,6 +327,21 @@ func rebuild_nodes():
 	"""Rebuild all quantum nodes from current biomes and farm grid."""
 	var ctx = _build_context()
 	quantum_nodes = node_manager.create_quantum_nodes(ctx)
+
+
+func register_biome(biome_name: String, biome):
+	"""Register a new biome dynamically and rebuild nodes.
+
+	Use this when creating biomes after initial setup (e.g., in tests).
+
+	Args:
+	    biome_name: Name of the biome
+	    biome: BiomeBase instance
+	"""
+	if not biomes:
+		biomes = {}
+	biomes[biome_name] = biome
+	rebuild_nodes()
 
 	# Rebuild lookup dictionaries
 	node_by_plot_id.clear()
@@ -345,6 +360,72 @@ func rebuild_nodes():
 
 	# Apply biome filter
 	node_manager.filter_nodes_for_biome(quantum_nodes, _get_filter_biome())
+
+
+func add_nodes_for_biome(biome_name: String, biome) -> void:
+	"""Add nodes for a single biome without rebuilding existing nodes.
+
+	Use this for incremental updates when toggling biomes on.
+	"""
+	if not biomes:
+		biomes = {}
+	biomes[biome_name] = biome
+
+	# Create nodes for just this biome
+	var ctx = _build_context()
+	var single_biome_ctx = {
+		"biomes": {biome_name: biome},
+		"farm_grid": ctx.get("farm_grid"),
+		"plot_pool": ctx.get("plot_pool"),
+		"layout_calculator": layout_calculator
+	}
+
+	var new_nodes = node_manager.create_quantum_nodes(single_biome_ctx)
+
+	# Add to existing nodes
+	for node in new_nodes:
+		quantum_nodes.append(node)
+
+		# Update lookup dictionaries
+		if node.plot_id:
+			node_by_plot_id[node.plot_id] = node
+		if node.grid_position != Vector2i(-1, -1):
+			quantum_nodes_by_grid_pos[node.grid_position] = node
+			all_plot_positions[node.grid_position] = node.classical_anchor
+
+	print("  [ForceGraph] Added %d nodes for %s" % [new_nodes.size(), biome_name])
+
+
+func remove_nodes_for_biome(biome_name: String) -> void:
+	"""Remove nodes for a single biome without rebuilding everything.
+
+	Use this for incremental updates when toggling biomes off.
+	"""
+	# Remove nodes matching this biome
+	var removed_count = 0
+	var i = quantum_nodes.size() - 1
+	while i >= 0:
+		var node = quantum_nodes[i]
+		if node.biome_name == biome_name:
+			# Remove from lookup dictionaries
+			if node.plot_id and node_by_plot_id.has(node.plot_id):
+				node_by_plot_id.erase(node.plot_id)
+			if node.grid_position != Vector2i(-1, -1):
+				if quantum_nodes_by_grid_pos.has(node.grid_position):
+					quantum_nodes_by_grid_pos.erase(node.grid_position)
+				if all_plot_positions.has(node.grid_position):
+					all_plot_positions.erase(node.grid_position)
+
+			# Remove from array (RefCounted nodes auto-free when no references remain)
+			quantum_nodes.remove_at(i)
+			removed_count += 1
+		i -= 1
+
+	# Remove from biomes dict
+	if biomes and biomes.has(biome_name):
+		biomes.erase(biome_name)
+
+	print("  [ForceGraph] Removed %d nodes for %s" % [removed_count, biome_name])
 
 
 func update_layout(force_rebuild: bool = false):
@@ -469,6 +550,16 @@ func _unhandled_input(event):
 	var ctx = _build_context()
 	if input_handler.handle_input(event, ctx):
 		get_viewport().set_input_as_handled()
+
+
+func _on_terminal_bound(terminal: RefCounted, register_id: int):
+	"""Handle terminal binding - rebuild nodes to overlay terminal data on existing bubble."""
+	rebuild_nodes()
+
+
+func _on_terminal_unbound(terminal: RefCounted):
+	"""Handle terminal unbinding - rebuild nodes to remove terminal overlay."""
+	rebuild_nodes()
 
 
 func _on_bubble_tapped(node: QuantumNode):

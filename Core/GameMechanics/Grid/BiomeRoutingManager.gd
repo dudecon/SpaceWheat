@@ -10,9 +10,8 @@ extends RefCounted
 var biomes: Dictionary = {}  # String → BiomeBase (registry of all biomes)
 var plot_biome_assignments: Dictionary = {}  # Vector2i → String (plot position → biome name)
 
-# Register mapping (for visualization team)
-var plot_register_mapping: Dictionary = {}  # Vector2i → int (plot position → register_id in biome)
-var plot_to_biome_quantum_computer: Dictionary = {}  # Vector2i → QuantumComputer reference
+# Terminal pool (single source of truth for plot→register bindings)
+var plot_pool = null
 
 # Legacy biome reference (for backward compatibility)
 var legacy_biome = null
@@ -24,6 +23,11 @@ var _verbose = null
 func set_verbose(verbose_ref) -> void:
 	"""Set verbose logger reference."""
 	_verbose = verbose_ref
+
+
+func set_plot_pool(pool) -> void:
+	"""Inject PlotPool for register resolution."""
+	plot_pool = pool
 
 
 func set_legacy_biome(biome) -> void:
@@ -119,42 +123,17 @@ func get_entanglement_graph() -> Dictionary:
 	return consolidated_graph
 
 
-func get_plot_to_register_mapping() -> Dictionary:
-	"""Export plot position → register_id mapping for visualization team
-
-	Returns: {Vector2i position → int register_id}
-	Used to correlate visual grid with quantum register structure.
-	"""
-	return plot_register_mapping.duplicate()
-
-
-func get_quantum_computer_for_plot(position: Vector2i) -> Resource:
-	"""Get the QuantumComputer instance for a plot's biome
-
-	Returns: QuantumComputer resource, or null if not available
-	"""
-	return plot_to_biome_quantum_computer.get(position, null)
-
-
-func track_register_allocation(position: Vector2i, register_id: int, quantum_computer) -> void:
-	"""Track register allocation for a plot (legacy planting hook)."""
-	plot_register_mapping[position] = register_id
-	if quantum_computer:
-		plot_to_biome_quantum_computer[position] = quantum_computer
-
-
-func clear_register_tracking(position: Vector2i) -> void:
-	"""Clear register tracking for a plot (called on harvest)."""
-	plot_register_mapping.erase(position)
-	plot_to_biome_quantum_computer.erase(position)
-
-
 func get_register_for_plot(position: Vector2i) -> int:
 	"""Get the RegisterId for a plot.
 
 	Returns: Register ID (int) if plot is planted, -1 if not found
 	"""
-	return plot_register_mapping.get(position, -1)
+	if not plot_pool:
+		return -1
+	var terminal = plot_pool.get_terminal_at_grid_pos(position)
+	if terminal and terminal.is_bound:
+		return terminal.bound_register_id
+	return -1
 
 
 func is_biomes_empty() -> bool:

@@ -12,6 +12,7 @@ const FactionStateMatcher = preload("res://Core/QuantumSubstrate/FactionStateMat
 const QuestTypes = preload("res://Core/Quests/QuestTypes.gd")
 const FactionDatabase = preload("res://Core/Quests/FactionDatabaseV2.gd")
 const VocabularyPairing = preload("res://Core/Quests/VocabularyPairing.gd")
+const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 # Light bias toward simulated vocab when selecting north pole.
 const NORTH_BIAS_WEIGHT: float = 1.3
@@ -93,14 +94,21 @@ static func _select_quest_type(params: FactionStateMatcher.QuestParameters) -> i
 static func _generate_delivery_quest(params: FactionStateMatcher.QuestParameters, bath) -> Dictionary:
 	"""Generate traditional delivery quest (current system)"""
 
-	# intensity → quantity in CREDITS (10-50 range)
-	# This matches the economy where pop gives: probability × 10 = credits
+	# intensity → quantity in CREDITS (fallback when IconMap missing)
 	var base_units = 1 + int(params.intensity * 4)  # 1-5 base
-	var quantity = base_units * 10  # Convert to credits: 10-50
+	var quantity = base_units * EconomyConstants.QUANTUM_TO_CREDITS
 
 	# Sample resource from ALLOWED emojis only (vocabulary constraint!)
 	var allowed_emojis = params.available_emojis if params.available_emojis.size() > 0 else []
 	var resource = _sample_from_allowed_emojis(bath, allowed_emojis, params)
+
+	# If IconMap is available, map cumulative probability → credits (x10)
+	var icon_map = _get_icon_map_payload(bath)
+	if icon_map and icon_map.has("by_emoji") and resource != "":
+		var weight = icon_map["by_emoji"].get(resource, 0.0)
+		if weight > 0.0:
+			quantity = int(round(weight * EconomyConstants.QUANTUM_TO_CREDITS))
+			quantity = max(quantity, 1)
 
 	# urgency → time limit
 	var time_limit = _urgency_to_time(params.urgency)
@@ -256,7 +264,40 @@ static func _sample_from_allowed_emojis(bath, allowed_emojis: Array, params) -> 
 		_log("warn", "quest", "⚠️", "Empty allowed_emojis - fallback to 🌾")
 		return "🌾"  # Ultimate fallback
 
-	# No bath? Pick random from allowed
+	var icon_map = _get_icon_map_payload(bath)
+	if icon_map and icon_map.has("by_emoji"):
+		var by_emoji: Dictionary = icon_map["by_emoji"]
+		var filtered_emojis: Array = []
+		var filtered_weights: Array = []
+		var total = 0.0
+
+		for emoji in allowed_emojis:
+			if by_emoji.has(emoji):
+				var weight = float(by_emoji[emoji])
+				if weight > 0.0:
+					filtered_emojis.append(emoji)
+					filtered_weights.append(weight)
+					total += weight
+
+		if filtered_emojis.is_empty() or total <= 0.0:
+			_log("debug", "quest", "🎲", "No IconMap overlap - random from allowed: %s" % allowed_emojis[0])
+			return allowed_emojis[randi() % allowed_emojis.size()]
+
+		# Sample from cumulative weights
+		var roll = randf() * total
+		var cumulative = 0.0
+		for i in range(filtered_weights.size()):
+			cumulative += filtered_weights[i]
+			if roll <= cumulative:
+				var chosen = filtered_emojis[i]
+				_log("debug", "quest", "🎯", "Sampled %s from IconMap (w=%.3f, roll=%.3f)" % [
+					chosen, filtered_weights[i], roll
+				])
+				return chosen
+
+		return filtered_emojis[0]
+
+	# No IconMap? Fall back to density matrix sampling
 	if bath == null:
 		var chosen = allowed_emojis[randi() % allowed_emojis.size()]
 		_log("debug", "quest", "🎲", "No bath - random from allowed: %s" % chosen)
@@ -312,6 +353,37 @@ static func _sample_from_allowed_emojis(bath, allowed_emojis: Array, params) -> 
 	var fallback = bath_emojis[allowed_indices[0]]
 	_log("debug", "quest", "🎲", "Fallback to first allowed: %s" % fallback)
 	return fallback
+
+
+static func _get_icon_map_payload(bath) -> Dictionary:
+	if bath == null:
+		return _get_global_icon_map()
+	if bath.has_method("get_icon_map"):
+		return bath.get_icon_map()
+	if "viz_cache" in bath and bath.viz_cache:
+		return bath.viz_cache.get_icon_map()
+	if bath.has_method("get_viz_cache"):
+		var cache = bath.get_viz_cache()
+		if cache and cache.has_method("get_icon_map"):
+			return cache.get_icon_map()
+	var global_map = _get_global_icon_map()
+	return global_map if not global_map.is_empty() else {}
+
+
+static func _get_global_icon_map() -> Dictionary:
+	var tree = Engine.get_main_loop()
+	if not tree or not tree.root:
+		return {}
+	var gsm = tree.root.get_node_or_null("/root/GameStateManager")
+	if not gsm or not ("active_farm" in gsm):
+		return {}
+	var farm = gsm.active_farm
+	if not farm or not ("biome_evolution_batcher" in farm):
+		return {}
+	var batcher = farm.biome_evolution_batcher
+	if batcher and batcher.has_method("get_global_icon_map"):
+		return batcher.get_global_icon_map()
+	return {}
 
 
 static func _urgency_to_time(urgency: float) -> float:
@@ -389,13 +461,28 @@ static func generate_quest(
 	var faction_bits = faction.get("bits", [0,0,0,0,0,0,0,0,0,0,0,0])
 	var params = FactionStateMatcher.generate_quest_parameters(faction_bits, obs, bath)
 
-	# 6. Add vocabulary constraint to params
+	# 6. Apply IconMap constraint (resource vocabulary from lookahead payload)
+	var icon_map = _get_icon_map_payload(bath)
+	if icon_map and icon_map.has("by_emoji"):
+		var icon_emojis = icon_map["by_emoji"].keys()
+		available_emojis = FactionDatabase.get_vocabulary_overlap(available_emojis, icon_emojis)
+		if available_emojis.is_empty():
+			_log("debug", "quest", "🚫", "%s inaccessible - no IconMap overlap with resource vocabulary" % faction_name)
+			return {
+				"error": "no_iconmap_overlap",
+				"message": "No active resource overlap for %s yet..." % faction.get("name", "Unknown"),
+				"faction": faction.get("name", "Unknown"),
+				"required_emojis": icon_emojis.slice(0, 3),
+				"faction_vocabulary": faction_vocab.signature
+			}
+
+	# 7. Add vocabulary constraint to params
 	params.available_emojis = available_emojis
 
-	# 7. Apply SpaceWheat theming (quest resources MUST come from available_emojis)
+	# 8. Apply SpaceWheat theming (quest resources MUST come from available_emojis)
 	var quest = apply_theming(params, bath)
 
-	# 8. Add faction metadata
+	# 9. Add faction metadata
 	quest["faction"] = faction.get("name", "Unknown")
 	var signature = faction.get("sig", faction.get("signature", []))  # v2.1 uses "sig" not "signature"
 	quest["faction_emoji"] = "".join(signature.slice(0, 3))
@@ -411,12 +498,12 @@ static func generate_quest(
 	# Banner asset path (if available)
 	quest["banner_path"] = FactionDatabase.get_faction_banner_path(faction)
 
-	# 9. Add vocabulary info
+	# 10. Add vocabulary info
 	quest["faction_vocabulary"] = faction_vocab.all
 	quest["available_emojis"] = available_emojis
 	quest["vocabulary_overlap_pct"] = float(available_emojis.size()) / max(faction_vocab.all.size(), 1)
 
-	# 10. PRE-ROLL VOCABULARY REWARD PAIR
+	# 11. PRE-ROLL VOCABULARY REWARD PAIR
 	# Roll the vocab pair NOW (at quest creation) so player knows what they'll learn
 	var vocab_pair = _roll_vocabulary_reward_pair(signature, player_vocab, bias_emojis)
 	quest["reward_vocab_north"] = vocab_pair.get("north", "")

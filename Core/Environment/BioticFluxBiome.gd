@@ -115,9 +115,8 @@ func _initialize_bath() -> void:
 	quantum_computer.allocate_axis(1, "🌾", "🍄")  # Flora: Wheat/Mushroom
 	quantum_computer.allocate_axis(2, "🍂", "💀")  # Matter: Organic/Death
 
-	# Initialize to balanced state (½☀ + ½🌙)(½🌾 + ½🍄)(½🍂 + ½💀)
-	# For simplicity, start with |000⟩ = ☀🌾🍂 (sunny, wheat, organic)
-	quantum_computer.initialize_basis(0)
+	# Initialize to uniform superposition across all basis states
+	quantum_computer.initialize_uniform_superposition()
 
 	# Initialize sun_qubit for visualization bridge (synced from quantum_computer)
 	sun_qubit = DualEmojiQubit.new("☀", "🌙", 0.0, null)

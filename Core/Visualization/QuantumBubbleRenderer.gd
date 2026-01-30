@@ -9,8 +9,8 @@ extends RefCounted
 ## - Emoji opacity: P(n)/mass, P(s)/mass (measurement probability)
 ## - Color hue: arg(ρ_01) (coherence phase)
 ## - Color saturation: |ρ_01| (coherence magnitude)
-## - Glow intensity: Tr(ρ²) (purity)
-## - Pulse rate: |ρ_01| + berry_phase (stability indicator)
+## - Glow intensity: Tr(ρ²) + berry_phase (purity + unbounded evolution experience)
+## - Berry phase glow: Unbounded accumulation (grows indefinitely with evolution)
 ## - Inner purity ring: Individual Tr(ρ²) (local purity vs biome)
 ## - Outer probability ring: P(n)+P(s) globally (total probability mass)
 ## - Measurement uncertainty ring: 2×√(p_n×p_s) (outcome spread)
@@ -110,12 +110,13 @@ func _draw_quantum_bubble(graph: Node2D, node, biomes: Dictionary, time_accumula
 	# Check if measured
 	var is_measured = _is_node_measured(node, plot_pool)
 
-	# Pulse animation - breathing based on measurement uncertainty
-	var pulse_rate = node.get_pulse_rate()  # Berry phase (evolution speed)
-	var measurement_uncertainty = _get_measurement_uncertainty(node, biomes, is_celestial)
-	var pulse_amplitude = 0.12 * measurement_uncertainty  # 0-12% breathing amplitude
-	var pulse_phase = sin(time_accumulator * pulse_rate * TAU) * 0.5 + 0.5
-	var pulse_scale = 1.0 + pulse_phase * pulse_amplitude
+	# Pulse animation disabled - berry phase now affects glow only
+	# var pulse_rate = node.get_pulse_rate()  # Berry phase (evolution speed)
+	# var measurement_uncertainty = _get_measurement_uncertainty(node, biomes, is_celestial)
+	# var pulse_amplitude = 0.12 * measurement_uncertainty  # 0-12% breathing amplitude
+	# var pulse_phase = sin(time_accumulator * pulse_rate * TAU) * 0.5 + 0.5
+	# var pulse_scale = 1.0 + pulse_phase * pulse_amplitude
+	var pulse_scale = 1.0  # Fixed scale - no breathing
 
 	# Color scheme
 	var base_color: Color
@@ -132,9 +133,10 @@ func _draw_quantum_bubble(graph: Node2D, node, biomes: Dictionary, time_accumula
 			max(node.color.v * 0.6, 0.3)
 		)
 
-	# Glow based on purity
-	var glow_alpha = (node.energy * 0.5 + 0.3) * anim_alpha
-	var effective_radius = node.radius * anim_scale * pulse_scale
+	# Glow based on berry phase (will be real when C++ computes geometric phase)
+	var berry_glow = node.berry_phase * 0.05
+	var glow_alpha = (0.5 + berry_glow) * anim_alpha  # Base glow without purity
+	var effective_radius = node.radius * anim_scale  # Removed pulse_scale
 
 	# === LAYER 1-2: OUTER GLOWS ===
 	if is_measured and not is_celestial:
@@ -263,28 +265,15 @@ func _draw_unmeasured_outline(graph: Node2D, node, effective_radius: float, is_c
 func _draw_purity_ring(graph: Node2D, node, biomes: Dictionary, effective_radius: float, anim_alpha: float) -> void:
 	"""Draw inner ring showing individual purity vs biome average."""
 	var biome = biomes.get(node.biome_name)
-	if not biome or not biome.quantum_computer:
+	if not biome or not biome.viz_cache:
 		return
 
-	var qc = biome.quantum_computer
-	var biome_purity = qc.get_purity() if qc.has_method("get_purity") else 0.5
+	var biome_purity = biome.viz_cache.get_purity()
+	if biome_purity < 0.0:
+		biome_purity = 0.5
 
 	# Calculate individual purity
-	var individual_purity = 0.5
-	if node.plot and node.plot.parent_biome and node.plot.parent_biome.quantum_computer:
-		var qc_local = node.plot.parent_biome.quantum_computer
-		var p_n = qc_local.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
-		var p_s = qc_local.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
-		var coh = qc_local.get_coherence(node.emoji_north, node.emoji_south) if qc_local.has_method("get_coherence") else null
-		var coh_mag_sq = coh.abs() * coh.abs() if coh else 0.0
-		var mass = p_n + p_s
-		if mass > 0.001:
-			var p_n_norm = p_n / mass
-			var p_s_norm = p_s / mass
-			var coh_norm_sq = coh_mag_sq / (mass * mass)
-			individual_purity = p_n_norm * p_n_norm + p_s_norm * p_s_norm + 2.0 * coh_norm_sq
-	elif node.has_farm_tether:
-		individual_purity = node.energy
+	var individual_purity = node.energy if node.energy > 0.0 else 0.5
 
 	# Color based on comparison
 	var purity_color: Color
@@ -306,13 +295,7 @@ func _draw_purity_ring(graph: Node2D, node, biomes: Dictionary, effective_radius
 
 func _draw_probability_ring(graph: Node2D, node, biomes: Dictionary, effective_radius: float, anim_alpha: float) -> void:
 	"""Draw outer ring showing global probability mass."""
-	var global_prob = 0.0
-	var biome = biomes.get(node.biome_name)
-	if biome and biome.quantum_computer:
-		var qc = biome.quantum_computer
-		var p_north = qc.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
-		var p_south = qc.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
-		global_prob = p_north + p_south
+	var global_prob = clampf(node.emoji_north_opacity + node.emoji_south_opacity, 0.0, 1.0)
 
 	if global_prob > 0.01:
 		var arc_color = Color(1.0, 1.0, 1.0, 0.4 * anim_alpha)
@@ -338,23 +321,13 @@ func _draw_measurement_uncertainty_ring(graph: Node2D, node, biomes: Dictionary,
 	This helps players identify which bubbles have high measurement uncertainty
 	(good candidates for quantum operations) vs which are nearly classical.
 	"""
-	var biome = biomes.get(node.biome_name)
-	if not biome or not biome.quantum_computer:
-		return
-
-	var qc = biome.quantum_computer
-
-	# Get normalized probabilities for this qubit's axis
-	var p_north = qc.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
-	var p_south = qc.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
-	var mass = p_north + p_south
-
+	var p_n = node.emoji_north_opacity
+	var p_s = node.emoji_south_opacity
+	var mass = p_n + p_s
 	if mass < 0.001:
 		return
-
-	# Normalize to this qubit's subspace
-	var p_n = p_north / mass
-	var p_s = p_south / mass
+	p_n = p_n / mass
+	p_s = p_s / mass
 
 	# Measurement uncertainty: 2 × √(p_n × p_s)
 	# Maximum = 1.0 at 50/50 (p_n = p_s = 0.5 → 2 × √0.25 = 1.0)
@@ -385,28 +358,8 @@ func _draw_measurement_uncertainty_ring(graph: Node2D, node, biomes: Dictionary,
 
 func _draw_sink_flux_particles(graph: Node2D, node, biomes: Dictionary, effective_radius: float, anim_alpha: float, time: float) -> void:
 	"""Draw particles showing decoherence rate."""
-	var biome = biomes.get(node.biome_name)
-	if not biome or not biome.quantum_computer:
-		return
-
-	var qc = biome.quantum_computer
-	var sink_flux = qc.get_sink_flux(node.emoji_north) if node.emoji_north != "" and qc.has_method("get_sink_flux") else 0.0
-
-	if sink_flux > 0.001:
-		var particle_count = int(clampf(sink_flux * 20, 1, 6))
-		for i in range(particle_count):
-			var particle_time = time * 0.5 + float(i) * 0.3
-			var particle_phase = fmod(particle_time, 1.0)
-
-			var angle = (float(i) / float(particle_count)) * TAU + particle_time * 2.0
-			var dist = effective_radius * (1.2 + particle_phase * 0.8)
-
-			var particle_pos = node.position + Vector2(cos(angle), sin(angle)) * dist
-			var particle_alpha = (1.0 - particle_phase) * 0.6 * anim_alpha
-			var particle_color = Color(0.8, 0.4, 0.2, particle_alpha)
-			var particle_size = 3.0 * (1.0 - particle_phase * 0.5)
-
-			graph.draw_circle(particle_pos, particle_size, particle_color)
+	# Disabled: sink flux is not provided by native viz cache.
+	return
 
 
 func _draw_emojis(graph: Node2D, node, is_celestial: bool) -> void:
@@ -480,23 +433,13 @@ func _get_measurement_uncertainty(node, biomes: Dictionary, is_celestial: bool) 
 	if is_celestial or node.biome_name == "":
 		return 0.0
 
-	var biome = biomes.get(node.biome_name)
-	if not biome or not biome.quantum_computer:
-		return 0.0
-
-	var qc = biome.quantum_computer
-
-	# Get normalized probabilities for this qubit's axis
-	var p_north = qc.get_population(node.emoji_north) if node.emoji_north != "" else 0.0
-	var p_south = qc.get_population(node.emoji_south) if node.emoji_south != "" else 0.0
-	var mass = p_north + p_south
-
+	var p_n = node.emoji_north_opacity
+	var p_s = node.emoji_south_opacity
+	var mass = p_n + p_s
 	if mass < 0.001:
 		return 0.0
-
-	# Normalize to this qubit's subspace
-	var p_n = p_north / mass
-	var p_s = p_south / mass
+	p_n = p_n / mass
+	p_s = p_s / mass
 
 	# Measurement uncertainty: 2 × √(p_n × p_s)
 	return 2.0 * sqrt(p_n * p_s)

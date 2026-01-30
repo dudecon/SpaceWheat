@@ -190,6 +190,8 @@ func update_from_quantum_state():
 	# Priority 1: Direct biome reference (first-class quantum viz)
 	if biome_name != "" and biome_resolver.is_valid():
 		biome = biome_resolver.call(biome_name)
+		if not biome and register_id == 0:  # Debug first register only
+			print("    [LIFELESS] Biome '%s' not found via resolver" % biome_name)
 
 	# Priority 2: Terminal binding (v2 game mechanic)
 	elif terminal and terminal.is_bound:
@@ -207,8 +209,8 @@ func update_from_quantum_state():
 			if "biome_name" in biome:
 				biome_name = biome.biome_name
 
-	# Guard: no biome or no quantum_computer → LIFELESS fallback (no wiggle)
-	if not biome or not biome.quantum_computer:
+	# Guard: no biome or no viz payload → LIFELESS fallback (no wiggle)
+	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 		is_lifeless = true  # Mark as frozen - no physics
 		energy = 0.0       # No glow - lifeless
 		coherence = 0.0    # No pulse - static
@@ -270,18 +272,27 @@ func update_from_quantum_state():
 	emoji_north = emojis.get("north", emoji_north)
 	emoji_south = emojis.get("south", emoji_south)
 
-	# Prefer cached visualization metrics from QuantumComputer (fast path)
-	var qc = biome.quantum_computer
-	var metrics: Dictionary = {}
-	var metrics_ok = false
-	if qc and qc.has_method("get_viz_qubit_metrics") and qc.register_map and qc.register_map.has(emoji_north):
-		var qubit_index = qc.register_map.qubit(emoji_north)
-		metrics = qc.get_viz_qubit_metrics(qubit_index)
-		metrics_ok = not metrics.is_empty()
+	# Prefer cached visualization metrics from biome viz_cache (fast path)
+	var qubit_index = -1
+	var snap: Dictionary = {}
+	if biome and biome.viz_cache:
+		qubit_index = biome.viz_cache.get_qubit(emoji_north)
+		snap = biome.viz_cache.get_snapshot(qubit_index)
 
 	# 1. EMOJI OPACITY ← Normalized probabilities (θ-like)
-	var north_prob = metrics.get("p_north", biome.get_emoji_probability(emoji_north))
-	var south_prob = metrics.get("p_south", biome.get_emoji_probability(emoji_south))
+	var north_prob = 0.5
+	var south_prob = 0.5
+	if snap.is_empty():
+		is_lifeless = true
+		energy = 0.0
+		coherence = 0.0
+		radius = MIN_RADIUS
+		color = Color(0.4, 0.4, 0.5, 0.4)
+		emoji_north_opacity = 0.0
+		emoji_south_opacity = 0.0
+		return
+	north_prob = snap.get("p0", 0.5)
+	south_prob = snap.get("p1", 0.5)
 	var mass = north_prob + south_prob  # Total probability in our subspace
 
 	if mass > 0.001:
@@ -295,35 +306,18 @@ func update_from_quantum_state():
 	# 2. COLOR HUE ← Coherence phase arg(ρ_{n,s}) (φ-like)
 	var coh_magnitude = 0.0
 	var coh_phase = 0.0
-	if metrics_ok:
-		coh_magnitude = metrics.get("coh_mag", 0.0)
-		coh_phase = metrics.get("coh_phase", 0.0)
-	else:
-		var coh = biome.get_emoji_coherence(emoji_north, emoji_south)
-		if coh:
-			coh_magnitude = coh.abs()
-			coh_phase = coh.arg()  # Returns angle in radians [-π, π]
-			# DEBUG: Log if we're getting real coherence (verbose filtered)
-			if is_transitioning_planted and coh_magnitude > 0.01:
-				var verbose = _get_verbose()
-				if verbose:
-					verbose.debug("quantum", "⚛️", "COHERENCE FOUND: |coh|=%.4f arg=%.2f° for %s/%s" % [coh_magnitude, rad_to_deg(coh_phase), emoji_north, emoji_south])
-		else:
-			# DEBUG: Log when coherence is null (possible problem)
-			if is_transitioning_planted:
-				var verbose = _get_verbose()
-				if verbose:
-					verbose.debug("quantum", "⚠️", "COHERENCE NULL for %s/%s at %s" % [emoji_north, emoji_south, grid_position])
+	coh_magnitude = snap.get("r_xy", 0.0) * 0.5
+	coh_phase = snap.get("phi", 0.0)
 
 	# Map phase to hue [0, 1] for HSV color
-	var hue = metrics.get("hue", (coh_phase + PI) / TAU)  # Normalize to [0, 1]
-	var saturation = metrics.get("saturation", coh_magnitude)  # More coherent = more saturated color
+	var hue = (coh_phase + PI) / TAU  # Normalize to [0, 1]
+	var saturation = coh_magnitude  # More coherent = more saturated color
 	color = Color.from_hsv(hue, saturation * 0.8, 0.9, 0.8)
 
 	# 3. GLOW (energy) ← Purity Tr(ρ²)
 	# Pure state = 1.0 (bright glow), maximally mixed = 1/N (dim)
-	var purity = qc.get_viz_purity() if qc and qc.has_method("get_viz_purity") else -1.0
-	energy = purity if purity >= 0.0 else biome.get_purity()
+	var purity = snap.get("purity", -1.0)
+	energy = purity if purity >= 0.0 else 0.5
 
 	# 4. PULSE RATE (coherence) ← |ρ_{n,s}| coherence magnitude
 	# High coherence = stable/slow pulse, low = jittery/fast
@@ -341,8 +335,9 @@ func update_from_quantum_state():
 
 	radius = base_radius + purity_boost
 
-	# 6. Berry phase accumulation (tracks total evolution)
-	berry_phase += energy * 0.01
+	# 6. Berry phase - DISABLED until C++ computes geometric phase
+	# Real berry phase must come from path integral during quantum evolution
+	# berry_phase += energy * 0.01  # This was fake accumulation!
 
 	if is_transitioning_planted:
 		var verbose = _get_verbose()
@@ -372,18 +367,43 @@ func apply_force(force: Vector2, delta: float):
 	"""Apply a force to this node, scaled by inverse mass for realism
 
 	Physics: acceleration = force / mass
-	Here: mass ~ node.radius (probability weight)
-	Lighter nodes (small radius) accelerate more, heavier nodes resist
+	Here: mass = combined probability (north + south opacity)
+	High probability states (mass near 1.0) are heavy and resist forces
+	Low probability states (mass near 0.0) are light and easily moved
+	This creates quantum-mechanical inertia!
 	"""
-	# Scale acceleration by inverse mass (larger radius = more inertia)
-	# Clamp to avoid division by very small numbers
-	var effective_mass = max(radius, 5.0)  # Minimum mass scaling
-	var acceleration = force / effective_mass
+	# Mass = total probability in this measurement subspace
+	var probability_mass = emoji_north_opacity + emoji_south_opacity
+	probability_mass = clampf(probability_mass, 0.1, 1.0)  # Min mass to avoid division by zero
+
+	# Acceleration = force / mass (Newton's 2nd law)
+	var acceleration = force / probability_mass
 	velocity += acceleration * delta
 
 
 func apply_damping(damping_factor: float):
-	"""Apply velocity damping"""
+	"""Apply linear velocity damping (deprecated - use quadratic drag instead)"""
+	velocity *= damping_factor
+
+
+func apply_quadratic_drag(impulse: float):
+	"""Apply quadratic drag proportional to velocity squared
+
+	Quadratic drag: F_drag = -β * v * |v|
+	This creates realistic air resistance where drag increases with speed.
+	The impulse coefficient is linked to quantum coherence for physics grounding.
+
+	Implementation: v_new = v_old * (1 - impulse * |v|)
+	"""
+	var speed = velocity.length()
+	if speed < 1.0:
+		return  # Skip for very slow velocities to avoid numerical issues
+
+	# Quadratic damping factor: (1 - impulse * speed)
+	# Higher speed = more damping
+	var damping_factor = 1.0 - impulse * speed
+	damping_factor = clampf(damping_factor, 0.1, 1.0)  # Prevent over-damping or reversal
+
 	velocity *= damping_factor
 
 

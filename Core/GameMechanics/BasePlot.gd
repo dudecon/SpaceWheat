@@ -108,35 +108,43 @@ func get_purity() -> float:
 	"""
 	if not is_planted or not parent_biome:
 		return 0.0
-
-	if not parent_biome.quantum_computer:
+	if not parent_biome.viz_cache:
 		return 0.0
-
-	return parent_biome.quantum_computer.get_purity()
+	var purity = parent_biome.viz_cache.get_purity()
+	return purity if purity >= 0.0 else 0.0
 
 ## Get coherence from parent biome's quantum computer
 func get_coherence() -> float:
 	"""Query coherence from parent biome's quantum computer."""
 	if not is_planted or not parent_biome:
 		return 0.0
-
-	if not parent_biome.quantum_computer:
+	if not parent_biome.viz_cache:
 		return 0.0
-
-	# Coherence approximated from purity (off-diagonal elements)
-	return parent_biome.quantum_computer.get_purity()
+	var q = parent_biome.viz_cache.get_qubit(north_emoji)
+	if q < 0:
+		return 0.0
+	var bloch = parent_biome.viz_cache.get_bloch(q)
+	if bloch.is_empty():
+		return 0.0
+	var x = bloch.get("x", 0.0)
+	var y = bloch.get("y", 0.0)
+	return 0.5 * sqrt(x * x + y * y)
 
 ## Get mass (probability in subspace)
 func get_mass() -> float:
 	"""Get probability mass in measurement basis subspace."""
 	if not is_planted or not parent_biome:
 		return 0.0
-
-	if not parent_biome.quantum_computer:
+	if not parent_biome.viz_cache:
 		return 0.0
-
-	var p_north = parent_biome.quantum_computer.get_population(north_emoji)
-	var p_south = parent_biome.quantum_computer.get_population(south_emoji)
+	var q = parent_biome.viz_cache.get_qubit(north_emoji)
+	if q < 0:
+		return 0.0
+	var snap = parent_biome.viz_cache.get_snapshot(q)
+	if snap.is_empty():
+		return 0.0
+	var p_north = snap.get("p0", 0.5)
+	var p_south = snap.get("p1", 0.5)
 	return p_north + p_south
 
 ## Core Methods
@@ -217,9 +225,12 @@ func register_in_biome(biome: Node) -> bool:
 	parent_biome = biome
 
 	# Get register_id - axis should already exist from expand_quantum_system
-	if biome.quantum_computer.register_map.has(north_emoji):
-		register_id = biome.quantum_computer.register_map.qubit(north_emoji)
-	else:
+	if biome.viz_cache:
+		register_id = biome.viz_cache.get_qubit(north_emoji)
+	if register_id < 0 and biome.quantum_computer and biome.quantum_computer.register_map:
+		if biome.quantum_computer.register_map.has(north_emoji):
+			register_id = biome.quantum_computer.register_map.qubit(north_emoji)
+	if register_id < 0:
 		push_error("Axis %s/%s not found in quantum computer - was expand_quantum_system called?" % [
 			north_emoji, south_emoji])
 		return false

@@ -67,6 +67,7 @@ var conspiracy_network = null
 var faction_territory_manager = null
 var farm_economy = null
 var vocabulary_evolution = null
+var plot_pool = null
 
 # Legacy biome reference (for backward compatibility)
 var biome = null
@@ -98,16 +99,6 @@ var biomes: Dictionary:
 var plot_biome_assignments: Dictionary:
 	get:
 		return _biome_routing.plot_biome_assignments if _biome_routing else {}
-
-## Direct access to plot_register_mapping
-var plot_register_mapping: Dictionary:
-	get:
-		return _biome_routing.plot_register_mapping if _biome_routing else {}
-
-## Direct access to plot_to_biome_quantum_computer
-var plot_to_biome_quantum_computer: Dictionary:
-	get:
-		return _biome_routing.plot_to_biome_quantum_computer if _biome_routing else {}
 
 ## Direct access to entangled_pairs
 var entangled_pairs: Array:
@@ -148,12 +139,36 @@ func _init(width: int = 6, height: int = 4):
 	_harvest = HarvestMeasurementManager.new()
 
 
+func resize_grid(new_width: int, new_height: int) -> void:
+	"""Resize grid dimensions and update internal managers (expansion only)."""
+	if new_width <= 0 or new_height <= 0:
+		push_error("FarmGrid.resize_grid(): invalid size %dx%d" % [new_width, new_height])
+		return
+	if new_width == grid_width and new_height == grid_height:
+		return
+
+	grid_width = new_width
+	grid_height = new_height
+
+	if _plot_manager:
+		_plot_manager.grid_width = new_width
+		_plot_manager.grid_height = new_height
+		_plot_manager.initialize_all_plots()
+
+	if _verbose:
+		_verbose.info("farm", "📐", "FarmGrid resized: %dx%d (%d plots)" % [
+			grid_width, grid_height, grid_width * grid_height
+		])
+
+
 func _ready():
 	_verbose.info("farm", "🌾", "FarmGrid initialized: %dx%d = %d plots" % [grid_width, grid_height, grid_width * grid_height])
 
 	# Wire verbose logger to all components (requires @onready _verbose)
 	_plot_manager.set_verbose(_verbose)
 	_biome_routing.set_verbose(_verbose)
+	if plot_pool:
+		_biome_routing.set_plot_pool(plot_pool)
 	_entanglement.set_verbose(_verbose)
 	_buildings.set_verbose(_verbose)
 	_harvest.set_verbose(_verbose)
@@ -162,7 +177,7 @@ func _ready():
 	_entanglement.set_dependencies(_plot_manager, _biome_routing)
 	_buildings.set_dependencies(_plot_manager, _biome_routing, _entanglement)
 	_buildings.set_parent_node(self)
-	_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement)
+	_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
 
 	# Wire external references
 	_plot_manager.faction_territory_manager = faction_territory_manager
@@ -227,6 +242,15 @@ func assign_plot_to_biome(position: Vector2i, biome_name: String) -> bool:
 	return _biome_routing.assign_plot_to_biome(position, biome_name)
 
 
+func set_plot_pool(pool) -> void:
+	"""Inject PlotPool for terminal-based register resolution."""
+	plot_pool = pool
+	if _biome_routing:
+		_biome_routing.set_plot_pool(pool)
+	if _harvest:
+		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
+
+
 func get_biome_for_plot(position: Vector2i):
 	"""Get the biome responsible for a specific plot"""
 	return _biome_routing.get_biome_for_plot(position)
@@ -235,16 +259,6 @@ func get_biome_for_plot(position: Vector2i):
 func get_entanglement_graph() -> Dictionary:
 	"""Export aggregated entanglement graph from all biomes"""
 	return _biome_routing.get_entanglement_graph()
-
-
-func get_plot_to_register_mapping() -> Dictionary:
-	"""Export plot position → register_id mapping"""
-	return _biome_routing.get_plot_to_register_mapping()
-
-
-func get_quantum_computer_for_plot(position: Vector2i) -> Resource:
-	"""Get the QuantumComputer instance for a plot's biome"""
-	return _biome_routing.get_quantum_computer_for_plot(position)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -338,7 +352,9 @@ func harvest_wheat(position: Vector2i) -> Dictionary:
 	"""Harvest wheat at position"""
 	# Ensure economy is wired
 	if farm_economy and not _harvest._economy:
-		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement)
+		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
+	elif plot_pool and not _harvest._plot_pool:
+		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
 	return _harvest.harvest_wheat(position)
 
 
@@ -485,19 +501,9 @@ func process_mill_flour(flour_amount: int) -> void:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# REGISTER MANAGEMENT (for visualization - delegates to BiomeRoutingManager)
+# REGISTER MANAGEMENT (terminal-based)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 func get_register_for_plot(position: Vector2i) -> int:
-	"""Get the RegisterId for a plot"""
+	"""Get the RegisterId for a plot via terminal binding."""
 	return _biome_routing.get_register_for_plot(position)
-
-
-func clear_register_for_plot(position: Vector2i) -> void:
-	"""Clear register allocation for a plot (called after harvest)"""
-	_biome_routing.clear_register_tracking(position)
-
-	# Also clear in biome
-	var plot_biome = _biome_routing.get_biome_for_plot(position)
-	if plot_biome and plot_biome.has_method("clear_register_for_plot"):
-		plot_biome.clear_register_for_plot(position)

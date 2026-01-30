@@ -13,7 +13,7 @@ extends RefCounted
 ##   var sun_factions = registry.get_factions_for_emoji("☀")
 
 const Faction = preload("res://Core/Factions/Faction.gd")
-const JSON_PATH = "res://Core/Factions/data/factions.json"
+const JSON_PATH = "res://Core/Factions/data/factions_merged.json"
 
 # Faction storage
 var _factions: Array = []

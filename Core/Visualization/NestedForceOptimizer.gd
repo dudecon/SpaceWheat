@@ -16,9 +16,9 @@ extends RefCounted
 const BiomeMetaQuantum = preload("res://Core/Visualization/BiomeMetaQuantum.gd")
 
 # Force constants (same physics, just partitioned)
-const CORRELATION_SPRING = 0.12
-const PURITY_RADIAL_SPRING = 0.08
-const REPULSION_STRENGTH = 1500.0
+const CORRELATION_SPRING = 0.02    # Reduced from 0.12 to prevent over-clustering
+const MI_LOW_BOOST = 0.05          # Minimum MI floor to keep bubbles loosely clustered
+const REPULSION_STRENGTH = 300.0   # Prevents overlap (reduced from 1500 to match main system)
 const MIN_DISTANCE = 15.0
 const DAMPING = 0.85
 
@@ -262,10 +262,7 @@ func _update_inner_graph(delta: float, inner: BiomeInnerGraph, mi: PackedFloat64
 		var local_pos = inner.local_positions.get(node_id, Vector2.ZERO)
 		var force = Vector2.ZERO
 
-		# 1. Purity radial force (pure → center, mixed → edge)
-		force += _purity_radial_force(bubble, local_pos)
-
-		# 2. Correlation forces (MI-based, within this biome only)
+		# 1. Correlation forces (MI-based, within this biome only)
 		for j in range(num_bubbles):
 			if i == j:
 				continue
@@ -280,7 +277,7 @@ func _update_inner_graph(delta: float, inner: BiomeInnerGraph, mi: PackedFloat64
 			var mi_val = _get_mi_value(i, j, num_bubbles, mi)
 			force += _correlation_force(local_pos, other_pos, mi_val)
 
-		# 3. Repulsion (prevent overlap)
+		# 2. Repulsion (prevent overlap)
 		for j in range(num_bubbles):
 			if i == j:
 				continue
@@ -309,38 +306,23 @@ func _update_inner_graph(delta: float, inner: BiomeInnerGraph, mi: PackedFloat64
 		bubble.position = center + local_pos
 
 
-func _purity_radial_force(bubble, local_pos: Vector2) -> Vector2:
-	"""Pure states → center, mixed states → edge."""
-	var purity = bubble.energy if bubble else 0.5
-	purity = clampf(purity, 0.5, 1.0)
-
-	var normalized_purity = (purity - 0.5) / 0.5
-	var target_radius = (1.0 - normalized_purity) * BIOME_RADIUS * 0.8
-
-	var current_radius = local_pos.length()
-	if current_radius < 1.0:
-		return Vector2.ZERO
-
-	var direction = -local_pos.normalized()  # Toward center
-	var displacement = target_radius - current_radius
-
-	return direction * (-displacement) * PURITY_RADIAL_SPRING
+# REMOVED: Purity radial force - purity should come from C++ bloch packet, not node.energy
 
 
 func _correlation_force(pos: Vector2, other_pos: Vector2, mi: float) -> Vector2:
-	"""High MI → attract, low MI → no force."""
-	if mi < 0.01:
-		return Vector2.ZERO
+	"""High MI → attract, low MI → loose clustering."""
+	# Boost low MI to keep bubbles loosely clustered (prevents explosion)
+	var mi_boosted = max(mi, MI_LOW_BOOST)
 
 	var delta_pos = other_pos - pos
 	var dist = delta_pos.length()
 	if dist < 1.0:
 		return Vector2.ZERO
 
-	var target_dist = 80.0 / (1.0 + 3.0 * mi)
+	var target_dist = 80.0 / (1.0 + 3.0 * mi_boosted)
 	var displacement = dist - target_dist
 
-	return delta_pos.normalized() * displacement * CORRELATION_SPRING * mi
+	return delta_pos.normalized() * displacement * CORRELATION_SPRING * mi_boosted
 
 
 func _repulsion_force(pos: Vector2, other_pos: Vector2) -> Vector2:

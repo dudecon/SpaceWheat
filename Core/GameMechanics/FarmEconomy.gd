@@ -42,7 +42,7 @@ const INITIAL_RESOURCES = {
 	# Forest organisms
 	"🌿": 0,    # vegetation (producer)
 	"🐇": 0,    # rabbit (herbivore)
-	"🦅": 800,  # eagle (apex predator) - 80 quantum units
+	"🦅": 40,   # eagle (apex predator) - 4 quantum units
 	# StellarForges resources
 	"⚙": 20,   # gears (industry)
 	# Other
@@ -104,6 +104,10 @@ func add_resource(emoji: String, credits_amount, reason: String = "") -> void:
 	Purity Bonus: If emoji is in player's vocabulary, apply 2x multiplier (squared = 4x total)
 	Otherwise, always allow gain with no bonus (1x)
 	"""
+	if not _resource_allowed_by_iconmap(emoji):
+		if _verbose:
+			_verbose.warn("economy", "⚠️", "Blocked gain for %s (not in IconMap vocabulary)" % emoji)
+		return
 	if not emoji_credits.has(emoji):
 		emoji_credits[emoji] = 0
 
@@ -130,6 +134,7 @@ func _get_vocabulary_purity_multiplier(emoji: String) -> float:
 	if not gsm:
 		return 1.0
 
+
 	var is_in_vocabulary = false
 
 	# Prefer farm-owned vocabulary when available
@@ -148,6 +153,22 @@ func _get_vocabulary_purity_multiplier(emoji: String) -> float:
 		return 1.0  # Always allow, just no bonus
 
 
+func _resource_allowed_by_iconmap(emoji: String) -> bool:
+	"""Only allow gains for emojis present in the current IconMap vocabulary."""
+	var gsm = get_node_or_null("/root/GameStateManager")
+	if not gsm or not ("active_farm" in gsm):
+		return true
+	var farm = gsm.active_farm
+	if not farm or not ("biome_evolution_batcher" in farm):
+		return true
+	var batcher = farm.biome_evolution_batcher
+	if not batcher or not batcher.has_method("get_global_icon_map"):
+		return true
+	var icon_map = batcher.get_global_icon_map()
+	if icon_map.is_empty():
+		return true
+	var by_emoji = icon_map.get("by_emoji", {})
+	return by_emoji.has(emoji)
 func remove_resource(emoji: String, credits_amount, reason: String = "") -> bool:
 	"""Remove emoji-credits from a resource. Returns false if insufficient. Supports float amounts."""
 	if not can_afford_resource(emoji, credits_amount):

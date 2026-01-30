@@ -22,6 +22,7 @@ const BiomeQuantumObserver = preload("res://Core/Environment/Components/BiomeQua
 const BiomeGateOperations = preload("res://Core/Environment/Components/BiomeGateOperations.gd")
 const BiomeQuantumSystemBuilder = preload("res://Core/Environment/Components/BiomeQuantumSystemBuilder.gd")
 const BiomeDensityMatrixMutator = preload("res://Core/Environment/Components/BiomeDensityMatrixMutator.gd")
+const QuantumVizCache = preload("res://Core/Visualization/QuantumVizCache.gd")
 
 # Core imports
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
@@ -50,6 +51,7 @@ var _quantum_observer: BiomeQuantumObserver
 var _gate_operations: BiomeGateOperations
 var _system_builder: BiomeQuantumSystemBuilder
 var _density_mutator: BiomeDensityMatrixMutator
+var viz_cache: QuantumVizCache = QuantumVizCache.new()
 
 # ============================================================================
 # CORE STATE (remains in BiomeBase)
@@ -103,7 +105,7 @@ var phase_lnn_enabled: bool = false  # Enable/disable phase modulation
 # Quantum time scaling (affects simulation speed without changing render rate)
 # Lower = slower simulation, higher = faster simulation
 # 1.0 = real-time, 0.5 = half-speed, 2.0 = double-speed
-var quantum_time_scale: float = 0.125  # Default to 1/8th real-time for detailed observation
+var quantum_time_scale: float = 0.03125  # Default to 1/32nd real-time for detailed observation (4x slower)
 
 # Matrix substep granularity (controls numerical accuracy of evolution)
 # Smaller = more substeps = better accuracy but slower computation
@@ -183,6 +185,7 @@ func _ready() -> void:
 	# Initialize biome-specific quantum computer via virtual method
 	# NOTE: Subclasses like BioticFluxBiome create their own quantum_computer here
 	_initialize_bath()
+	_seed_viz_metadata()
 
 	# Wire component dependencies AFTER _initialize_bath() creates the real quantum_computer
 	if quantum_computer:
@@ -201,6 +204,30 @@ func _wire_component_dependencies() -> void:
 	_system_builder.set_dependencies(quantum_computer, _resource_registry, _icon_registry)
 	_gate_operations.set_dependencies(quantum_computer, null, _bell_gate_tracker, time_tracker)
 	_gate_operations.set_verbose_log_callback(_verbose_log)
+
+
+func _seed_viz_metadata() -> void:
+	"""Seed viz_cache metadata from register_map when lookahead is disabled."""
+	if not viz_cache or not quantum_computer or not quantum_computer.register_map:
+		return
+	if viz_cache.has_metadata():
+		return
+	var register_map = quantum_computer.register_map
+	var payload: Dictionary = {}
+	payload["num_qubits"] = register_map.num_qubits
+	payload["axes"] = register_map.axes.duplicate(true) if "axes" in register_map else {}
+	var emoji_to_qubit: Dictionary = {}
+	var emoji_to_pole: Dictionary = {}
+	var emoji_list: Array = []
+	for emoji in register_map.coordinates.keys():
+		var coord = register_map.coordinates[emoji]
+		emoji_to_qubit[emoji] = coord.get("qubit", -1)
+		emoji_to_pole[emoji] = coord.get("pole", -1)
+		emoji_list.append(emoji)
+	payload["emoji_to_qubit"] = emoji_to_qubit
+	payload["emoji_to_pole"] = emoji_to_pole
+	payload["emoji_list"] = emoji_list
+	viz_cache.update_metadata_from_payload(payload)
 
 
 # ============================================================================
@@ -347,6 +374,34 @@ func initialize_phase_lnn() -> void:
 	phase_lnn_enabled = true
 
 
+## Enable LNN for testing (bypasses ENABLE_PHASE_LNN constant)
+func enable_phase_lnn_for_testing() -> bool:
+	"""Force-enable phase LNN regardless of master switch (for performance tests)."""
+	if phase_lnn:
+		phase_lnn_enabled = true
+		return true
+
+	# Initialize if not already done
+	if not quantum_computer or not quantum_computer.register_map:
+		return false
+
+	var num_qubits = quantum_computer.register_map.num_qubits
+	var dim = quantum_computer.register_map.dim()
+	var hidden_size = max(4, dim / 4)
+
+	phase_lnn = LiquidNeuralNet.new(dim, hidden_size, dim)
+	quantum_computer.phase_lnn = phase_lnn
+	phase_lnn_enabled = true
+
+	return true
+
+
+## Disable LNN for testing
+func disable_phase_lnn_for_testing():
+	"""Disable phase LNN (for performance comparison)."""
+	phase_lnn_enabled = false
+
+
 # ============================================================================
 # EVOLUTION CONTROL
 # ============================================================================
@@ -445,37 +500,89 @@ func bell_gate_count() -> int:
 # ============================================================================
 
 func get_observable_theta(north: String, south: String) -> float:
-	return _quantum_observer.get_observable_theta(north, south)
+	var bloch = _get_bloch_for_pair(north, south)
+	return bloch.get("theta", 0.0) if not bloch.is_empty() else 0.0
 
 func get_observable_phi(north: String, south: String) -> float:
-	return _quantum_observer.get_observable_phi(north, south)
+	var bloch = _get_bloch_for_pair(north, south)
+	return bloch.get("phi", 0.0) if not bloch.is_empty() else 0.0
 
 func get_observable_coherence(north: String, south: String) -> float:
-	return _quantum_observer.get_observable_coherence(north, south)
+	var bloch = _get_bloch_for_pair(north, south)
+	if bloch.is_empty():
+		return 0.0
+	var x = bloch.get("x", 0.0)
+	var y = bloch.get("y", 0.0)
+	return 0.5 * sqrt(x * x + y * y)
 
 func get_observable_radius(north: String, south: String) -> float:
-	return _quantum_observer.get_observable_radius(north, south)
+	var bloch = _get_bloch_for_pair(north, south)
+	return bloch.get("r", 0.0) if not bloch.is_empty() else 0.0
 
 func get_observable_amplitude(emoji: String) -> float:
-	return _quantum_observer.get_observable_amplitude(emoji)
+	var prob = get_emoji_probability(emoji)
+	return sqrt(maxf(prob, 0.0))
 
 func get_observable_phase(emoji: String) -> float:
-	return _quantum_observer.get_observable_phase(emoji)
+	var bloch = _get_bloch_for_emoji(emoji)
+	return bloch.get("phi", 0.0) if not bloch.is_empty() else 0.0
 
 func get_emoji_probability(emoji: String) -> float:
-	return _quantum_observer.get_emoji_probability(emoji)
+	if not viz_cache:
+		return 0.0
+	var q = viz_cache.get_qubit(emoji)
+	var pole = viz_cache.get_pole(emoji)
+	if q < 0 or pole < 0:
+		return 0.0
+	var snap = viz_cache.get_snapshot(q)
+	if snap.is_empty():
+		return 0.0
+	return snap.get("p0", 0.5) if pole == 0 else snap.get("p1", 0.5)
 
 func get_emoji_coherence(north_emoji: String, south_emoji: String):
-	return _quantum_observer.get_emoji_coherence(north_emoji, south_emoji)
+	var bloch = _get_bloch_for_pair(north_emoji, south_emoji)
+	if bloch.is_empty():
+		return 0.0
+	var x = bloch.get("x", 0.0)
+	var y = bloch.get("y", 0.0)
+	return 0.5 * sqrt(x * x + y * y)
 
 func get_purity() -> float:
-	return _quantum_observer.get_purity()
+	if viz_cache:
+		var purity = viz_cache.get_purity()
+		if purity >= 0.0:
+			return purity
+	return 0.0
+
+
+func get_icon_map() -> Dictionary:
+	if not viz_cache:
+		return {}
+	return viz_cache.get_icon_map()
+
+
+func get_icon_probability(emoji: String, normalized: bool = true) -> float:
+	if not viz_cache:
+		return 0.0
+	return viz_cache.get_icon_map_probability(emoji, normalized)
 
 func get_register_emoji_pair(register_id: int) -> Dictionary:
-	return _quantum_observer.get_register_emoji_pair(register_id)
+	if not viz_cache:
+		return {}
+	return viz_cache.get_axis(register_id)
 
 func get_coherence_with_other_registers(register_id: int) -> float:
-	return _quantum_observer.get_coherence_with_other_registers(register_id)
+	if not viz_cache or viz_cache.get_num_qubits() <= 1:
+		return 0.0
+	var max_mi = 0.0
+	var n = viz_cache.get_num_qubits()
+	for i in range(n):
+		if i == register_id:
+			continue
+		var mi = viz_cache.get_mutual_information(register_id, i)
+		if mi > max_mi:
+			max_mi = mi
+	return max_mi
 
 
 # ============================================================================
@@ -484,15 +591,19 @@ func get_coherence_with_other_registers(register_id: int) -> float:
 
 ## Get register probability for a specific register ID
 func get_register_probability(register_id: int) -> float:
-	return _quantum_observer.get_register_probability(register_id)
+	if not viz_cache:
+		return 0.5
+	var snap = viz_cache.get_snapshot(register_id)
+	if snap.is_empty():
+		return 0.5
+	return snap.get("p0", 0.5)
 
 ## Get all unbound register IDs (available for new terminal binding)
 func get_unbound_registers(plot_pool = null) -> Array[int]:
 	"""Get all register IDs not currently bound to a terminal."""
-	if not quantum_computer or not quantum_computer.register_map:
+	if not viz_cache:
 		return []
-
-	var num_qubits = quantum_computer.register_map.num_qubits
+	var num_qubits = viz_cache.get_num_qubits()
 	var unbound: Array[int] = []
 	var biome_name = get_biome_type() if has_method("get_biome_type") else ""
 
@@ -509,23 +620,40 @@ func get_register_probabilities(plot_pool = null) -> Dictionary:
 	var unbound = get_unbound_registers(plot_pool)
 
 	for reg_id in unbound:
-		if _quantum_observer:
-			probs[reg_id] = _quantum_observer.get_register_probability(reg_id)
-		else:
-			probs[reg_id] = 0.5
+		probs[reg_id] = get_register_probability(reg_id)
 
 	return probs
 
 ## Get total number of registers in this biome
 func get_total_register_count() -> int:
-	if not quantum_computer or not quantum_computer.register_map:
+	if not viz_cache:
 		return 0
-	return quantum_computer.register_map.num_qubits
+	return viz_cache.get_num_qubits()
 
 ## Get registers not currently bound to any terminal (V2 Architecture)
 func get_available_registers_v2(plot_pool) -> Array[int]:
 	"""Get unbound registers for EXPLORE action."""
 	return get_unbound_registers(plot_pool)
+
+
+func _get_bloch_for_emoji(emoji: String) -> Dictionary:
+	if not viz_cache:
+		return {}
+	var q = viz_cache.get_qubit(emoji)
+	if q < 0:
+		return {}
+	return viz_cache.get_bloch(q)
+
+
+func _get_bloch_for_pair(north: String, south: String) -> Dictionary:
+	if not viz_cache:
+		return {}
+	var q = viz_cache.get_qubit(north)
+	if q < 0:
+		q = viz_cache.get_qubit(south)
+	if q < 0:
+		return {}
+	return viz_cache.get_bloch(q)
 
 
 # ============================================================================
@@ -571,7 +699,8 @@ func batch_measure_plots(position: Vector2i) -> Dictionary:
 
 func expand_quantum_system(north_emoji: String, south_emoji: String) -> Dictionary:
 	_wire_component_dependencies()
-	return _system_builder.expand_quantum_system(north_emoji, south_emoji)
+	var result = _system_builder.expand_quantum_system(north_emoji, south_emoji)
+	return result
 
 func inject_coupling(emoji_a: String, emoji_b: String, strength: float) -> Dictionary:
 	_wire_component_dependencies()

@@ -154,7 +154,7 @@ func place_kitchen(position: Vector2i) -> bool:
 	# Inject bread axis into biome's quantum system
 	var biome = _biome_routing.get_biome_for_plot(position)
 	if biome and biome.quantum_computer:
-		if not biome.quantum_computer.register_map.has("🍞"):
+		if not _has_emoji(biome, "🍞"):
 			if biome.has_method("expand_quantum_system"):
 				# Expand quantum system to include bread (coupled to flour)
 				var result = biome.expand_quantum_system("🍞", "💨")
@@ -221,7 +221,7 @@ func place_kitchen_triplet(positions: Array[Vector2i]) -> bool:
 		# Inject bread superposition into biome
 		var biome = _biome_routing.get_biome_for_plot(positions[0])
 		if biome and biome.has_method("expand_quantum_system"):
-			if not biome.quantum_computer.register_map.has("🍞"):
+			if not _has_emoji(biome, "🍞"):
 				var result = biome.expand_quantum_system("🍞", "💨")
 				if result.success or result.get("already_exists", false):
 					if _verbose:
@@ -246,3 +246,14 @@ func get_mill(position: Vector2i) -> QuantumMill:
 func get_market(position: Vector2i) -> QuantumMarket:
 	"""Get market at position if exists."""
 	return quantum_markets.get(position, null)
+
+
+func _has_emoji(biome, emoji: String) -> bool:
+	"""Check emoji presence via viz_cache metadata (fallback to register_map)."""
+	if not biome or emoji == "":
+		return false
+	if biome.viz_cache:
+		return biome.viz_cache.get_qubit(emoji) >= 0
+	if biome.quantum_computer and biome.quantum_computer.register_map:
+		return biome.quantum_computer.register_map.has(emoji)
+	return false

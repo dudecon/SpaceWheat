@@ -11,6 +11,15 @@ extends RefCounted
 const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 
+static func _has_emoji(biome, emoji: String) -> bool:
+	"""Check if emoji exists in biome via viz_cache metadata."""
+	if not biome or emoji == "":
+		return false
+	if biome.viz_cache and biome.viz_cache.has_metadata():
+		return biome.viz_cache.get_qubit(emoji) >= 0
+	return false
+
+
 ## ============================================================================
 ## ICON ASSIGNMENT OPERATIONS
 ## ============================================================================
@@ -68,7 +77,14 @@ static func icon_assign(farm, positions: Array[Vector2i], emoji: String, _game_s
 			"error": "no_biome",
 			"message": "No biome at position"
 		}
-	if biome.quantum_computer and biome.quantum_computer.register_map.num_qubits >= EconomyConstants.MAX_BIOME_QUBITS:
+	if not biome.viz_cache or not biome.viz_cache.has_metadata():
+		return {
+			"success": false,
+			"error": "no_viz_cache",
+			"message": "Biome visualization data not ready"
+		}
+	var qubit_count = biome.get_total_register_count() if biome.has_method("get_total_register_count") else 0
+	if qubit_count >= EconomyConstants.MAX_BIOME_QUBITS:
 		return {
 			"success": false,
 			"error": "qubit_cap_reached",
@@ -76,13 +92,13 @@ static func icon_assign(farm, positions: Array[Vector2i], emoji: String, _game_s
 		}
 
 	# Check if either emoji already exists in biome (prevent axis conflicts)
-	if biome.quantum_computer and biome.quantum_computer.register_map.has(north):
+	if _has_emoji(biome, north):
 		return {
 			"success": false,
 			"error": "already_exists",
 			"message": "%s already in biome" % north
 		}
-	if biome.quantum_computer and biome.quantum_computer.register_map.has(south):
+	if _has_emoji(biome, south):
 		return {
 			"success": false,
 			"error": "already_exists",
@@ -260,10 +276,9 @@ static func get_biome_icons(farm, position: Vector2i) -> Dictionary:
 
 	var icons: Array = []
 
-	# Get from quantum computer register map
-	if biome.quantum_computer and biome.quantum_computer.register_map:
-		for emoji in biome.quantum_computer.register_map.coordinates:
-			icons.append(emoji)
+	# Get from viz_cache metadata
+	if biome.viz_cache:
+		icons = biome.viz_cache.get_emojis()
 
 	# Also include producible emojis
 	var producible = biome.producible_emojis if biome.producible_emojis else []

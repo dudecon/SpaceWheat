@@ -94,11 +94,10 @@ func _draw_temperature_heatmap(graph: Node2D, ctx: Dictionary) -> void:
 		# Get average decoherence from sink fluxes
 		var total_flux = 0.0
 		var flux_count = 0
-		if biome.quantum_computer and biome.quantum_computer.has_method("get_all_sink_fluxes"):
-			var fluxes = biome.quantum_computer.get_all_sink_fluxes()
-			for emoji in fluxes:
-				total_flux += fluxes[emoji]
-				flux_count += 1
+		var fluxes = biome.viz_cache.get_sink_fluxes() if biome.viz_cache else {}
+		for emoji in fluxes:
+			total_flux += fluxes[emoji]
+			flux_count += 1
 
 		var avg_flux = total_flux / max(flux_count, 1)
 

@@ -78,16 +78,28 @@ static func build(icons: Dictionary, register_map: RegisterMap, verbose = null, 
 				var target_q = register_map.qubit(target_emoji)
 				var target_p = register_map.pole(target_emoji)
 				var strength = icon.hamiltonian_couplings[target_emoji]
-				# Convert float to Complex for matrix operations
-				var coupling = Complex.new(strength, 0.0) if strength is float else strength
+
+				# Convert to Complex for matrix operations
+				# strength can be: float (real), Vector2 (complex: x=real, y=imag), or Complex
+				var coupling: Complex
+				if strength is float:
+					coupling = Complex.new(strength, 0.0)
+				elif strength is Vector2:
+					coupling = Complex.new(strength.x, strength.y)
+				elif strength is Complex:
+					coupling = strength
+				else:
+					push_warning("HamiltonianBuilder: unexpected coupling type: %s" % typeof(strength))
+					continue
 
 				_add_coupling(H, source_q, source_p, target_q, target_p, coupling, num_qubits)
 				stats.couplings_added += 1
 
+				var strength_label = _format_strength_label(strength)
 				if verbose:
-					verbose.debug("quantum-build", "✓", "%s→%s coupling: %.3f" % [source_emoji, target_emoji, strength])
+					verbose.debug("quantum-build", "✓", "%s→%s coupling: %s" % [source_emoji, target_emoji, strength_label])
 				else:
-					print("  ✓ %s→%s coupling: %.3f" % [source_emoji, target_emoji, strength])
+					print("  ✓ %s→%s coupling: %s" % [source_emoji, target_emoji, strength_label])
 
 	# Ensure Hermiticity: H = (H + H†)/2
 	H = _hermitianize(H)
@@ -110,6 +122,19 @@ static func build(icons: Dictionary, register_map: RegisterMap, verbose = null, 
 		])
 
 	return H
+
+
+static func _format_strength_label(strength) -> String:
+	"""Format coupling strength for logs (supports float, Vector2, Complex)."""
+	if strength is float or strength is int:
+		return "%.3f" % float(strength)
+	if strength is Vector2:
+		var re = float(strength.x)
+		var im = float(strength.y)
+		return "%.3f%+.3fi" % [re, im]
+	if strength is Complex:
+		return "%.3f%+.3fi" % [strength.re, strength.im]
+	return str(strength)
 
 
 static func _add_self_energy(H: ComplexMatrix, qubit: int, pole: int,

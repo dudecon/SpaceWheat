@@ -12,7 +12,7 @@ const QuantumGateLibrary = preload("res://Core/QuantumSubstrate/QuantumGateLibra
 
 # Injected dependencies
 var quantum_computer = null
-var register_manager = null  # BiomePlotRegisterManager
+var register_manager = null  # Legacy plot→register resolver (deprecated)
 var bell_gate_tracker = null  # BiomeBellGateTracker
 var time_tracker = null  # BiomeTimeTracker
 

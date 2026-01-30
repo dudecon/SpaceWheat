@@ -7,16 +7,11 @@ const Icon = preload("res://Core/QuantumSubstrate/Icon.gd")
 ##
 ## Architecture: QuantumComputer with 4-qubit tensor product
 ##
-## Core Fungal State (16D):
+## Axes:
 ##   Qubit 0 (Colony):    🦗 Locusts / 🐜 Ants
 ##   Qubit 1 (Growth):    🍄 Mature fungi / 🦠 Spores
 ##   Qubit 2 (Substrate): 🧫 Nutrients / 🍂 Detritus
 ##   Qubit 3 (Cycle):     🌙 Night / ☀ Day
-##
-## Basis States: 16 total (2^4)
-##   |0000⟩ = 🦗🍄🧫🌙 (Locust swarm + Mature fungi + Rich nutrients + Night)
-##   |1111⟩ = 🐜🦠🍂☀ (Ant colony + Spores + Detritus + Day)
-##   ... and 14 intermediate states
 ##
 ## Physics:
 ##   - Colony competition (locusts boom-bust vs ant stability)
@@ -78,9 +73,8 @@ func _initialize_bath() -> void:
 	quantum_computer.allocate_axis(2, "🧫", "🍂")  # Substrate: Nutrient/Detritus
 	quantum_computer.allocate_axis(3, "🌙", "☀")   # Cycle: Night/Day
 
-	# Initialize to balanced fungal state |0100⟩ = 🦗🦠🧫🌙
-	# (Locusts dormant, spores active, nutrients available, night)
-	quantum_computer.initialize_basis(4)
+	# Initialize to uniform superposition across all basis states
+	quantum_computer.initialize_uniform_superposition()
 
 	print("  📊 RegisterMap configured (4 qubits, 16 basis states)")
 

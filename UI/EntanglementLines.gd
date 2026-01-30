@@ -206,7 +206,7 @@ func _get_tile(pos: Vector2i) -> Control:
 	if plot_tiles.is_empty():
 		return null
 
-	var grid_width = 5  # GRID_SIZE from FarmView
+	var grid_width = farm_grid.grid_width if farm_grid else 5
 	var index = pos.y * grid_width + pos.x
 
 	if index < 0 or index >= plot_tiles.size():

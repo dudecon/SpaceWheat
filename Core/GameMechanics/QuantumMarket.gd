@@ -63,13 +63,13 @@ func activate(biome, target_emoji: String = "🌾") -> bool:
 		return false
 
 	# Verify target emoji exists in biome
-	if not parent_biome.quantum_computer.register_map.has(target_emoji):
+	if not _has_emoji(parent_biome, target_emoji):
 		print("🏪 Market: Target emoji %s not in biome - market inactive" % target_emoji)
 		is_active = false
 		return false
 
 	# Add 💰 axis if not present
-	if not parent_biome.quantum_computer.register_map.has("💰"):
+	if not _has_emoji(parent_biome, "💰"):
 		print("🏪 Market: Adding 💰 axis to quantum system...")
 
 		if parent_biome.has_method("expand_quantum_system"):
@@ -116,12 +116,10 @@ func measure_for_sale() -> Dictionary:
 	if not is_active or not parent_biome or not parent_biome.quantum_computer:
 		return {"success": false, "credits": 0, "got_money": false, "probability": 0.0}
 
-	var qc = parent_biome.quantum_computer
-
 	# Get P(💰) from quantum computer (Model C)
 	var money_prob = 0.5  # Default
-	if qc.register_map.has("💰"):
-		money_prob = qc.get_population("💰")
+	if _has_emoji(parent_biome, "💰"):
+		money_prob = parent_biome.get_emoji_probability("💰")
 
 	# Perform measurement (Born rule)
 	var got_money = randf() < money_prob
@@ -156,9 +154,8 @@ func get_current_price() -> float:
 	if not is_active or not parent_biome or not parent_biome.quantum_computer:
 		return 0.5
 
-	var qc = parent_biome.quantum_computer
-	if qc.register_map.has("💰"):
-		return qc.get_emoji_probability("💰")
+	if _has_emoji(parent_biome, "💰"):
+		return parent_biome.get_emoji_probability("💰")
 	return 0.5
 
 
@@ -182,3 +179,14 @@ func get_debug_info() -> Dictionary:
 func is_working() -> bool:
 	"""Check if market is actively trading."""
 	return is_active
+
+
+func _has_emoji(biome, emoji: String) -> bool:
+	"""Check emoji presence via viz_cache metadata (fallback to register_map)."""
+	if not biome or emoji == "":
+		return false
+	if biome.viz_cache:
+		return biome.viz_cache.get_qubit(emoji) >= 0
+	if biome.quantum_computer and biome.quantum_computer.register_map:
+		return biome.quantum_computer.register_map.has(emoji)
+	return false

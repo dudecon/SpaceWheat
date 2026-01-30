@@ -76,14 +76,15 @@ func add_biome(biome_name: String, biome_ref) -> void:
 		push_warning("BathQuantumViz: null biome reference for %s" % biome_name)
 		return
 
-	# All biomes must have quantum_computer (Model C)
-	if not biome_ref.quantum_computer:
-		push_warning("BathQuantumViz: biome %s has no quantum_computer" % biome_name)
+	# All biomes must have visualization payload (Model C)
+	if not biome_ref.viz_cache or not biome_ref.viz_cache.has_metadata():
+		push_warning("BathQuantumViz: biome %s has no viz payload" % biome_name)
 		return
 
 	biomes[biome_name] = biome_ref
 	if _verbose:
-		_verbose.debug("viz", "🛁", "BathQuantumViz: Added biome '%s' with %d qubits (Model C)" % [biome_name, biome_ref.quantum_computer.register_map.num_qubits])
+		var qubits = biome_ref.viz_cache.get_num_qubits() if ("viz_cache" in biome_ref) else 0
+		_verbose.debug("viz", "🛁", "BathQuantumViz: Added biome '%s' with %d qubits (Model C)" % [biome_name, qubits])
 
 
 func initialize() -> void:
@@ -428,8 +429,8 @@ func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
 		return
 
 	var biome = biomes.get(biome_name)
-	# Model C: Check for quantum_computer OR legacy bath
-	if not biome or (not biome.quantum_computer):
+	# Model C: require visualization payload
+	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 		return
 
 	# Get emojis from plot (Model C: uses terminal system now)
@@ -506,7 +507,7 @@ func request_emoji_bubble(biome_name: String, emoji: String) -> void:
 		return
 
 	var biome = biomes[biome_name]
-	if not biome or not biome.quantum_computer:
+	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 		return
 
 	# Skip if already requested
@@ -539,8 +540,8 @@ func _create_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> Quantu
 	Returns: The created QuantumNode, or null if creation failed
 	"""
 	var biome = biomes.get(biome_name)
-	# Model C: Check for quantum_computer OR legacy bath
-	if not biome or (not biome.quantum_computer):
+	# Model C: require visualization payload
+	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 		return null
 
 	# Determine initial position (scatter around oval perimeter)
@@ -588,9 +589,9 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 		return
 
 	var biome = biomes.get(biome_name)
-	if not biome or (not biome.quantum_computer):
+	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 		if _verbose:
-			_verbose.debug("viz", "⚠️", "Biome %s has no quantum backend" % biome_name)
+			_verbose.debug("viz", "⚠️", "Biome %s has no viz payload" % biome_name)
 		return
 
 	if not graph or not graph.layout_calculator:
@@ -671,8 +672,8 @@ func _create_single_bubble(biome_name: String, emoji: String, grid_pos: Vector2i
 	Returns: The created QuantumNode, or null if creation failed
 	"""
 	var biome = biomes.get(biome_name)
-	# Model C: Check for quantum_computer OR legacy bath
-	if not biome or (not biome.quantum_computer):
+	# Model C: require visualization payload
+	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
 		return null
 
 	# Create dummy qubit for interface compatibility (QuantumNode expects one)
@@ -777,8 +778,10 @@ func _apply_skating_rink_forces(delta: float) -> void:
 		# Get biome's purity for radial positioning
 		var biome = biomes.get(biome_name)
 		var biome_purity = 0.5  # Default mid-purity
-		if biome and biome.quantum_computer:
-			biome_purity = biome.quantum_computer.get_purity()
+		if biome and ("viz_cache" in biome):
+			var purity = biome.viz_cache.get_purity()
+			if purity >= 0.0:
+				biome_purity = purity
 
 		# RADIAL POSITION: ring_distance ← purity (constant for all bubbles in this biome)
 		# Pure (1.0) → 0.3 (center), Mixed (0.125 for 8-dim) → 0.85 (edge)

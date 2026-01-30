@@ -235,30 +235,7 @@ func _create_tiles() -> void:
 
 	for plot_config in active_plots:
 		var pos = plot_config.position
-
-		# Create tile (position will be set by _update_layout_for_active_biome)
-		var tile = PlotTile.new()
-		tile.grid_position = pos
-		tile.custom_minimum_size = Vector2(90, 90)
-
-		# Disable layout mode so position is respected
-		tile.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		tile.set_anchor(SIDE_LEFT, 0.0)
-		tile.set_anchor(SIDE_TOP, 0.0)
-		tile.set_anchor(SIDE_RIGHT, 0.0)
-		tile.set_anchor(SIDE_BOTTOM, 0.0)
-		tile.layout_mode = 0
-
-		# Start hidden - will be shown by _filter_tiles_for_biome
-		tile.visible = false
-
-		add_child(tile)
-		tiles[pos] = tile
-
-		# Set keyboard label from grid config
-		var label = plot_config.keyboard_label if plot_config.keyboard_label else ""
-		if label:
-			tile.set_label_text(label)
+		_create_tile_at(pos, plot_config.keyboard_label)
 
 	if _verbose:
 		_verbose.info("ui", "✅", "Created %d plot tiles (awaiting positioning)" % tiles.size())
@@ -269,6 +246,52 @@ func _create_tiles() -> void:
 		TouchInputManager.tap_detected.connect(_on_touch_tap, CONNECT_DEFERRED)
 		if _verbose:
 			_verbose.info("ui", "✅", "Touch: Tap-to-select connected with DEFERRED (bubbles have priority)")
+
+
+func _create_tile_at(pos: Vector2i, label: String = "") -> void:
+	"""Create a single plot tile if it doesn't already exist."""
+	if tiles.has(pos):
+		return
+	var tile = PlotTile.new()
+	tile.grid_position = pos
+	tile.custom_minimum_size = Vector2(90, 90)
+
+	# Disable layout mode so position is respected
+	tile.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	tile.set_anchor(SIDE_LEFT, 0.0)
+	tile.set_anchor(SIDE_TOP, 0.0)
+	tile.set_anchor(SIDE_RIGHT, 0.0)
+	tile.set_anchor(SIDE_BOTTOM, 0.0)
+	tile.layout_mode = 0
+
+	# Start hidden - will be shown by _filter_tiles_for_biome
+	tile.visible = false
+
+	add_child(tile)
+	tiles[pos] = tile
+
+	if label != "":
+		tile.set_label_text(label)
+
+
+func apply_grid_config_update(new_config: GridConfig, new_biomes: Dictionary = {}) -> void:
+	"""Apply a new GridConfig (used when biomes are added)."""
+	if not new_config:
+		return
+	grid_config = new_config
+	if not new_biomes.is_empty():
+		biomes = new_biomes
+
+	# Create missing tiles for new positions
+	var active_plots = grid_config.get_all_active_plots()
+	for plot_config in active_plots:
+		_create_tile_at(plot_config.position, plot_config.keyboard_label)
+
+	# Reposition for current biome (if available)
+	if active_biome_manager:
+		var biome_name = active_biome_manager.get_active_biome()
+		_update_layout_for_active_biome(biome_name)
+		_filter_tiles_for_biome(biome_name)
 
 
 ## ═══════════════════════════════════════════════════════════════════════════════
@@ -351,6 +374,11 @@ func _update_layout_for_active_biome(biome_name: String) -> void:
 		var plot_biome = grid_config.get_biome_for_plot(plot_config.position)
 		if plot_biome == biome_name:
 			plots_in_biome.append(plot_config.position)
+
+	# Clamp visible plots to number of available registers
+	var register_count = _get_biome_register_count(biome_name)
+	if register_count > 0 and plots_in_biome.size() > register_count:
+		plots_in_biome = plots_in_biome.slice(0, register_count)
 
 	if plots_in_biome.is_empty():
 		return
@@ -449,6 +477,7 @@ func _filter_tiles_for_biome(biome_name: String) -> void:
 	if not grid_config:
 		return
 
+	var register_count = _get_biome_register_count(biome_name)
 	var visible_count = 0
 	var hidden_count = 0
 
@@ -456,7 +485,7 @@ func _filter_tiles_for_biome(biome_name: String) -> void:
 		var tile = tiles[pos]
 		var tile_biome = grid_config.get_biome_for_plot(pos)
 
-		if tile_biome == biome_name:
+		if tile_biome == biome_name and (register_count <= 0 or pos.x < register_count):
 			tile.visible = true
 			visible_count += 1
 		else:
@@ -467,6 +496,18 @@ func _filter_tiles_for_biome(biome_name: String) -> void:
 
 	# Clear selection when changing biomes (plots from other biomes may be selected)
 	_clear_selection_for_other_biomes(biome_name)
+
+
+func _get_biome_register_count(biome_name: String) -> int:
+	"""Return number of registers (qubits) for a biome, or 0 if unknown."""
+	if biome_name == "" or biomes.is_empty():
+		return 0
+	if not biomes.has(biome_name):
+		return 0
+	var biome = biomes[biome_name]
+	if biome and biome.quantum_computer and biome.quantum_computer.register_map:
+		return biome.quantum_computer.register_map.num_qubits
+	return 0
 
 
 func _clear_selection_for_other_biomes(active_biome: String) -> void:
@@ -555,8 +596,37 @@ func inject_farm(farm_ref: Node) -> void:
 			if _verbose:
 				_verbose.debug("ui", "📡", "Connected to farm.structure_built")
 
+	# Connect to biome_loaded for dynamic biome injection
+	if farm.has_signal("biome_loaded"):
+		if not farm.biome_loaded.is_connected(_on_biome_loaded):
+			farm.biome_loaded.connect(_on_biome_loaded)
+			if _verbose:
+				_verbose.debug("ui", "📡", "Connected to farm.biome_loaded")
+
+	# Connect to grid resize events (dynamic biome expansion)
+	if farm.has_signal("grid_resized"):
+		if not farm.grid_resized.is_connected(_on_grid_resized):
+			farm.grid_resized.connect(_on_grid_resized)
+			if _verbose:
+				_verbose.debug("ui", "📡", "Connected to farm.grid_resized")
+
 	if _verbose:
 		_verbose.info("ui", "💉", "Farm injected into PlotGridDisplay")
+
+
+func _on_grid_resized(new_config: GridConfig) -> void:
+	"""Handle dynamic grid resize (new biome discovered)."""
+	apply_grid_config_update(new_config, farm.grid.biomes if farm and farm.grid else {})
+
+
+func _on_biome_loaded(_biome_name: String, _biome_ref) -> void:
+	"""Update injected biome map after dynamic load."""
+	if farm and farm.grid:
+		biomes = farm.grid.biomes
+		if active_biome_manager:
+			var active_biome = active_biome_manager.get_active_biome()
+			_update_layout_for_active_biome(active_biome)
+			_filter_tiles_for_biome(active_biome)
 
 
 func rebuild_from_grid() -> void:

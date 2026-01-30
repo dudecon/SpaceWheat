@@ -491,6 +491,23 @@ func initialize_basis(basis_index: int) -> void:
 	_log("debug", "quantum", "🎯", "Initialized to |%d⟩ = %s" % [basis_index, register_map.basis_to_emojis(basis_index)])
 
 
+func initialize_uniform_superposition() -> void:
+	"""Initialize density matrix to uniform superposition |ψ⟩ over all basis states.
+
+	|ψ⟩ = (1/√d) Σ_i |i⟩, so ρ = |ψ⟩⟨ψ| has all entries = 1/d.
+	"""
+	var dim = register_map.dim()
+	if dim <= 0:
+		push_error("❌ Cannot initialize superposition: invalid dimension %d" % dim)
+		return
+	density_matrix = ComplexMatrix.zeros(dim)
+	var value = Complex.new(1.0 / float(dim), 0.0)
+	for i in range(dim):
+		for j in range(dim):
+			density_matrix.set_element(i, j, value)
+	_log("debug", "quantum", "✨", "Initialized to uniform superposition (dim=%d)" % dim)
+
+
 # Delegate RegisterMap queries
 func has(emoji: String) -> bool:
 	"""Check if emoji is registered in this quantum computer."""
@@ -1030,14 +1047,23 @@ func _renormalize() -> void:
 		_reinitialize_mixed_state()
 		return
 
-	# Stage 3: Normalize trace to 1
-	if abs(trace - 1.0) > 1e-10:
+	# Stage 3: Cap trace to 1 (allow dissipative trace < 1)
+	if trace > 1.0 + 1e-10:
 		var scale = 1.0 / trace
 		var scale_c = Complex.new(scale, 0.0)
 		for i in range(data.size()):
 			data[i] = data[i].mul(scale_c)
 	
 	_purity_cache = -1.0
+
+
+func load_packed_state(rho_packed: PackedFloat64Array, dim: int, already_normalized: bool = false) -> void:
+	"""Load a packed density matrix, with optional trusted normalization."""
+	if density_matrix == null or density_matrix.n != dim:
+		density_matrix = ComplexMatrix.zeros(dim)
+	density_matrix._from_packed(rho_packed, dim)
+	if not already_normalized:
+		_renormalize()
 
 
 func _reinitialize_mixed_state() -> void:
@@ -2076,268 +2102,3 @@ func set_lindblad_operators(operators: Array) -> void:
 	var avg_sparsity = 1.0 - (float(total_nnz) / float(total_dense)) if total_dense > 0 else 0.0
 	_log("debug", "quantum", "⚡", "%d Lindblad ops → sparse: avg %.1f%% zeros, total nnz=%d" % [
 		operators.size(), avg_sparsity * 100, total_nnz])
-
-
-# ============================================================================
-# VISUALIZATION OBSERVABLES (Computed from packed density matrices)
-# ============================================================================
-# These methods compute quantum observables for visualization, supporting both
-# live state and lookahead buffered states.
-
-## Cached visualization metrics per qubit (updated once per frame)
-## Format: {qubit_index: {p_north, p_south, coh_re, coh_im, coh_mag, coh_phase, hue, saturation}}
-var _viz_metrics_cache: Dictionary = {}
-var _viz_purity_cache: float = -1.0
-var _viz_cache_frame: int = -1
-var _viz_bloch_cache: Dictionary = {}
-
-
-func compute_viz_metrics_from_packed(packed: PackedFloat64Array) -> void:
-	"""Compute all visualization metrics from a packed density matrix.
-
-	This populates _viz_metrics_cache and _viz_purity_cache for all qubits.
-	Called once per frame by BiomeEvolutionBatcher to update visualization state.
-
-	Args:
-		packed: Packed density matrix [re00, im00, re01, im01, ..., reNN, imNN]
-	"""
-	var current_frame = Engine.get_process_frames()
-	if current_frame == _viz_cache_frame:
-		return  # Already computed this frame
-
-	_viz_cache_frame = current_frame
-	_viz_metrics_cache.clear()
-
-	var num_qubits = register_map.num_qubits
-	var dim = register_map.dim()
-
-	if packed.is_empty() or dim <= 0:
-		return
-
-	# Compute per-qubit metrics
-	for qubit_idx in range(num_qubits):
-		var metrics = _compute_qubit_metrics_from_packed(packed, num_qubits, dim, qubit_idx)
-		_viz_metrics_cache[qubit_idx] = metrics
-
-	# Compute purity
-	_viz_purity_cache = _compute_purity_from_packed(packed)
-	_viz_bloch_cache.clear()
-
-
-func compute_viz_metrics_from_live() -> void:
-	"""Compute visualization metrics from live density_matrix state.
-
-	Use this fallback when lookahead buffers are not available.
-	Populates _viz_metrics_cache and _viz_purity_cache for all qubits.
-	"""
-	var current_frame = Engine.get_process_frames()
-	if current_frame == _viz_cache_frame:
-		return  # Already computed this frame
-
-	if density_matrix == null:
-		return
-
-	# Pack live state and compute
-	var packed = density_matrix._to_packed()
-	compute_viz_metrics_from_packed(packed)
-
-
-func _set_bloch_cache_from_packed(packed: PackedFloat64Array) -> void:
-	"""Populate Bloch cache from packed [x,y,z,r,theta,phi] per qubit."""
-	_viz_bloch_cache.clear()
-	if packed.is_empty():
-		return
-	var stride = 6
-	var num_qubits = register_map.num_qubits
-	if num_qubits <= 0:
-		return
-	var expected = num_qubits * stride
-	if packed.size() < expected:
-		return
-	for q in range(num_qubits):
-		var base = q * stride
-		_viz_bloch_cache[q] = {
-			"x": packed[base + 0],
-			"y": packed[base + 1],
-			"z": packed[base + 2],
-			"r": packed[base + 3],
-			"theta": packed[base + 4],
-			"phi": packed[base + 5],
-		}
-
-
-func _compute_qubit_metrics_from_packed(
-	packed: PackedFloat64Array,
-	num_qubits: int,
-	dim: int,
-	qubit_index: int
-) -> Dictionary:
-	"""Compute visualization metrics for a single qubit from packed density matrix.
-
-	Returns:
-		{p_north, p_south, coh_re, coh_im, coh_mag, coh_phase, hue, saturation}
-	"""
-	var shift = num_qubits - 1 - qubit_index
-	if shift < 0:
-		return {"p_north": 0.0, "p_south": 0.0, "coh_re": 0.0, "coh_im": 0.0,
-				"coh_mag": 0.0, "coh_phase": 0.0, "hue": 0.0, "saturation": 0.0}
-
-	var target_bit = 1 << shift
-	var mask_other = (dim - 1) ^ target_bit
-
-	var p_north = 0.0
-	var p_south = 0.0
-	var coh_re = 0.0
-	var coh_im = 0.0
-
-	# Accumulate diagonal (populations) and off-diagonal (coherence)
-	for i in range(dim):
-		var idx_diag = (i * dim + i) * 2
-		var prob = packed[idx_diag]
-		var bit = (i >> shift) & 1
-		if bit == 0:
-			p_north += prob
-		else:
-			p_south += prob
-
-		# Coherence: sum ρ[i,j] where i has bit=0 and j has bit=1 at qubit position
-		# and all other qubits match (partial trace condition)
-		var i_bit = bit
-		if i_bit != 0:
-			continue
-		var i_other = i & mask_other
-		for j in range(dim):
-			if (j & mask_other) != i_other:
-				continue
-			if ((j >> shift) & 1) != 1:
-				continue
-			var idx = (i * dim + j) * 2
-			coh_re += packed[idx]
-			coh_im += packed[idx + 1]
-
-	# Derive visualization properties
-	var coh_mag = sqrt(coh_re * coh_re + coh_im * coh_im)
-	var coh_phase = atan2(coh_im, coh_re)
-	var hue = (coh_phase + PI) / TAU
-	var saturation = clampf(coh_mag * 2.0, 0.0, 1.0)
-
-	return {
-		"p_north": p_north,
-		"p_south": p_south,
-		"coh_re": coh_re,
-		"coh_im": coh_im,
-		"coh_mag": coh_mag,
-		"coh_phase": coh_phase,
-		"hue": hue,
-		"saturation": saturation
-	}
-
-
-func _compute_purity_from_packed(packed: PackedFloat64Array) -> float:
-	"""Compute Tr(ρ²) = Σ|ρᵢⱼ|² from packed density matrix.
-
-	This is O(n²) where n = dim, computed once per frame per biome.
-
-	Args:
-		packed: Packed density matrix [re00, im00, re01, im01, ...]
-
-	Returns:
-		Purity in [0, 1] (1 = pure state, 1/dim = maximally mixed)
-	"""
-	var purity = 0.0
-	var count = packed.size()
-	var i = 0
-	while i < count:
-		var re = packed[i]
-		var im = packed[i + 1]
-		purity += re * re + im * im
-		i += 2
-	return clampf(purity, 0.0, 1.0)
-
-
-func get_viz_qubit_metrics(qubit_index: int) -> Dictionary:
-	"""Get cached visualization metrics for a qubit.
-
-	Call compute_viz_metrics_from_packed() first to populate the cache.
-
-	Returns:
-		{p_north, p_south, coh_re, coh_im, coh_mag, coh_phase, hue, saturation}
-		or empty dict if not cached
-	"""
-	return _viz_metrics_cache.get(qubit_index, {})
-
-
-func get_viz_purity() -> float:
-	"""Get cached visualization purity.
-
-	Call compute_viz_metrics_from_packed() first to populate the cache.
-
-	Returns:
-		Purity in [0, 1], or -1 if not cached
-	"""
-	return _viz_purity_cache
-
-
-func get_all_viz_metrics() -> Dictionary:
-	"""Get all cached visualization metrics for all qubits.
-
-	Returns:
-		{qubit_index: {p_north, p_south, coh_re, coh_im, ...}, ...}
-	"""
-	return _viz_metrics_cache
-
-
-func get_viz_bloch(qubit_index: int) -> Dictionary:
-	"""Get cached Bloch metrics for a qubit.
-
-	Returns {x,y,z,r,theta,phi} or empty dict if not cached.
-	"""
-	return _viz_bloch_cache.get(qubit_index, {})
-
-
-func compute_emoji_opacities(qubit_index: int) -> Dictionary:
-	"""Compute normalized emoji opacities from cached metrics.
-
-	Returns:
-		{north_opacity: float, south_opacity: float}
-	"""
-	var metrics = _viz_metrics_cache.get(qubit_index, {})
-	if metrics.is_empty():
-		return {"north_opacity": 0.5, "south_opacity": 0.5}
-
-	var p_north = metrics.get("p_north", 0.0)
-	var p_south = metrics.get("p_south", 0.0)
-	var mass = p_north + p_south
-
-	if mass > 0.001:
-		return {"north_opacity": p_north / mass, "south_opacity": p_south / mass}
-	return {"north_opacity": 0.1, "south_opacity": 0.1}
-
-
-func compute_bubble_color(qubit_index: int) -> Color:
-	"""Compute bubble color from cached coherence phase/magnitude.
-
-	Returns:
-		Color with hue from phase, saturation from magnitude
-	"""
-	var metrics = _viz_metrics_cache.get(qubit_index, {})
-	if metrics.is_empty():
-		return Color(0.7, 0.8, 0.9, 0.8)
-
-	var hue = metrics.get("hue", 0.0)
-	var saturation = metrics.get("saturation", 0.0)
-	return Color.from_hsv(hue, saturation * 0.8, 0.9, 0.8)
-
-
-func compute_bubble_radius(qubit_index: int, min_radius: float, max_radius: float) -> float:
-	"""Compute bubble radius from cached mass.
-
-	Returns:
-		Radius interpolated between min and max based on mass
-	"""
-	var metrics = _viz_metrics_cache.get(qubit_index, {})
-	if metrics.is_empty():
-		return min_radius
-
-	var mass = metrics.get("p_north", 0.0) + metrics.get("p_south", 0.0)
-	return lerpf(min_radius, max_radius, clampf(mass * 2.0, 0.0, 1.0))

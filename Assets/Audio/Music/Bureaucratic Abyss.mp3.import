@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://c4kcvqrrlytbe"
+path="res://.godot/imported/Bureaucratic Abyss.mp3-3f9d2f7c6cb606f98d3de9f096e67d91.mp3str"
+
+[deps]
+
+source_file="res://Assets/Audio/Music/Bureaucratic Abyss.mp3"
+dest_files=["res://.godot/imported/Bureaucratic Abyss.mp3-3f9d2f7c6cb606f98d3de9f096e67d91.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

@@ -145,57 +145,45 @@ const TOOL_GROUPS = {
 
 	# =========================================================================
 	# GROUP 3: MEASURE (O) - Discrete
-	# Main gameplay loop. F-cycles: probe -> gate -> build
-	# Gates and buildings merged conceptually (classical layer bubbles)
+	# Main gameplay loop. F-cycles: probe -> gate
 	# =========================================================================
 	3: {
 		"name": "Measure",
 		"emoji": "O",
 		"icon": "res://Assets/UI/Science/Measure.svg",
 		"time_scale": "discrete",
-		"description": "Collapse, harvest, build infrastructure",
+		"description": "Collapse, harvest, entangle",
 		"has_f_cycling": true,
-		"modes": ["probe", "gate", "build"],
-		"mode_labels": ["?", ")(", "#"],
-		"mode_emojis": ["?", ")(", "#"],
+		"modes": ["probe", "gate"],
+		"mode_labels": ["?", ")("],
+		"mode_emojis": ["?", ")("],
 		"pauses_sim": true,
 		"actions": {
 			# PROBE MODE: Main quantum observation loop
 			"probe": {
-			"Q": {"action": "explore", "label": "Explore", "emoji": "?",
-				  "icon": "res://Assets/UI/Science/Explore.svg",
-				  "hint": "Bind terminal (dig DOWN)"},
-			"E": {"action": "measure", "label": "Measure", "emoji": "!",
-				  "icon": "res://Assets/UI/Science/Measure.svg",
-				  "hint": "Collapse state (observe)"},
-			"R": {"action": "reap", "label": "Reap", "emoji": "^",
-				  "icon": "res://Assets/UI/Science/Pop-Harvest.svg",
-				  "hint": "Harvest & unbind terminal",
-				  "shift_action": "harvest_all", "shift_label": "Harvest All"}
+				"Q": {"action": "explore", "label": "Explore", "emoji": "?",
+					  "icon": "res://Assets/UI/Science/Explore.svg",
+					  "hint": "Bind terminal (dig DOWN)"},
+				"E": {"action": "measure", "label": "Measure", "emoji": "!",
+					  "icon": "res://Assets/UI/Science/Measure.svg",
+					  "hint": "Collapse state (observe)"},
+				"R": {"action": "reap", "label": "Reap", "emoji": "^",
+					  "icon": "res://Assets/UI/Science/Pop-Harvest.svg",
+					  "hint": "Harvest & unbind terminal",
+					  "shift_action": "harvest_all", "shift_label": "Harvest All"}
 			},
 			# GATE MODE: Entanglement infrastructure
 			"gate": {
-				"Q": {"action": "build_gate", "label": "Build", "emoji": ")(",
+				"Q": {"action": "build_gate", "label": "Gate", "emoji": ")(",
 					  "icon": "res://Assets/UI/Q-Bit/CNOT.svg",
-					  "hint": "Build gate (bell/cluster/cnot)"},
+					  "hint": "Build entangling gate",
+					  "submenu": "gate_selection"},
 				"E": {"action": "inspect", "label": "Inspect", "emoji": "[]",
 					  "icon": "res://Assets/UI/Science/Explore.svg",
 					  "hint": "Inspect entanglement"},
-				"R": {"action": "remove_gates", "label": "Remove", "emoji": "X",
+				"R": {"action": "remove_gates", "label": "Break", "emoji": "X",
 					  "icon": "res://Assets/UI/Biome/BiomeClear.svg",
-					  "hint": "Remove gate infrastructure"}
-			},
-			# BUILD MODE: Gate infrastructure (merged with industry structures)
-			"build": {
-				"Q": {"action": "build_gate", "label": "Build", "emoji": ")(",
-					  "icon": "res://Assets/UI/Q-Bit/CNOT.svg",
-					  "hint": "Build gate infrastructure"},
-				"E": {"action": "inspect", "label": "Inspect", "emoji": "[]",
-					  "icon": "res://Assets/UI/Science/Explore.svg",
-					  "hint": "Inspect gate infrastructure"},
-				"R": {"action": "remove_gates", "label": "Remove", "emoji": "X",
-					  "icon": "res://Assets/UI/Biome/BiomeClear.svg",
-					  "hint": "Remove gate infrastructure"}
+					  "hint": "Break entanglement"}
 			}
 		}
 	},

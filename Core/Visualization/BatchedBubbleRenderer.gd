@@ -231,34 +231,16 @@ func _pack_bubble_data(node, biomes: Dictionary, time_accumulator: float, plot_p
 	var sink_flux = 0.0
 
 	var biome = biomes.get(node.biome_name)
-	if biome and biome.quantum_computer:
-		var qc = biome.quantum_computer
-		biome_purity = qc.get_purity() if qc.has_method("get_purity") else 0.5
+	if biome and biome.viz_cache:
+		biome_purity = biome.viz_cache.get_purity()
+		if biome_purity < 0.0:
+			biome_purity = 0.5
 
-		# Get populations
-		if node.emoji_north != "":
-			p_north = qc.get_population(node.emoji_north)
-		if node.emoji_south != "":
-			p_south = qc.get_population(node.emoji_south)
-		global_prob = p_north + p_south
+		p_north = node.emoji_north_opacity
+		p_south = node.emoji_south_opacity
+		global_prob = clampf(p_north + p_south, 0.0, 1.0)
 
-		# Get sink flux
-		if node.emoji_north != "" and qc.has_method("get_sink_flux"):
-			sink_flux = qc.get_sink_flux(node.emoji_north)
-
-		# Calculate individual purity
-		if node.plot and node.plot.parent_biome and node.plot.parent_biome.quantum_computer:
-			var qc_local = node.plot.parent_biome.quantum_computer
-			var coh = qc_local.get_coherence(node.emoji_north, node.emoji_south) if qc_local.has_method("get_coherence") else null
-			var coh_mag_sq = coh.abs() * coh.abs() if coh else 0.0
-			var mass = p_north + p_south
-			if mass > 0.001:
-				var p_n_norm = p_north / mass
-				var p_s_norm = p_south / mass
-				var coh_norm_sq = coh_mag_sq / (mass * mass)
-				individual_purity = p_n_norm * p_n_norm + p_s_norm * p_s_norm + 2.0 * coh_norm_sq
-		elif node.has_farm_tether:
-			individual_purity = node.energy
+		individual_purity = node.energy if node.energy > 0.0 else 0.5
 
 	# Pack into buffer
 	_bubble_data[offset + P_X] = node.position.x

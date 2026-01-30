@@ -8,14 +8,8 @@ extends Control
 ##
 ## Sits at z_index -100 (or CanvasLayer -1) to render behind everything.
 
-const BIOME_TEXTURES: Dictionary = {
-	"BioticFlux": preload("res://Assets/Biomes/Quantum_Fields.png"),
-	"StellarForges": preload("res://Assets/Biomes/Stellar_Forges.png"),
-	"FungalNetworks": preload("res://Assets/Biomes/Fungal_Networks.png"),
-	"VolcanicWorlds": preload("res://Assets/Biomes/Volcanic_Worlds.png"),
-	"StarterForest": preload("res://Assets/Biomes/Starter_Forest.png"),
-	"Village": preload("res://Assets/Biomes/Village.png"),
-}
+const BiomeRegistry = preload("res://Core/Biomes/BiomeRegistry.gd")
+const FALLBACK_BIOME_TEXTURE: String = "res://Assets/Biomes/Entropy_Garden.png"
 
 ## Transition duration in seconds
 @export var transition_duration: float = 0.3
@@ -34,6 +28,9 @@ var _tween: Tween
 
 ## Reference to ActiveBiomeManager (set in _ready)
 var _biome_manager: Node
+var _biome_textures: Dictionary = {}
+var _biome_registry: BiomeRegistry = null
+var _unknown_biome_warned: Dictionary = {}
 
 
 func _ready() -> void:
@@ -103,12 +100,10 @@ func _create_texture_rect() -> TextureRect:
 
 func set_biome(biome_name: String) -> void:
 	"""Set biome instantly (no transition)"""
-	if not BIOME_TEXTURES.has(biome_name):
-		push_warning("BiomeBackground: Unknown biome '%s'" % biome_name)
-		return
-
 	current_biome = biome_name
-	_current_bg.texture = BIOME_TEXTURES[biome_name]
+	var texture = _get_biome_texture(biome_name)
+	if texture:
+		_current_bg.texture = texture
 	_current_bg.position = Vector2.ZERO
 
 
@@ -119,8 +114,10 @@ func transition_to_biome(biome_name: String, direction: int) -> void:
 		biome_name: Target biome
 		direction: -1 = slide from left, 1 = slide from right
 	"""
-	if not BIOME_TEXTURES.has(biome_name):
-		push_warning("BiomeBackground: Unknown biome '%s'" % biome_name)
+	var incoming_texture = _get_biome_texture(biome_name)
+	if not incoming_texture:
+		# No valid texture - fall back to instant swap without animation
+		set_biome(biome_name)
 		return
 
 	if biome_name == current_biome:
@@ -137,7 +134,7 @@ func transition_to_biome(biome_name: String, direction: int) -> void:
 	var viewport_width = get_viewport_rect().size.x
 
 	# Set up incoming background
-	_incoming_bg.texture = BIOME_TEXTURES[biome_name]
+	_incoming_bg.texture = incoming_texture
 	_incoming_bg.visible = true
 
 	# Position based on direction
@@ -197,6 +194,41 @@ func _on_active_biome_changed(new_biome: String, _old_biome: String) -> void:
 func _on_transition_requested(from_biome: String, to_biome: String, direction: int) -> void:
 	"""Handle animated biome transition"""
 	transition_to_biome(to_biome, direction)
+
+
+func _get_biome_texture(biome_name: String) -> Texture2D:
+	"""Load biome texture without relying on imported .ctex artifacts."""
+	if _biome_textures.has(biome_name):
+		return _biome_textures[biome_name]
+	var path: String = _get_biome_texture_path(biome_name)
+	if path == "":
+		return null
+	var loaded = ResourceLoader.load(path)
+	if loaded is Texture2D:
+		_biome_textures[biome_name] = loaded
+		return loaded
+	var image := Image.new()
+	var err := image.load(path)
+	if err != OK:
+		push_warning("BiomeBackground: Failed to load biome image '%s' (err=%s)" % [path, err])
+		return null
+
+	var texture := ImageTexture.create_from_image(image)
+	_biome_textures[biome_name] = texture
+	return texture
+
+
+func _get_biome_texture_path(biome_name: String) -> String:
+	"""Resolve biome image path from known mapping or BiomeRegistry."""
+	if _biome_registry == null:
+		_biome_registry = BiomeRegistry.new()
+	var biome = _biome_registry.get_by_name(biome_name)
+	if biome and biome.image_path != "":
+		return biome.image_path
+	if not _unknown_biome_warned.has(biome_name):
+		_unknown_biome_warned[biome_name] = true
+		push_warning("BiomeBackground: No image path for biome '%s' - using fallback" % biome_name)
+	return FALLBACK_BIOME_TEXTURE
 
 
 func get_current_biome() -> String:

@@ -8,6 +8,7 @@ extends RefCounted
 
 const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
 const QuantumMill = preload("res://Core/GameMechanics/QuantumMill.gd")
+const GateSelectionSubmenu = preload("res://UI/Core/Submenus/GateSelectionSubmenu.gd")
 
 # Current submenu name (empty = not in submenu)
 var current_submenu: String = ""
@@ -17,6 +18,9 @@ var _cached_submenu: Dictionary = {}
 
 # Current page for paginated submenus (like vocab_injection)
 var _current_page: int = 0
+
+# Current selection for selection-aware submenus (like gate_selection)
+var _current_selection: Array = []
 
 # Signals
 signal submenu_changed(submenu_name: String, submenu_info: Dictionary)
@@ -61,16 +65,18 @@ func is_submenu_disabled() -> bool:
 ## SUBMENU NAVIGATION
 ## ============================================================================
 
-func enter_submenu(submenu_name: String, farm, menu_position: Vector2i) -> void:
+func enter_submenu(submenu_name: String, farm, menu_position: Vector2i, selection: Array = []) -> void:
 	"""Enter a submenu - QER keys now map to submenu actions.
 
 	Args:
 		submenu_name: Name of submenu to enter
 		farm: Farm instance for dynamic menu generation
 		menu_position: Position to use for context-aware menus
+		selection: Array of selected positions (for multi-select aware submenus)
 	"""
 	# Reset page when entering submenu
 	_current_page = 0
+	_current_selection = selection  # Store for refresh/pagination
 
 	var submenu = {}
 
@@ -81,6 +87,14 @@ func enter_submenu(submenu_name: String, farm, menu_position: Vector2i) -> void:
 			submenu = VocabInjectionSubmenu.generate_submenu(biome, farm, _current_page)
 		else:
 			push_error("VocabInjectionSubmenu: No biome or farm available")
+			return
+	# Gate selection submenu (selection-aware)
+	elif submenu_name == "gate_selection":
+		var biome = farm.grid.get_biome_for_plot(menu_position) if farm and farm.grid else null
+		if biome and farm:
+			submenu = GateSelectionSubmenu.generate_submenu(biome, farm, selection, _current_page)
+		else:
+			push_error("GateSelectionSubmenu: No biome or farm available")
 			return
 	else:
 		# Standard submenu lookup
@@ -188,19 +202,22 @@ func cycle_submenu_page(farm, menu_position: Vector2i) -> void:
 	if current_submenu == "":
 		return  # Not in submenu
 
-	# Only vocab_injection supports pagination currently
-	if current_submenu == "vocab_injection":
-		_current_page += 1
+	_current_page += 1
+	var biome = farm.grid.get_biome_for_plot(menu_position) if farm and farm.grid else null
 
-		# Generate new page
-		var biome = farm.grid.get_biome_for_plot(menu_position) if farm and farm.grid else null
+	# Handle pagination for each submenu type
+	if current_submenu == "vocab_injection":
 		if biome and farm:
 			var regenerated = VocabInjectionSubmenu.generate_submenu(biome, farm, _current_page)
 			_cached_submenu = regenerated
-
-			# Update current_page from regenerated submenu (handles wraparound)
 			_current_page = regenerated.get("page", 0)
+			submenu_changed.emit(current_submenu, regenerated)
 
+	elif current_submenu == "gate_selection":
+		if biome and farm:
+			var regenerated = GateSelectionSubmenu.generate_submenu(biome, farm, _current_selection, _current_page)
+			_cached_submenu = regenerated
+			_current_page = regenerated.get("page", 0)
 			submenu_changed.emit(current_submenu, regenerated)
 
 
@@ -243,6 +260,7 @@ func reset() -> void:
 	current_submenu = ""
 	_cached_submenu = {}
 	_current_page = 0
+	_current_selection = []
 
 
 func _get_game_state_manager():

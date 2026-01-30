@@ -72,14 +72,13 @@ func get_power_availability(biome) -> Dictionary:
 	Returns:
 		{"Q": bool, "E": bool, "R": bool}
 	"""
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return {"Q": false, "E": false, "R": false}
 
-	var rm = biome.quantum_computer.register_map
 	return {
-		"Q": rm.has(POWER_SOURCES["Q"].emoji),
-		"E": rm.has(POWER_SOURCES["E"].emoji),
-		"R": rm.has(POWER_SOURCES["R"].emoji),
+		"Q": QuantumMill._has_emoji(biome, POWER_SOURCES["Q"].emoji),
+		"E": QuantumMill._has_emoji(biome, POWER_SOURCES["E"].emoji),
+		"R": QuantumMill._has_emoji(biome, POWER_SOURCES["R"].emoji),
 	}
 
 
@@ -95,14 +94,13 @@ func get_conversion_availability(biome) -> Dictionary:
 	Returns:
 		{"Q": bool, "E": bool, "R": bool}
 	"""
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return {"Q": false, "E": false, "R": false}
 
-	var rm = biome.quantum_computer.register_map
 	return {
-		"Q": rm.has(CONVERSIONS["Q"].source) and rm.has(CONVERSIONS["Q"].product),
-		"E": rm.has(CONVERSIONS["E"].source) and rm.has(CONVERSIONS["E"].product),
-		"R": rm.has(CONVERSIONS["R"].source) and rm.has(CONVERSIONS["R"].product),
+		"Q": QuantumMill._has_emoji(biome, CONVERSIONS["Q"].source) and QuantumMill._has_emoji(biome, CONVERSIONS["Q"].product),
+		"E": QuantumMill._has_emoji(biome, CONVERSIONS["E"].source) and QuantumMill._has_emoji(biome, CONVERSIONS["E"].product),
+		"R": QuantumMill._has_emoji(biome, CONVERSIONS["R"].source) and QuantumMill._has_emoji(biome, CONVERSIONS["R"].product),
 	}
 
 
@@ -140,14 +138,13 @@ func configure(biome, power_key: String, conversion_key: String) -> Dictionary:
 	source_emoji = CONVERSIONS[conversion_key].source
 	product_emoji = CONVERSIONS[conversion_key].product
 
-	# Verify all emojis exist in register_map
-	var rm = parent_biome.quantum_computer.register_map
+	# Verify all emojis exist (viz_cache metadata)
 	for emoji in [power_emoji, source_emoji, product_emoji]:
-		if not rm.has(emoji):
+		if not QuantumMill._has_emoji(parent_biome, emoji):
 			return {"success": false, "error": "missing_emoji", "emoji": emoji}
 
 	# Calculate effective coupling strength: J_base × P(power_source)
-	var power_prob = parent_biome.quantum_computer.get_population(power_emoji)
+	var power_prob = parent_biome.get_emoji_probability(power_emoji)
 	coupling_strength = BASE_COUPLING_STRENGTH * max(power_prob, 0.1)  # Minimum 10% of base
 
 	# Inject coupling between source and product
@@ -214,31 +211,40 @@ func is_working() -> bool:
 	return is_active
 
 
+static func _has_emoji(biome, emoji: String) -> bool:
+	"""Check emoji presence using viz_cache metadata (fallback to register_map)."""
+	if not biome or emoji == "":
+		return false
+	if biome.viz_cache:
+		return biome.viz_cache.get_qubit(emoji) >= 0
+	if biome.quantum_computer and biome.quantum_computer.register_map:
+		return biome.quantum_computer.register_map.has(emoji)
+	return false
+
+
 ## ========================================
 ## Static Helpers (for UI without instance)
 ## ========================================
 
 static func check_power_availability(biome) -> Dictionary:
 	"""Static version of get_power_availability for UI use."""
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return {"Q": false, "E": false, "R": false}
 
-	var rm = biome.quantum_computer.register_map
 	return {
-		"Q": rm.has(POWER_SOURCES["Q"].emoji),
-		"E": rm.has(POWER_SOURCES["E"].emoji),
-		"R": rm.has(POWER_SOURCES["R"].emoji),
+		"Q": QuantumMill._has_emoji(biome, POWER_SOURCES["Q"].emoji),
+		"E": QuantumMill._has_emoji(biome, POWER_SOURCES["E"].emoji),
+		"R": QuantumMill._has_emoji(biome, POWER_SOURCES["R"].emoji),
 	}
 
 
 static func check_conversion_availability(biome) -> Dictionary:
 	"""Static version of get_conversion_availability for UI use."""
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return {"Q": false, "E": false, "R": false}
 
-	var rm = biome.quantum_computer.register_map
 	return {
-		"Q": rm.has(CONVERSIONS["Q"].source) and rm.has(CONVERSIONS["Q"].product),
-		"E": rm.has(CONVERSIONS["E"].source) and rm.has(CONVERSIONS["E"].product),
-		"R": rm.has(CONVERSIONS["R"].source) and rm.has(CONVERSIONS["R"].product),
+		"Q": QuantumMill._has_emoji(biome, CONVERSIONS["Q"].source) and QuantumMill._has_emoji(biome, CONVERSIONS["Q"].product),
+		"E": QuantumMill._has_emoji(biome, CONVERSIONS["E"].source) and QuantumMill._has_emoji(biome, CONVERSIONS["E"].product),
+		"R": QuantumMill._has_emoji(biome, CONVERSIONS["R"].source) and QuantumMill._has_emoji(biome, CONVERSIONS["R"].product),
 	}

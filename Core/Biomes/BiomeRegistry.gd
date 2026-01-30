@@ -13,7 +13,7 @@ extends RefCounted
 ##   var emojis = registry.get_emojis_for_biome("StarterForest")
 
 const Biome = preload("res://Core/Biomes/Biome.gd")
-const JSON_PATH = "res://Core/Biomes/data/biomes.json"
+const JSON_PATH = "res://Core/Biomes/data/biomes_merged.json"
 
 # Biome storage
 var _biomes: Array = []

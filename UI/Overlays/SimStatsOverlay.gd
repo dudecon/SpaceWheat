@@ -17,11 +17,30 @@ func _process(delta: float) -> void:
 		_ensure_ui()
 		if sim_label == null or fps_label == null:
 			return
-	var speed = _get_simulation_speed()
-	var fraction = _get_speed_fraction(speed)
-	var suffix = (" (%s)" % fraction) if fraction != "" else ""
-	sim_label.text = "Sim time scale: %.3fx%s" % [speed, suffix]
+
+	# Check if we're in test mode or game mode
+	if has_meta("test_controller"):
+		var test = get_meta("test_controller")
+		var speed = test.simulation_time_scale if "simulation_time_scale" in test else 1.0
+		var fraction = _get_speed_fraction(speed)
+		var suffix = (" %s" % fraction) if fraction != "" else ""
+		sim_label.text = "Sim speed: %.3fx%s" % [speed, suffix]
+	else:
+		var speed = _get_simulation_speed()
+		var fraction = _get_speed_fraction(speed)
+		var suffix = (" %s" % fraction) if fraction != "" else ""
+		sim_label.text = "Sim time scale: %.3fx%s" % [speed, suffix]
+
 	fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
+
+func _get_granularity(test_biomes: Array) -> float:
+	"""Get max_evolution_dt from test biomes."""
+	if test_biomes.is_empty():
+		return 0.02
+	var first_biome = test_biomes[0]
+	if "max_evolution_dt" in first_biome:
+		return first_biome.max_evolution_dt
+	return 0.02
 
 func _get_simulation_speed() -> float:
 	var farm = _locate_farm()

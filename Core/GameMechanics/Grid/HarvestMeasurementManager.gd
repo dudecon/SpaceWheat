@@ -12,19 +12,25 @@ signal plot_changed(position: Vector2i, change_type: String, details: Dictionary
 signal visualization_changed()
 
 # Component dependencies (injected via set_dependencies)
-var _plot_manager = null  # GridPlotManager
+var _plot_manager = null  # GridPlotManager (legacy)
 var _biome_routing = null  # BiomeRoutingManager
 var _economy = null  # FarmEconomy
-var _entanglement = null  # EntanglementManager
+var _entanglement = null  # EntanglementManager (legacy)
+var _plot_pool = null  # PlotPool (terminal source of truth)
+var _farm = null  # Farm (optional, for neighbor-based yield)
 var _verbose = null
 
+const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
 
-func set_dependencies(plot_manager, biome_routing, economy, entanglement, _topology_analyzer = null) -> void:
+
+func set_dependencies(plot_manager, biome_routing, economy, entanglement, plot_pool = null, farm_ref = null, _topology_analyzer = null) -> void:
 	"""Inject component dependencies."""
 	_plot_manager = plot_manager
 	_biome_routing = biome_routing
 	_economy = economy
 	_entanglement = entanglement
+	_plot_pool = plot_pool
+	_farm = farm_ref
 	# Note: topology_analyzer param kept for API compatibility but no longer used
 
 
@@ -34,125 +40,60 @@ func set_verbose(verbose_ref) -> void:
 
 
 func harvest_wheat(position: Vector2i) -> Dictionary:
-	"""Harvest wheat at position (quantum-only: must be planted)"""
-	var plot = _plot_manager.get_plot(position)
-	if plot == null or not plot.is_planted:
-		return {"success": false}
+	"""Harvest a measured terminal at position (terminal-first)."""
+	if not _plot_pool:
+		return {"success": false, "error": "no_pool"}
 
-	var yield_data = plot.harvest()
-	if yield_data["success"]:
-		_biome_routing.clear_register_tracking(position)
+	var terminal = _plot_pool.get_terminal_at_grid_pos(position)
+	if not terminal:
+		return {"success": false, "error": "no_terminal"}
 
-		# Remove projection from biome
-		var plot_biome = _biome_routing.get_biome_for_plot(position)
-		if plot_biome and plot_biome.has_method("remove_projection"):
-			plot_biome.remove_projection(position)
-			if _verbose:
-				_verbose.debug("farm", "🗑️", "Removed projection from biome at %s" % position)
+	var harvest_result = ProbeActions.action_pop(terminal, _plot_pool, _economy, _farm)
+	if not harvest_result.get("success", false):
+		return harvest_result
 
-		plot_harvested.emit(position, yield_data)
+	# Map to legacy keys for compatibility
+	var outcome = harvest_result.get("resource", "")
+	var amount = harvest_result.get("amount", 0)
+	var credits = harvest_result.get("credits", 0.0)
+	var yield_data = {
+		"success": true,
+		"outcome": outcome,
+		"yield": amount,
+		"energy": credits,
+		"purity": harvest_result.get("purity", 0.0),
+		"recorded_probability": harvest_result.get("recorded_probability", 0.0),
+		"terminal_id": harvest_result.get("terminal_id", ""),
+		"register_id": harvest_result.get("register_id", -1),
+		"biome_name": harvest_result.get("biome_name", "")
+	}
 
-		# Emit generic signals for visualization update
-		plot_changed.emit(position, "harvested", {"yield": yield_data})
-		visualization_changed.emit()
+	plot_harvested.emit(position, yield_data)
+	plot_changed.emit(position, "harvested", {"yield": yield_data})
+	visualization_changed.emit()
 
 	return yield_data
 
 
 func measure_plot(position: Vector2i) -> String:
-	"""Measure quantum state (observer effect). Entanglement means measuring one collapses entire network!
-
-	Uses biome's quantum_computer for register-based measurement.
-	"""
-	var plot = _plot_manager.get_plot(position)
-	if plot == null or not plot.is_planted:
+	"""Measure terminal at position (terminal-first)."""
+	if not _plot_pool:
 		return ""
 
-	# Get biome for this plot
-	var biome = _biome_routing.get_biome_for_plot(position)
-	if not biome:
-		if _verbose:
-			_verbose.warn("farm", "⚠️", "No biome for plot at %s" % position)
+	var terminal = _plot_pool.get_terminal_at_grid_pos(position)
+	if not terminal:
 		return ""
 
-	var result = ""
+	var biome = null
+	if _biome_routing and terminal.bound_biome_name != "":
+		biome = _biome_routing.biomes.get(terminal.bound_biome_name, null)
 
-	if not biome.quantum_computer:
-		if _verbose:
-			_verbose.warn("farm", "⚠️", "No quantum system for plot at %s" % position)
-		return plot.north_emoji  # Default fallback
+	var result = ProbeActions.action_measure(terminal, biome)
+	if not result.get("success", false):
+		return ""
 
-	if plot.north_emoji == "" or plot.south_emoji == "":
-		return plot.north_emoji  # Default fallback
-
-	# Model C: Use measure_axis directly
-	var outcome_emoji = biome.quantum_computer.measure_axis(plot.north_emoji, plot.south_emoji)
-	result = outcome_emoji if outcome_emoji != "" else plot.north_emoji
-	var basis_outcome = "north" if outcome_emoji == plot.north_emoji else "south"
-	if _verbose:
-		_verbose.debug("farm", "📊", "Measure operation (Model C): %s collapsed to %s" % [position, result])
-
-	# UPDATE PLOT STATE
-	plot.has_been_measured = true
-	plot.measured_outcome = basis_outcome  # "north" or "south"
-
-	# For compatibility, still track which plots were in the component
-	# (This is purely for logging/visualization - quantum collapse already happened in quantum_computer)
-	var measured_ids = {plot.plot_id: true}
-
-	# Flood-fill through FarmGrid entanglement metadata to find component
-	# (This mirrors the quantum measurement - all plots in component are now measured)
-	var to_check = []
-	for entangled_id in plot.entangled_plots.keys():
-		to_check.append(entangled_id)
-
-	# Flood-fill through the entanglement network
-	while not to_check.is_empty():
-		var current_id = to_check.pop_front()
-
-		# Skip if already processed
-		if measured_ids.has(current_id):
-			continue
-
-		# Find this plot
-		var current_pos = _plot_manager.find_plot_by_id(current_id)
-		if current_pos == Vector2i(-1, -1):
-			continue
-
-		var current_plot = _plot_manager.get_plot(current_pos)
-		if not current_plot or not current_plot.is_planted:
-			continue
-
-		# Mark as measured (quantum_computer already handled the measurement)
-		if _verbose:
-			_verbose.debug("quantum", "↪", "Entanglement network collapsed %s (via quantum_computer)" % current_id)
-		measured_ids[current_id] = true
-
-		# Add its entangled partners to the queue
-		for next_id in current_plot.entangled_plots.keys():
-			if not measured_ids.has(next_id):
-				to_check.append(next_id)
-
-	# MEASUREMENT COLLAPSES TO CLASSICAL STATE: (Model B)
-	# Break ALL entanglements for measured plots (quantum → classical transition)
-	for measured_id in measured_ids.keys():
-		var measured_pos = _plot_manager.find_plot_by_id(measured_id)
-		if measured_pos == Vector2i(-1, -1):
-			continue
-
-		var measured_plot = _plot_manager.get_plot(measured_pos)
-		if not measured_plot:
-			continue
-
-		# Clear all entanglements for this plot (FarmGrid metadata only)
-		if not measured_plot.entangled_plots.is_empty():
-			var num_broken = measured_plot.entangled_plots.size()
-			measured_plot.entangled_plots.clear()
-			if _verbose:
-				_verbose.debug("quantum", "🔓", "Measurement broke %d entanglements for %s (classical state)" % [num_broken, measured_id])
-
-	# Emit signals for visualization update
-	plot_changed.emit(position, "measured", {"outcome": result})
+	var outcome = result.get("outcome", "")
+	plot_changed.emit(position, "measured", {"outcome": outcome})
 	visualization_changed.emit()
 
-	return result
+	return outcome

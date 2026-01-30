@@ -1,16 +1,30 @@
 #include "multi_biome_lookahead_engine.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
+#include <algorithm>
+#include <numeric>
 
 using namespace godot;
 
 void MultiBiomeLookaheadEngine::_bind_methods() {
     ClassDB::bind_method(D_METHOD("register_biome", "dim", "H_packed", "lindblad_triplets", "num_qubits"),
                          &MultiBiomeLookaheadEngine::register_biome);
+    ClassDB::bind_method(D_METHOD("set_biome_metadata", "biome_id", "metadata"),
+                         &MultiBiomeLookaheadEngine::set_biome_metadata);
+    ClassDB::bind_method(D_METHOD("set_biome_couplings", "biome_id", "couplings"),
+                         &MultiBiomeLookaheadEngine::set_biome_couplings);
     ClassDB::bind_method(D_METHOD("clear_biomes"),
                          &MultiBiomeLookaheadEngine::clear_biomes);
     ClassDB::bind_method(D_METHOD("get_biome_count"),
                          &MultiBiomeLookaheadEngine::get_biome_count);
+
+    // LNN methods
+    ClassDB::bind_method(D_METHOD("enable_biome_lnn", "biome_id", "hidden_size"),
+                         &MultiBiomeLookaheadEngine::enable_biome_lnn);
+    ClassDB::bind_method(D_METHOD("disable_biome_lnn", "biome_id"),
+                         &MultiBiomeLookaheadEngine::disable_biome_lnn);
+    ClassDB::bind_method(D_METHOD("is_lnn_enabled", "biome_id"),
+                         &MultiBiomeLookaheadEngine::is_lnn_enabled);
 
     ClassDB::bind_method(D_METHOD("evolve_all_lookahead", "biome_rhos", "steps", "dt", "max_dt"),
                          &MultiBiomeLookaheadEngine::evolve_all_lookahead);
@@ -51,6 +65,9 @@ int MultiBiomeLookaheadEngine::register_biome(int dim, const PackedFloat64Array&
     int biome_id = static_cast<int>(m_engines.size());
     m_engines.push_back(engine);
     m_num_qubits.push_back(num_qubits);
+    m_metadata.push_back(Dictionary());
+    m_couplings.push_back(Dictionary());
+    m_lnns.push_back(nullptr);  // LNN disabled by default
 
     UtilityFunctions::print("MultiBiomeLookaheadEngine: Registered biome ",
                             biome_id, " (dim=", dim, ", num_qubits=", num_qubits,
@@ -62,19 +79,46 @@ int MultiBiomeLookaheadEngine::register_biome(int dim, const PackedFloat64Array&
 void MultiBiomeLookaheadEngine::clear_biomes() {
     m_engines.clear();
     m_num_qubits.clear();
+    m_metadata.clear();
+    m_couplings.clear();
+    m_lnns.clear();
 }
 
 int MultiBiomeLookaheadEngine::get_biome_count() const {
     return static_cast<int>(m_engines.size());
 }
 
+void MultiBiomeLookaheadEngine::set_biome_metadata(int biome_id, const Dictionary& metadata) {
+    if (biome_id < 0 || biome_id >= static_cast<int>(m_metadata.size())) {
+        UtilityFunctions::push_warning("MultiBiomeLookaheadEngine: Invalid biome_id for metadata ", biome_id);
+        return;
+    }
+    m_metadata[biome_id] = metadata;
+    if (biome_id < static_cast<int>(m_engines.size())) {
+        m_couplings[biome_id] = m_engines[biome_id]->compute_coupling_payload(metadata);
+    }
+}
+
+void MultiBiomeLookaheadEngine::set_biome_couplings(int biome_id, const Dictionary& couplings) {
+    if (biome_id < 0 || biome_id >= static_cast<int>(m_couplings.size())) {
+        UtilityFunctions::push_warning("MultiBiomeLookaheadEngine: Invalid biome_id for couplings ", biome_id);
+        return;
+    }
+    m_couplings[biome_id] = couplings;
+}
+
 Dictionary MultiBiomeLookaheadEngine::evolve_all_lookahead(
     const Array& biome_rhos, int steps, float dt, float max_dt) {
 
     Dictionary result;
-    Array all_results;  // Array<Array<PackedFloat64Array>>
-    Array all_mi;       // Array<PackedFloat64Array>
-    Array all_bloch;    // Array<PackedFloat64Array>
+    Array all_results;      // Array<Array<PackedFloat64Array>>
+    Array all_mi;           // Array<PackedFloat64Array> (last step)
+    Array all_mi_steps;     // Array<Array<PackedFloat64Array>>
+    Array all_bloch_steps;  // Array<Array<PackedFloat64Array>>
+    Array all_purity_steps; // Array<Array<float>>
+    Array all_metadata;     // Array<Dictionary>
+    Array all_couplings;    // Array<Dictionary>
+    Array all_icon_maps;    // Array<Dictionary>
 
     int num_biomes = static_cast<int>(biome_rhos.size());
 
@@ -100,13 +144,53 @@ Dictionary MultiBiomeLookaheadEngine::evolve_all_lookahead(
         }
 
         all_results.push_back(biome_steps);
-        all_mi.push_back(biome_result.mi);
-        all_bloch.push_back(biome_result.bloch);
+
+        Array biome_mi_steps;
+        for (const auto& mi_step : biome_result.mi_steps) {
+            biome_mi_steps.push_back(mi_step);
+        }
+        all_mi_steps.push_back(biome_mi_steps);
+        if (!biome_result.mi_steps.empty()) {
+            all_mi.push_back(biome_result.mi_steps.back());
+        } else {
+            all_mi.push_back(PackedFloat64Array());
+        }
+
+        Array biome_bloch_steps;
+        for (const auto& bloch_step : biome_result.bloch_steps) {
+            biome_bloch_steps.push_back(bloch_step);
+        }
+        all_bloch_steps.push_back(biome_bloch_steps);
+
+        Array biome_purity_steps;
+        for (double purity_val : biome_result.purity_steps) {
+            biome_purity_steps.push_back(purity_val);
+        }
+        all_purity_steps.push_back(biome_purity_steps);
+
+        if (biome_id < static_cast<int>(m_metadata.size())) {
+            all_metadata.push_back(m_metadata[biome_id]);
+        } else {
+            all_metadata.push_back(Dictionary());
+        }
+
+        if (biome_id < static_cast<int>(m_couplings.size())) {
+            all_couplings.push_back(m_couplings[biome_id]);
+        } else {
+            all_couplings.push_back(Dictionary());
+        }
+
+        all_icon_maps.push_back(biome_result.icon_map);
     }
 
     result["results"] = all_results;
     result["mi"] = all_mi;
-    result["bloch"] = all_bloch;
+    result["mi_steps"] = all_mi_steps;
+    result["bloch_steps"] = all_bloch_steps;
+    result["purity_steps"] = all_purity_steps;
+    result["metadata"] = all_metadata;
+    result["couplings"] = all_couplings;
+    result["icon_maps"] = all_icon_maps;
 
     return result;
 }
@@ -133,8 +217,37 @@ Dictionary MultiBiomeLookaheadEngine::evolve_single_biome(
     }
 
     result["results"] = biome_steps;
-    result["mi"] = biome_result.mi;
-    result["bloch"] = biome_result.bloch;
+    if (!biome_result.mi_steps.empty()) {
+        result["mi"] = biome_result.mi_steps.back();
+    } else {
+        result["mi"] = PackedFloat64Array();
+    }
+
+    Array biome_mi_steps;
+    for (const auto& mi_step : biome_result.mi_steps) {
+        biome_mi_steps.push_back(mi_step);
+    }
+    result["mi_steps"] = biome_mi_steps;
+
+    Array biome_bloch_steps;
+    for (const auto& bloch_step : biome_result.bloch_steps) {
+        biome_bloch_steps.push_back(bloch_step);
+    }
+    result["bloch_steps"] = biome_bloch_steps;
+
+    Array biome_purity_steps;
+    for (double purity_val : biome_result.purity_steps) {
+        biome_purity_steps.push_back(purity_val);
+    }
+    result["purity_steps"] = biome_purity_steps;
+
+    if (biome_id >= 0 && biome_id < static_cast<int>(m_metadata.size())) {
+        result["metadata"] = m_metadata[biome_id];
+    }
+    if (biome_id >= 0 && biome_id < static_cast<int>(m_couplings.size())) {
+        result["couplings"] = m_couplings[biome_id];
+    }
+    result["icon_map"] = biome_result.icon_map;
 
     return result;
 }
@@ -161,21 +274,207 @@ MultiBiomeLookaheadEngine::_evolve_biome_steps(
         // Single evolution step (with subcycling inside)
         PackedFloat64Array evolved_rho = engine->evolve(current_rho, dt, max_dt);
 
+        // Apply phase-shadow LNN modulation (if enabled)
+        _apply_lnn_phase_modulation(biome_id, evolved_rho);
+
         // Store result
         out.steps.push_back(evolved_rho);
+        out.bloch_steps.push_back(engine->compute_bloch_metrics_from_packed(evolved_rho, num_qubits));
+        out.purity_steps.push_back(engine->compute_purity_from_packed(evolved_rho));
+        out.mi_steps.push_back(engine->compute_all_mutual_information(evolved_rho, num_qubits));
 
         // Update for next step
         current_rho = evolved_rho;
     }
 
-    // Compute MI for the final state (used for force graph)
-    if (!out.steps.empty()) {
-        if (num_qubits >= 2) {
-            out.mi = engine->compute_all_mutual_information(out.steps.back(), num_qubits);
-        }
-        Eigen::MatrixXcd rho = engine->unpack_dense(out.steps.back());
-        out.bloch = engine->compute_bloch_metrics(rho, num_qubits);
-    }
+    out.icon_map = _build_icon_map(biome_id, out.bloch_steps);
 
     return out;
+}
+
+// ============================================================================
+// PHASE-SHADOW LNN METHODS
+// ============================================================================
+
+void MultiBiomeLookaheadEngine::enable_biome_lnn(int biome_id, int hidden_size) {
+    if (biome_id < 0 || biome_id >= static_cast<int>(m_engines.size())) {
+        UtilityFunctions::push_warning("MultiBiomeLookaheadEngine: Invalid biome_id for LNN ", biome_id);
+        return;
+    }
+
+    // Get dimension from the engine
+    int dim = m_engines[biome_id]->get_dimension();
+    if (dim <= 0) {
+        UtilityFunctions::push_warning("MultiBiomeLookaheadEngine: Invalid dimension for LNN");
+        return;
+    }
+
+    // Create LNN: input = dim phases, output = dim phase modulations
+    m_lnns[biome_id] = std::make_unique<LiquidNeuralNet>(dim, hidden_size, dim);
+
+    UtilityFunctions::print("MultiBiomeLookaheadEngine: LNN enabled for biome ", biome_id,
+                            " (dim=", dim, ", hidden=", hidden_size, ")");
+}
+
+void MultiBiomeLookaheadEngine::disable_biome_lnn(int biome_id) {
+    if (biome_id < 0 || biome_id >= static_cast<int>(m_lnns.size())) {
+        return;
+    }
+    m_lnns[biome_id].reset();
+}
+
+bool MultiBiomeLookaheadEngine::is_lnn_enabled(int biome_id) const {
+    if (biome_id < 0 || biome_id >= static_cast<int>(m_lnns.size())) {
+        return false;
+    }
+    return m_lnns[biome_id] != nullptr;
+}
+
+void MultiBiomeLookaheadEngine::_apply_lnn_phase_modulation(int biome_id, PackedFloat64Array& rho_packed) {
+    if (biome_id < 0 || biome_id >= static_cast<int>(m_lnns.size()) || !m_lnns[biome_id]) {
+        return;
+    }
+
+    LiquidNeuralNet* lnn = m_lnns[biome_id].get();
+    int dim = static_cast<int>(std::sqrt(rho_packed.size() / 2));
+    if (dim * dim * 2 != rho_packed.size()) {
+        return;
+    }
+
+    // Extract diagonal phases: phase[i] = arg(rho[i,i])
+    std::vector<double> phases(dim);
+    for (int i = 0; i < dim; i++) {
+        int idx = (i * dim + i) * 2;  // Diagonal element rho[i,i]
+        double re = rho_packed[idx];
+        double im = rho_packed[idx + 1];
+        phases[i] = std::atan2(im, re);
+    }
+
+    // Forward pass through LNN
+    std::vector<double> phase_deltas = lnn->forward(phases);
+
+    // Apply phase modulation to diagonal elements
+    // rho[i,i] *= exp(i * delta_phase[i])
+    for (int i = 0; i < dim && i < static_cast<int>(phase_deltas.size()); i++) {
+        int idx = (i * dim + i) * 2;
+        double re = rho_packed[idx];
+        double im = rho_packed[idx + 1];
+
+        // Scale delta to be small modulation (0.01 radians max)
+        double delta = phase_deltas[i] * 0.01;
+
+        // exp(i*delta) = cos(delta) + i*sin(delta)
+        double cos_d = std::cos(delta);
+        double sin_d = std::sin(delta);
+
+        // (re + i*im) * (cos_d + i*sin_d) = (re*cos_d - im*sin_d) + i*(re*sin_d + im*cos_d)
+        rho_packed[idx] = re * cos_d - im * sin_d;
+        rho_packed[idx + 1] = re * sin_d + im * cos_d;
+    }
+}
+
+// ============================================================================
+// ICON MAP BUILDING
+// ============================================================================
+
+Dictionary MultiBiomeLookaheadEngine::_build_icon_map(
+    int biome_id, const std::vector<PackedFloat64Array>& bloch_steps) {
+
+    Dictionary icon_map;
+
+    if (biome_id < 0 || biome_id >= static_cast<int>(m_num_qubits.size())) {
+        return icon_map;
+    }
+    if (bloch_steps.empty()) {
+        return icon_map;
+    }
+    if (biome_id < 0 || biome_id >= static_cast<int>(m_metadata.size())) {
+        return icon_map;
+    }
+
+    Dictionary metadata = m_metadata[biome_id];
+    if (metadata.is_empty()) {
+        return icon_map;
+    }
+
+    Array emoji_list = metadata.get("emoji_list", Array());
+    Dictionary emoji_to_qubit = metadata.get("emoji_to_qubit", Dictionary());
+    Dictionary emoji_to_pole = metadata.get("emoji_to_pole", Dictionary());
+
+    if (emoji_list.is_empty() || emoji_to_qubit.is_empty() || emoji_to_pole.is_empty()) {
+        return icon_map;
+    }
+
+    int num_qubits = m_num_qubits[biome_id];
+    const int stride = 8;
+    const int expected = num_qubits * stride;
+
+    std::vector<double> totals;
+    totals.resize(emoji_list.size(), 0.0);
+
+    for (const auto& bloch_step : bloch_steps) {
+        if (bloch_step.is_empty() || bloch_step.size() < expected) {
+            continue;
+        }
+
+        const double* ptr = bloch_step.ptr();
+        for (int i = 0; i < emoji_list.size(); i++) {
+            Variant emoji_var = emoji_list[i];
+            if (emoji_var.get_type() != Variant::STRING) {
+                continue;
+            }
+            String emoji = emoji_var;
+            if (!emoji_to_qubit.has(emoji) || !emoji_to_pole.has(emoji)) {
+                continue;
+            }
+
+            int qubit = static_cast<int>(emoji_to_qubit[emoji]);
+            int pole = static_cast<int>(emoji_to_pole[emoji]);
+            if (qubit < 0 || qubit >= num_qubits || (pole != 0 && pole != 1)) {
+                continue;
+            }
+
+            int base = qubit * stride;
+            double p0 = ptr[base + 0];
+            double p1 = ptr[base + 1];
+            double prob = (pole == 0) ? p0 : p1;
+            totals[i] += prob;
+        }
+    }
+
+    std::vector<int> order(totals.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&totals](int a, int b) {
+        return totals[a] > totals[b];
+    });
+
+    Array sorted_emojis;
+    PackedFloat64Array sorted_weights;
+    sorted_weights.resize(static_cast<int>(order.size()));
+
+    Dictionary by_emoji;
+    double total_sum = 0.0;
+    int out_idx = 0;
+    for (int idx : order) {
+        Variant emoji_var = emoji_list[idx];
+        if (emoji_var.get_type() != Variant::STRING) {
+            continue;
+        }
+        String emoji = emoji_var;
+        double weight = totals[idx];
+        sorted_emojis.push_back(emoji);
+        sorted_weights.set(out_idx, weight);
+        out_idx += 1;
+        by_emoji[emoji] = weight;
+        total_sum += weight;
+    }
+
+    icon_map["emojis"] = sorted_emojis;
+    icon_map["weights"] = sorted_weights;
+    icon_map["by_emoji"] = by_emoji;
+    icon_map["steps"] = static_cast<int>(bloch_steps.size());
+    icon_map["total"] = total_sum;
+    icon_map["num_qubits"] = num_qubits;
+
+    return icon_map;
 }

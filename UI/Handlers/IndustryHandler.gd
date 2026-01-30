@@ -148,12 +148,12 @@ static func harvest_flour(farm, positions: Array[Vector2i]) -> Dictionary:
 		if not mill or not mill.is_active:
 			continue
 
-		# Get flour probability from biome
+		# Get flour probability from biome (viz_cache-backed)
 		var biome = farm.grid.get_biome_for_plot(pos)
-		if not biome or not biome.quantum_computer:
+		if not biome:
 			continue
 
-		var flour_prob = biome.quantum_computer.get_emoji_probability("💨")
+		var flour_prob = biome.get_emoji_probability("💨")
 
 		# Harvest based on probability (threshold: 30%)
 		if flour_prob > 0.3:
@@ -299,7 +299,7 @@ static func bake_bread(farm, positions: Array[Vector2i]) -> Dictionary:
 
 	# Get biome and check bread probability
 	var biome = farm.grid.get_biome_for_plot(positions[0])
-	if not biome or not biome.quantum_computer:
+	if not biome:
 		return {
 			"success": false,
 			"error": "no_quantum_system",
@@ -308,10 +308,10 @@ static func bake_bread(farm, positions: Array[Vector2i]) -> Dictionary:
 
 	# Get P(bread) or use coherence as proxy
 	var bread_prob = 0.5
-	if biome.quantum_computer.register_map.has("🍞"):
-		bread_prob = biome.quantum_computer.get_population("🍞")
+	if biome.viz_cache and biome.viz_cache.get_qubit("🍞") >= 0:
+		bread_prob = biome.get_emoji_probability("🍞")
 	else:
-		bread_prob = biome.quantum_computer.get_purity()
+		bread_prob = biome.get_purity()
 
 	# Attempt baking (Born rule)
 	if randf() < bread_prob:
