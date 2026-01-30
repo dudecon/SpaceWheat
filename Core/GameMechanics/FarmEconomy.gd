@@ -10,80 +10,28 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 
 @onready var _verbose = get_node_or_null("/root/VerboseConfig")
 
-# Universal resource change signal
 signal resource_changed(emoji: String, new_amount: int)
-
-# Other signals
 signal purchase_failed(reason: String)
 signal flour_processed(wheat_amount: int, flour_produced: int)
 signal flour_sold(flour_amount: int, credits_received: int)
 
-const STARTER_BREAD_UNITS: int = 100
-const STARTER_BREAD_CREDITS: int = STARTER_BREAD_UNITS * EconomyConstants.QUANTUM_TO_CREDITS
-
-# Initial resources in emoji-credits (10 credits = 1 quantum energy unit)
-# Start with basic resources - player gathers more through gameplay
-const INITIAL_RESOURCES = {
-	# BioticFlux crops
-	"🌾": 10,   # wheat (agriculture)
-	"👥": 120,   # labor (work)
-	"🍄": 0,    # mushroom (fungal)
-	"🍂": 0,    # detritus (decay)
-	"🍅": 0,    # tomato (life/conspiracy)
-	"🌌": 0,    # cosmic chaos (entropy/void)
-	# Market commodities
-	"💨": 0,    # flour (processed grain)
-	"🍞": STARTER_BREAD_CREDITS,   # bread (finished product) – starter buffer (100 bread units)
-	# Kitchen ingredients
-	"🔥": 50,    # fire (heat)
-	"💧": 0,    # water (moisture)
-	"❄️": 50,    # cold (opposite of fire)
-	"🏜️": 0,    # dry (opposite of water)
-	# Forest organisms
-	"🌿": 0,    # vegetation (producer)
-	"🐇": 0,    # rabbit (herbivore)
-	"🦅": 40,   # eagle (apex predator) - 4 quantum units
-	# StellarForges resources
-	"⚙": 20,   # gears (industry)
-	# Other
-	"👑": 0,    # imperium
-	"💰": 0,    # credits
-	# Reality Midwife tokens (tracked as emoji-credits)
-	EconomyConstants.MIDWIFE_EMOJI: 6,
-}
-
-## ========================================
-## Kitchen v2: Resource ID Mapping (Guardrail)
-## ========================================
-## Maps emoji strings to logical resource types for kitchen mechanics
-## Ensures same emoji in different biomes routes to same economy resource
-## Example: BioticFlux 🌾 and Kitchen 🌾 both route to RESOURCE_IDS["🌾"] = "wheat"
 const RESOURCE_IDS = {
-	"🌾": "wheat",      # Grain (produced in BioticFlux, consumed in Kitchen)
-	"💨": "flour",      # Processed grain (produced via Mill, consumed in Kitchen)
-	"🔥": "fire",       # Heat energy (tapped from Kitchen biome, consumed in Kitchen)
-	"💧": "water",      # Moisture (tapped from Forest biome, consumed in Kitchen)
-	"🍞": "bread",      # Finished product (measurement outcome of Kitchen)
-	"❄️": "cold",       # Opposite of fire
-	"🏜️": "dry",        # Opposite of water
+	"🌾": "wheat",
+	"💨": "flour",
+	"🔥": "fire",
+	"💧": "water",
+	"🍞": "bread",
+	"❄️": "cold",
+	"🏜️": "dry",
 }
 
-# Unified emoji-credits dictionary - THE source of truth
 var emoji_credits: Dictionary = {}
-
-# Stats
-var total_wheat_harvested: int = 0  # For contract tracking
-
-# Imperium Icon reference (linked to conspiracy network)
+var total_wheat_harvested: int = 0
 var imperium_icon = null
 
 
 func _ready():
-	# Initialize from INITIAL_RESOURCES
-	for emoji in INITIAL_RESOURCES:
-		emoji_credits[emoji] = INITIAL_RESOURCES[emoji]
-
-	if _verbose: _verbose.info("economy", "⚛️", "Unified Emoji-Credits Economy initialized (1 quantum = %d credits)" % EconomyConstants.QUANTUM_TO_CREDITS)
+	if _verbose: _verbose.info("economy", "⚛️", "Emoji-Credits Economy ready (1 quantum = %d credits)" % EconomyConstants.QUANTUM_TO_CREDITS)
 
 
 func _print_resources():
@@ -213,14 +161,8 @@ func can_afford_cost(cost: Dictionary) -> bool:
 
 	cost format: {"🌾": 10, "👥": 5} meaning 10 wheat-credits + 5 labor-credits
 	"""
-	print("DEBUG FarmEconomy.can_afford_cost: checking cost ", cost)
-	print("DEBUG FarmEconomy.can_afford_cost: emoji_credits keys: ", emoji_credits.keys())
 	for emoji in cost.keys():
-		var have = get_resource(emoji)
-		var need = cost[emoji]
-		print("DEBUG FarmEconomy.can_afford_cost: emoji '", emoji, "' need ", need, " have ", have)
 		if not can_afford_resource(emoji, cost[emoji]):
-			print("DEBUG FarmEconomy.can_afford_cost: FAILED on ", emoji)
 			return false
 	return true
 

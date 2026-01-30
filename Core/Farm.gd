@@ -320,7 +320,8 @@ func _ready():
 		grid.set_plot_pool(plot_pool)
 
 	# Create environmental simulations (six biomes for multi-biome support)
-	# GRACEFUL LOADING: Each biome loads independently - failed biomes are skipped
+	# UNIFIED LOADING: All biomes go through BootManager.load_biome() for consistency
+	# This ensures: script load → grid register → batcher register → operator rebuild
 	biome_enabled = false
 	_loaded_biome_count = 0
 
@@ -333,24 +334,33 @@ func _ready():
 	elif observation_frame and observation_frame.has_method("get_unlocked_biomes"):
 		unlocked_biomes = observation_frame.get_unlocked_biomes()
 
-	# Load unlocked biomes
-	if "StarterForest" in unlocked_biomes:
-		starter_forest_biome = _load_and_register_biome("res://Core/Environment/StarterForestBiome.gd", "StarterForest")
-	if "Village" in unlocked_biomes:
-		village_biome = _load_and_register_biome("res://Core/Environment/VillageBiome.gd", "Village")
-	if "BioticFlux" in unlocked_biomes:
-		biotic_flux_biome = _load_and_register_biome("res://Core/Environment/BioticFluxBiome.gd", "BioticFlux")
-	if "StellarForges" in unlocked_biomes:
-		stellar_forges_biome = _load_and_register_biome("res://Core/Environment/StellarForgesBiome.gd", "StellarForges")
-	if "FungalNetworks" in unlocked_biomes:
-		fungal_networks_biome = _load_and_register_biome("res://Core/Environment/FungalNetworksBiome.gd", "FungalNetworks")
-	if "VolcanicWorlds" in unlocked_biomes:
-		volcanic_worlds_biome = _load_and_register_biome("res://Core/Environment/VolcanicWorldsBiome.gd", "VolcanicWorlds")
+	# Load unlocked biomes through unified BootManager.load_biome()
+	var boot_manager = get_node_or_null("/root/BootManager")
+	var biome_name_to_var = {
+		"StarterForest": "starter_forest_biome",
+		"Village": "village_biome",
+		"BioticFlux": "biotic_flux_biome",
+		"StellarForges": "stellar_forges_biome",
+		"FungalNetworks": "fungal_networks_biome",
+		"VolcanicWorlds": "volcanic_worlds_biome"
+	}
+
+	for biome_name in unlocked_biomes:
+		if boot_manager and boot_manager.has_method("load_biome"):
+			var result = boot_manager.load_biome(biome_name, self)
+			if result.get("success", false):
+				# Store biome reference in the correct variable
+				if biome_name_to_var.has(biome_name):
+					var var_name = biome_name_to_var[biome_name]
+					set(var_name, result.get("biome_ref"))
+					_loaded_biome_count += 1
+			else:
+				_verbose.warn("boot", "⚠️", "Failed to load biome '%s': %s" % [biome_name, result.get("message", "unknown error")])
 
 	# Enable biome features if at least one biome loaded
 	if _loaded_biome_count > 0:
 		biome_enabled = true
-		print("Farm: %d/%d biomes loaded successfully" % [_loaded_biome_count, 6])
+		print("Farm: %d biomes loaded successfully (via unified BootManager.load_biome)" % _loaded_biome_count)
 	else:
 		biome_enabled = false
 		_verbose.warn("boot", "⚠️", "No biomes loaded - operating in simple mode (fallback 4×1 grid)")
@@ -387,14 +397,8 @@ func _ready():
 
 	# Note: StellarForges doesn't have direct economy connection (no trading)
 
-	# Wire loaded biomes to the grid (skip any that failed to load)
-	if biome_enabled:
-		_register_biome_if_loaded("BioticFlux", biotic_flux_biome, grid)
-		_register_biome_if_loaded("StellarForges", stellar_forges_biome, grid)
-		_register_biome_if_loaded("FungalNetworks", fungal_networks_biome, grid)
-		_register_biome_if_loaded("VolcanicWorlds", volcanic_worlds_biome, grid)
-		_register_biome_if_loaded("StarterForest", starter_forest_biome, grid)
-		_register_biome_if_loaded("Village", village_biome, grid)
+	# NOTE: Biomes are already wired to grid by BootManager.load_biome()
+	# (No additional registration needed here - unified path handles it)
 
 	# Register loaded biomes as metadata for UI systems (QuantumForceGraph visualization)
 	set_meta("grid", grid)
@@ -1282,6 +1286,9 @@ func _load_biome_dynamically(biome_name: String) -> bool:
 	var already = result.get("already_loaded", false)
 	if not already:
 		print("🗺️ Dynamically loaded and registered biome: %s" % biome_name)
+
+	# Grid needs to rebuild now that the biome is present
+	refresh_grid_for_biomes()
 
 	return true
 

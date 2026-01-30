@@ -164,22 +164,15 @@ static func get_vocab_injection_cost(south_emoji: String) -> Dictionary:
 static func can_afford(economy, costs: Dictionary) -> bool:
 	"""Check if economy can afford the given costs"""
 	if not economy:
-		print("DEBUG can_afford: economy is null")
 		return false
 	if economy.has_method("can_afford_cost"):
-		var result = economy.can_afford_cost(costs)
-		print("DEBUG can_afford: can_afford_cost returned ", result, " for costs ", costs)
-		return result
+		return economy.can_afford_cost(costs)
 	if economy.has_method("can_afford_resource"):
 		for emoji in costs:
 			var amount = costs[emoji]
-			var has = economy.get_resource(emoji) if economy.has_method("get_resource") else -1
-			print("DEBUG can_afford: checking emoji '", emoji, "' (", emoji.length(), " chars) need ", amount, " have ", has)
 			if not economy.can_afford_resource(emoji, amount):
-				print("DEBUG can_afford: FAILED - cannot afford ", emoji)
 				return false
 		return true
-	print("DEBUG can_afford: economy has no can_afford methods")
 	return false
 
 

@@ -364,8 +364,10 @@ func _physics_process_lookahead(delta: float):
 		_advance_all_buffers()
 
 	# Check if any active biome needs refill
+	# Refill when we've consumed enough to need more (not when buffer is completely empty)
 	lookahead_accumulator += delta
-	if lookahead_accumulator >= LOOKAHEAD_DT * LOOKAHEAD_STEPS:
+	var refill_threshold = (LOOKAHEAD_DT * LOOKAHEAD_STEPS) * 0.8  # Refill at 80% consumption
+	if lookahead_accumulator >= refill_threshold:
 		lookahead_accumulator = 0.0
 		if lookahead_refills % 100 == 0:
 			_log("trace", "test", "⚙️", "Refilling lookahead (engine %s)" % [
@@ -426,6 +428,10 @@ func _apply_buffered_step(biome, apply_post: bool = true) -> void:
 			print("[BiomeEvolutionBatcher] ⚠️ No bloch data for %s (cursor=%d, buffer size=%d)" % [
 				biome_name, cursor, bloch_steps.size()
 			])
+			# Detailed diagnostics
+			var frame_buffer = frame_buffers.get(biome_name, [])
+			var frame_cursor = buffer_cursors.get(biome_name, 0)
+			print("  → frame_buffer cursor=%d, size=%d" % [frame_cursor, frame_buffer.size()])
 		var purity_steps = purity_buffers.get(biome_name, [])
 		if cursor < purity_steps.size():
 			biome.viz_cache.update_purity(purity_steps[cursor])
@@ -543,6 +549,16 @@ func _refill_all_lookahead_buffers(force_all: bool = false):
 	var mi_results = result.get("mi", [])
 	var bloch_steps_results = result.get("bloch_steps", [])
 	var purity_steps_results = result.get("purity_steps", [])
+
+	# Diagnostic: check if result counts match biome counts
+	if results.size() != biomes.size():
+		print("[WARNING] Lookahead result size mismatch: %d results for %d biomes" % [results.size(), biomes.size()])
+		print("  Expected: results=%d, mi_steps=%d, bloch_steps=%d, purity=%d" % [
+			biomes.size(), biomes.size(), biomes.size(), biomes.size()
+		])
+		print("  Got: results=%d, mi_steps=%d, bloch_steps=%d, purity=%d" % [
+			results.size(), mi_steps_results.size(), bloch_steps_results.size(), purity_steps_results.size()
+		])
 	var metadata_payloads_result = result.get("metadata", [])
 	var coupling_payloads_result = result.get("couplings", [])
 	var icon_maps_result = result.get("icon_maps", [])
@@ -560,6 +576,11 @@ func _refill_all_lookahead_buffers(force_all: bool = false):
 			if i < results.size():
 				frame_buffers[biome_name] = results[i]
 				buffer_cursors[biome_name] = 0
+				if lookahead_refills % 50 == 0 and i < bloch_steps_results.size():
+					var bloch = bloch_steps_results[i]
+					print("[Refill] %s: frame_buffer=%d steps, bloch_buffer=%d packets, cursor reset to 0" % [
+						biome_name, results[i].size(), bloch.size() if bloch is Array else 0
+					])
 			if i < mi_steps_results.size():
 				mi_buffers[biome_name] = mi_steps_results[i]
 				var mi_steps = mi_steps_results[i]
