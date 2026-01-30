@@ -81,52 +81,22 @@ func _safe_load_biome(script_path: String, biome_name: String):
 	return biome
 
 
-func _load_and_register_biome(script_path: String, biome_name: String):
-	"""Load biome, register to grid, and refresh grid sizing (boot-time helper)."""
-	var biome = _safe_load_biome(script_path, biome_name)
-	if biome and grid:
-		_register_biome_if_loaded(biome_name, biome, grid)
-		refresh_grid_for_biomes()
-	return biome
 
 
-func _register_biome_if_loaded(biome_name: String, biome, grid_ref) -> void:
-	"""Register a biome with the grid only if it loaded successfully."""
-	if biome == null:
-		return
-	grid_ref.register_biome(biome_name, biome)
-	biome.grid = grid_ref
+func _finalize_biome_evolution_batcher() -> void:
+	"""Finalize batched biome evolution setup after all biomes are loaded.
 
-
-func _verify_biome_quantum(biome_name: String, biome) -> void:
-	"""Verify a biome's quantum system is initialized (graceful warning if not)."""
-	if biome == null:
-		return  # Biome didn't load, already warned
-	if biome.quantum_computer == null:
-		push_warning("Farm: %s biome has no quantum_computer - quantum features disabled" % biome_name)
-	else:
-		_verbose.debug("boot", "✓", "%s biome quantum system verified" % biome_name)
-
-
-func _setup_biome_evolution_batcher() -> void:
-	"""Initialize batched biome evolution for smooth frame times.
-
-	Processes 2 biomes per frame in rotation instead of all 6 at once.
-	This eliminates 30-40ms frame spikes for smoother gameplay.
+	The batcher was created before biome loading and biomes were registered
+	during BootManager.load_biome(). Now we just disable individual biome
+	_process() to prevent double evolution.
 	"""
-	biome_evolution_batcher = BiomeEvolutionBatcherClass.new()
-	biome_evolution_batcher.initialize([
-		biotic_flux_biome,
-		stellar_forges_biome,
-		fungal_networks_biome,
-		volcanic_worlds_biome,
-		starter_forest_biome,
-		village_biome
-	], plot_pool)  # Pass plot_pool for "skip empty biomes" optimization
+	if not biome_evolution_batcher:
+		push_warning("Farm: Batcher not initialized - cannot finalize")
+		return
 
 	# Disable individual biome _process() to prevent double evolution
 	# BiomeEvolutionBatcher handles both quantum evolution AND time_tracker updates
-	var biomes_to_batch = [
+	var all_biomes = [
 		biotic_flux_biome,
 		stellar_forges_biome,
 		fungal_networks_biome,
@@ -135,12 +105,14 @@ func _setup_biome_evolution_batcher() -> void:
 		village_biome
 	]
 
-	for biome in biomes_to_batch:
+	var disabled_count = 0
+	for biome in all_biomes:
 		if biome:
 			biome.set_meta("batched_evolution", true)
 			biome.set_process(false)  # Completely disable - batcher handles everything
+			disabled_count += 1
 
-	print("Farm: Biome evolution batcher initialized (2 biomes/frame)")
+	print("Farm: Biome evolution batcher finalized (%d biomes, 2/frame rotation)" % disabled_count)
 
 
 # Configuration
@@ -319,6 +291,11 @@ func _ready():
 	if grid:
 		grid.set_plot_pool(plot_pool)
 
+	# Create biome evolution batcher BEFORE loading biomes
+	# This allows BootManager.load_biome() to register each biome as it loads
+	biome_evolution_batcher = BiomeEvolutionBatcherClass.new()
+	biome_evolution_batcher.initialize([], plot_pool)  # Initialize with empty array, biomes register individually
+
 	# Create environmental simulations (six biomes for multi-biome support)
 	# UNIFIED LOADING: All biomes go through BootManager.load_biome() for consistency
 	# This ensures: script load → grid register → batcher register → operator rebuild
@@ -442,11 +419,12 @@ func _ready():
 	if grid:
 		grid.vocabulary_evolution = vocabulary_evolution
 
-
-	# Initialize biome evolution batcher for smooth frame times
-	_setup_biome_evolution_batcher()
+	# Finalize biome evolution batcher setup
+	# (Batcher was created before biome loading, biomes registered during load)
+	# Now disable individual biome _process() to prevent double evolution
+	_finalize_biome_evolution_batcher()
 	if _verbose:
-		_verbose.info("boot", "🧭", "Farm _ready checkpoint: after batcher")
+		_verbose.info("boot", "🧭", "Farm _ready checkpoint: after batcher finalization")
 
 	# Create UI State abstraction layer (Phase 2 integration)
 	ui_state = FarmUIState.new()
@@ -604,18 +582,9 @@ func rebuild_all_biome_operators() -> void:
 func finalize_setup() -> void:
 	"""Finalize farm setup after all basic initialization.
 
-	Called by BootManager.boot() after biomes are verified to be initialized.
-	This allows for any post-setup operations needed before gameplay starts.
+	Called by BootManager.boot() after biomes are loaded and verified.
+	Quantum verification already happened in BootManager.load_biome().
 	"""
-	# Verify loaded biomes have their quantum systems initialized (graceful warnings)
-	if biome_enabled:
-		_verify_biome_quantum("BioticFlux", biotic_flux_biome)
-		_verify_biome_quantum("StellarForges", stellar_forges_biome)
-		_verify_biome_quantum("FungalNetworks", fungal_networks_biome)
-		_verify_biome_quantum("VolcanicWorlds", volcanic_worlds_biome)
-		_verify_biome_quantum("StarterForest", starter_forest_biome)
-		_verify_biome_quantum("Village", village_biome)
-
 	_verbose.info("boot", "✓", "Farm setup finalized (%d biomes active)" % _loaded_biome_count)
 
 
@@ -1287,8 +1256,6 @@ func _load_biome_dynamically(biome_name: String) -> bool:
 	if not already:
 		print("🗺️ Dynamically loaded and registered biome: %s" % biome_name)
 
-	# Grid needs to rebuild now that the biome is present
-	refresh_grid_for_biomes()
 
 	return true
 

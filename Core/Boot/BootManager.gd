@@ -424,8 +424,14 @@ func load_biome(biome_name: String, farm: Node) -> Dictionary:
 		}
 
 	# ====== STEP 2: REGISTER WITH GRID ======
-	farm._register_biome_if_loaded(biome_name, biome, farm.grid)
+	farm.grid.register_biome(biome_name, biome)
+	biome.grid = farm.grid
 	_verbose.debug("boot", "✓", "Registered '%s' with grid" % biome_name)
+
+	# ====== STEP 2.5: UPDATE GRID CONFIG ======
+	if farm.has_method("refresh_grid_for_biomes"):
+		farm.refresh_grid_for_biomes()
+		_verbose.debug("boot", "📐", "Grid refreshed for loaded biomes")
 
 	# ====== STEP 3: ASSIGN PLOTS FROM GridConfig ======
 	farm._assign_plots_for_biome(biome_name)

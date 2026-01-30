@@ -33,7 +33,7 @@ func _ready():
 	# ═══════════════════════════════════════════════════════════════════════
 	# BOOT CORE (GameStateManager owns Farm)
 	# ═══════════════════════════════════════════════════════════════════════
-	farm = await _boot_mgr.boot_core(0, "default", is_headless)
+	farm = await _boot_mgr.boot_core(-1, "default", is_headless)
 	if not farm:
 		_verbose.warn("ui", "❌", "Farm not available after core boot")
 		return

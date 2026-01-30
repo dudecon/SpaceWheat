@@ -159,6 +159,12 @@ func register_biome(biome) -> void:
 		lookahead_accumulator = LOOKAHEAD_DT * LOOKAHEAD_STEPS
 		if lookahead_enabled:
 			_prime_single_biome(biome, biome_id)
+		else:
+			# Native engine exists but not ready yet - use GDScript priming
+			_prime_single_biome_gdscript(biome)
+	else:
+		# Native engine doesn't exist - use GDScript priming
+		_prime_single_biome_gdscript(biome)
 
 	print("BiomeEvolutionBatcher: Registered biome '%s' (total=%d)" % [biome_name, biomes.size()])
 
@@ -466,7 +472,7 @@ func prime_lookahead_buffers() -> void:
 
 
 func _prime_single_biome(biome, biome_id: int) -> void:
-	"""Prime buffers for a single biome (used for dynamic biome registration)."""
+	"""Prime buffers for a single biome using native engine (fast)."""
 	if not lookahead_enabled or not lookahead_engine:
 		return
 	if not biome or not biome.quantum_computer:
@@ -491,6 +497,41 @@ func _prime_single_biome(biome, biome_id: int) -> void:
 	icon_map_payloads[biome_name] = result.get("icon_map", icon_map_payloads.get(biome_name, {}))
 
 	_apply_buffered_step(biome, false)
+
+
+func _prime_single_biome_gdscript(biome) -> void:
+	"""Prime viz_cache with GDScript evolution (fallback when native unavailable).
+
+	Runs a single evolution step to populate viz_cache with real Bloch data.
+	This prevents inanimate bubbles when native engine isn't ready yet.
+	"""
+	if not biome or not biome.quantum_computer:
+		return
+
+	var qc = biome.quantum_computer
+	var biome_name = biome.get_biome_type()
+
+	_log("info", "biome", "🔄", "Priming '%s' viz_cache with GDScript evolution (native engine pending)" % biome_name)
+
+	# Run a single evolution step to get real phase/color data
+	qc.evolve(LOOKAHEAD_DT, MAX_SUBSTEP_DT, null)
+
+	# Export Bloch packet from quantum computer
+	var bloch_packet = qc.export_bloch_packet()
+	var purity = qc.get_purity()
+	var num_qubits = qc.register_map.num_qubits
+
+	# Populate viz_cache directly (bypass buffers since no native lookahead)
+	if biome.viz_cache:
+		biome.viz_cache.update_from_bloch_packet(bloch_packet, num_qubits)
+		biome.viz_cache.update_purity(purity)
+		_log("debug", "biome", "✓", "Primed '%s' viz_cache: %d qubits, purity=%.3f" % [
+			biome_name,
+			biome.viz_cache.get_num_qubits(),
+			purity
+		])
+	else:
+		_log("warn", "biome", "⚠️", "Biome '%s' has no viz_cache - cannot prime" % biome_name)
 
 
 func _refill_all_lookahead_buffers(force_all: bool = false):

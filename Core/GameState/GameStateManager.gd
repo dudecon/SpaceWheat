@@ -75,9 +75,9 @@ func start_session(load_slot: int = -1, scenario_id: String = "default", reset_f
 	if load_slot >= 0:
 		state = load_game_state(load_slot)
 		if not state:
-			state = new_game(scenario_id)
+			state = load_new_game_template()
 	else:
-		state = new_game(scenario_id)
+		state = load_new_game_template()
 
 	current_state = state
 	current_scenario_id = state.scenario_id if state else scenario_id
@@ -327,6 +327,22 @@ func get_save_info(slot: int) -> Dictionary:
 
 
 ## Load Operations
+
+func load_new_game_template() -> GameState:
+	"""Load new game template from new_game_easy.tres"""
+	var path = SAVE_DIR + "new_game_easy.tres"
+	if not FileAccess.file_exists(path):
+		_verbose.warn("save", "⚠", "new_game_easy.tres not found, creating blank state")
+		return new_game("default")
+
+	var state = ResourceLoader.load(path)
+	if state:
+		_verbose.info("save", "📂", "Loaded new game template from new_game_easy.tres")
+		return state
+	else:
+		push_error("Failed to load new_game_easy.tres, creating blank state")
+		return new_game("default")
+
 
 func load_game_state(slot: int) -> GameState:
 	"""Load game state from slot (returns state, doesn't apply it)"""
