@@ -213,8 +213,14 @@ func can_afford_cost(cost: Dictionary) -> bool:
 
 	cost format: {"🌾": 10, "👥": 5} meaning 10 wheat-credits + 5 labor-credits
 	"""
+	print("DEBUG FarmEconomy.can_afford_cost: checking cost ", cost)
+	print("DEBUG FarmEconomy.can_afford_cost: emoji_credits keys: ", emoji_credits.keys())
 	for emoji in cost.keys():
+		var have = get_resource(emoji)
+		var need = cost[emoji]
+		print("DEBUG FarmEconomy.can_afford_cost: emoji '", emoji, "' need ", need, " have ", have)
 		if not can_afford_resource(emoji, cost[emoji]):
+			print("DEBUG FarmEconomy.can_afford_cost: FAILED on ", emoji)
 			return false
 	return true
 

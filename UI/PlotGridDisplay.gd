@@ -386,16 +386,19 @@ func _update_layout_for_active_biome(biome_name: String) -> void:
 	# Get screen positions - prefer biome-defined layout, then fallback to fixed layouts
 	var screen_positions: Array[Vector2] = []
 	var layout_positions = _get_biome_plot_layout_positions(biome_name, plots_in_biome.size(), viewport_size)
+	var fallback_reason = ""
 	if layout_positions.size() == plots_in_biome.size():
 		screen_positions = layout_positions
 		_verbose.debug("ui", "[]", "Using BIOME plot_layout for '%s'" % biome_name)
 	elif plots_in_biome.size() == 4:
 		# Use fixed quad positions (2x2 grid arrangement)
 		screen_positions = _get_quad_screen_positions()
+		fallback_reason = "FIXED quad layout (2x2 arrangement)"
 		_verbose.debug("ui", "[]", "Using FIXED quad layout (2x2 arrangement)")
 	elif plots_in_biome.size() == 6:
 		# Use fixed hex positions (same size, 1.67:1 aspect ratio for all biomes)
 		screen_positions = layout_calculator.get_hex_screen_positions()
+		fallback_reason = "FIXED hex layout (1.67:1 aspect ratio)"
 		_verbose.debug("ui", "[]", "Using FIXED hex layout (1.67:1 aspect ratio)")
 	else:
 		# Fall back to parametric for other plot counts
@@ -404,6 +407,14 @@ func _update_layout_for_active_biome(biome_name: String) -> void:
 			screen_positions.append(layout_calculator.get_parametric_position(
 				biome_name, params["t"], params["ring"]
 			))
+		fallback_reason = "PARAMETRIC distribution"
+
+	if fallback_reason != "":
+		_verbose.info("ui", "🔁", "Fallback plot layout for '%s': %s" % [biome_name, fallback_reason])
+
+	if screen_positions.is_empty():
+		_verbose.warn("ui", "⚠️", "Fallback plot calculation failed for '%s' (%d plots)" % [biome_name, plots_in_biome.size()])
+		return
 
 	# Apply positions to tiles
 	var biome_positions: Dictionary = {}

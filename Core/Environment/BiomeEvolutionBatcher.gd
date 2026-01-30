@@ -105,6 +105,8 @@ func initialize(biome_array: Array, p_plot_pool = null):
 		print("  Mode: Stage 1 rotation (%d biomes/frame at %.1fHz)" % [
 			BIOMES_PER_FRAME, 1.0 / EVOLUTION_INTERVAL
 		])
+		if ENABLE_LOOKAHEAD:
+			print("  Note: Lookahead engine initializing asynchronously (may activate shortly...)")
 
 	if plot_pool:
 		print("  Optimization: Skip evolution for biomes with no bound terminals")
@@ -252,6 +254,7 @@ func _create_lookahead_engine_async() -> void:
 	lookahead_enabled = (lookahead_engine.get_biome_count() > 0)
 	if lookahead_enabled:
 		lookahead_accumulator = LOOKAHEAD_DT * LOOKAHEAD_STEPS
+		print("  ✓ Lookahead engine ACTIVATED - now using Stage 2 batched evolution")
 	var lnn_count = 0
 	if use_phase_lnn and lookahead_engine.has_method("is_lnn_enabled"):
 		for i in range(lookahead_engine.get_biome_count()):
@@ -413,7 +416,16 @@ func _apply_buffered_step(biome, apply_post: bool = true) -> void:
 		# Update visualization cache from precomputed lookahead packets
 		var bloch_steps = bloch_buffers.get(biome_name, [])
 		if cursor < bloch_steps.size():
-			biome.viz_cache.update_from_bloch_packet(bloch_steps[cursor], num_qubits)
+			var bloch_packet = bloch_steps[cursor]
+			if bloch_packet.size() > 0 and Engine.get_process_frames() % 120 == 0:
+				print("[BiomeEvolutionBatcher] Updating bloch for %s: packet size=%d, num_qubits=%d" % [
+					biome_name, bloch_packet.size(), num_qubits
+				])
+			biome.viz_cache.update_from_bloch_packet(bloch_packet, num_qubits)
+		elif Engine.get_process_frames() % 120 == 0:
+			print("[BiomeEvolutionBatcher] ⚠️ No bloch data for %s (cursor=%d, buffer size=%d)" % [
+				biome_name, cursor, bloch_steps.size()
+			])
 		var purity_steps = purity_buffers.get(biome_name, [])
 		if cursor < purity_steps.size():
 			biome.viz_cache.update_purity(purity_steps[cursor])
