@@ -364,6 +364,10 @@ func _physics_process_lookahead(delta: float):
 	lookahead_accumulator += delta
 	if lookahead_accumulator >= LOOKAHEAD_DT * LOOKAHEAD_STEPS:
 		lookahead_accumulator = 0.0
+		if lookahead_refills % 100 == 0:
+			_log("trace", "test", "⚙️", "Refilling lookahead (engine %s)" % [
+				"available" if lookahead_engine else "NULL"
+			])
 		_refill_all_lookahead_buffers()
 
 
@@ -474,6 +478,11 @@ func _prime_single_biome(biome, biome_id: int) -> void:
 func _refill_all_lookahead_buffers(force_all: bool = false):
 	"""Refill lookahead buffers with batched C++ call."""
 	var batch_start = Time.get_ticks_usec()
+
+	# Check if native engine is available
+	if not lookahead_engine:
+		_log("warn", "test", "⚠️", "Lookahead engine is null - cannot refill buffers")
+		return
 
 	# Collect current rhos for ALL registered biomes (must match native engine order)
 	var biome_rhos: Array = []
