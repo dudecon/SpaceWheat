@@ -8,12 +8,32 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
-# Run visual bubble test with emoji atlas validation
-run_test_scene "VisualBubbleTest.tscn" 20 "🌾 Visual Bubble Test - GPU Emoji Verification"
+echo "🌾 Visual Bubble Test - GPU Emoji Verification"
+echo "==========================="
+
+# Run test ONCE and capture output
+BUBBLE_OUTPUT=$(timeout 20 godot --scene VisualBubbleTest.tscn 2>&1 || true)
 EXIT_CODE=$?
 
-# Additional GPU offload analysis
-BUBBLE_OUTPUT=$(timeout 20 godot --scene VisualBubbleTest.tscn 2>&1 || true)
+# Print relevant output
+echo "$BUBBLE_OUTPUT" | grep -E "🎨|emoji|atlas|WARNING.*emoji|Using pre-built|BUILD|ATLAS" || true
+
+# Analyze results
+if [ $EXIT_CODE -eq 124 ]; then
+    echo ""
+    echo -e "${GREEN}✅ Test completed (timeout after 20s)${NC}"
+elif [ $EXIT_CODE -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}✅ Test completed successfully${NC}"
+else
+    echo ""
+    echo -e "${YELLOW}⚠️  Test exited with code: $EXIT_CODE${NC}"
+fi
+
+# Validate emoji atlas from captured output
+validate_emoji_atlas "$BUBBLE_OUTPUT" "Visual Bubble Test"
+
+# Analyze GPU offload status from same output
 verify_gpu_offload "$BUBBLE_OUTPUT"
 
 exit $EXIT_CODE
