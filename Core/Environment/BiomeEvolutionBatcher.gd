@@ -107,7 +107,7 @@ var _evolution_tick_count: int = 0  # Total evolution ticks since start
 var _avg_batch_time_ms: float = 10.0  # Running average of batch processing time
 var _avg_frame_time_ms: float = 16.67  # Running average of frame time (starts at 60fps)
 var _last_frame_time: int = 0  # For measuring frame deltas
-const REFILL_THRESHOLD_MS = 1000.0  # Start refilling when buffer drops below 1 second
+const REFILL_THRESHOLD_MS = 2000.0  # Start refilling when buffer drops below 2 seconds (prevents starvation)
 const BATCH_TIME_SMOOTHING = 0.3  # EMA smoothing for batch time (0-1, higher = more responsive)
 
 # Rate limit batch processing to prevent physics from blocking rendering
