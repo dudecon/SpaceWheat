@@ -302,6 +302,8 @@ func build_atlas_async(emoji_list: Array, parent_node: Node, font_size: int = 48
 			_emoji_uvs[emoji] = Rect2(uv_x, uv_y, uv_w, uv_h)
 			_emoji_cells[emoji] = cell_index
 			successful_count += 1
+		else:
+			print("[EmojiAtlasBatcher] DEBUG: emoji_image is null for '%s' (svg=%s, vp=%s, failed=%s)" % [emoji, svg_count, viewport_count, failed_count])
 
 		cell_index += 1
 
@@ -364,7 +366,7 @@ func add_emoji_by_name(position: Vector2, size: Vector2, emoji: String, color: C
 		if not _missing_emojis.has(emoji):
 			_missing_emojis[emoji] = true
 			# Only warn once per emoji to avoid spam
-			push_warning("[EmojiAtlasBatcher] Missing emoji: '%s'" % emoji)
+			push_warning("[EmojiAtlasBatcher] Missing emoji: '%s' (UV map has %d emojis)" % [emoji, _emoji_uvs.size()])
 		# Fallback: try SVG texture
 		if _visual_asset_registry:
 			var tex = _visual_asset_registry.get_texture(emoji)
