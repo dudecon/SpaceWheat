@@ -15,8 +15,8 @@ echo "==========================="
 BUBBLE_OUTPUT=$(timeout 20 godot --scene VisualBubbleTest.tscn 2>&1 || true)
 EXIT_CODE=$?
 
-# Print relevant output
-echo "$BUBBLE_OUTPUT" | grep -E "🎨|emoji|atlas|WARNING.*emoji|Using pre-built|BUILD|ATLAS" || true
+# Print ALL output (performance metrics, FPS, timing, etc.)
+echo "$BUBBLE_OUTPUT"
 
 # Analyze results
 if [ $EXIT_CODE -eq 124 ]; then
