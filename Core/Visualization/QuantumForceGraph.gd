@@ -85,6 +85,7 @@ var chaos_icon = null
 var imperium_icon = null
 
 var biome_evolution_batcher = null
+var emoji_atlas_batcher = null  # Pre-built emoji atlas for GPU-accelerated rendering
 var lookahead_offset: int = 0  # 0 = render current frame; set >0 to preview lookahead
 
 var center_position: Vector2 = Vector2.ZERO
@@ -262,6 +263,7 @@ func _build_context() -> Dictionary:
 		"farm_grid": farm_grid,
 		"plot_pool": plot_pool,
 		"biome_evolution_batcher": biome_evolution_batcher,
+		"emoji_atlas_batcher": emoji_atlas_batcher,
 		"lookahead_offset": lookahead_offset,
 		"biotic_flux_biome": biotic_flux_biome,
 		"biotic_icon": biotic_icon,
@@ -482,6 +484,18 @@ func highlight_node(node: QuantumNode):
 func get_stats() -> Dictionary:
 	"""Get graph statistics."""
 	return input_handler.get_stats(quantum_nodes, node_by_plot_id)
+
+
+func get_bubble_renderer():
+	"""Get the bubble renderer for stats access."""
+	return bubble_renderer
+
+
+func set_emoji_atlas_batcher(atlas_batcher):
+	"""Set the pre-built emoji atlas batcher for GPU-accelerated emoji rendering."""
+	emoji_atlas_batcher = atlas_batcher
+	if bubble_renderer and bubble_renderer.has_method("set_emoji_atlas_batcher"):
+		bubble_renderer.set_emoji_atlas_batcher(atlas_batcher)
 
 
 func print_snapshot(reason: String = ""):

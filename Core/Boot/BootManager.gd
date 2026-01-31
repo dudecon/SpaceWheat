@@ -201,6 +201,36 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 	_verbose.info("boot", "✓", "BiomeLayoutCalculator ready")
 	_verbose.info("boot", "✓", "Layout positions computed")
 
+	# Build emoji atlas for GPU-accelerated emoji rendering
+	var biomes = {}
+	if farm.biome_enabled:
+		if farm.biotic_flux_biome:
+			biomes["BioticFlux"] = farm.biotic_flux_biome
+		if farm.stellar_forges_biome:
+			biomes["StellarForges"] = farm.stellar_forges_biome
+		if farm.fungal_networks_biome:
+			biomes["FungalNetworks"] = farm.fungal_networks_biome
+		if farm.volcanic_worlds_biome:
+			biomes["VolcanicWorlds"] = farm.volcanic_worlds_biome
+		if farm.starter_forest_biome:
+			biomes["StarterForest"] = farm.starter_forest_biome
+		if farm.village_biome:
+			biomes["Village"] = farm.village_biome
+
+	if biomes.size() > 0:
+		_verbose.info("boot", "🎨", "Building emoji atlas...")
+		var all_emojis = _collect_all_emojis(biomes)
+		_verbose.info("boot", "🎨", "  Found %d unique emojis" % all_emojis.size())
+
+		var EmojiAtlasBatcherClass = load("res://Core/Visualization/EmojiAtlasBatcher.gd")
+		var atlas_batcher = EmojiAtlasBatcherClass.new()
+		await atlas_batcher.build_atlas_async(all_emojis, quantum_viz.graph)
+		_verbose.info("boot", "✓", "Emoji atlas ready")
+
+		# Pass atlas to the quantum viz context for use by bubble renderer
+		if quantum_viz.graph.has_method("set_emoji_atlas_batcher"):
+			quantum_viz.graph.set_emoji_atlas_batcher(atlas_batcher)
+
 	visualization_ready.emit()
 
 ## Stage 3C: Initialize UI
@@ -495,3 +525,37 @@ func _get_biome_script_path(biome_name: String) -> String:
 			if registry.get_by_name(biome_name):
 				return "res://Core/Environment/DataDrivenBiome.gd"
 			return ""
+
+
+## Helper: Collect all unique emojis from all biomes for atlas building
+func _collect_all_emojis(biomes: Dictionary) -> Array:
+	"""Extract all unique emojis from biome quantum computers.
+
+	Returns an array of unique emoji strings for atlas building.
+	"""
+	var unique_emojis: Dictionary = {}
+
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if not biome or not biome.quantum_computer:
+			continue
+
+		var qc = biome.quantum_computer
+		var register_map = qc.register_map
+		if not register_map:
+			continue
+
+		# Get all emojis from register map coordinates
+		for emoji in register_map.coordinates.keys():
+			unique_emojis[emoji] = true
+
+		# Also get from axes (north/south poles)
+		if "axes" in register_map:
+			for axis_id in register_map.axes:
+				var axis = register_map.axes[axis_id]
+				if axis.has("north"):
+					unique_emojis[axis.north] = true
+				if axis.has("south"):
+					unique_emojis[axis.south] = true
+
+	return unique_emojis.keys()
