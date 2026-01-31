@@ -380,6 +380,10 @@ func _run_visual_update(delta):
 				total_distance, tracking_node.velocity.length()
 			])
 
+	# Detailed C++ task profiling every ~10 physics frames (100 visual frames)
+	if frame % 100 == 0 and frame >= 100 and batcher:
+		_print_cpp_profiling_report()
+
 
 func _select_biome_in_inspector(keycode: int):
 	"""Select biome in inspector using TYUIOP keys."""
@@ -568,3 +572,69 @@ func _input(event):
 					print("\n[STRESS] Biome toggle SPAM started (%.1fs interval)" % spam_interval)
 				else:
 					print("\n[STRESS] Biome toggle SPAM stopped")
+
+
+func _print_cpp_profiling_report():
+	"""Print detailed C++ task profiling and resource usage over last 10 physics frames."""
+	if not batcher or not batcher.has_method("get_performance_metrics"):
+		return
+
+	var metrics = batcher.get_performance_metrics()
+	var vfps = Engine.get_frames_per_second()
+	var frame_budget_ms = 16.67  # 60 FPS target
+
+	print("\n" + "=".repeat(75))
+	print("📊 C++ TASK PROFILING - Frame %d (10 Physics Frames Window)" % frame)
+	print("=".repeat(75))
+
+	# Frame budget analysis
+	var estimated_render_ms = 5.1  # From rendering profiler
+	var physics_frame_time = 1000.0 / (metrics.get("physics_fps", 10.0) if metrics.get("physics_fps", 10.0) > 0 else 10.0)
+
+	print("\n⏱️  FRAME BUDGET:")
+	print("  Visual FPS:     %.1f fps (%.2fms/frame)" % [vfps, 1000.0 / vfps if vfps > 0 else 0])
+	print("  Physics FPS:    %.1f Hz  (%.2fms/frame)" % [
+		metrics.get("physics_fps", 0.0),
+		physics_frame_time
+	])
+	print("  Target budget:  16.67ms (60 fps)")
+
+	# C++ task breakdown
+	print("\n⚙️  C++ TASK TIMINGS:")
+	print("  Evolution (C++):   %.2fms/batch  (avg: %.2fms)" % [
+		metrics.get("last_batch_time_ms", 0.0),
+		metrics.get("avg_batch_time_ms", 0.0)
+	])
+	print("    ├─ Batches pending:   %d" % metrics.get("batches_pending", 0))
+	print("    ├─ Batches in flight: %d" % metrics.get("batches_in_flight", 0))
+	print("    └─ Total evolutions:  %d" % metrics.get("total_evolutions", 0))
+
+	print("\n  Force calc (GPU):  [active - check GPU usage]")
+	print("  Rendering (GPU):   ~%.1fms (estimated)" % estimated_render_ms)
+
+	# Resource usage (requires external monitoring)
+	print("\n💻 RESOURCE USAGE (last 10 physics frames):")
+	print("  CPU:  Check system monitor (top/htop)")
+	print("  GPU:  Check nvidia-smi / radeontop / intel_gpu_top")
+	print("  Note: Frame %d, Refills: %d" % [frame, metrics.get("refill_count", 0)])
+
+	# Buffer health
+	var diag = batcher.get_batching_diagnostics() if batcher.has_method("get_batching_diagnostics") else {}
+	var buffer_size = diag.get("buffer_size", 0)
+	var cursor = diag.get("buffer_cursor", 0)
+	var steps_remaining = buffer_size - cursor
+	var buffer_ms_remaining = steps_remaining * 100.0  # 100ms per step
+
+	print("\n📦 BUFFER HEALTH:")
+	print("  Steps remaining:  %d / %d  (%.0fms coverage)" % [
+		steps_remaining,
+		buffer_size,
+		buffer_ms_remaining
+	])
+	print("  Refill threshold: 2000ms")
+	if buffer_ms_remaining < 2000:
+		print("  ⚠️  Buffer low - refill imminent")
+	else:
+		print("  ✅ Buffer healthy")
+
+	print("=".repeat(75) + "\n")

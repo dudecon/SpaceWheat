@@ -1258,6 +1258,19 @@ func get_batching_diagnostics() -> Dictionary:
 	}
 
 
+func get_performance_metrics() -> Dictionary:
+	"""Get C++ task timing metrics for profiling."""
+	return {
+		"last_batch_time_ms": last_batch_time_ms,
+		"avg_batch_time_ms": _avg_batch_time_ms,
+		"batches_pending": lookahead_batch_queue.size(),
+		"batches_in_flight": _batches_in_flight.size(),
+		"total_evolutions": total_evolutions,
+		"refill_count": lookahead_refills,
+		"physics_fps": physics_frames_per_second,
+	}
+
+
 # ============================================================================
 # DISTRIBUTED LOOKAHEAD - Queue-based batch processing (low-end CPU opt)
 # ============================================================================
