@@ -159,14 +159,19 @@ func _update_gpu(delta: float, nodes: Array, biomes: Dictionary, layout_calculat
 				mi_values = biome.viz_cache._mi_values
 				num_qubits = biome.viz_cache.get_num_qubits()
 
-				# Pack Bloch data: [x, y, z, r] per qubit
+				# Pack full Bloch data: [p0, p1, x, y, z, r, theta, phi] per qubit (8 floats each)
+				# This matches C++ ForceGraphEngine format
 				for q in range(num_qubits):
 					var bloch = biome.viz_cache.get_bloch(q)
 					if not bloch.is_empty():
+						bloch_packet.append(bloch.get("p0", 0.5))
+						bloch_packet.append(bloch.get("p1", 0.5))
 						bloch_packet.append(bloch.get("x", 0.0))
 						bloch_packet.append(bloch.get("y", 0.0))
 						bloch_packet.append(bloch.get("z", 0.0))
 						bloch_packet.append(bloch.get("r", 0.0))
+						bloch_packet.append(bloch.get("theta", 0.0))
+						bloch_packet.append(bloch.get("phi", 0.0))
 
 	# Force configuration
 	var config = {

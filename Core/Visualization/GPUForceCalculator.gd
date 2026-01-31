@@ -70,7 +70,14 @@ func _compile_force_shader() -> bool:
 
 
 func _get_force_shader_glsl() -> String:
-	"""Return inline force calculation shader source."""
+	"""Return inline force calculation shader source.
+
+	Matches C++ ForceGraphEngine calculations:
+	1. Purity radial force - pure states at center, mixed at edge
+	2. Phase angular force - tangent force based on Bloch theta
+	3. Correlation forces - MI-based springs between coupled nodes
+	4. Repulsion forces - inverse-square prevents overlap
+	"""
 	return """
 #version 450
 
@@ -89,8 +96,9 @@ layout(std430, binding = 2) readonly buffer MutualInfo {
 	float mi[];
 };
 
-layout(std430, binding = 3) readonly buffer BlochVectors {
-	vec4 bloch[];
+// Bloch packet: [p0, p1, x, y, z, r, theta, phi] per qubit (stride=8)
+layout(std430, binding = 3) readonly buffer BlochPacket {
+	float bloch[];  // 8 floats per qubit
 };
 
 layout(std430, binding = 4) readonly buffer FrozenMask {
@@ -114,15 +122,25 @@ layout(push_constant) uniform PushConstants {
 	uint num_qubits;
 	float purity_radial_spring;
 	float phase_angular_spring;
-	float correlation_spring;
+	float mi_spring;
 	float repulsion_strength;
 	float damping;
 	float base_distance;
 	float min_distance;
+	float correlation_scaling;
+	float max_biome_radius;
 } pc;
 
 const float PI = 3.14159265359;
 const float EPSILON = 0.001;
+
+// Get MI index for pair (i, j) in upper triangular format
+uint mi_index(uint i, uint j, uint n) {
+	if (i > j) {
+		uint tmp = i; i = j; j = tmp;
+	}
+	return i * n - (i * (i + 1u)) / 2u + j - i - 1u;
+}
 
 void main() {
 	uint node_id = gl_GlobalInvocationID.x;
@@ -137,55 +155,118 @@ void main() {
 	vec2 force = vec2(0.0);
 	vec2 node_pos = pos[node_id];
 
-	// Parity radial force (purity-based)
-	if (node_id < pc.num_qubits) {
-		float purity = bloch[node_id].w;
-		float target_radius = 250.0 * (1.0 - purity);
+	// === 1. PURITY RADIAL FORCE ===
+	// Pure states (purity≈1) at center, mixed (purity≈0) at edge
+	uint bloch_offset = node_id * 8u;
+	if (bloch_offset + 7u < bloch.length()) {
+		float p0 = bloch[bloch_offset];      // |0⟩ probability
+		float p1 = bloch[bloch_offset + 1u]; // |1⟩ probability
+		float purity = abs(p0 - p1);         // Purity ≈ |p0 - p1|
+
+		// Target radius: pure=center, mixed=edge
+		float target_radius = pc.max_biome_radius * (1.0 - purity);
+
 		vec2 radial = node_pos - pc.biome_center;
 		float current_radius = length(radial);
 
 		if (current_radius > EPSILON) {
 			vec2 radial_dir = radial / current_radius;
-			float radius_error = current_radius - target_radius;
-			force += radial_dir * radius_error * pc.purity_radial_spring;
+			float radial_error = target_radius - current_radius;
+			force += radial_dir * (pc.purity_radial_spring * radial_error);
+		} else if (target_radius > 1.0) {
+			// At center, push outward if target > 0
+			force += vec2(1.0, 0.0) * (pc.purity_radial_spring * target_radius);
 		}
 	}
 
-	// Pairwise forces (correlation + repulsion)
+	// === 2. PHASE ANGULAR FORCE ===
+	// Tangent force to cluster by phase (theta on Bloch sphere)
+	if (bloch_offset + 7u < bloch.length()) {
+		float theta = bloch[bloch_offset + 6u];  // Bloch theta
+
+		vec2 radial = node_pos - pc.biome_center;
+		float current_radius = length(radial);
+
+		if (current_radius > EPSILON) {
+			// Current angle in 2D
+			float current_angle = atan(radial.y, radial.x);
+
+			// Target angle from Bloch theta
+			float target_angle = theta;
+
+			// Angular error wrapped to [-PI, PI]
+			float angular_error = target_angle - current_angle;
+			if (angular_error > PI) angular_error -= 2.0 * PI;
+			if (angular_error < -PI) angular_error += 2.0 * PI;
+
+			// Tangent direction (perpendicular to radial)
+			vec2 tangent = vec2(-radial.y, radial.x) / current_radius;
+
+			// Tangent force proportional to angular error × radius
+			force += tangent * (pc.phase_angular_spring * angular_error * current_radius);
+		}
+	}
+
+	// === 3. CORRELATION FORCES (MI-based springs) ===
+	// High MI → attract (shorter spring length)
 	for (uint j = 0u; j < pc.num_nodes; j++) {
 		if (j == node_id) continue;
+		if (frozen[j] > 0u) continue;
 
-		vec2 to_other = pos[j] - node_pos;
-		float dist = length(to_other);
+		// Get MI value
+		uint mi_idx = mi_index(node_id, j, pc.num_nodes);
+		float mi_val = 0.0;
+		if (mi_idx < mi.length()) {
+			mi_val = mi[mi_idx];
+		}
+		if (mi_val < 0.000001) continue;  // Skip if no correlation
 
-		if (dist > EPSILON) {
-			// MI-based correlation spring
-			float mi_val = 0.0;
-			if (node_id < j && node_id < 24u && j < 24u) {
-				uint mi_idx = node_id * 24u + j - (node_id * (node_id + 1u)) / 2u;
-				if (mi_idx < mi.length()) {
-					mi_val = mi[mi_idx];
-				}
-			}
+		// Distance between nodes
+		vec2 delta = pos[j] - node_pos;
+		float dist = length(delta);
+		if (dist < EPSILON) continue;
 
-			float spring_length = pc.base_distance / (1.0 + 3.0 * mi_val);
-			float spring_force = (dist - spring_length) * pc.correlation_spring;
-			force += normalize(to_other) * spring_force;
+		// Target distance decreases with MI
+		float target_distance = pc.base_distance / (1.0 + pc.correlation_scaling * mi_val);
+		target_distance = max(target_distance, pc.min_distance);
 
-			// Repulsion
-			if (dist < 15.0) {
-				force += normalize(to_other) * pc.repulsion_strength;
-			} else if (dist < pc.base_distance * 0.5) {
-				float repel_mag = pc.repulsion_strength / (dist * dist + 1.0);
-				force += normalize(to_other) * repel_mag;
-			}
+		// Spring force: F = k * (dist - target)
+		float error = dist - target_distance;
+		vec2 direction = delta / dist;
+		force += direction * (pc.mi_spring * error);
+	}
+
+	// === 4. REPULSION FORCES ===
+	// Inverse-square prevents overlap
+	for (uint j = 0u; j < pc.num_nodes; j++) {
+		if (j == node_id) continue;
+		if (frozen[j] > 0u) continue;
+
+		vec2 delta = node_pos - pos[j];
+		float dist = length(delta);
+
+		if (dist < EPSILON) {
+			// Exactly on top: push in random-ish direction
+			force += vec2(float(node_id) * 0.1, float(j) * 0.1);
+			continue;
+		}
+
+		if (dist < pc.min_distance) {
+			// Strong repulsion for very close nodes
+			vec2 direction = delta / dist;
+			force += direction * pc.repulsion_strength;
+		} else if (dist < pc.base_distance) {
+			// Soft inverse-square repulsion
+			vec2 direction = delta / dist;
+			float repel_mag = pc.repulsion_strength / (dist * dist + 1.0);
+			force += direction * repel_mag;
 		}
 	}
 
-	// Integration
+	// === INTEGRATION ===
 	vec2 new_velocity = (vel[node_id] + force * pc.dt) * pc.damping;
 
-	// Clamp velocity
+	// Clamp velocity to prevent instability
 	float vel_mag = length(new_velocity);
 	if (vel_mag > 500.0) {
 		new_velocity = normalize(new_velocity) * 500.0;
@@ -193,8 +274,8 @@ void main() {
 
 	vec2 new_position = node_pos + new_velocity * pc.dt;
 
-	// Clamp to bounding box
-	float max_extent = 375.0;
+	// Clamp to biome bounding box
+	float max_extent = pc.max_biome_radius * 1.5;
 	new_position.x = clamp(new_position.x, pc.biome_center.x - max_extent, pc.biome_center.x + max_extent);
 	new_position.y = clamp(new_position.y, pc.biome_center.y - max_extent, pc.biome_center.y + max_extent);
 
@@ -208,37 +289,52 @@ func compute_forces(
 	positions: PackedVector2Array,
 	velocities: PackedVector2Array,
 	mi_values: PackedFloat64Array,
-	bloch_data: PackedFloat64Array,
+	bloch_packet: PackedFloat64Array,  # Full 8-float format: [p0, p1, x, y, z, r, theta, phi] per qubit
 	num_qubits: int,
 	biome_center: Vector2,
 	delta: float,
 	config: Dictionary = {}
 ) -> Dictionary:
-	"""Compute forces on GPU, return updated positions/velocities."""
+	"""Compute forces on GPU, return updated positions/velocities.
+
+	Calculates all four force types matching C++ ForceGraphEngine:
+	1. Purity radial force
+	2. Phase angular force
+	3. Correlation forces (MI-based)
+	4. Repulsion forces
+	"""
 
 	if not gpu_available or positions.is_empty():
 		return {}
 
 	var num_nodes = positions.size()
 
-	# Get config with defaults
+	# Get config with defaults (matching C++ ForceGraphEngine defaults)
 	var purity_spring = config.get("purity_radial_spring", 0.08)
 	var phase_spring = config.get("phase_angular_spring", 0.04)
-	var corr_spring = config.get("correlation_spring", 0.12)
+	var mi_spring = config.get("mi_spring", 0.18)
 	var repulsion = config.get("repulsion_strength", 1500.0)
 	var damping = config.get("damping", 0.89)
 	var base_dist = config.get("base_distance", 120.0)
 	var min_dist = config.get("min_distance", 15.0)
+	var corr_scaling = config.get("correlation_scaling", 3.0)
+	var max_radius = config.get("max_biome_radius", 250.0)
 
-	# Pack data as bytes
+	# Pack data as bytes - use float32 for GPU (converts from float64)
 	var pos_bytes = _pack_vector2_to_bytes(positions)
 	var vel_bytes = _pack_vector2_to_bytes(velocities)
-	var mi_bytes = _pack_float64_to_bytes(mi_values)
-	var bloch_bytes = _pack_float64_to_bytes(bloch_data)
+	var mi_bytes = _pack_float32_array(mi_values)
+	var bloch_bytes = _pack_float32_array(bloch_packet)
+
+	# Ensure we have valid buffer data
+	if mi_bytes.is_empty():
+		mi_bytes = PackedByteArray([0, 0, 0, 0])  # Minimum 4 bytes
+	if bloch_bytes.is_empty():
+		bloch_bytes = PackedByteArray([0, 0, 0, 0])
 
 	var frozen = PackedByteArray()
-	for _i in range(num_nodes):
-		frozen.append(0)
+	frozen.resize(num_nodes * 4)  # uint per node, 4 bytes each
+	frozen.fill(0)
 
 	# Create/update input buffers
 	position_buffer = rd.storage_buffer_create(pos_bytes.size(), pos_bytes)
@@ -267,7 +363,11 @@ func compute_forces(
 
 	var uniform_set = rd.uniform_set_create(uniforms, force_pipeline, 0)
 
-	# Pack push constants (must match shader exactly)
+	# Pack push constants (must match shader layout exactly)
+	# Layout: biome_center(vec2), dt, num_nodes, num_qubits,
+	#         purity_radial_spring, phase_angular_spring, mi_spring,
+	#         repulsion_strength, damping, base_distance, min_distance,
+	#         correlation_scaling, max_biome_radius
 	var push_const = PackedFloat32Array([
 		biome_center.x, biome_center.y,
 		delta,
@@ -275,11 +375,13 @@ func compute_forces(
 		float(num_qubits),
 		purity_spring,
 		phase_spring,
-		corr_spring,
+		mi_spring,
 		repulsion,
 		damping,
 		base_dist,
 		min_dist,
+		corr_scaling,
+		max_radius,
 	])
 
 	# Dispatch compute
@@ -336,6 +438,16 @@ func _pack_float64_to_bytes(arr: PackedFloat64Array) -> PackedByteArray:
 	var bytes = PackedByteArray()
 	for f in arr:
 		bytes.append_array(var_to_bytes(f))
+	return bytes
+
+
+func _pack_float32_array(arr: PackedFloat64Array) -> PackedByteArray:
+	"""Pack float64 array as float32 for GPU (4 bytes per value)."""
+	var bytes = PackedByteArray()
+	for f in arr:
+		# Convert to float32 and pack as 4 bytes
+		var f32 = PackedFloat32Array([float(f)])
+		bytes.append_array(f32.to_byte_array())
 	return bytes
 
 func cleanup():
