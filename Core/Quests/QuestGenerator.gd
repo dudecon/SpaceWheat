@@ -17,7 +17,7 @@ static func generate_quest(faction: Dictionary, biome_name: String, resources: A
 	"""Generate quest from faction data and biome context
 
 	Args:
-		faction: {name: String, bits: Array[int], signature: Array[String]}
+		faction: {name: String, bits: Array[int], sig: Array[String]}
 		biome_name: String (e.g., "BioticFlux")
 		resources: Array[String] (available emoji resources in biome)
 
@@ -55,12 +55,14 @@ static func generate_quest(faction: Dictionary, biome_name: String, resources: A
 
 	# Compose full quest
 	# Convert signature array to string (first 3 emojis for display)
-	var faction_emoji = "".join(faction.get("signature", []).slice(0, 3))
+	# v2.1 uses "sig" not "signature" - check both for compatibility
+	var sig = faction.get("sig", faction.get("signature", []))
+	var faction_emoji = "".join(sig.slice(0, 3))
 
 	return {
 		"faction": faction_name,
 		"faction_emoji": faction_emoji,
-		"faction_signature": faction.get("signature", []),  # Full signature array
+		"faction_signature": sig,  # Full signature array
 		"prefix": voice["prefix"],
 		"body": body,
 		"suffix": voice["suffix"],
@@ -215,9 +217,10 @@ static func generate_emoji_quest(faction: Dictionary, biome_name: String, resour
 		qty_display = "%s×%d" % [resource, quantity]
 
 	# Convert signature array to string and get first emoji
-	var signature = faction.get("signature", [])
-	var faction_emoji = "".join(signature.slice(0, 3))
-	var target_emoji = signature[0] if signature.size() > 0 else "❓"
+	# v2.1 uses "sig" not "signature" - check both for compatibility
+	var sig = faction.get("sig", faction.get("signature", []))
+	var faction_emoji = "".join(sig.slice(0, 3))
+	var target_emoji = sig[0] if sig.size() > 0 else "❓"
 
 	var display = "%s: %s %s → %s %s" % [
 		faction_emoji,
@@ -230,7 +233,7 @@ static func generate_emoji_quest(faction: Dictionary, biome_name: String, resour
 	return {
 		"faction": faction["name"],
 		"faction_emoji": faction_emoji,
-		"faction_signature": signature,  # Full signature array
+		"faction_signature": sig,  # Full signature array
 		"display": display,
 		"resource": resource,
 		"quantity": quantity,

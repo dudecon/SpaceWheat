@@ -349,8 +349,8 @@ func _update_node_visual_batched(
 	if not node.has_farm_tether and not node.plot and node.biome_name != "":
 		var biome = biomes.get(node.biome_name, null)
 		if biome and biome.viz_cache and node.register_id >= 0:
-			# Update from quantum state directly
-			node.update_from_quantum_state()
+			# Update from quantum state with interpolation for smooth 60fps
+			node.update_from_quantum_state(batcher)
 			# Ensure node is visible
 			if node.visual_scale == 0.0:
 				node.visual_scale = 1.0
@@ -481,15 +481,19 @@ func _apply_buffered_metrics(
 ) -> bool:
 	"""Apply lookahead buffer metrics to a node. Returns true if applied.
 
-	Delegates to biome viz_cache populated by lookahead packets.
+	Uses interpolated snapshots for smooth 60fps visual updates.
 	"""
 	if not biome or not biome.viz_cache:
 		return false
 
 	var snap: Dictionary = {}
-	if use_lookahead and batcher and batcher.has_method("get_viz_snapshot"):
+	if use_lookahead and batcher:
 		var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
-		snap = batcher.get_viz_snapshot(biome_name, register_id, lookahead_offset)
+		# Use interpolated snapshot for smooth visuals between physics frames
+		if batcher.has_method("get_interpolated_snapshot"):
+			snap = batcher.get_interpolated_snapshot(biome_name, register_id)
+		elif batcher.has_method("get_viz_snapshot"):
+			snap = batcher.get_viz_snapshot(biome_name, register_id, lookahead_offset)
 	else:
 		snap = biome.viz_cache.get_snapshot(register_id)
 	if snap.is_empty():

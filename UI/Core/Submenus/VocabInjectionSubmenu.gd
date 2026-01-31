@@ -143,10 +143,11 @@ static func _get_injection_cost(south_emoji: String) -> Dictionary:
 static func _get_biome_emojis(biome) -> Array[String]:
 	"""Get all emojis in biome's quantum computer."""
 	if not biome:
-		return []
+		return [] as Array[String]
 	if biome.viz_cache:
-		return biome.viz_cache.get_emojis()
-	return []
+		var emojis = biome.viz_cache.get_emojis()
+		return emojis as Array[String]
+	return [] as Array[String]
 
 
 static func _get_player_vocab_qc():

@@ -371,21 +371,26 @@ Dictionary NativeBubbleRenderer::generate_draw_batches(const PackedFloat64Array&
     // Convert to Godot packed arrays
     PackedVector2Array points;
     PackedColorArray colors;
+    PackedInt32Array indices;
 
     points.resize(m_circle_points.size());
     colors.resize(m_circle_colors.size());
+    indices.resize(m_circle_points.size());
 
     Vector2* points_ptr = points.ptrw();
     Color* colors_ptr = colors.ptrw();
+    int32_t* indices_ptr = indices.ptrw();
 
     for (size_t i = 0; i < m_circle_points.size(); i++) {
         points_ptr[i] = m_circle_points[i];
         colors_ptr[i] = m_circle_colors[i];
+        indices_ptr[i] = static_cast<int32_t>(i);  // Sequential indices for triangles
     }
 
     Dictionary result;
     result["points"] = points;
     result["colors"] = colors;
+    result["indices"] = indices;
     result["triangle_count"] = static_cast<int>(m_circle_points.size() / 3);
 
     return result;

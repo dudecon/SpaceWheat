@@ -255,7 +255,7 @@ Dictionary MultiBiomeLookaheadEngine::evolve_single_biome(
 MultiBiomeLookaheadEngine::BiomeStepResult
 MultiBiomeLookaheadEngine::_evolve_biome_steps(
     int biome_id, const PackedFloat64Array& rho_packed,
-    int steps, float dt, float max_dt) {
+    int steps, float dt, float max_dt, bool compute_mi) {
 
     BiomeStepResult out;
 
@@ -280,8 +280,20 @@ MultiBiomeLookaheadEngine::_evolve_biome_steps(
         // Store result
         out.steps.push_back(evolved_rho);
         out.bloch_steps.push_back(engine->compute_bloch_metrics_from_packed(evolved_rho, num_qubits));
-        out.purity_steps.push_back(engine->compute_purity_from_packed(evolved_rho));
-        out.mi_steps.push_back(engine->compute_all_mutual_information(evolved_rho, num_qubits));
+        double purity = engine->compute_purity_from_packed(evolved_rho);
+        out.purity_steps.push_back(purity);
+
+        // OPTIMIZED MI: Adaptive computation with screening + high-purity approximation
+        // - Step 0: Full scan to identify candidate pairs (pairs with MI > threshold)
+        // - Steps 1+: Only compute for candidates, skip negligible pairs
+        // - Uses linear entropy (no eigendecomp) when purity > 0.9
+        if (compute_mi) {
+            bool force_full_scan = (step == 0);  // Screen on first step only
+            out.mi_steps.push_back(engine->compute_mi_adaptive(
+                evolved_rho, num_qubits, purity, force_full_scan));
+        } else {
+            out.mi_steps.push_back(PackedFloat64Array());  // Empty placeholder
+        }
 
         // Update for next step
         current_rho = evolved_rho;

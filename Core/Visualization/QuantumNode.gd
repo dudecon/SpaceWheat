@@ -78,6 +78,22 @@ var is_lifeless: bool = false
 # 2 = FIXED: Completely static (celestial bodies)
 var quantum_behavior: int = 0
 
+# === AZIMUTHAL SEASON SYSTEM ===
+# Three "seasons" at 120° offsets encode phi as RGB-like projections
+# Each season's intensity = (1 + cos(phi - season_angle)) / 2
+# This creates visible rotational dynamics from quantum phase evolution
+var season_projections: Array[float] = [0.5, 0.5, 0.5]  # [R, G, B] season intensities
+var season_angular_momentum: float = 0.0  # Frame-to-frame spin accumulation
+var phi_raw: float = 0.0  # Raw phi for force calculations
+
+# Season angles (in radians): 0°, 120°, 240°
+const SEASON_ANGLES: Array[float] = [0.0, TAU / 3.0, 2.0 * TAU / 3.0]
+const SEASON_COLORS: Array[Color] = [
+	Color(1.0, 0.3, 0.3, 0.6),  # Season 0: Red-ish
+	Color(0.3, 1.0, 0.3, 0.6),  # Season 1: Green-ish
+	Color(0.3, 0.3, 1.0, 0.6),  # Season 2: Blue-ish
+]
+
 # Legacy compatibility (deprecated - use biome_name + parametric coords)
 var venn_zone: int = -1      # Zone enum value (-1 = not set)
 
@@ -165,8 +181,13 @@ func update_animation(current_time: float, delta: float):
 		visual_alpha = 1.0
 
 
-func update_from_quantum_state():
+func update_from_quantum_state(batcher = null):
 	"""Update visual properties from quantum state (first-class quantum visualization).
+
+	Args:
+		batcher: Optional BiomeEvolutionBatcher for smooth 60fps interpolation.
+		         If provided and lookahead is enabled, uses interpolated snapshots
+		         between physics frames for buttery smooth visuals.
 
 	Queries quantum computer directly via biome_resolver + biome_name.
 	No plot dependency - bubbles are independent quantum visualizations.
@@ -273,11 +294,16 @@ func update_from_quantum_state():
 	emoji_south = emojis.get("south", emoji_south)
 
 	# Prefer cached visualization metrics from biome viz_cache (fast path)
+	# If batcher is provided with lookahead, use interpolated snapshot for smooth 60fps
 	var qubit_index = -1
 	var snap: Dictionary = {}
 	if biome and biome.viz_cache:
 		qubit_index = biome.viz_cache.get_qubit(emoji_north)
-		snap = biome.viz_cache.get_snapshot(qubit_index)
+		# Use interpolated snapshot for smooth visuals between physics frames
+		if batcher and batcher.lookahead_enabled and qubit_index >= 0:
+			snap = batcher.get_interpolated_snapshot(biome_name, qubit_index)
+		else:
+			snap = biome.viz_cache.get_snapshot(qubit_index)
 
 	# 1. EMOJI OPACITY ← Normalized probabilities (θ-like)
 	var north_prob = 0.5
@@ -321,6 +347,26 @@ func update_from_quantum_state():
 	var saturation = coh_magnitude  # More coherent = more saturated color
 	color = Color.from_hsv(hue, saturation * 0.8, 0.9, 0.8)
 
+	# === AZIMUTHAL SEASON PROJECTIONS ===
+	# Project phi onto 3 season basis vectors at 0°, 120°, 240°
+	# Each projection = (1 + cos(phi - season_angle)) / 2 → [0, 1]
+	var old_phi = phi_raw
+	phi_raw = coh_phase
+
+	for i in range(3):
+		var angle_diff = phi_raw - SEASON_ANGLES[i]
+		# Projection intensity: cos maps to [-1, 1], rescale to [0, 1]
+		# Multiply by coherence magnitude so mixed states have weak seasons
+		season_projections[i] = (1.0 + cos(angle_diff)) * 0.5 * coh_magnitude
+
+	# Track angular momentum (phase velocity) for whirlpool force
+	var delta_phi = phi_raw - old_phi
+	# Wrap delta to [-π, π]
+	while delta_phi > PI: delta_phi -= TAU
+	while delta_phi < -PI: delta_phi += TAU
+	# Exponential smoothing of angular momentum
+	season_angular_momentum = season_angular_momentum * 0.8 + delta_phi * 0.2
+
 	# 3. GLOW (energy) ← Purity Tr(ρ²)
 	# Pure state = 1.0 (bright glow), maximally mixed = 1/N (dim)
 	var purity = snap.get("purity", -1.0)
@@ -342,9 +388,16 @@ func update_from_quantum_state():
 
 	radius = base_radius + purity_boost
 
-	# 6. Berry phase - DISABLED until C++ computes geometric phase
-	# Real berry phase must come from path integral during quantum evolution
-	# berry_phase += energy * 0.01  # This was fake accumulation!
+	# 6. Berry phase - REAL geometric phase from Bloch sphere path integral
+	# Formula: dβ = -(1/2) × (1 - cos(θ)) × dφ
+	# This is the solid angle swept on the Bloch sphere per frame
+	var theta = snap.get("theta", PI / 2.0)  # Polar angle from Bloch metrics
+	var dphi = season_angular_momentum       # Phase velocity (already smoothed)
+	var berry_increment = -0.5 * (1.0 - cos(theta)) * dphi
+	berry_phase += berry_increment
+	# Berry phase wraps at 2π (full geometric cycle)
+	while berry_phase > TAU: berry_phase -= TAU
+	while berry_phase < 0: berry_phase += TAU
 
 	if is_transitioning_planted:
 		var verbose = _get_verbose()

@@ -509,9 +509,18 @@ func discover_pair(north: String, south: String) -> bool:
 	if north == "" or south == "" or north == south:
 		return false
 
+	# Check if exact pair already exists
 	for pair in known_pairs:
 		if pair.get("north", "") == north and pair.get("south", "") == south:
 			return false  # Already known
+
+	# Check if either emoji already exists in a different pair
+	for pair in known_pairs:
+		var existing_north = pair.get("north", "")
+		var existing_south = pair.get("south", "")
+		if north == existing_north or north == existing_south or south == existing_north or south == existing_south:
+			# One of the emojis is already registered - can't add overlapping pair
+			return false
 
 	known_pairs.append({"north": north, "south": south})
 	_sync_player_vocabulary(false)

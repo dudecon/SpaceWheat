@@ -37,7 +37,49 @@
       "natural",
       "quantum"
     ],
-    "icon_components": {}
+    "icon_components": {
+      "💀": {
+        "lindblad_outgoing": {
+          "⚱": 0.05
+        }
+      },
+      "🌾": {
+        "lindblad_outgoing": {
+          "♻️": 0.06
+        },
+        "lindblad_incoming": {
+          "🍂": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🍂"
+        }
+      },
+      "🍄": {
+        "lindblad_outgoing": {
+          "💀": 0.01
+        },
+        "lindblad_incoming": {
+          "🌙": 0.06,
+          "🍂": 0.12,
+          "💀": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🍂"
+        }
+      },
+      "🍂": {
+        "lindblad_incoming": {
+          "💀": 0.08,
+          "🌲": 0.08,
+          "🌿": 0.15
+        },
+        "lindblad_outgoing": {
+          "⛰": 0.005
+        }
+      }
+    }
   },
   {
     "name": "CyberDebtMegacity",
@@ -102,6 +144,9 @@
         "decay": {
           "rate": 0.01,
           "target": "🗑"
+        },
+        "lindblad_outgoing": {
+          "🚢": 0.01
         }
       },
       "⛓": {
@@ -110,7 +155,7 @@
           "💸": 0.05
         },
         "decay": {
-          "rate": 0.005,
+          "rate": 0.015,
           "target": "🗑"
         },
         "gated_lindblad_source": [
@@ -122,7 +167,11 @@
             "inverse": false,
             "comment": "Debt leads to death when chains tighten"
           }
-        ]
+        ],
+        "lindblad_outgoing": {
+          "🗑": 0.04,
+          "🔓": 0.04
+        }
       },
       "💸": {
         "self_energy": -0.3,
@@ -147,7 +196,7 @@
         "self_energy": 0.02,
         "lindblad_outgoing": {
           "💀": 0.02,
-          "💸": 0.03
+          "💸": 0.05
         }
       },
       "🗝": {
@@ -161,12 +210,15 @@
             "inverse": false,
             "comment": "Keys unlock wealth when spies find secrets"
           }
-        ]
+        ],
+        "lindblad_incoming": {
+          "🛂": 0.02
+        }
       },
       "🕵️": {
         "self_energy": 0.2,
         "lindblad_outgoing": {
-          "💀": 0.02
+          "💀": 0.04
         }
       },
       "💀": {
@@ -174,12 +226,15 @@
         "decay": {
           "rate": 0.0,
           "target": "🍂"
+        },
+        "lindblad_outgoing": {
+          "⚱": 0.05
         }
       },
       "🩸": {
         "self_energy": 0.1,
         "lindblad_outgoing": {
-          "💀": 0.04
+          "💀": 0.08
         },
         "gated_lindblad_source": [
           {
@@ -190,15 +245,32 @@
             "inverse": false,
             "comment": "Blood flows when chains bind"
           }
-        ]
+        ],
+        "lindblad_incoming": {
+          "🫀": 0.04,
+          "⚔": 0.03
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
+        }
       },
       "💰": {
         "self_energy": 0.3,
         "lindblad_incoming": {
-          "🚀": 0.04
+          "🚀": 0.04,
+          "🌱": 0.02,
+          "🍞": 0.04,
+          "💾": 0.03,
+          "🚢": 0.04,
+          "🔍": 0.03,
+          "🪞": 0.04,
+          "✨": 0.02,
+          "💎": 0.03
         },
         "lindblad_outgoing": {
-          "💸": 0.02
+          "💸": 0.02,
+          "📦": 0.05
         },
         "gated_lindblad_source": [
           {
@@ -292,6 +364,9 @@
           "amplitude": 0.8,
           "phase": 0.0,
           "comment": "Waves of silence that amplify dissolution"
+        },
+        "lindblad_incoming": {
+          "🤫": 0.03
         }
       },
       "🎶": {
@@ -353,8 +428,11 @@
       "🕯": {
         "self_energy": 0.2,
         "decay": {
-          "rate": 0.03,
+          "rate": 0.035,
           "target": "🗑"
+        },
+        "lindblad_incoming": {
+          "🔥": 0.03
         }
       },
       "🌑": {
@@ -377,7 +455,8 @@
           "phase": 1.57
         },
         "lindblad_incoming": {
-          "🎼": 0.04
+          "🎼": 0.04,
+          "✨": 0.04
         },
         "decay": {
           "rate": 0.05,
@@ -389,6 +468,9 @@
         "decay": {
           "rate": 0.0,
           "target": "⚫"
+        },
+        "lindblad_incoming": {
+          "🌞": 0.03
         }
       }
     },
@@ -446,7 +528,79 @@
       "network",
       "microbial"
     ],
-    "icon_components": {}
+    "icon_components": {
+      "🦠": {
+        "lindblad_outgoing": {
+          "🌫": 0.06,
+          "💀": 0.05
+        },
+        "lindblad_incoming": {
+          "🧫": 0.07,
+          "🌾": 0.06,
+          "🐇": 0.08,
+          "🐝": 0.1
+        },
+        "decay": {
+          "rate": 0.15,
+          "target": "🍂"
+        }
+      },
+      "🧫": {
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        },
+        "lindblad_incoming": {
+          "🧪": 0.03
+        }
+      },
+      "🐜": {
+        "lindblad_incoming": {
+          "🧫": 0.04
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "💀"
+        }
+      },
+      "🦗": {
+        "lindblad_incoming": {
+          "♻️": 0.03,
+          "🧫": 0.05
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "💀"
+        },
+        "lindblad_outgoing": {
+          "🚫": 0.04
+        }
+      },
+      "🍄": {
+        "lindblad_outgoing": {
+          "💀": 0.01
+        },
+        "lindblad_incoming": {
+          "🌙": 0.06,
+          "🍂": 0.12,
+          "💀": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🍂"
+        }
+      },
+      "🍂": {
+        "lindblad_incoming": {
+          "💀": 0.08,
+          "🌲": 0.08,
+          "🌿": 0.15
+        },
+        "lindblad_outgoing": {
+          "⛰": 0.005
+        }
+      }
+    }
   },
   {
     "name": "HorizonFracture",
@@ -504,6 +658,13 @@
           "amplitude": 0.5,
           "phase": 0.0,
           "comment": "Shooting stars pulse irregularly, guiding navigation"
+        },
+        "lindblad_incoming": {
+          "💫": 0.03
+        },
+        "decay": {
+          "rate": 0.08,
+          "target": "🗑"
         }
       },
       "🕳": {
@@ -538,7 +699,10 @@
             "inverse": false,
             "comment": "Vortices feed the void when darkness is high"
           }
-        ]
+        ],
+        "lindblad_incoming": {
+          "🌞": 0.03
+        }
       },
       "⚫": {
         "self_energy": 0.4,
@@ -566,7 +730,7 @@
       "📍": {
         "self_energy": 0.15,
         "lindblad_incoming": {
-          "🧭": 0.03
+          "🧭": 0.06
         },
         "lindblad_outgoing": {
           "🗺": 0.03
@@ -579,8 +743,10 @@
       "🗺": {
         "self_energy": 0.25,
         "lindblad_incoming": {
-          "📍": 0.03,
-          "🔭": 0.04
+          "📍": 0.06,
+          "🔭": 0.08,
+          "📡": 0.02,
+          "🧩": 0.03
         },
         "decay": {
           "rate": 0.025,
@@ -684,7 +850,92 @@
       "forest",
       "ecosystem"
     ],
-    "icon_components": {}
+    "icon_components": {
+      "🦅": {
+        "lindblad_incoming": {
+          "💀": 0.03,
+          "🐇": 0.12
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "💀"
+        }
+      },
+      "🌿": {
+        "lindblad_outgoing": {
+          "🥣": 0.03,
+          "♻️": 0.03
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🍂"
+        },
+        "lindblad_incoming": {
+          "♻️": 0.03,
+          "💧": 0.04,
+          "🍂": 0.04
+        }
+      },
+      "🌱": {
+        "lindblad_outgoing": {
+          "♻️": 0.05,
+          "🌲": 0.02,
+          "🌿": 0.06
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🍂"
+        }
+      },
+      "🍂": {
+        "lindblad_incoming": {
+          "💀": 0.08,
+          "🌲": 0.08,
+          "🌿": 0.15
+        },
+        "lindblad_outgoing": {
+          "⛰": 0.005
+        }
+      },
+      "🐺": {
+        "lindblad_incoming": {
+          "🐇": 0.15,
+          "🦌": 0.12
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "💀"
+        }
+      },
+      "🐇": {
+        "decay": {
+          "rate": 0.05,
+          "target": "💀"
+        },
+        "lindblad_incoming": {
+          "🌿": 0.1
+        }
+      },
+      "🦌": {
+        "decay": {
+          "rate": 0.04,
+          "target": "💀"
+        },
+        "lindblad_incoming": {
+          "🌿": 0.08
+        }
+      },
+      "🌲": {
+        "lindblad_incoming": {
+          "🌬": 0.02,
+          "🍂": 0.01
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🍂"
+        }
+      }
+    }
   },
   {
     "name": "StellarForges",
@@ -724,7 +975,46 @@
       "space",
       "quantum"
     ],
-    "icon_components": {}
+    "icon_components": {
+      "⚙": {
+        "lindblad_outgoing": {
+          "🏭": 0.02
+        },
+        "lindblad_incoming": {
+          "🔩": 0.04,
+          "🛠": 0.03,
+          "🔨": 0.03,
+          "🌀": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "🔩": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🔋": {
+        "lindblad_outgoing": {
+          "🔌": 0.04
+        },
+        "lindblad_incoming": {
+          "⚡": 0.06
+        }
+      },
+      "🚀": {
+        "lindblad_outgoing": {
+          "🚢": 0.01
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      }
+    }
   },
   {
     "name": "Village",
@@ -766,7 +1056,67 @@
       "civilization",
       "domestic"
     ],
-    "icon_components": {}
+    "icon_components": {
+      "👥": {
+        "lindblad_outgoing": {
+          "💸": 0.02
+        }
+      },
+      "🔥": {
+        "lindblad_incoming": {
+          "🧨": 0.12,
+          "🍞": 0.1,
+          "🕯": 0.02,
+          "🪵": 0.05,
+          "🌋": 0.3,
+          "🌬": 0.05,
+          "🍂": 0.1
+        },
+        "lindblad_outgoing": {
+          "🪨": 0.03,
+          "🍂": 0.08
+        },
+        "decay": {
+          "rate": 0.1,
+          "target": "🍂"
+        }
+      },
+      "💰": {
+        "lindblad_incoming": {
+          "🌱": 0.02,
+          "🍞": 0.04,
+          "💾": 0.03,
+          "🚢": 0.04,
+          "🔍": 0.03,
+          "🪞": 0.04,
+          "✨": 0.02,
+          "💎": 0.03
+        },
+        "lindblad_outgoing": {
+          "📦": 0.05
+        }
+      },
+      "🧺": {
+        "lindblad_incoming": {
+          "🍞": 0.03
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🍂"
+        }
+      },
+      "🍞": {
+        "lindblad_incoming": {
+          "💨": 0.08,
+          "🔥": 0.05
+        }
+      },
+      "💨": {
+        "lindblad_incoming": {
+          "🌾": 0.05
+        }
+      }
+    }
   },
   {
     "name": "VolcanicWorlds",
@@ -806,7 +1156,72 @@
       "mineral",
       "harsh"
     ],
-    "icon_components": {}
+    "icon_components": {
+      "🌫": {
+        "lindblad_incoming": {
+          "🔥": 0.09
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
+        }
+      },
+      "🔥": {
+        "lindblad_incoming": {
+          "🧨": 0.12,
+          "🍞": 0.1,
+          "🕯": 0.02,
+          "🪵": 0.05,
+          "🌋": 0.3,
+          "🌬": 0.05,
+          "🍂": 0.1
+        },
+        "lindblad_outgoing": {
+          "🪨": 0.03,
+          "🍂": 0.08
+        },
+        "decay": {
+          "rate": 0.1,
+          "target": "🍂"
+        }
+      },
+      "🪨": {
+        "lindblad_incoming": {
+          "⛰": 0.02
+        },
+        "lindblad_outgoing": {
+          "💎": 0.01
+        }
+      },
+      "⛏": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "✨": {
+        "lindblad_incoming": {
+          "⚫": 0.02,
+          "🕳": 0.03,
+          "💎": 0.02
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🌫"
+        }
+      },
+      "💎": {
+        "lindblad_incoming": {
+          "🧊": 0.02,
+          "⛏": 0.02,
+          "⛰": 0.01
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🪨"
+        }
+      }
+    }
   },
   {
     "name": "TidalPools",
@@ -878,7 +1293,13 @@
         }
       },
       "🪨": {
-        "self_energy": 0.15
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "⛰": 0.02
+        },
+        "lindblad_outgoing": {
+          "💎": 0.01
+        }
       },
       "🌀": {
         "self_energy": 0.0,
@@ -890,7 +1311,10 @@
             "power": 1.5,
             "inverse": false
           }
-        ]
+        ],
+        "lindblad_incoming": {
+          "🌞": 0.03
+        }
       },
       "🦀": {
         "self_energy": 0.2,
@@ -968,6 +1392,11 @@
         "decay": {
           "rate": 0.1,
           "target": "🗑"
+        },
+        "lindblad_incoming": {
+          "⚫": 0.02,
+          "🕳": 0.03,
+          "💎": 0.02
         }
       },
       "🐠": {
@@ -988,7 +1417,21 @@
           "🌊": 0.02
         }
       },
-      "💧": {}
+      "💧": {},
+      "📜": {
+        "lindblad_outgoing": {
+          "🏢": 0.05,
+          "📘": 0.04
+        },
+        "lindblad_incoming": {
+          "⚜": 0.02,
+          "🏰": 0.07
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      }
     },
     "cross_biome_flows": {}
   },
@@ -1053,8 +1496,8 @@
       "📜": {
         "self_energy": 0.2,
         "decay": {
-          "rate": 0.005,
-          "target": "🗃"
+          "rate": 0.03,
+          "target": "🗑"
         },
         "gated_lindblad_source": [
           {
@@ -1073,7 +1516,12 @@
           }
         ],
         "lindblad_incoming": {
-          "⚜": 0.06
+          "⚜": 0.08,
+          "🏰": 0.07
+        },
+        "lindblad_outgoing": {
+          "🏢": 0.05,
+          "📘": 0.04
         }
       },
       "🖋": {
@@ -1088,8 +1536,8 @@
       "♟": {
         "self_energy": 0.2,
         "decay": {
-          "rate": 0.01,
-          "target": "👥"
+          "rate": 0.02,
+          "target": "⚫"
         },
         "lindblad_incoming": {
           "👥": 0.02
@@ -1098,7 +1546,8 @@
       "👥": {
         "self_energy": 0.05,
         "lindblad_outgoing": {
-          "🗃": 0.03
+          "🗃": 0.03,
+          "💸": 0.02
         },
         "gated_lindblad_source": [
           {
@@ -1111,7 +1560,15 @@
         ]
       },
       "⛓": {
-        "self_energy": 0.25
+        "self_energy": 0.25,
+        "lindblad_outgoing": {
+          "🗑": 0.04,
+          "🔓": 0.04
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
       },
       "🪦": {
         "self_energy": 0.15,
@@ -1120,7 +1577,10 @@
         }
       },
       "💀": {
-        "self_energy": 0.1
+        "self_energy": 0.1,
+        "lindblad_outgoing": {
+          "⚱": 0.05
+        }
       },
       "📖": {
         "self_energy": 0.25
@@ -1216,6 +1676,15 @@
         "self_energy": 0.6,
         "lindblad_outgoing": {
           "📜": 0.06
+        },
+        "lindblad_incoming": {
+          "💰": 0.02,
+          "🩸": 0.02,
+          "⚫": 0.02
+        },
+        "decay": {
+          "rate": 0.002,
+          "target": "🏚"
         }
       },
       "🍷": {
@@ -1234,17 +1703,22 @@
           }
         ],
         "lindblad_incoming": {
-          "🩸": 0.04
+          "🩸": 0.04,
+          "💰": 0.03
+        },
+        "lindblad_outgoing": {
+          "💀": 0.01
         }
       },
       "🌹": {
         "self_energy": 0.25,
         "lindblad_outgoing": {
-          "🥀": 0.03
+          "🥀": 0.03,
+          "🩸": 0.01
         },
         "decay": {
-          "rate": 0.015,
-          "target": "🥀"
+          "rate": 0.03,
+          "target": "🍂"
         },
         "gated_lindblad_source": [
           {
@@ -1254,7 +1728,10 @@
             "power": 0.8,
             "inverse": true
           }
-        ]
+        ],
+        "lindblad_incoming": {
+          "🍷": 0.02
+        }
       },
       "🎭": {
         "self_energy": 0.3
@@ -1263,7 +1740,15 @@
         "self_energy": 0.2
       },
       "🦅": {
-        "self_energy": 0.35
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "💀": 0.03,
+          "🐇": 0.12
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "💀"
+        }
       },
       "🩸": {
         "self_energy": 0.1,
@@ -1278,11 +1763,32 @@
           }
         ],
         "lindblad_incoming": {
-          "💀": 0.05
+          "💀": 0.05,
+          "🫀": 0.04,
+          "⚔": 0.03
+        },
+        "lindblad_outgoing": {
+          "💀": 0.04
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
         }
       },
       "📜": {
-        "self_energy": 0.2
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🏢": 0.05,
+          "📘": 0.04
+        },
+        "lindblad_incoming": {
+          "⚜": 0.02,
+          "🏰": 0.07
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
       },
       "🥀": {
         "self_energy": 0.1,
@@ -1308,6 +1814,671 @@
           "📜",
           "⚜"
         ]
+      }
+    }
+  },
+  {
+    "name": "_orphan_lindblads",
+    "description": "Collected Lindblad terms for emojis not found in any biome",
+    "emojis": [
+      "🧨",
+      "⭐",
+      "💧",
+      "📡",
+      "📶",
+      "🔊",
+      "🔌",
+      "📒",
+      "🧵",
+      "🏚️",
+      "📦",
+      "📋",
+      "🤲",
+      "🪵",
+      "⚔",
+      "🧶",
+      "🗣",
+      "🧤",
+      "♻️",
+      "everything",
+      "🔧",
+      "⚱",
+      "🚩",
+      "🫧",
+      "🧩",
+      "✊",
+      "🏷️",
+      "🥣",
+      "🧿",
+      "🧬",
+      "📿",
+      "🧘",
+      "🐑",
+      "🛡",
+      "🪢",
+      "🚔",
+      "👘",
+      "🐂",
+      "🐻",
+      "📊",
+      "📘",
+      "📼",
+      "🏛",
+      "🧱",
+      "💱",
+      "🐝",
+      "🚫",
+      "🪝",
+      "🔓",
+      "🛰",
+      "🎵",
+      "💳",
+      "🏮",
+      "⚖",
+      "🗑",
+      "📐",
+      "🧮",
+      "🧰",
+      "👤",
+      "🫙",
+      "💉",
+      "🏰",
+      "🪤",
+      "🧪",
+      "🪣",
+      "🏭",
+      "🏺",
+      "🚧",
+      "🕴️",
+      "🩺",
+      "🛶",
+      "🔨",
+      "🧊",
+      "🪞",
+      "💊",
+      "🧲",
+      "🪛",
+      "🧷"
+    ],
+    "icon_components": {
+      "🧨": {
+        "lindblad_outgoing": {
+          "🔥": 0.1
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🔥"
+        }
+      },
+      "⭐": {
+        "lindblad_outgoing": {
+          "🕳": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🕳"
+        }
+      },
+      "💧": {
+        "lindblad_outgoing": {
+          "🔥": 0.08
+        },
+        "lindblad_incoming": {
+          "🌧": 0.05,
+          "♻️": 0.04
+        }
+      },
+      "📡": {
+        "lindblad_outgoing": {
+          "🔇": 0.05
+        },
+        "lindblad_incoming": {
+          "🔊": 0.04,
+          "👘": 0.02
+        },
+        "decay": {
+          "rate": 0.008,
+          "target": "🗑"
+        }
+      },
+      "📶": {
+        "lindblad_outgoing": {
+          "📵": 0.04,
+          "🧩": 0.02
+        },
+        "lindblad_incoming": {
+          "📡": 0.03,
+          "📻": 0.04
+        },
+        "decay": {
+          "rate": 0.06,
+          "target": "🗑"
+        }
+      },
+      "🔊": {
+        "lindblad_outgoing": {
+          "🔇": 0.06
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
+        }
+      },
+      "🔌": {
+        "lindblad_outgoing": {
+          "⚡": 0.03
+        },
+        "lindblad_incoming": {
+          "♻️": 0.04
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "♻️"
+        }
+      },
+      "📒": {
+        "lindblad_outgoing": {
+          "🗑": 0.005
+        },
+        "lindblad_incoming": {
+          "📘": 0.03
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "🧵": {
+        "lindblad_outgoing": {
+          "👘": 0.03
+        },
+        "lindblad_incoming": {
+          "🧬": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🏚️": {
+        "lindblad_outgoing": {
+          "🏛️": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🏛️"
+        }
+      },
+      "📦": {
+        "lindblad_outgoing": {
+          "💰": 0.04,
+          "🚛": 0.04
+        },
+        "lindblad_incoming": {
+          "💊": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "📋": {
+        "lindblad_outgoing": {
+          "📘": 0.02
+        },
+        "lindblad_incoming": {
+          "🛂": 0.03,
+          "🔬": 0.04
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        }
+      },
+      "🤲": {
+        "lindblad_outgoing": {
+          "🍼": 0.02
+        }
+      },
+      "🪵": {
+        "lindblad_outgoing": {
+          "🔥": 0.04
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "⚔": {
+        "lindblad_outgoing": {
+          "💀": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🧶": {
+        "lindblad_outgoing": {
+          "🧵": 0.03
+        }
+      },
+      "🗣": {
+        "lindblad_outgoing": {
+          "📶": 0.03
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🗑"
+        }
+      },
+      "🧤": {
+        "lindblad_outgoing": {
+          "💀": 0.02
+        },
+        "lindblad_incoming": {
+          "🗑": 0.05
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "💀"
+        }
+      },
+      "♻️": {
+        "lindblad_outgoing": {
+          "🗑": 0.03
+        }
+      },
+      "everything": {
+        "lindblad_outgoing": {
+          "⚫": 0.01
+        }
+      },
+      "🔧": {
+        "lindblad_incoming": {
+          "⚙": 0.02
+        }
+      },
+      "⚱": {
+        "lindblad_incoming": {
+          "💀": 0.09
+        }
+      },
+      "🚩": {
+        "lindblad_incoming": {
+          "✊": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🫧": {
+        "lindblad_incoming": {
+          "🕳": 0.04
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🗑"
+        }
+      },
+      "🧩": {
+        "lindblad_incoming": {
+          "📡": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "✊": {
+        "lindblad_incoming": {
+          "⛓": 0.05
+        }
+      },
+      "🏷️": {
+        "lindblad_incoming": {
+          "⚙": 0.03
+        }
+      },
+      "🥣": {
+        "lindblad_incoming": {
+          "🌿": 0.04,
+          "🫖": 0.03
+        }
+      },
+      "🧿": {
+        "lindblad_incoming": {
+          "🕯": 0.03,
+          "🏮": 0.03,
+          "🔦": 0.02,
+          "🌿": 0.03,
+          "🕵️": 0.03
+        }
+      },
+      "🧬": {
+        "lindblad_incoming": {
+          "⚗️": 0.02,
+          "🧫": 0.07,
+          "🌱": 0.03
+        }
+      },
+      "📿": {
+        "lindblad_incoming": {
+          "⛪": 0.03,
+          "🪢": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "🧘": {
+        "lindblad_incoming": {
+          "📿": 0.02,
+          "🔇": 0.02
+        }
+      },
+      "🐑": {
+        "lindblad_incoming": {
+          "👥": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "💀"
+        }
+      },
+      "🛡": {
+        "lindblad_incoming": {
+          "⚔": 0.05
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🪢": {
+        "lindblad_incoming": {
+          "🧵": 0.07
+        }
+      },
+      "🚔": {
+        "lindblad_incoming": {
+          "📒": 0.02
+        }
+      },
+      "👘": {
+        "lindblad_incoming": {
+          "🧵": 0.08,
+          "🪡": 0.03,
+          "🧶": 0.03
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "🐂": {
+        "lindblad_incoming": {
+          "💰": 0.08
+        }
+      },
+      "🐻": {
+        "lindblad_incoming": {
+          "📦": 0.06
+        }
+      },
+      "📊": {
+        "lindblad_incoming": {
+          "🧮": 0.03
+        }
+      },
+      "📘": {
+        "lindblad_incoming": {
+          "📐": 0.03,
+          "🧮": 0.02,
+          "🕴️": 0.03
+        }
+      },
+      "📼": {
+        "lindblad_incoming": {
+          "🧩": 0.02
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🧩"
+        }
+      },
+      "🏛": {
+        "lindblad_incoming": {
+          "📐": 0.02,
+          "🧱": 0.03
+        }
+      },
+      "🧱": {
+        "lindblad_incoming": {
+          "⛓": 0.03,
+          "🪨": 0.02
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "💱": {
+        "lindblad_incoming": {
+          "💰": 0.02
+        }
+      },
+      "🐝": {
+        "lindblad_incoming": {
+          "🌿": 0.06
+        },
+        "decay": {
+          "rate": 0.06,
+          "target": "🍂"
+        }
+      },
+      "🚫": {
+        "lindblad_incoming": {
+          "🧪": 0.03,
+          "🩺": 0.02
+        }
+      },
+      "🪝": {
+        "lindblad_incoming": {
+          "⚓": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🔓": {
+        "lindblad_incoming": {
+          "🕵️": 0.03
+        }
+      },
+      "🛰": {
+        "lindblad_incoming": {
+          "📡": 0.02
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🎵": {
+        "lindblad_incoming": {
+          "⚙": 0.02,
+          "🔨": 0.03
+        }
+      },
+      "💳": {
+        "lindblad_incoming": {
+          "👥": 0.02,
+          "📋": 0.04
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "🏮": {
+        "lindblad_incoming": {
+          "🕯": 0.03
+        }
+      },
+      "⚖": {
+        "lindblad_incoming": {
+          "🔭": 0.03
+        }
+      },
+      "🗑": {
+        "lindblad_incoming": {
+          "🍂": 0.03,
+          "🍞": 0.02
+        }
+      },
+      "📐": {
+        "lindblad_incoming": {
+          "🔬": 0.03,
+          "🔭": 0.02
+        }
+      },
+      "🧮": {
+        "lindblad_incoming": {
+          "📐": 0.03
+        }
+      },
+      "🧰": {
+        "lindblad_incoming": {
+          "🪛": 0.02
+        }
+      },
+      "👤": {
+        "lindblad_incoming": {
+          "🤫": 0.04,
+          "🧷": 0.02
+        }
+      },
+      "🫙": {
+        "lindblad_incoming": {
+          "🍞": 0.02,
+          "💧": 0.03
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🍂"
+        }
+      },
+      "💉": {
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🏰": {
+        "decay": {
+          "rate": 0.001,
+          "target": "🏚"
+        }
+      },
+      "🪤": {
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🧪": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🪣": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🏭": {
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "🏺": {
+        "decay": {
+          "rate": 0.003,
+          "target": "🗑"
+        }
+      },
+      "🚧": {
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🕴️": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🩺": {
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🛶": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🔨": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🧊": {
+        "decay": {
+          "rate": 0.03,
+          "target": "💧"
+        }
+      },
+      "🪞": {
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "💊": {
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        }
+      },
+      "🧲": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🪛": {
+        "decay": {
+          "rate": 0.02,
+          "target": "♻️"
+        }
+      },
+      "🧷": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
       }
     }
   }

@@ -60,6 +60,10 @@ void QuantumEvolutionEngine::_bind_methods() {
     // MI computation methods
     ClassDB::bind_method(D_METHOD("compute_all_mutual_information", "rho_data", "num_qubits"),
                          &QuantumEvolutionEngine::compute_all_mutual_information);
+    ClassDB::bind_method(D_METHOD("compute_mi_adaptive", "rho_data", "num_qubits", "biome_purity", "force_full_scan"),
+                         &QuantumEvolutionEngine::compute_mi_adaptive);
+    ClassDB::bind_method(D_METHOD("clear_mi_candidates"),
+                         &QuantumEvolutionEngine::clear_mi_candidates);
     ClassDB::bind_method(D_METHOD("evolve_with_mi", "rho_data", "dt", "max_dt", "num_qubits"),
                          &QuantumEvolutionEngine::evolve_with_mi);
 
@@ -100,7 +104,30 @@ void QuantumEvolutionEngine::set_hamiltonian(const PackedFloat64Array& H_packed)
         return;
     }
 
-    m_hamiltonian = unpack_dense(H_packed);
+    // Build sparse Hamiltonian from packed dense format
+    // H_packed is row-major: [re00, im00, re01, im01, ..., renn, imnn]
+    const double* ptr = H_packed.ptr();
+    const double threshold = 1e-15;
+
+    std::vector<Eigen::Triplet<std::complex<double>>> triplets;
+    triplets.reserve(m_dim * 4);  // Estimate: sparse matrices typically have O(n) non-zeros
+
+    for (int i = 0; i < m_dim; i++) {
+        for (int j = 0; j < m_dim; j++) {
+            int idx = (i * m_dim + j) * 2;
+            double re = ptr[idx];
+            double im = ptr[idx + 1];
+
+            if (std::abs(re) > threshold || std::abs(im) > threshold) {
+                triplets.emplace_back(i, j, std::complex<double>(re, im));
+            }
+        }
+    }
+
+    m_hamiltonian.resize(m_dim, m_dim);
+    m_hamiltonian.setFromTriplets(triplets.begin(), triplets.end());
+    m_hamiltonian.makeCompressed();
+
     m_has_hamiltonian = true;
     m_finalized = false;
 }
@@ -162,6 +189,12 @@ void QuantumEvolutionEngine::finalize() {
         Eigen::SparseMatrix<std::complex<double>, Eigen::RowMajor> LdagL = L_dag * L;
         LdagL.makeCompressed();
         m_LdagLs.push_back(LdagL);
+    }
+
+    // Pre-allocate scratch buffers to avoid per-frame allocation
+    if (m_dim > 0) {
+        m_drho_buffer = Eigen::MatrixXcd::Zero(m_dim, m_dim);
+        m_temp_buffer = Eigen::MatrixXcd::Zero(m_dim, m_dim);
     }
 
     m_finalized = true;
@@ -244,24 +277,38 @@ PackedFloat64Array QuantumEvolutionEngine::evolve(const PackedFloat64Array& rho_
     // Unpack once, evolve multiple times, pack once
     Eigen::MatrixXcd rho = unpack_dense(rho_data);
 
-    for (int step = 0; step < num_steps; step++) {
-        Eigen::MatrixXcd drho = Eigen::MatrixXcd::Zero(m_dim, m_dim);
+    // Use pre-allocated buffer for drho (avoid allocation per substep)
+    Eigen::MatrixXcd& drho = m_drho_buffer;
 
-        // Term 1: Hamiltonian
+    for (int step = 0; step < num_steps; step++) {
+        drho.setZero();  // Much faster than allocating new matrix
+
+        // Term 1: Hamiltonian -i[H, ρ]
         if (m_has_hamiltonian) {
-            Eigen::MatrixXcd commutator = m_hamiltonian * rho - rho * m_hamiltonian;
-            drho += std::complex<double>(0.0, -1.0) * commutator;
+            // Compute commutator using temp buffer to reduce allocations
+            m_temp_buffer.noalias() = m_hamiltonian * rho;
+            drho.noalias() = m_temp_buffer - rho * m_hamiltonian;
+            drho *= std::complex<double>(0.0, -1.0);
         }
 
-        // Term 2: Lindblad
+        // Term 2: Lindblad dissipation Σ_k (L_k ρ L_k† - ½{L_k†L_k, ρ})
         for (size_t k = 0; k < m_lindblads.size(); k++) {
             const auto& L = m_lindblads[k];
             const auto& L_dag = m_lindblad_dags[k];
             const auto& LdagL = m_LdagLs[k];
 
-            Eigen::MatrixXcd L_rho_Ldag = (L * rho) * L_dag;
-            Eigen::MatrixXcd anticomm = LdagL * rho + rho * LdagL;
-            drho += L_rho_Ldag - 0.5 * anticomm;
+            // L ρ L† using temp buffer
+            m_temp_buffer.noalias() = L * rho;
+            Eigen::MatrixXcd L_rho_Ldag = m_temp_buffer * L_dag;
+
+            // Anticommutator {L†L, ρ} = L†L ρ + ρ L†L
+            Eigen::MatrixXcd LdagL_rho = LdagL * rho;
+            Eigen::MatrixXcd rho_LdagL = rho * LdagL;
+
+            // Accumulate: L ρ L† - 0.5 * (L†L ρ + ρ L†L)
+            drho += L_rho_Ldag;
+            drho -= 0.5 * LdagL_rho;
+            drho -= 0.5 * rho_LdagL;
         }
 
         // Euler step
@@ -437,6 +484,10 @@ PackedFloat64Array QuantumEvolutionEngine::compute_all_mutual_information(
     // Compute MI for all qubit pairs in upper triangular order
     // Returns: [mi_01, mi_02, ..., mi_0(n-1), mi_12, mi_13, ..., mi_(n-2)(n-1)]
     // Total: n*(n-1)/2 values
+    //
+    // OPTIMIZATION: Cache single-qubit entropies S(i) to avoid recomputation
+    // Old: 3 eigendecomps per pair × n(n-1)/2 pairs = O(3n²) eigendecomps
+    // New: n + n(n-1)/2 eigendecomps = O(n² / 2) eigendecomps (~50% reduction)
 
     int num_pairs = num_qubits * (num_qubits - 1) / 2;
     PackedFloat64Array mi_values;
@@ -449,13 +500,271 @@ PackedFloat64Array QuantumEvolutionEngine::compute_all_mutual_information(
     Eigen::MatrixXcd rho = unpack_dense(rho_data);
     double* ptr = mi_values.ptrw();
 
+    // Pre-compute all single-qubit reduced density matrices and entropies
+    std::vector<Eigen::MatrixXcd> single_rhos(num_qubits);
+    std::vector<double> single_entropies(num_qubits);
+
+    for (int q = 0; q < num_qubits; q++) {
+        single_rhos[q] = partial_trace_single(rho, q, num_qubits);
+        single_entropies[q] = von_neumann_entropy(single_rhos[q]);
+    }
+
+    // Now compute MI for each pair using cached single-qubit entropies
+    // I(A:B) = S(A) + S(B) - S(AB)
     int idx = 0;
     for (int i = 0; i < num_qubits; i++) {
         for (int j = i + 1; j < num_qubits; j++) {
-            ptr[idx] = mutual_information(rho, i, j, num_qubits);
+            // Only need to compute S(AB) - the two-qubit joint entropy
+            Eigen::MatrixXcd rho_ab = partial_trace_complement(rho, i, j, num_qubits);
+            double S_ab = von_neumann_entropy(rho_ab);
+
+            // MI = S(i) + S(j) - S(ij) using cached single-qubit entropies
+            double mi = single_entropies[i] + single_entropies[j] - S_ab;
+            ptr[idx] = std::max(mi, 0.0);  // Ensure non-negative
             idx++;
         }
     }
+
+    return mi_values;
+}
+
+// ============================================================================
+// OPTIMIZED ADAPTIVE MI COMPUTATION
+// ============================================================================
+
+Eigen::Matrix<std::complex<double>, 2, 2> QuantumEvolutionEngine::partial_trace_single_2x2(
+    const Eigen::MatrixXcd& rho, int qubit, int num_qubits) const {
+    // Trace out all qubits except 'qubit', return fixed 2x2 matrix
+    Eigen::Matrix<std::complex<double>, 2, 2> result;
+    result.setZero();
+
+    int dim = 1 << num_qubits;
+    int qubit_mask = 1 << (num_qubits - 1 - qubit);
+
+    for (int i = 0; i < dim; i++) {
+        for (int j = 0; j < dim; j++) {
+            // Check if indices differ only in the target qubit position
+            int other_bits_i = i & ~qubit_mask;
+            int other_bits_j = j & ~qubit_mask;
+            if (other_bits_i != other_bits_j) continue;
+
+            int qi = (i & qubit_mask) ? 1 : 0;
+            int qj = (j & qubit_mask) ? 1 : 0;
+            result(qi, qj) += rho(i, j);
+        }
+    }
+    return result;
+}
+
+Eigen::Matrix<std::complex<double>, 4, 4> QuantumEvolutionEngine::partial_trace_pair_4x4(
+    const Eigen::MatrixXcd& rho, int qa, int qb, int num_qubits) const {
+    // Trace out all qubits except qa and qb, return fixed 4x4 matrix
+    // Uses smart algorithm: O(4 × 2^(n-2)) instead of O(4^n)
+    Eigen::Matrix<std::complex<double>, 4, 4> result;
+    result.setZero();
+
+    // Ensure consistent ordering
+    int q_lo = std::min(qa, qb);
+    int q_hi = std::max(qa, qb);
+    bool swapped = (qa > qb);
+
+    int other_qubits = num_qubits - 2;
+    int other_dim = 1 << other_qubits;
+
+    // For each element of the 4×4 reduced matrix
+    for (int row_ab = 0; row_ab < 4; row_ab++) {
+        for (int col_ab = 0; col_ab < 4; col_ab++) {
+            // Extract qubit values from 2-bit indices
+            int a_row = swapped ? (row_ab & 1) : ((row_ab >> 1) & 1);
+            int b_row = swapped ? ((row_ab >> 1) & 1) : (row_ab & 1);
+            int a_col = swapped ? (col_ab & 1) : ((col_ab >> 1) & 1);
+            int b_col = swapped ? ((col_ab >> 1) & 1) : (col_ab & 1);
+
+            std::complex<double> sum(0.0, 0.0);
+
+            // Sum over all other qubits (trace condition: same value in row and col)
+            for (int other_bits = 0; other_bits < other_dim; other_bits++) {
+                int row_idx = 0, col_idx = 0;
+                int bit_pos = 0;
+
+                for (int q = 0; q < num_qubits; q++) {
+                    int bit_val;
+                    if (q == q_lo) {
+                        row_idx |= (a_row << (num_qubits - 1 - q));
+                        col_idx |= (a_col << (num_qubits - 1 - q));
+                    } else if (q == q_hi) {
+                        row_idx |= (b_row << (num_qubits - 1 - q));
+                        col_idx |= (b_col << (num_qubits - 1 - q));
+                    } else {
+                        bit_val = (other_bits >> bit_pos) & 1;
+                        row_idx |= (bit_val << (num_qubits - 1 - q));
+                        col_idx |= (bit_val << (num_qubits - 1 - q));
+                        bit_pos++;
+                    }
+                }
+
+                sum += rho(row_idx, col_idx);
+            }
+
+            result(row_ab, col_ab) = sum;
+        }
+    }
+    return result;
+}
+
+double QuantumEvolutionEngine::trace_rho_squared_2x2(
+    const Eigen::Matrix<std::complex<double>, 2, 2>& rho) const {
+    // Tr(ρ²) for Hermitian 2×2 = |ρ₀₀|² + 2|ρ₀₁|² + |ρ₁₁|²
+    return std::norm(rho(0,0)) + 2.0*std::norm(rho(0,1)) + std::norm(rho(1,1));
+}
+
+double QuantumEvolutionEngine::trace_rho_squared_4x4(
+    const Eigen::Matrix<std::complex<double>, 4, 4>& rho) const {
+    // Tr(ρ²) for Hermitian 4×4
+    double sum = 0.0;
+    for (int i = 0; i < 4; i++) {
+        sum += std::norm(rho(i,i));  // Diagonal terms
+        for (int j = i+1; j < 4; j++) {
+            sum += 2.0 * std::norm(rho(i,j));  // Off-diagonal (Hermitian symmetry)
+        }
+    }
+    return sum;
+}
+
+double QuantumEvolutionEngine::screen_product_deviation(
+    const Eigen::Matrix<std::complex<double>, 4, 4>& rho_ab,
+    const Eigen::Matrix<std::complex<double>, 2, 2>& rho_a,
+    const Eigen::Matrix<std::complex<double>, 2, 2>& rho_b) const {
+    // Compute ||ρ_AB - ρ_A ⊗ ρ_B||²_F (Frobenius norm squared)
+    // If small, state is nearly separable and MI ≈ 0
+    double deviation = 0.0;
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            for (int k = 0; k < 2; k++) {
+                for (int l = 0; l < 2; l++) {
+                    int row = i * 2 + k;
+                    int col = j * 2 + l;
+                    auto expected = rho_a(i, j) * rho_b(k, l);
+                    auto diff = rho_ab(row, col) - expected;
+                    deviation += std::norm(diff);
+                }
+            }
+        }
+    }
+    return deviation;
+}
+
+double QuantumEvolutionEngine::compute_mi_linear(
+    const Eigen::Matrix<std::complex<double>, 4, 4>& rho_ab,
+    const Eigen::Matrix<std::complex<double>, 2, 2>& rho_a,
+    const Eigen::Matrix<std::complex<double>, 2, 2>& rho_b) const {
+    // Linear entropy approximation: S_lin(ρ) = 1 - Tr(ρ²)
+    // I_lin = S_lin(A) + S_lin(B) - S_lin(AB)
+    //       = (1 - P_A) + (1 - P_B) - (1 - P_AB)
+    //       = 1 - P_A - P_B + P_AB
+    double purity_a = trace_rho_squared_2x2(rho_a);
+    double purity_b = trace_rho_squared_2x2(rho_b);
+    double purity_ab = trace_rho_squared_4x4(rho_ab);
+
+    return std::max(0.0, 1.0 - purity_a - purity_b + purity_ab);
+}
+
+PackedFloat64Array QuantumEvolutionEngine::compute_mi_adaptive(
+    const PackedFloat64Array& rho_data, int num_qubits,
+    double biome_purity, bool force_full_scan) {
+    // OPTIMIZED MI computation:
+    // 1. On first call (force_full_scan): Screen all pairs to find candidates
+    // 2. On subsequent calls: Only compute for candidates
+    // 3. Use linear entropy (no eigendecomp) when purity > 0.9
+
+    int num_pairs = num_qubits * (num_qubits - 1) / 2;
+    PackedFloat64Array mi_values;
+    mi_values.resize(num_pairs);
+
+    if (num_qubits < 2) {
+        return mi_values;
+    }
+
+    Eigen::MatrixXcd rho = unpack_dense(rho_data);
+    double* ptr = mi_values.ptrw();
+
+    // Pre-compute single-qubit reduced density matrices (2x2 fixed size)
+    std::vector<Eigen::Matrix<std::complex<double>, 2, 2>> single_rhos(num_qubits);
+    for (int q = 0; q < num_qubits; q++) {
+        single_rhos[q] = partial_trace_single_2x2(rho, q, num_qubits);
+    }
+
+    // Decide if we use linear approximation (cheap) or full eigendecomp
+    bool use_linear = (biome_purity > PURITY_HIGH_THRESHOLD);
+
+    // If force_full_scan, clear and rebuild candidates
+    if (force_full_scan) {
+        m_mi_candidates.clear();
+    }
+
+    int idx = 0;
+    for (int i = 0; i < num_qubits; i++) {
+        for (int j = i + 1; j < num_qubits; j++) {
+            if (force_full_scan) {
+                // SCREENING PHASE: Check if pair is a candidate
+                auto rho_ab = partial_trace_pair_4x4(rho, i, j, num_qubits);
+                double deviation = screen_product_deviation(rho_ab, single_rhos[i], single_rhos[j]);
+
+                if (deviation < MI_SCREEN_THRESHOLD) {
+                    // Not a candidate - MI is negligible
+                    ptr[idx] = 0.0;
+                    idx++;
+                    continue;
+                }
+
+                // Mark as candidate
+                m_mi_candidates.push_back(idx);
+
+                // Compute MI for this candidate
+                if (use_linear) {
+                    ptr[idx] = compute_mi_linear(rho_ab, single_rhos[i], single_rhos[j]);
+                } else {
+                    // Fallback to full eigendecomp
+                    double S_a = von_neumann_entropy(single_rhos[i]);
+                    double S_b = von_neumann_entropy(single_rhos[j]);
+                    double S_ab = von_neumann_entropy(rho_ab);
+                    ptr[idx] = std::max(0.0, S_a + S_b - S_ab);
+                }
+            } else {
+                // SUBSEQUENT FRAMES: Only compute for known candidates
+                bool is_candidate = std::find(m_mi_candidates.begin(), m_mi_candidates.end(), idx)
+                                    != m_mi_candidates.end();
+
+                if (!is_candidate) {
+                    ptr[idx] = 0.0;
+                    idx++;
+                    continue;
+                }
+
+                // Compute MI for candidate
+                auto rho_ab = partial_trace_pair_4x4(rho, i, j, num_qubits);
+
+                if (use_linear) {
+                    ptr[idx] = compute_mi_linear(rho_ab, single_rhos[i], single_rhos[j]);
+                } else {
+                    double S_a = von_neumann_entropy(single_rhos[i]);
+                    double S_b = von_neumann_entropy(single_rhos[j]);
+                    double S_ab = von_neumann_entropy(rho_ab);
+                    ptr[idx] = std::max(0.0, S_a + S_b - S_ab);
+                }
+            }
+            idx++;
+        }
+    }
+
+    // Debug: Report candidate count on full scan (disabled - too spammy for main game)
+    // if (force_full_scan) {
+    //     UtilityFunctions::print(String("[TEST] [MI_ADAPTIVE] q=") + String::num_int64(num_qubits) +
+    //         String(" candidates=") + String::num_int64((int64_t)m_mi_candidates.size()) +
+    //         String("/") + String::num_int64(num_pairs) +
+    //         String(" purity=") + String::num(biome_purity, 3) +
+    //         String(" linear=") + (use_linear ? String("Y") : String("N")));
+    // }
 
     return mi_values;
 }
@@ -644,7 +953,7 @@ Dictionary QuantumEvolutionEngine::compute_coupling_payload(const Dictionary& me
             }
 
             if (m_has_hamiltonian) {
-                std::complex<double> h_val = m_hamiltonian(i, j);
+                std::complex<double> h_val = m_hamiltonian.coeff(i, j);
                 double h_strength = std::abs(h_val);
                 if (h_strength > eps) {
                     h_targets[emoji_b] = h_strength;

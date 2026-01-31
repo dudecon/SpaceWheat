@@ -136,13 +136,17 @@ func _get_player_vocab_emojis() -> Array:
 	return []
 
 
-func _discover_vocab_pair(north: String, south: String) -> void:
-	"""Grant a vocab pair to the player (farm-owned preferred)."""
+func _discover_vocab_pair(north: String, south: String) -> bool:
+	"""Grant a vocab pair to the player (farm-owned preferred).
+
+	Returns true if vocabulary was newly discovered, false if already known.
+	"""
 	var gsm = _get_gsm()
 	if gsm and "active_farm" in gsm and gsm.active_farm and gsm.active_farm.has_method("discover_pair"):
-		gsm.active_farm.discover_pair(north, south)
+		return gsm.active_farm.discover_pair(north, south)
 	elif gsm and gsm.has_method("discover_pair"):
-		gsm.discover_pair(north, south)
+		return gsm.discover_pair(north, south)
+	return false
 
 
 func _get_simulated_vocab_emojis(biome: Node) -> Array:
@@ -416,11 +420,14 @@ func complete_quest(quest_id: int) -> bool:
 		var north = pair.get("north", "")
 		var south = pair.get("south", "")
 		if north != "" and south != "":
-			_discover_vocab_pair(north, south)
-			vocabulary_pair_learned.emit(north, south, faction_name)
-			vocabulary_learned.emit(north, faction_name)
-			vocabulary_learned.emit(south, faction_name)
-			print("📖 %s taught you: %s/%s axis" % [faction_name, north, south])
+			var was_new = _discover_vocab_pair(north, south)
+			if was_new:
+				vocabulary_pair_learned.emit(north, south, faction_name)
+				vocabulary_learned.emit(north, faction_name)
+				vocabulary_learned.emit(south, faction_name)
+				print("📖 %s taught you: %s/%s axis" % [faction_name, north, south])
+			else:
+				print("📖 %s tried to teach %s/%s but you already know it" % [faction_name, north, south])
 
 	# Single emojis (fallback for emojis without connections)
 	if reward.learned_pairs.is_empty():

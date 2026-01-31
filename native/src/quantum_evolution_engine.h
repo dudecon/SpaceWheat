@@ -52,6 +52,17 @@ public:
     // Format: num_qubits * (num_qubits - 1) / 2 values in upper triangular order
     PackedFloat64Array compute_all_mutual_information(const PackedFloat64Array& rho_data, int num_qubits);
 
+    // OPTIMIZED: Adaptive MI computation with screening and high-purity approximation
+    // - First call (force_full_scan=true): Screens ALL pairs to find candidates
+    // - Subsequent calls: Only computes MI for candidates
+    // - Uses linear entropy approximation when purity > 0.9 (no eigendecomp!)
+    PackedFloat64Array compute_mi_adaptive(
+        const PackedFloat64Array& rho_data, int num_qubits,
+        double biome_purity, bool force_full_scan = false);
+
+    // Clear MI candidates (call when biome state changes significantly)
+    void clear_mi_candidates() { m_mi_candidates.clear(); }
+
     // Combined evolution + MI computation (single call for both)
     // Returns Dictionary with "rho" (evolved state), "mi" (mutual information array),
     // "purity" (Tr(rho^2)), "trace_re"/"trace_im" (Tr(rho)),
@@ -97,8 +108,8 @@ private:
     bool m_finalized;
     int m_num_qubits;  // Cached for MI computation
 
-    // Dense Hamiltonian (optional)
-    Eigen::MatrixXcd m_hamiltonian;
+    // Sparse Hamiltonian (optional) - exploits ~99% sparsity in quantum coupling matrices
+    Eigen::SparseMatrix<std::complex<double>, Eigen::RowMajor> m_hamiltonian;
     bool m_has_hamiltonian;
 
     // Sparse Lindblad operators
@@ -108,15 +119,40 @@ private:
     std::vector<Eigen::SparseMatrix<std::complex<double>, Eigen::RowMajor>> m_lindblad_dags;  // L†
     std::vector<Eigen::SparseMatrix<std::complex<double>, Eigen::RowMajor>> m_LdagLs;        // L†L
 
+    // Pre-allocated scratch buffers for evolution (avoid per-frame allocation)
+    Eigen::MatrixXcd m_drho_buffer;      // Scratch for drho computation
+    Eigen::MatrixXcd m_temp_buffer;      // Scratch for intermediate results
+
+    // Adaptive MI optimization
+    std::vector<int> m_mi_candidates;    // Pair indices with significant MI
+    static constexpr double MI_SCREEN_THRESHOLD = 0.001;   // Product deviation threshold
+    static constexpr double PURITY_HIGH_THRESHOLD = 0.9;   // Use linear approx above this
+
     // Helper methods
     Eigen::MatrixXcd unpack_dense(const PackedFloat64Array& data) const;
     PackedFloat64Array pack_dense(const Eigen::MatrixXcd& mat) const;
 
-    // MI computation helpers
+    // MI computation helpers (original)
     Eigen::MatrixXcd partial_trace_single(const Eigen::MatrixXcd& rho, int qubit, int num_qubits) const;
     Eigen::MatrixXcd partial_trace_complement(const Eigen::MatrixXcd& rho, int qubit_a, int qubit_b, int num_qubits) const;
     double von_neumann_entropy(const Eigen::MatrixXcd& reduced_rho) const;
     double mutual_information(const Eigen::MatrixXcd& rho, int qubit_a, int qubit_b, int num_qubits) const;
+
+    // Adaptive MI helpers (new - optimized)
+    double screen_product_deviation(
+        const Eigen::Matrix<std::complex<double>, 4, 4>& rho_ab,
+        const Eigen::Matrix<std::complex<double>, 2, 2>& rho_a,
+        const Eigen::Matrix<std::complex<double>, 2, 2>& rho_b) const;
+    double compute_mi_linear(
+        const Eigen::Matrix<std::complex<double>, 4, 4>& rho_ab,
+        const Eigen::Matrix<std::complex<double>, 2, 2>& rho_a,
+        const Eigen::Matrix<std::complex<double>, 2, 2>& rho_b) const;
+    double trace_rho_squared_2x2(const Eigen::Matrix<std::complex<double>, 2, 2>& rho) const;
+    double trace_rho_squared_4x4(const Eigen::Matrix<std::complex<double>, 4, 4>& rho) const;
+    Eigen::Matrix<std::complex<double>, 2, 2> partial_trace_single_2x2(
+        const Eigen::MatrixXcd& rho, int qubit, int num_qubits) const;
+    Eigen::Matrix<std::complex<double>, 4, 4> partial_trace_pair_4x4(
+        const Eigen::MatrixXcd& rho, int qa, int qb, int num_qubits) const;
 };
 
 }  // namespace godot

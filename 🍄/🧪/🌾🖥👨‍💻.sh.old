@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# 🌾🖥👨‍💻 - SpaceWheat Visual Bubble Test & Frame Budget Analysis
+# The best visual display for quantum bubble interactions + detailed performance metrics
+
+cd "/home/tehcr33d/ws/SpaceWheat"
+
+echo "🌾 SpaceWheat Visual Bubble Test (20s)"
+echo "======================================"
+echo "Running quantum bubble visualization..."
+echo ""
+
+# Auto-close after 20 seconds to avoid long test runs
+timeout 20 godot --scene VisualBubbleTest.tscn
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 124 ]; then
+    echo ""
+    echo "✅ Visual test completed (timeout)"
+else
+    echo ""
+    echo "✅ Visual test completed"
+fi
+
+echo ""
+echo "📊 Frame Budget Profiler - Detailed Performance Analysis"
+echo "=========================================================="
+echo "Measuring physics vs visual processing breakdown..."
+echo "This will take ~40 seconds (warmup + 2 measurement phases)"
+echo ""
+
+# Run frame budget profiler (no timeout - it will auto-exit after measurement)
+godot --scene Tests/FrameBudgetProfilerScene.tscn
+PROFILER_EXIT=$?
+
+if [ $PROFILER_EXIT -eq 0 ]; then
+    echo ""
+    echo "✅ Frame budget analysis completed"
+else
+    echo ""
+    echo "⚠️  Frame budget analysis exited with code: $PROFILER_EXIT"
+fi
+
+echo ""
+echo "======================================"
+echo "🎯 All tests completed"
+echo "======================================"

@@ -7,6 +7,7 @@ const PANEL_PADDING: int = 10
 var sim_label: Label
 var fps_label: Label
 var farm_ref = null
+var batcher_ref = null  # For PFPS
 
 func _ready() -> void:
 	_ensure_ui()
@@ -31,7 +32,11 @@ func _process(delta: float) -> void:
 		var suffix = (" %s" % fraction) if fraction != "" else ""
 		sim_label.text = "Sim time scale: %.3fx%s" % [speed, suffix]
 
-	fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
+	# Get VFPS (visual) and PFPS (physics)
+	var vfps = Engine.get_frames_per_second()
+	var pfps = _get_physics_fps()
+
+	fps_label.text = "FPS: %d | VFPS: %d | PFPS: %.1f" % [vfps, vfps, pfps]
 
 func _get_granularity(test_biomes: Array) -> float:
 	"""Get max_evolution_dt from test biomes."""
@@ -74,6 +79,29 @@ func _get_speed_fraction(speed: float) -> String:
 			return lookup[key]
 	return ""
 
+func _get_physics_fps() -> float:
+	"""Get PFPS from batcher or test controller."""
+	# Check test mode first
+	if has_meta("test_controller"):
+		var test = get_meta("test_controller")
+		if "batcher" in test and test.batcher:
+			if "physics_frames_per_second" in test.batcher:
+				return test.batcher.physics_frames_per_second
+
+	# Check batcher reference
+	if batcher_ref and "physics_frames_per_second" in batcher_ref:
+		return batcher_ref.physics_frames_per_second
+
+	# Try to find farm's batcher
+	var farm = _locate_farm()
+	if farm and "biome_evolution_batcher" in farm:
+		var batcher = farm.biome_evolution_batcher
+		if batcher and "physics_frames_per_second" in batcher:
+			batcher_ref = batcher
+			return batcher.physics_frames_per_second
+
+	return 0.0
+
 func _locate_farm():
 	if farm_ref and farm_ref.is_inside_tree():
 		return farm_ref
@@ -99,13 +127,13 @@ func _ensure_ui() -> void:
 	offset_left = 16
 	offset_top = 16
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	custom_minimum_size = Vector2(210, 62)
+	custom_minimum_size = Vector2(280, 62)
 
 	var panel = PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	panel.custom_minimum_size = Vector2(210, 62)
+	panel.custom_minimum_size = Vector2(280, 62)
 
 	var panel_style = StyleBoxFlat.new()
 	panel_style.bg_color = PANEL_BG_COLOR

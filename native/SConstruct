@@ -12,7 +12,7 @@ env.Append(CPPPATH=['include'])
 
 # C++17 for Eigen
 if env['platform'] != 'windows':
-    env.Append(CXXFLAGS=['-O3'])
+    env.Append(CXXFLAGS=['-O2'])  # Reduced from -O3 to save memory during compilation
 
 # Source files
 # Exclude GPU-accelerated and disabled classes
@@ -23,7 +23,7 @@ disabled = [
     # 'src/liquid_neural_net.cpp',
     'src/liquid_neural_net_native.cpp',      # GPU-accelerated LNN (not needed)
     'src/quantum_sparse_native.cpp',         # GPU sparse matrix
-    'src/batched_bubble_renderer.cpp',       # GPU bubble rendering
+    # RE-ENABLED: batched_bubble_renderer.cpp - CPU-only triangle batching (no GPU deps)
     'src/quantum_solver_cpu_native.cpp',     # Unused native solver
     # RE-ENABLED: Pure CPU evolution engines + force graph (no GPU deps, just Eigen/STL)
 ]

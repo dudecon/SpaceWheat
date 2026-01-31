@@ -64,18 +64,17 @@ var _num_bubbles: int = 0
 # Emoji draw queue (emojis can't be batched - separate pass)
 var _emoji_queue: Array = []
 
+# Emoji batcher for reduced draw calls (group by texture)
+var _emoji_batcher: EmojiAtlasBatcher = null
+
 
 func _init():
-	# DISABLED: Batched renderer causes polygon triangulation errors
-	# TODO: Fix draw_polygon() call to generate valid, non-degenerate geometry
-	_use_native = false
-
 	# Try to instantiate native renderer (different name to avoid GDScript class_name collision)
-	#if ClassDB.class_exists("NativeBubbleRenderer"):
-	#	_native_renderer = ClassDB.instantiate("NativeBubbleRenderer")
-	#	_use_native = _native_renderer != null
-	#	if _use_native:
-	#		print("[BatchedBubbleRenderer] Native renderer available - batching enabled")
+	if ClassDB.class_exists("NativeBubbleRenderer"):
+		_native_renderer = ClassDB.instantiate("NativeBubbleRenderer")
+		_use_native = _native_renderer != null
+		if _use_native:
+			print("[BatchedBubbleRenderer] Native renderer available - batching enabled")
 
 	if not _use_native:
 		print("[BatchedBubbleRenderer] Using GDScript fallback renderer")
@@ -83,6 +82,19 @@ func _init():
 
 	# Pre-allocate for 32 bubbles (24 + sun + margin)
 	_bubble_data.resize(32 * STRIDE)
+
+	# Initialize emoji batcher for efficient emoji rendering
+	_emoji_batcher = EmojiAtlasBatcher.new()
+
+
+func set_emoji_atlas_batcher(atlas_batcher: EmojiAtlasBatcher) -> void:
+	"""Set a pre-built emoji atlas batcher for GPU-accelerated emoji rendering.
+
+	Call this after building the atlas during boot to enable fast batched drawing.
+	"""
+	if atlas_batcher and atlas_batcher._atlas_built:
+		_emoji_batcher = atlas_batcher
+		print("[BatchedBubbleRenderer] 🎨 Using pre-built emoji atlas (%d emojis)" % atlas_batcher._emoji_uvs.size())
 
 
 func draw(graph: Node2D, ctx: Dictionary) -> void:
@@ -97,10 +109,16 @@ func draw(graph: Node2D, ctx: Dictionary) -> void:
 		_fallback_renderer.draw(graph, ctx)
 		return
 
+	# Check for pre-built atlas in context (first-time setup)
+	var atlas_batcher = ctx.get("emoji_atlas_batcher")
+	if atlas_batcher and atlas_batcher != _emoji_batcher and atlas_batcher._atlas_built:
+		set_emoji_atlas_batcher(atlas_batcher)
+
 	var quantum_nodes = ctx.get("quantum_nodes", [])
 	var biomes = ctx.get("biomes", {})
 	var time_accumulator = ctx.get("time_accumulator", 0.0)
 	var plot_pool = ctx.get("plot_pool")
+	var batcher = ctx.get("biome_evolution_batcher", null)
 
 	_num_bubbles = 0
 	_emoji_queue.clear()
@@ -117,23 +135,33 @@ func draw(graph: Node2D, ctx: Dictionary) -> void:
 		if not node.plot and node.emoji_north.is_empty():
 			continue
 
-		# Update terminal bubbles
+		# Update terminal bubbles with interpolation for smooth 60fps
 		if node.is_terminal_bubble and node.terminal and node.terminal.is_bound:
-			node.update_from_quantum_state()
+			node.update_from_quantum_state(batcher)
 
 		_pack_bubble_data(node, biomes, time_accumulator, plot_pool, false)
 
 	# Generate and draw batched geometry
 	if _num_bubbles > 0:
 		var batches = _native_renderer.generate_draw_batches(_bubble_data, _num_bubbles, STRIDE)
-		var points = batches.get("points")
-		var colors = batches.get("colors")
+		var points: PackedVector2Array = batches.get("points", PackedVector2Array())
+		var colors: PackedColorArray = batches.get("colors", PackedColorArray())
+		var indices: PackedInt32Array = batches.get("indices", PackedInt32Array())
 
-		if points.size() > 0:
-			# ONE draw call for all circles and arcs!
-			graph.draw_polygon(points, colors)
+		if points.size() > 0 and indices.size() > 0:
+			# ONE draw call for all circles and arcs using pre-triangulated geometry!
+			# RenderingServer.canvas_item_add_triangle_array() accepts raw triangles
+			RenderingServer.canvas_item_add_triangle_array(
+				graph.get_canvas_item(),
+				indices,
+				points,
+				colors,
+				PackedVector2Array(),  # UVs (empty)
+				PackedInt32Array(),    # bones (empty)
+				PackedFloat32Array()   # weights (empty)
+			)
 
-	# Draw emojis (can't be batched - texture/string drawing)
+	# Draw emojis (batched via GPU atlas when available)
 	_draw_emoji_pass(graph)
 
 
@@ -182,11 +210,20 @@ func draw_sun_qubit(graph: Node2D, ctx: Dictionary) -> void:
 
 	if _num_bubbles > 0:
 		var batches = _native_renderer.generate_draw_batches(_bubble_data, _num_bubbles, STRIDE)
-		var points = batches.get("points")
-		var colors = batches.get("colors")
+		var points: PackedVector2Array = batches.get("points", PackedVector2Array())
+		var colors: PackedColorArray = batches.get("colors", PackedColorArray())
+		var indices: PackedInt32Array = batches.get("indices", PackedInt32Array())
 
-		if points.size() > 0:
-			graph.draw_polygon(points, colors)
+		if points.size() > 0 and indices.size() > 0:
+			RenderingServer.canvas_item_add_triangle_array(
+				graph.get_canvas_item(),
+				indices,
+				points,
+				colors,
+				PackedVector2Array(),  # UVs
+				PackedInt32Array(),    # bones
+				PackedFloat32Array()   # weights
+			)
 
 	# Draw sun emoji
 	_draw_emoji_pass(graph)
@@ -283,10 +320,52 @@ func _pack_bubble_data(node, biomes: Dictionary, time_accumulator: float, plot_p
 
 
 func _draw_emoji_pass(graph: Node2D) -> void:
-	"""Draw all emojis (separate pass - can't be batched)."""
-	var visual_asset_registry = graph.get_node_or_null("/root/VisualAssetRegistry")
-	var font = ThemeDB.fallback_font
+	"""Draw all emojis using GPU-batched atlas rendering.
 
+	When atlas is built: ONE draw call for all emojis (fast!)
+	Fallback: Text rendering for emojis not in atlas (slow but works)
+	"""
+	if not _emoji_batcher:
+		_draw_emoji_pass_legacy(graph)
+		return
+
+	_emoji_batcher.begin(graph.get_canvas_item())
+
+	for emoji_data in _emoji_queue:
+		var pos = emoji_data["position"]
+		var radius = emoji_data["radius"]
+		var is_celestial = emoji_data["is_celestial"]
+		var font_size = int(radius * (1.1 if is_celestial else 1.0))
+		var size = Vector2(font_size, font_size) * 1.2
+
+		# South emoji (behind) - draw first for correct z-order
+		var emoji_south = emoji_data["emoji_south"]
+		var south_opacity = emoji_data["emoji_south_opacity"]
+		if emoji_south != "" and south_opacity > 0.01:
+			south_opacity *= (0.9 if is_celestial else 1.0)
+			# Use atlas-based rendering (fast path)
+			_emoji_batcher.add_emoji_by_name(pos, size, emoji_south, Color(1, 1, 1, south_opacity))
+
+		# North emoji (front)
+		var emoji_north = emoji_data["emoji_north"]
+		var north_opacity = emoji_data["emoji_north_opacity"]
+		if emoji_north != "" and north_opacity > 0.01:
+			# Use atlas-based rendering (fast path)
+			_emoji_batcher.add_emoji_by_name(pos, size, emoji_north, Color(1, 1, 1, north_opacity))
+
+	# Flush batched atlas emojis (ONE DRAW CALL!)
+	_emoji_batcher.flush()
+
+	# Flush any text fallbacks (emojis not in atlas)
+	_emoji_batcher.flush_text_fallbacks(graph)
+
+
+func _draw_emoji_pass_legacy(graph: Node2D) -> void:
+	"""Legacy emoji rendering path (no atlas)."""
+	var visual_asset_registry = graph.get_node_or_null("/root/VisualAssetRegistry")
+
+	# Legacy path: no batcher (should not happen)
+	var font = ThemeDB.fallback_font
 	for emoji_data in _emoji_queue:
 		var pos = emoji_data["position"]
 		var radius = emoji_data["radius"]
@@ -344,3 +423,15 @@ func _is_node_measured(node, plot_pool) -> bool:
 		if terminal and terminal.is_measured:
 			return true
 	return false
+
+
+func get_emoji_stats() -> Dictionary:
+	"""Get emoji batching statistics for performance monitoring."""
+	if _emoji_batcher:
+		return _emoji_batcher.get_stats()
+	return {"emoji_count": 0, "draw_calls": 0, "unique_textures": 0, "savings": 0}
+
+
+func is_native_enabled() -> bool:
+	"""Check if native bubble renderer is being used."""
+	return _use_native

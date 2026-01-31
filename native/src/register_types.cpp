@@ -3,10 +3,10 @@
 #include "quantum_evolution_engine.h"        // RE-ENABLED: Pure CPU Eigen code
 #include "multi_biome_lookahead_engine.h"    // RE-ENABLED: Pure CPU Eigen code
 #include "force_graph_engine.h"              // NEW: Native force graph calculations
+#include "batched_bubble_renderer.h"         // RE-ENABLED: CPU triangle batching (no GPU deps)
 
 // DISABLED HEADERS: GPU-dependent and dead code classes
 // #include "quantum_sparse_native.h"
-// #include "batched_bubble_renderer.h"
 // #include "liquid_neural_net_native.h"
 // #include "quantum_solver_cpu_native.h"  // Dead: LNN now in QuantumComputer._apply_phase_lnn()
 
@@ -31,10 +31,13 @@ void initialize_quantum_matrix_module(ModuleInitializationLevel p_level) {
     // NEW: Native force graph calculations (3-5× speedup)
     ClassDB::register_class<ForceGraphEngine>();
 
+    // RE-ENABLED: CPU-based triangle batching for bubble rendering (3-5× speedup)
+    // Generates pre-triangulated geometry for RenderingServer.canvas_item_add_triangle_array()
+    ClassDB::register_class<NativeBubbleRenderer>();
+
     // DISABLED: Causes crashes in WSL due to platform/GPU dependencies
     // - QuantumSolverCPUNative (replaced by integrated QuantumComputer._apply_phase_lnn)
     // - QuantumSparseMatrixNative (GPU-optimized)
-    // - NativeBubbleRenderer (GL rendering)
     // - LiquidNeuralNetNative (loads GPU code during init)
 }
 

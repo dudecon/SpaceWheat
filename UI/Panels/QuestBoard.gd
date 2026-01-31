@@ -67,8 +67,8 @@ func _init():
 	overlay_tier = 3000
 	action_labels = {
 		"Q": "Accept/Complete",
-		"E": "Lock/Abandon",
-		"R": "Reroll",
+		"E": "Lock/Unlock",
+		"R": "Reroll/Abandon",
 		"F": "Next Page"
 	}
 
@@ -446,9 +446,8 @@ func _regenerate_all_pages() -> void:
 	Called when quest pool changes (accept, complete, etc).
 	Clears all cached pages and regenerates current page from pool.
 	"""
-	print("\n🟢 DEBUG: _regenerate_all_pages() CALLED")
-	var pool_ids = all_available_quests.map(func(q): return q.get("id", -1)) if all_available_quests else []
-	print("   Current pool IDs: %s" % [pool_ids])
+	if _verbose:
+		_verbose.debug("quest", "📋", "Regenerating all pages")
 
 	# Clear runtime page memory (force regeneration)
 	quest_pages_memory.clear()
@@ -460,7 +459,6 @@ func _regenerate_all_pages() -> void:
 
 	# Regenerate current page from pool
 	_generate_and_display_page(current_page)
-	print("🟢 DEBUG: _regenerate_all_pages() END\n")
 
 
 func _refresh_slots() -> void:
@@ -613,7 +611,7 @@ func action_q_on_selected() -> void:
 
 
 func action_e_on_selected() -> void:
-	"""E action dispatch from manifest"""
+	"""E action: Lock/Unlock only (NEUTRAL)"""
 	var info = get_action_info("E")
 	if info.is_empty() or info.get("disabled", false):
 		return
@@ -621,19 +619,19 @@ func action_e_on_selected() -> void:
 	var slot = quest_slots[selected_slot_index]
 	match info.action:
 		"quest_lock":
-			var was_locked = slot.is_locked
-			if not was_locked:
-				if quest_manager and quest_manager.economy:
-					var lock_gate = EconomyConstants.preflight_action("quest_lock", quest_manager.economy)
-					if not lock_gate.get("ok", true):
-						_verbose.warn("quest", "🌲", "Cannot lock: Need 1 🌲 tree.")
-						return
-			
-			slot.toggle_lock()
-			if not was_locked and quest_manager and quest_manager.economy:
-				if not EconomyConstants.commit_action("quest_lock", quest_manager.economy):
-					_verbose.warn("quest", "🌲", "Lock failed: unable to spend cost.")
-					return
+			_toggle_lock(slot)
+
+
+func action_r_on_selected() -> void:
+	"""R action: Reroll/Abandon/Reject (UP)"""
+	var info = get_action_info("R")
+	if info.is_empty() or info.get("disabled", false):
+		return
+
+	var slot = quest_slots[selected_slot_index]
+	match info.action:
+		"quest_reroll":
+			_reroll_quest(slot)
 			_save_current_page()
 			_emit_selection_update()
 		"quest_abandon":
@@ -642,18 +640,31 @@ func action_e_on_selected() -> void:
 			_reject_quest(slot)
 
 
-func action_r_on_selected() -> void:
-	"""R action dispatch from manifest"""
-	var info = get_action_info("R")
-	if info.is_empty() or info.get("disabled", false):
-		return
+func _toggle_lock(slot) -> void:
+	"""Toggle lock on offered quest slot (costs 🌲 to lock, free to unlock)"""
+	var was_locked = slot.is_locked
+	var cost = {"🌲": 1}
 
-	var slot = quest_slots[selected_slot_index]
-	match info.action:
-		"quest_generate", "quest_reroll":
-			_reroll_quest(slot)
-			_save_current_page()
-			_emit_selection_update()
+	# Only check cost when locking (unlock is free)
+	if not was_locked:
+		if not quest_manager or not quest_manager.economy:
+			return
+
+		if not _check_can_afford(cost):
+			_verbose.warn("quest", "🌲", "Cannot lock: Need 1 🌲 tree.")
+			return
+
+	slot.toggle_lock()
+
+	# Only commit cost when locking
+	if not was_locked and quest_manager and quest_manager.economy:
+		if not quest_manager.economy.spend_cost(cost, "quest_lock"):
+			slot.toggle_lock()  # Rollback
+			_verbose.warn("quest", "🌲", "Lock failed: unable to spend cost.")
+			return
+
+	_save_current_page()
+	_emit_selection_update()
 
 
 func _accept_quest(slot) -> void:
@@ -677,8 +688,9 @@ func _accept_quest(slot) -> void:
 		quest_manager.active_quests_changed.disconnect(_refresh_slots)
 		was_connected = true
 
-	# Save quest data and set slot to ACTIVE
+	# Save quest data and set slot to ACTIVE + LOCKED (commitment)
 	slot.set_quest_active(quest_data_copy)
+	slot.is_locked = true
 
 	var success = quest_manager.accept_quest(quest_data_copy)
 
@@ -698,15 +710,14 @@ func _accept_quest(slot) -> void:
 				quest_index = i
 				break
 
-		# Move to front of pool
+		# Move to front of pool (for priority when cycling pages)
 		if quest_index >= 0:
 			var quest_to_move = all_available_quests[quest_index]
 			all_available_quests.remove_at(quest_index)
 			all_available_quests.insert(0, quest_to_move)
 
-			# Regenerate all pages with new ordering
-			_regenerate_all_pages()
-
+		# Save current page (don't regenerate - preserves locked/active quests)
+		_save_current_page()
 		_emit_selection_update()
 	else:
 		# Revert slot state if accept failed
@@ -715,11 +726,6 @@ func _accept_quest(slot) -> void:
 
 func _deliver_quest(slot) -> void:
 	"""Deliver a DELIVERY quest - deducts resources and grants rewards"""
-	print("\n🔵 DEBUG: _deliver_quest() START")
-	var before_pool_ids = all_available_quests.map(func(q): return q.get("id", -1)) if all_available_quests else []
-	var before_active = quest_manager.active_quests.keys() if quest_manager.active_quests else []
-	print("   BEFORE: Pool=%s, Active=%s" % [before_pool_ids, before_active])
-
 	if not quest_manager:
 		return
 
@@ -727,44 +733,32 @@ func _deliver_quest(slot) -> void:
 	if quest_id < 0:
 		return
 
-	print("   Completing quest_id=%d" % quest_id)
+	if _verbose:
+		_verbose.debug("quest", "📦", "Delivering quest %d" % quest_id)
 
 	# Disconnect _refresh_slots to prevent pool rebuild that would change quest IDs
 	var was_connected = false
 	if quest_manager.active_quests_changed.is_connected(_refresh_slots):
-		print("   Disconnecting _refresh_slots signal")
 		quest_manager.active_quests_changed.disconnect(_refresh_slots)
 		was_connected = true
 
 	var success = quest_manager.complete_quest(quest_id)
-	print("   complete_quest() returned: %s" % success)
 
 	# Reconnect signal
 	if was_connected:
-		print("   Reconnecting _refresh_slots signal")
 		quest_manager.active_quests_changed.connect(_refresh_slots)
 
 	if success:
-		var after_complete_pool = all_available_quests.map(func(q): return q.get("id", -1)) if all_available_quests else []
-		print("   AFTER complete: Pool=%s" % [after_complete_pool])
-
 		# Remove completed quest from pool (preserve active quest IDs)
 		for i in range(all_available_quests.size()):
 			if all_available_quests[i].get("id") == quest_id:
 				all_available_quests.remove_at(i)
 				break
 
-		var after_remove_pool = all_available_quests.map(func(q): return q.get("id", -1)) if all_available_quests else []
-		print("   AFTER remove: Pool=%s" % [after_remove_pool])
-
-		# Regenerate pages from existing pool
-		_regenerate_all_pages()
+		# Clear the completed slot (don't regenerate all pages - preserves locked/active quests)
+		slot.set_empty()
+		_save_current_page()
 		_emit_selection_update()
-
-	var after_pool_ids = all_available_quests.map(func(q): return q.get("id", -1)) if all_available_quests else []
-	var after_active = quest_manager.active_quests.keys() if quest_manager.active_quests else []
-	print("   FINAL: Pool=%s, Active=%s" % [after_pool_ids, after_active])
-	print("🔵 DEBUG: _deliver_quest() END\n")
 
 
 func _claim_quest(slot) -> void:
@@ -795,8 +789,9 @@ func _claim_quest(slot) -> void:
 				all_available_quests.remove_at(i)
 				break
 
-		# Regenerate pages from existing pool
-		_regenerate_all_pages()
+		# Clear the completed slot (don't regenerate all pages - preserves locked/active quests)
+		slot.set_empty()
+		_save_current_page()
 		_emit_selection_update()
 
 
@@ -822,17 +817,23 @@ func _reject_quest(slot) -> void:
 	if was_connected:
 		quest_manager.active_quests_changed.connect(_refresh_slots)
 
-	# Remove from pool and regenerate pages (preserves active quest IDs)
+	# Remove from pool and clear slot (preserves other slots)
 	for i in range(all_available_quests.size()):
 		if all_available_quests[i].get("id") == quest_id:
 			all_available_quests.remove_at(i)
 			break
 
-	_regenerate_all_pages()
+	slot.set_empty()
+	_save_current_page()
+	_emit_selection_update()
 
 
 func _abandon_quest(slot) -> void:
-	"""Abandon an active quest"""
+	"""Abandon a quest - works for both ACTIVE and OFFERED+locked quests
+
+	ACTIVE quest: Remove from quest manager, unlock and return to OFFERED
+	OFFERED+locked quest (downgraded): Just unlock and return to OFFERED
+	"""
 	if not quest_manager:
 		return
 
@@ -840,26 +841,30 @@ func _abandon_quest(slot) -> void:
 	if quest_id < 0:
 		return
 
-	# Disconnect _refresh_slots to prevent pool rebuild that would change quest IDs
+	# Check if this is an active quest (needs to be removed from quest manager)
+	var is_active = slot.state == SlotState.ACTIVE
+
+	# Disconnect _refresh_slots to prevent pool rebuild
 	var was_connected = false
 	if quest_manager.active_quests_changed.is_connected(_refresh_slots):
 		quest_manager.active_quests_changed.disconnect(_refresh_slots)
 		was_connected = true
 
-	quest_manager.fail_quest(quest_id, "player_abandoned")
+	# Only fail the quest in manager if it's actually active
+	if is_active:
+		quest_manager.fail_quest(quest_id, "player_abandoned")
+
 	quest_abandoned.emit(quest_id)
 
 	# Reconnect signal
 	if was_connected:
 		quest_manager.active_quests_changed.connect(_refresh_slots)
 
-	# Remove from pool and regenerate pages (preserves active quest IDs)
-	for i in range(all_available_quests.size()):
-		if all_available_quests[i].get("id") == quest_id:
-			all_available_quests.remove_at(i)
-			break
-
-	_regenerate_all_pages()
+	# Unlock and return to OFFERED state (quest stays on board, stays in pool)
+	slot.set_quest_offered(slot.quest_data, false)  # Unlocked
+	slot.is_locked = false
+	_save_current_page()
+	_emit_selection_update()
 
 
 func _reroll_quest(slot) -> void:
@@ -867,9 +872,10 @@ func _reroll_quest(slot) -> void:
 	if not quest_manager or not current_biome or not quest_manager.economy:
 		return
 
-	# Preflight 1 rabbit
-	var reroll_gate = EconomyConstants.preflight_action("quest_reroll", quest_manager.economy)
-	if not reroll_gate.get("ok", true):
+	var cost = {"🐇": 1}
+
+	# Check affordability first
+	if not _check_can_afford(cost):
 		_verbose.warn("quest", "🐇", "Cannot reroll: Need 1 🐇 rabbit.")
 		return
 
@@ -900,8 +906,24 @@ func _reroll_quest(slot) -> void:
 	# Pick random
 	var new_quest = available[randi() % available.size()]
 	slot.set_quest_offered(new_quest, slot.is_locked)
-	if not EconomyConstants.commit_action("quest_reroll", quest_manager.economy):
-		_verbose.warn("quest", "🐇", "Reroll failed: unable to spend cost.")
+
+	# Commit cost after success
+	if not quest_manager.economy.spend_cost(cost, "quest_reroll"):
+		_verbose.warn("quest", "🐇", "Failed to spend reroll cost.")
+
+
+func _check_can_afford(cost: Dictionary) -> bool:
+	"""Check if economy can afford cost (uses BaseSubmenu pattern)"""
+	if not quest_manager or not quest_manager.economy:
+		return false
+
+	for resource in cost:
+		var required = cost[resource]
+		var available = quest_manager.economy.get_resource(resource)
+		if available < required:
+			return false
+
+	return true
 
 
 func _check_can_complete(slot) -> bool:
@@ -926,13 +948,20 @@ func _on_faction_selected(faction_quest: Dictionary) -> void:
 
 func _on_quest_completed(quest_id: int, rewards: Dictionary) -> void:
 	"""Handle quest completed signal from manager"""
-	# Remove from pool and regenerate pages (preserves active quest IDs)
+	# Remove from pool
 	for i in range(all_available_quests.size()):
 		if all_available_quests[i].get("id") == quest_id:
 			all_available_quests.remove_at(i)
 			break
 
-	_regenerate_all_pages()
+	# Find and clear the slot with this quest (preserves other slots)
+	for i in range(4):
+		var slot = quest_slots[i]
+		if slot.quest_data.get("id", -1) == quest_id:
+			slot.set_empty()
+			break
+
+	_save_current_page()
 	quest_completed.emit(quest_id, rewards)
 
 
@@ -951,37 +980,36 @@ func _on_quest_ready_to_claim(quest_id: int) -> void:
 
 
 func _on_vocabulary_learned(emoji: String, faction: String) -> void:
-	"""Handle vocabulary invalidation across all quest states.
+	"""Handle vocabulary learning flow.
 
-	When a quest's north pole vocabulary is learned:
-	- OFFERED unlocked → Auto-reroll with fresh quest
-	- ACTIVE → Downgrade to LOCKED (preserve, let player see it's invalid)
-	- LOCKED → Stay LOCKED (already protected, show it's invalid)
-
-	This gives the player visibility and manual control.
-
-	CRITICAL: Do NOT rebuild quest pool here! That would destroy quest IDs and break
-	active_quests matching. Only check the current slots against existing pool.
+	When vocabulary is learned:
+	1. Update known vocabulary (already done by Farm)
+	2. Check for new accessible factions (rebuild quest pool)
+	3. Refresh unlocked quests (locked/accepted set aside)
+	4. Invalidate locked/accepted quests if North emoji was learned
 	"""
-	print("\n🟣 DEBUG: _on_vocabulary_learned() CALLED - emoji=%s, faction=%s" % [emoji, faction])
-	var before_pool_ids = all_available_quests.map(func(q): return q.get("id", -1)) if all_available_quests else []
-	print("   Before: Pool IDs=%s" % [before_pool_ids])
-
-	var tree = Engine.get_main_loop()
-	var verbose = tree.root.get_node_or_null("/root/VerboseConfig") if tree and tree is SceneTree else null
-
-	if verbose:
-		verbose.debug("quest", "📚", "Vocabulary learned: %s (%s)" % [emoji, faction])
+	if _verbose:
+		_verbose.debug("quest", "📚", "Vocabulary learned: %s (%s)" % [emoji, faction])
 
 	if not quest_manager or not current_biome:
-		if verbose:
-			verbose.debug("quest", "⚠️", "Cannot check for vocab invalidation: quest_manager or current_biome not set")
+		if _verbose:
+			_verbose.debug("quest", "⚠️", "Cannot process vocab learning: quest_manager or current_biome not set")
 		return
 
-	var reroll_count = 0
-	var downgrade_count = 0
+	# Step 2: Rebuild quest pool (gets new accessible factions)
+	var old_pool_size = all_available_quests.size()
+	all_available_quests = quest_manager.offer_all_faction_quests(current_biome)
+	var new_pool_size = all_available_quests.size()
 
-	# Check ALL slots for vocabulary invalidation
+	if _verbose and new_pool_size != old_pool_size:
+		_verbose.info("quest", "🆕", "Quest pool updated: %d → %d factions accessible" % [old_pool_size, new_pool_size])
+
+	# Step 3: Refresh unlocked quests (1 quest per faction max)
+	# Preserve locked and accepted slots, regenerate unlocked/offered slots
+	var unlocked_slots = []
+	var downgrade_count = 0
+	var invalidated_locked_count = 0
+
 	for i in range(4):
 		var slot = quest_slots[i]
 
@@ -989,50 +1017,96 @@ func _on_vocabulary_learned(emoji: String, faction: String) -> void:
 		if slot.state == SlotState.EMPTY:
 			continue
 
-		# Check if this quest is invalidated
-		if not _is_quest_invalidated(slot.quest_data):
-			continue
-
-		var quest_id = slot.quest_data.get("id", -1)
+		# Step 4: Check for invalidation (North emoji learned)
+		var is_invalidated = _is_quest_invalidated(slot.quest_data)
 
 		match slot.state:
 			SlotState.OFFERED:
-				if not slot.is_locked:
-					# OFFERED unlocked → Auto-reroll
-					if verbose:
-						verbose.debug("quest", "🔄", "Auto-rerolling quest %d (offers already-known vocab)" % quest_id)
-					_reroll_quest(slot)
-					reroll_count += 1
-				# else: OFFERED locked - let it stay (user protecting it)
+				if slot.is_locked:
+					# Locked quest - preserve it (mark if invalid)
+					if is_invalidated and _verbose:
+						_verbose.debug("quest", "🔒", "Locked quest %d invalidated but preserved" % slot.quest_data.get("id", -1))
+						invalidated_locked_count += 1
+					# Keep locked slot as-is
+				else:
+					# Unlocked offered slot - will be regenerated
+					unlocked_slots.append(i)
 
 			SlotState.ACTIVE:
-				# ACTIVE → Downgrade to LOCKED (preserve for player to handle)
-				if verbose:
-					verbose.warn("quest", "⚠️", "Downgrading quest %d from ACTIVE to LOCKED (vocab invalidated)" % quest_id)
-				slot.set_quest_offered(slot.quest_data, true)  # Convert to locked offer
-				slot.state = SlotState.OFFERED
-				slot.is_locked = true
-				slot._refresh_ui()
-				downgrade_count += 1
+				# Active quest - check for invalidation
+				if is_invalidated:
+					# Downgrade to locked (player can see it's invalid)
+					if _verbose:
+						_verbose.warn("quest", "⚠️", "Downgrading active quest %d to locked (vocab invalidated)" % slot.quest_data.get("id", -1))
+					slot.set_quest_offered(slot.quest_data, true)  # Convert to locked offer
+					slot.state = SlotState.OFFERED
+					slot.is_locked = true
+					slot._refresh_ui()
+					downgrade_count += 1
+				# Keep active slot as-is (still working on it)
 
-			SlotState.LOCKED:
-				# LOCKED → Stay locked (but now clearly marked as invalid)
-				if verbose:
-					verbose.debug("quest", "🔒", "Quest %d invalidated but stays LOCKED (user protected)" % quest_id)
-				# Refresh to show it's invalid (visual indicator via locked state)
-				slot._refresh_ui()
+			SlotState.READY:
+				# Ready quest - keep as-is (player about to claim it)
+				pass
 
-	if reroll_count > 0 or downgrade_count > 0:
-		if verbose:
-			verbose.info("quest", "✅", "Vocabulary invalidation: %d auto-rerolled, %d downgraded to locked" % [reroll_count, downgrade_count])
-		# Save page after changes
-		_save_current_page()
-	elif verbose:
-		verbose.debug("quest", "ℹ️", "No quests invalidated by vocabulary learning")
+	# Regenerate unlocked slots with fresh quests from updated pool
+	if not unlocked_slots.is_empty():
+		_regenerate_unlocked_slots(unlocked_slots)
+		if _verbose:
+			_verbose.info("quest", "🔄", "Regenerated %d unlocked slot(s) with updated quest pool" % unlocked_slots.size())
 
-	var after_pool_ids = all_available_quests.map(func(q): return q.get("id", -1)) if all_available_quests else []
-	print("   After: Pool IDs=%s (rerolled=%d, downgraded=%d)" % [after_pool_ids, reroll_count, downgrade_count])
-	print("🟣 DEBUG: _on_vocabulary_learned() END\n")
+	# Summary
+	if downgrade_count > 0 or invalidated_locked_count > 0:
+		if _verbose:
+			_verbose.info("quest", "✅", "Vocab invalidation: %d downgraded, %d locked invalidated" % [downgrade_count, invalidated_locked_count])
+
+	# Save state
+	_save_current_page()
+	_update_page_display()
+
+
+func _regenerate_unlocked_slots(slot_indices: Array) -> void:
+	"""Regenerate specific unlocked slots with fresh quests from pool.
+
+	Respects 1 quest per faction - avoids factions already in locked/active slots.
+	"""
+	if all_available_quests.is_empty():
+		# No quests available - clear the unlocked slots
+		for idx in slot_indices:
+			quest_slots[idx].set_empty()
+		return
+
+	# Collect factions already in use (locked/active slots)
+	var used_factions = []
+	for i in range(4):
+		if i in slot_indices:
+			continue  # Skip slots we're regenerating
+		var slot = quest_slots[i]
+		if slot.state != SlotState.EMPTY and slot.quest_data.has("faction"):
+			used_factions.append(slot.quest_data.faction)
+
+	# Find available quests (not from used factions)
+	var available_quests = []
+	for quest in all_available_quests:
+		var quest_faction = quest.get("faction", "")
+		if quest_faction not in used_factions:
+			available_quests.append(quest)
+
+	# Assign quests to unlocked slots
+	var quest_idx = 0
+	for slot_idx in slot_indices:
+		var slot = quest_slots[slot_idx]
+
+		if quest_idx < available_quests.size():
+			var quest = available_quests[quest_idx]
+			slot.set_quest_offered(quest, false)  # Unlocked
+
+			# Mark faction as used (for next slot)
+			used_factions.append(quest.get("faction", ""))
+			quest_idx += 1
+		else:
+			# No more quests available
+			slot.set_empty()
 
 
 func _is_quest_invalidated(quest_data: Dictionary) -> bool:
@@ -1057,10 +1131,8 @@ func _is_quest_invalidated(quest_data: Dictionary) -> bool:
 	var north = quest_data.get("reward_vocab_north", "")
 
 	if north != "" and north in known_emojis:
-		var tree = Engine.get_main_loop()
-		var verbose = tree.root.get_node_or_null("/root/VerboseConfig") if tree and tree is SceneTree else null
-		if verbose:
-			verbose.debug("quest", "📚", "Quest invalidated: %s already known (north pole)" % north)
+		if _verbose:
+			_verbose.debug("quest", "📚", "Quest invalidated: %s already known (north pole)" % north)
 		return true
 
 	return false
@@ -1139,6 +1211,7 @@ func get_action_info(key: String) -> Dictionary:
 
 	match key:
 		"Q":
+			# DOWN = Accept/Deliver/Claim (construct, bind)
 			match slot.state:
 				SlotState.OFFERED:
 					return {"action": "quest_accept", "label": "Accept", "emoji": "✅"}
@@ -1151,33 +1224,74 @@ func get_action_info(key: String) -> Dictionary:
 						return {"action": "quest_deliver", "label": "Deliver", "emoji": "📦"}
 					return {"action": "quest_claim", "label": "Claim", "emoji": "🎁"}
 		"E":
+			# NEUTRAL = Lock/Unlock only (balance, toggle)
 			match slot.state:
 				SlotState.OFFERED:
-					return {"action": "quest_lock", "label": "Unlock" if slot.is_locked else "Lock", "emoji": "🔓" if slot.is_locked else "🔒"}
-				SlotState.ACTIVE, SlotState.READY:
-					if quest_type != 0 and slot.state == SlotState.READY:
-						return {"action": "quest_reject", "label": "Reject", "emoji": "❌"}
-					return {"action": "quest_abandon", "label": "Abandon", "emoji": "🗑️"}
+					return {
+						"action": "quest_lock",
+						"label": "Unlock" if slot.is_locked else "Lock",
+						"emoji": "🔓" if slot.is_locked else "🔒",
+						"cost": {} if slot.is_locked else {"🌲": 1},
+						"cost_display": "" if slot.is_locked else "🌲",
+						"can_afford": slot.is_locked or _check_can_afford({"🌲": 1})
+					}
+				_:
+					# E disabled for ACTIVE/READY
+					return {}
 		"R":
+			# UP = Reroll/Abandon/Reject (extract, remove, destroy)
 			match slot.state:
-				SlotState.EMPTY:
-					return {"action": "quest_generate", "label": "Generate", "emoji": "✨"}
 				SlotState.OFFERED:
 					if slot.is_locked:
-						return {"action": "quest_reroll", "label": "Reroll", "emoji": "🔄", "disabled": true}
-					return {"action": "quest_reroll", "label": "Reroll", "emoji": "🔄"}
+						# Locked offered quest - allow abandon (for downgraded active quests)
+						return {"action": "quest_abandon", "label": "Abandon", "emoji": "🗑️"}
+					return {
+						"action": "quest_reroll",
+						"label": "Reroll",
+						"emoji": "🔄",
+						"cost": {"🐇": 1},
+						"cost_display": "🐇",
+						"can_afford": _check_can_afford({"🐇": 1})
+					}
+				SlotState.ACTIVE:
+					return {
+						"action": "quest_abandon",
+						"label": "Abandon",
+						"emoji": "🗑️"
+					}
+				SlotState.READY:
+					if quest_type != 0:
+						return {
+							"action": "quest_reject",
+							"label": "Reject",
+							"emoji": "❌"
+						}
+					return {}
+				_:
+					return {}
 		"F":
 			return {"action": "quest_next_page", "label": "Next Page", "emoji": "📖"}
-			
+
 	return {}
 
 
 func get_action_labels() -> Dictionary:
-	"""v2 overlay interface: Get current labels from action info."""
+	"""v2 overlay interface: Get current labels with cost display"""
 	var labels = {}
 	for key in ["Q", "E", "R", "F"]:
 		var info = get_action_info(key)
-		labels[key] = info.get("label", "-")
+		var label = info.get("label", "-")
+		var cost_display = info.get("cost_display", "")
+
+		# Append cost if present
+		if cost_display != "":
+			label = "%s (%s)" % [label, cost_display]
+
+		# Dim if disabled or can't afford
+		if info.get("disabled", false) or not info.get("can_afford", true):
+			label = "[dim]%s[/dim]" % label
+
+		labels[key] = label
 	return labels
 
 

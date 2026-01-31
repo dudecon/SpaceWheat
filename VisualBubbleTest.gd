@@ -9,10 +9,13 @@ const TestBootManager = preload("res://Tests/TestBootManager.gd")
 const QuantumForceGraph = preload("res://Core/Visualization/QuantumForceGraph.gd")
 const SimStatsOverlay = preload("res://UI/Overlays/SimStatsOverlay.gd")
 const TestInspectorOverlay = preload("res://Tests/TestInspectorOverlay.gd")
+const FrameBudgetProfiler = preload("res://Tests/FrameBudgetProfiler.gd")
+const RenderingProfiler = preload("res://Tests/RenderingProfiler.gd")
 
 var boot_manager: TestBootManager = null
 var biomes: Dictionary = {}
 var batcher = null
+var emoji_atlas = null  # Pre-built emoji atlas for GPU-accelerated rendering
 var force_graph: QuantumForceGraph = null
 var stats_overlay = null
 var inspector_overlay = null
@@ -137,6 +140,7 @@ func _start_boot():
 
 	biomes = result.get("biomes", {})
 	batcher = result.get("batcher")
+	emoji_atlas = result.get("emoji_atlas_batcher")
 
 	# Initialize biome visibility (all start visible)
 	for biome_name in biomes:
@@ -164,7 +168,7 @@ func _create_visualization():
 	"""Create QuantumForceGraph with booted biomes"""
 	print("\n[VIZ] Creating QuantumForceGraph...")
 
-	force_graph = boot_manager.create_force_graph(self, biomes, batcher)
+	force_graph = boot_manager.create_force_graph(self, biomes, batcher, emoji_atlas)
 
 	# Center the graph at screen center
 	print("  Centering at: %s" % screen_center)
@@ -200,7 +204,22 @@ func _create_visualization():
 	inspector_overlay.position = Vector2(20, 20)  # Top-left corner
 	add_child(inspector_overlay)
 	inspector_overlay.set_biomes(biomes)
+	inspector_overlay.batcher = batcher  # For PFPS display
 	print("  Inspector overlay created (press N to toggle)")
+
+	# Create frame budget profiler
+	var profiler = FrameBudgetProfiler.new()
+	profiler.name = "FrameBudgetProfiler"
+	profiler.set_meta("test_controller", self)
+	add_child(profiler)
+	print("  Frame budget profiler created (reports every 180 frames)")
+
+	# Create rendering profiler
+	var render_profiler = RenderingProfiler.new()
+	render_profiler.name = "RenderingProfiler"
+	render_profiler.set_meta("test_controller", self)
+	add_child(render_profiler)
+	print("  Rendering profiler created (reports every 60 frames)")
 
 	await get_tree().process_frame
 
@@ -243,12 +262,30 @@ func _process(delta):
 		"waiting_for_window":
 			_check_window_ready()
 		"running":
-			_run_test(delta)
+			_run_visual_update(delta)
 
 
-func _run_test(delta):
-	"""Run the test - evolve and update"""
+func _physics_process(delta):
+	"""Physics loop - runs at fixed rate, handles quantum evolution"""
+	if test_phase == "running":
+		_run_physics_update(delta)
+
+
+func _run_physics_update(delta):
+	"""Physics loop - quantum evolution only"""
+	# Evolution with time scaling
+	if evolution_enabled and batcher:
+		var scaled_delta = delta * simulation_time_scale
+		batcher.physics_process(scaled_delta)
+
+
+func _run_visual_update(delta):
+	"""Visual loop - rendering and UI updates"""
 	frame += 1
+
+	# Track visual frames for batching verification
+	if batcher and batcher.has_method("track_visual_frame"):
+		batcher.track_visual_frame()
 
 	# Stress test: spam toggle biomes
 	if spam_active:
@@ -259,11 +296,6 @@ func _run_test(delta):
 			var slots = [KEY_T, KEY_Y, KEY_U, KEY_I, KEY_O, KEY_P]
 			_toggle_biome_visibility(slots[spam_slot_index % slots.size()])
 			spam_slot_index += 1
-
-	# Evolution with time scaling
-	if evolution_enabled and batcher:
-		var scaled_delta = delta * simulation_time_scale
-		batcher.physics_process(scaled_delta)
 
 	# Track position of first bubble
 	if tracking_node == null and force_graph and force_graph.quantum_nodes.size() > 0:
@@ -294,23 +326,51 @@ func _run_test(delta):
 			node.emoji_north_opacity, node.emoji_south_opacity
 		])
 
-	# Headless: exit after 200 frames
-	if DisplayServer.get_name() == "headless" and frame >= 200:
-		print("\n[HEADLESS] Completed 200 frames, exiting...")
+	# Detailed per-frame batching log (frames 10-40) to verify interpolation
+	if frame >= 10 and frame <= 40 and batcher and batcher.has_method("get_batching_diagnostics"):
+		var diag = batcher.get_batching_diagnostics()
+		var cursor = diag.get("buffer_cursor", -1)
+		var buffer_size = diag.get("buffer_size", 0)
+		var next_cursor = (cursor + 1) % buffer_size if buffer_size > 0 else -1
+		print("[F%d] cursor=%d→%d/%d t=%.3f evol_accum=%.3f vframes=%d" % [
+			frame,
+			cursor,
+			next_cursor,
+			buffer_size,
+			diag.get("interpolation_t", 0.0),
+			diag.get("evolution_accumulator", 0.0),
+			diag.get("visual_frames_since_refill", 0)
+		])
+
+	# Headless: exit after 500 frames
+	if DisplayServer.get_name() == "headless" and frame >= 500:
+		print("\n[HEADLESS] Completed 500 frames, exiting...")
 		get_tree().quit()
 		return
 
 	# Stats every 60 frames
 	if frame % 60 == 0 and frame >= 5:
 		var total_bubbles = force_graph.quantum_nodes.size() if force_graph else 0
-		var fps = Engine.get_frames_per_second()
+		var vfps = Engine.get_frames_per_second()  # Visual FPS
+		var pfps = batcher.physics_frames_per_second if batcher else 0.0  # Physics FPS
 
-		print("\n[Frame %d] %.1f FPS" % [frame, fps])
+		print("\n[Frame %d] VFPS=%.1f  PFPS=%.1f" % [frame, vfps, pfps])
 		print("  Simulation: %s at %.3fx speed" % [
 			"ENABLED" if evolution_enabled else "DISABLED",
 			simulation_time_scale
 		])
 		print("  Bubbles: %d across %d biomes" % [total_bubbles, biomes.size()])
+
+		# Detailed batching diagnostics
+		if batcher and batcher.has_method("get_batching_diagnostics"):
+			var diag = batcher.get_batching_diagnostics()
+			print("  [BATCH] cursor=%d/%d, t=%.3f, evol_tick=%d, refills=%d" % [
+				diag.get("buffer_cursor", -1),
+				diag.get("buffer_size", 0),
+				diag.get("interpolation_t", 0.0),
+				diag.get("evolution_tick", 0),
+				diag.get("refill_count", 0)
+			])
 
 		if tracking_node and position_tracker.size() >= 60:
 			var total_distance = 0.0

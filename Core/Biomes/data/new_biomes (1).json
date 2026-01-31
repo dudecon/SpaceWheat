@@ -1,0 +1,2809 @@
+[
+  {
+    "name": "BroadcastTower",
+    "description": "A crackling relay station at the edge of coherence. Signals propagate through antenna arrays, degrade into static, fragment into noise. The tower hums with transmissions that may or may not reach their destinations. What cannot be heard is eventually forgotten.",
+    "image_path": "res://Assets/Biomes/BroadcastTower.png",
+    "music_path": "res://Assets/Audio/Music/BroadcastTower.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.35, "y": 0.4},
+      {"x": 0.5, "y": 0.3},
+      {"x": 0.65, "y": 0.4},
+      {"x": 0.5, "y": 0.6}
+    ],
+    "emojis": ["📡", "📶", "🔊", "🗣", "🎵", "🧩"],
+    "native_factions": ["Symphony Smiths"],
+    "tags": ["signal", "communication", "transmission", "decay"],
+    "icon_components": {
+      "📡": {
+        "self_energy": 0.3,
+        "is_driver": true,
+        "driver": {
+          "type": "pulse",
+          "frequency": 0.12,
+          "amplitude": 0.6,
+          "phase": 0.0,
+          "comment": "Transmission bursts at regular intervals"
+        },
+        "lindblad_outgoing": {
+          "📶": 0.08,
+          "🧩": 0.03
+        },
+        "decay": {
+          "rate": 0.008,
+          "target": "🗑"
+        }
+      },
+      "📶": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "📡": 0.08,
+          "📻": 0.04
+        },
+        "lindblad_outgoing": {
+          "🧩": 0.04
+        },
+        "decay": {
+          "rate": 0.06,
+          "target": "🗑"
+        }
+      },
+      "🔊": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🗣": 0.05,
+          "🎵": 0.04
+        },
+        "lindblad_outgoing": {
+          "🔇": 0.06
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
+        }
+      },
+      "🗣": {
+        "self_energy": 0.1,
+        "lindblad_outgoing": {
+          "🔊": 0.05,
+          "📶": 0.03
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🗑"
+        }
+      },
+      "🎵": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "⚙": 0.02,
+          "🔨": 0.03
+        },
+        "lindblad_outgoing": {
+          "🔊": 0.04,
+          "🔇": 0.02
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🧩": {
+        "self_energy": -0.1,
+        "lindblad_incoming": {
+          "📡": 0.03,
+          "📶": 0.04
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "EchoingChasm": ["🔊"],
+        "MagneticAnomaly": ["📡"]
+      }
+    }
+  },
+
+  {
+    "name": "SatelliteGraveyard",
+    "description": "Orbital debris field where dead satellites tumble in eternal silence among dying stars. Recorded data corrupts slowly in the radiation bath. Nothing is recovered here—only preserved in degraded form, waiting for the void to claim it.",
+    "image_path": "res://Assets/Biomes/SatelliteGraveyard.png",
+    "music_path": "res://Assets/Audio/Music/SatelliteGraveyard.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🛰", "⭐", "📼", "🧩"],
+    "native_factions": [],
+    "tags": ["orbital", "debris", "decay", "cosmic"],
+    "icon_components": {
+      "🛰": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "📡": 0.02
+        },
+        "lindblad_outgoing": {
+          "📼": 0.02,
+          "🧩": 0.03
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "⭐": {
+        "self_energy": 0.35,
+        "lindblad_outgoing": {
+          "🕳": 0.03,
+          "✨": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🕳"
+        }
+      },
+      "📼": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🛰": 0.02,
+          "🧩": 0.02
+        },
+        "lindblad_outgoing": {
+          "🧩": 0.04
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🧩"
+        }
+      },
+      "🧩": {
+        "self_energy": -0.05,
+        "lindblad_incoming": {
+          "📼": 0.04,
+          "🛰": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "HorizonFracture": ["⭐"]
+      },
+      "incoming": {
+        "OrbitalStrike": ["🛰"]
+      }
+    }
+  },
+
+  {
+    "name": "Clinic",
+    "description": "Sterile light hums above examination tables. Treatments expire on shelves. Diagnosis leads inexorably to prohibition or intervention. The genetics persist long after the patient is gone—the only true record of what was attempted here.",
+    "image_path": "res://Assets/Biomes/Clinic.png",
+    "music_path": "res://Assets/Audio/Music/Clinic.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.35, "y": 0.35},
+      {"x": 0.65, "y": 0.35},
+      {"x": 0.35, "y": 0.65},
+      {"x": 0.65, "y": 0.65}
+    ],
+    "emojis": ["💉", "💊", "🩺", "🚫", "🧪", "🧬"],
+    "native_factions": ["Chop Docs"],
+    "tags": ["medical", "pharmaceutical", "sterile", "diagnosis"],
+    "icon_components": {
+      "💉": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🧪": 0.04
+        },
+        "lindblad_outgoing": {
+          "💀": 0.02,
+          "🩹": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "💊": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🧪": 0.05,
+          "🧬": 0.02
+        },
+        "lindblad_outgoing": {
+          "🩹": 0.04,
+          "💀": 0.01
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑",
+          "comment": "Medications expire"
+        }
+      },
+      "🩺": {
+        "self_energy": 0.25,
+        "lindblad_outgoing": {
+          "🚫": 0.05,
+          "📋": 0.03
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🚫": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🩺": 0.05,
+          "🧪": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🧪": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🧬": 0.03
+        },
+        "lindblad_outgoing": {
+          "💊": 0.05,
+          "💉": 0.04,
+          "🚫": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🧬": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "⚗️": 0.02,
+          "🧫": 0.07,
+          "🌱": 0.03
+        },
+        "lindblad_outgoing": {
+          "🧪": 0.03
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑",
+          "comment": "Genetic material persists"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "FungalNetworks": ["🧫"]
+      }
+    }
+  },
+
+  {
+    "name": "Workshop",
+    "description": "The honest entropy of labor. Hammers ring in steady rhythm. Tools wear down with use, are repaired, wear down again. Everything here serves a purpose until it doesn't, then joins the cycle of salvage and reuse.",
+    "image_path": "res://Assets/Biomes/Workshop.png",
+    "music_path": "res://Assets/Audio/Music/Workshop.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.3, "y": 0.45},
+      {"x": 0.5, "y": 0.35},
+      {"x": 0.7, "y": 0.45},
+      {"x": 0.5, "y": 0.6}
+    ],
+    "emojis": ["🔧", "🔨", "🪛", "🧰", "🔌", "♻️"],
+    "native_factions": ["Forgewright Union"],
+    "tags": ["labor", "tools", "industry", "repair"],
+    "icon_components": {
+      "🔧": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "⚙": 0.02,
+          "🧰": 0.03
+        },
+        "lindblad_outgoing": {
+          "⚙": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "♻️"
+        }
+      },
+      "🔨": {
+        "self_energy": 0.25,
+        "is_driver": true,
+        "driver": {
+          "type": "pulse",
+          "frequency": 0.3,
+          "amplitude": 0.4,
+          "phase": 0.0,
+          "comment": "Rhythmic hammering"
+        },
+        "lindblad_outgoing": {
+          "🎵": 0.03,
+          "⚙": 0.04
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🪛": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🧰": 0.02
+        },
+        "lindblad_outgoing": {
+          "⚙": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "♻️"
+        }
+      },
+      "🧰": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🪛": 0.02
+        },
+        "lindblad_outgoing": {
+          "🔧": 0.03,
+          "🪛": 0.02
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🔌": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "♻️": 0.04
+        },
+        "lindblad_outgoing": {
+          "⚡": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "♻️"
+        }
+      },
+      "♻️": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🔧": 0.02,
+          "🪛": 0.02,
+          "🔌": 0.03,
+          "🌾": 0.06
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.03,
+          "🔌": 0.04
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "ScrapYard": ["♻️"],
+        "PowerStation": ["🔌"]
+      }
+    }
+  },
+
+  {
+    "name": "ScrapYard",
+    "description": "The terminal basin. Everything ends here eventually—machinery, materials, workers. The 🗑 grows ever larger. But from decay comes recycling, and from recycling, raw material flows back into the world. Even endings feed beginnings.",
+    "image_path": "res://Assets/Biomes/ScrapYard.png",
+    "music_path": "res://Assets/Audio/Music/ScrapYard.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.35, "y": 0.35},
+      {"x": 0.65, "y": 0.35},
+      {"x": 0.5, "y": 0.5},
+      {"x": 0.5, "y": 0.7}
+    ],
+    "emojis": ["♻️", "🗑", "🧤", "🏭", "🚧", "🧱"],
+    "native_factions": [],
+    "tags": ["terminal", "waste", "recycling", "labor"],
+    "icon_components": {
+      "♻️": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🗑": 0.02,
+          "🌾": 0.06
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.03,
+          "🦗": 0.03,
+          "💧": 0.04
+        }
+      },
+      "🗑": {
+        "self_energy": -0.2,
+        "lindblad_incoming": {
+          "🍂": 0.03,
+          "🍞": 0.02,
+          "♻️": 0.03,
+          "🏭": 0.05,
+          "🚧": 0.04
+        },
+        "lindblad_outgoing": {
+          "♻️": 0.02,
+          "🧤": 0.05
+        }
+      },
+      "🧤": {
+        "self_energy": 0.05,
+        "lindblad_incoming": {
+          "🗑": 0.05
+        },
+        "lindblad_outgoing": {
+          "💀": 0.02
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "💀",
+          "comment": "Workers die in the yard"
+        }
+      },
+      "🏭": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "⚙": 0.02
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.05,
+          "🌫": 0.03
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "🚧": {
+        "self_energy": 0.1,
+        "lindblad_outgoing": {
+          "🗑": 0.04
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑",
+          "comment": "Temporary barriers fall quickly"
+        }
+      },
+      "🧱": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "⛓": 0.03,
+          "🪨": 0.02
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.02,
+          "🪨": 0.01
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "Workshop": ["♻️"],
+        "ConstructionSite": ["🚧", "🧱"]
+      },
+      "outgoing": {
+        "BioticFlux": ["♻️"]
+      }
+    }
+  },
+
+  {
+    "name": "MarketDistrict",
+    "description": "Hub of commerce where goods become money and money becomes obligation. Bulls and bears pace the trading floors while businessmen cut deals in shadowed alcoves. Everything has a price tag. Everything flows toward or away from wealth.",
+    "image_path": "res://Assets/Biomes/MarketDistrict.png",
+    "music_path": "res://Assets/Audio/Music/MarketDistrict.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.3, "y": 0.35},
+      {"x": 0.5, "y": 0.3},
+      {"x": 0.7, "y": 0.35},
+      {"x": 0.3, "y": 0.6},
+      {"x": 0.5, "y": 0.65},
+      {"x": 0.7, "y": 0.6}
+    ],
+    "emojis": ["💰", "💳", "📦", "🏷️", "💱", "🕴️", "🐂", "🐻"],
+    "native_factions": ["Debt Wardens", "Bone Merchants", "Umbra Exchange"],
+    "tags": ["commerce", "hub", "trade", "finance"],
+    "icon_components": {
+      "💰": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🚀": 0.04,
+          "🌱": 0.02,
+          "🍞": 0.04,
+          "💾": 0.03,
+          "🚢": 0.04,
+          "🔍": 0.03,
+          "🪞": 0.04,
+          "✨": 0.02,
+          "💎": 0.03,
+          "📦": 0.05
+        },
+        "lindblad_outgoing": {
+          "💸": 0.02,
+          "📦": 0.05,
+          "💳": 0.03
+        }
+      },
+      "💳": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "💰": 0.03,
+          "👥": 0.02,
+          "📋": 0.04
+        },
+        "lindblad_outgoing": {
+          "💸": 0.02,
+          "⛓": 0.02
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑",
+          "comment": "Credit persists but eventually expires"
+        }
+      },
+      "📦": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "💰": 0.05,
+          "💊": 0.03
+        },
+        "lindblad_outgoing": {
+          "💰": 0.05,
+          "🚛": 0.04,
+          "🐻": 0.06
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🏷️": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "⚙": 0.03
+        },
+        "lindblad_outgoing": {
+          "📦": 0.03,
+          "💰": 0.02
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "💱": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "💰": 0.02,
+          "🐂": 0.03,
+          "🐻": 0.03
+        },
+        "lindblad_outgoing": {
+          "💰": 0.03
+        }
+      },
+      "🕴️": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "💰": 0.02
+        },
+        "lindblad_outgoing": {
+          "💳": 0.02,
+          "📦": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🐂": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "💰": 0.08
+        },
+        "lindblad_outgoing": {
+          "💱": 0.03,
+          "📊": 0.02
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💰",
+            "gate": "📦",
+            "rate": 0.04,
+            "power": 1.0,
+            "inverse": false,
+            "comment": "Bulls drive profits when goods flow"
+          }
+        ]
+      },
+      "🐻": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "📦": 0.06
+        },
+        "lindblad_outgoing": {
+          "💱": 0.03,
+          "💸": 0.02
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💸",
+            "gate": "📦",
+            "rate": 0.04,
+            "power": 1.0,
+            "inverse": true,
+            "comment": "Bears cause losses when goods stop"
+          }
+        ]
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "TradingFloor": ["💱", "🐂", "🐻"],
+        "CyberDebtMegacity": ["💰"]
+      },
+      "outgoing": {
+        "CyberDebtMegacity": ["💸", "⛓"]
+      }
+    }
+  },
+
+  {
+    "name": "TradingFloor",
+    "description": "Pure speculation distilled. Bulls charge, bears retreat, charts rise and crash. Yesterday's analysis is worthless today. The floor is a fever dream of numbers that mean everything and nothing.",
+    "image_path": "res://Assets/Biomes/TradingFloor.png",
+    "music_path": "res://Assets/Audio/Music/TradingFloor.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🐂", "🐻", "📊", "💱"],
+    "native_factions": [],
+    "tags": ["finance", "speculation", "volatile", "markets"],
+    "icon_components": {
+      "🐂": {
+        "self_energy": 0.3,
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.05,
+          "amplitude": 0.5,
+          "phase": 0.0,
+          "comment": "Bull/bear market cycles"
+        },
+        "lindblad_incoming": {
+          "💰": 0.08
+        },
+        "lindblad_outgoing": {
+          "💱": 0.03,
+          "📊": 0.04
+        }
+      },
+      "🐻": {
+        "self_energy": 0.25,
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.05,
+          "amplitude": 0.5,
+          "phase": 3.14,
+          "comment": "Inverse of bull cycle"
+        },
+        "lindblad_incoming": {
+          "📦": 0.06
+        },
+        "lindblad_outgoing": {
+          "💱": 0.03,
+          "📊": 0.04
+        }
+      },
+      "📊": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🐂": 0.04,
+          "🐻": 0.04,
+          "🧮": 0.03
+        },
+        "decay": {
+          "rate": 0.08,
+          "target": "🗑",
+          "comment": "Charts become worthless quickly"
+        }
+      },
+      "💱": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🐂": 0.03,
+          "🐻": 0.03,
+          "💰": 0.02
+        },
+        "lindblad_outgoing": {
+          "💰": 0.02
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "MarketDistrict": ["💱", "🐂", "🐻"]
+      }
+    }
+  },
+
+  {
+    "name": "WeaversLoft",
+    "description": "Threads fray under patient fingers. Garments take shape, wear out, return to thread. Needles pierce and bind. Knots hold—until they don't. The loft smells of lanolin and old cloth, and nothing here is ever truly finished.",
+    "image_path": "res://Assets/Biomes/WeaversLoft.png",
+    "music_path": "res://Assets/Audio/Music/WeaversLoft.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.35, "y": 0.4},
+      {"x": 0.5, "y": 0.35},
+      {"x": 0.65, "y": 0.4},
+      {"x": 0.5, "y": 0.6}
+    ],
+    "emojis": ["🧵", "🧶", "👘", "🧷", "🪢", "🪡"],
+    "native_factions": [],
+    "tags": ["textile", "craft", "binding", "labor"],
+    "icon_components": {
+      "🧵": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🧶": 0.04,
+          "🧬": 0.03
+        },
+        "lindblad_outgoing": {
+          "👘": 0.03,
+          "🪢": 0.07
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🧶": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🧵": 0.04
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "👘": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🧵": 0.08,
+          "🪡": 0.03,
+          "🧶": 0.03
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑",
+          "comment": "Garments wear out"
+        }
+      },
+      "🧷": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🪡": 0.02
+        },
+        "lindblad_outgoing": {
+          "👘": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🪢": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🧵": 0.07
+        },
+        "decay": {
+          "rate": 0.008,
+          "target": "🗑",
+          "comment": "Knots are stable"
+        }
+      },
+      "🪡": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🧷": 0.02,
+          "👘": 0.03,
+          "🪢": 0.04
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "BindingCircle": ["🪢", "🧵"]
+      }
+    }
+  },
+
+  {
+    "name": "BindingCircle",
+    "description": "A small sacred space where oaths are knotted into permanence. Prayer beads count the bindings. Candles witness the promises. What is tied here does not easily come undone—but nothing lasts forever, not even vows.",
+    "image_path": "res://Assets/Biomes/BindingCircle.png",
+    "music_path": "res://Assets/Audio/Music/BindingCircle.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🪢", "📿", "🕯", "🧵"],
+    "native_factions": ["Knot-Shriners"],
+    "tags": ["occult", "binding", "oath", "ritual"],
+    "icon_components": {
+      "🪢": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "🧵": 0.07,
+          "📿": 0.03
+        },
+        "lindblad_outgoing": {
+          "📿": 0.02
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑",
+          "comment": "Ritual knots are very stable"
+        }
+      },
+      "📿": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "⛪": 0.03,
+          "🪢": 0.02
+        },
+        "lindblad_outgoing": {
+          "🪢": 0.03
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑",
+          "comment": "Beads scatter over time"
+        }
+      },
+      "🕯": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🔥": 0.03
+        },
+        "lindblad_outgoing": {
+          "🔥": 0.02,
+          "🏮": 0.03
+        },
+        "decay": {
+          "rate": 0.035,
+          "target": "🗑",
+          "comment": "Candles burn"
+        }
+      },
+      "🧵": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🧬": 0.03
+        },
+        "lindblad_outgoing": {
+          "🪢": 0.07
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "WeaversLoft": ["🪢", "🧵"]
+      }
+    }
+  },
+
+  {
+    "name": "MeditationGarden",
+    "description": "Lantern light flickers over still water. Breathing slows. The attempt to hold coherence against the constant pull of dissolution. Enlightenment is an attractor state—difficult to reach, stable once achieved, but the lights always fade eventually.",
+    "image_path": "res://Assets/Biomes/MeditationGarden.png",
+    "music_path": "res://Assets/Audio/Music/MeditationGarden.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🧘", "📿", "🏮", "🕯"],
+    "native_factions": ["Keepers of Silence"],
+    "tags": ["spiritual", "meditation", "peace", "attractor"],
+    "icon_components": {
+      "🧘": {
+        "self_energy": -0.1,
+        "lindblad_incoming": {
+          "📿": 0.02,
+          "🔇": 0.02
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑",
+          "comment": "Enlightenment is stable but not permanent"
+        }
+      },
+      "📿": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "⛪": 0.03,
+          "🪢": 0.02
+        },
+        "lindblad_outgoing": {
+          "🧘": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "🏮": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🕯": 0.03
+        },
+        "lindblad_outgoing": {
+          "🧿": 0.03
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑",
+          "comment": "Lanterns burn out"
+        }
+      },
+      "🕯": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🔥": 0.03
+        },
+        "lindblad_outgoing": {
+          "🏮": 0.03,
+          "🔥": 0.02
+        },
+        "decay": {
+          "rate": 0.035,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "OccultSanctum": ["🏮"]
+      }
+    }
+  },
+
+  {
+    "name": "OccultSanctum",
+    "description": "Warding magic hums in the shadows. The evil eye watches from every corner, deflecting what should not enter. Candles and lanterns mark the protective boundaries. The ashes of guardian spirits rest in urns along the walls.",
+    "image_path": "res://Assets/Biomes/OccultSanctum.png",
+    "music_path": "res://Assets/Audio/Music/OccultSanctum.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🧿", "🏮", "🕯", "⚱"],
+    "native_factions": ["Lantern Cant", "Memory Weavers"],
+    "tags": ["occult", "warding", "protection", "ritual"],
+    "icon_components": {
+      "🧿": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "🕯": 0.03,
+          "🏮": 0.03,
+          "🔦": 0.02,
+          "🌿": 0.03,
+          "🕵️": 0.03
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑",
+          "comment": "Wards are stable"
+        }
+      },
+      "🏮": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🕯": 0.03
+        },
+        "lindblad_outgoing": {
+          "🧿": 0.03
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        }
+      },
+      "🕯": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🔥": 0.03
+        },
+        "lindblad_outgoing": {
+          "🧿": 0.03,
+          "🏮": 0.03
+        },
+        "decay": {
+          "rate": 0.035,
+          "target": "🗑"
+        }
+      },
+      "⚱": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "💀": 0.09
+        },
+        "decay": {
+          "rate": 0.003,
+          "target": "🗑",
+          "comment": "Urns persist"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "MeditationGarden": ["🏮"],
+        "ShrineOfAshes": ["⚱"]
+      }
+    }
+  },
+
+  {
+    "name": "ShrineOfAshes",
+    "description": "Where the cremated rest. Final rites are performed by candlelight, prayers strung on beads that outlast the prayers themselves. The dead flow in; only memory flows out. A quiet terminus for those who burned.",
+    "image_path": "res://Assets/Biomes/ShrineOfAshes.png",
+    "music_path": "res://Assets/Audio/Music/ShrineOfAshes.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["⚱", "🕯", "📿", "💀"],
+    "native_factions": ["Brotherhood of Ash"],
+    "tags": ["death", "cremation", "memorial", "terminus"],
+    "icon_components": {
+      "⚱": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "💀": 0.09
+        },
+        "lindblad_outgoing": {
+          "🌱": 0.01
+        },
+        "decay": {
+          "rate": 0.002,
+          "target": "🗑",
+          "comment": "Urns are nearly permanent"
+        }
+      },
+      "🕯": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🔥": 0.03
+        },
+        "lindblad_outgoing": {
+          "🔥": 0.02
+        },
+        "decay": {
+          "rate": 0.035,
+          "target": "🗑"
+        }
+      },
+      "📿": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "⛪": 0.03,
+          "🪢": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "💀": {
+        "self_energy": 0.1,
+        "lindblad_outgoing": {
+          "⚱": 0.09
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "Battlefield": ["💀"],
+        "BioticFlux": ["💀"]
+      },
+      "outgoing": {
+        "OccultSanctum": ["⚱"]
+      }
+    }
+  },
+
+  {
+    "name": "PastoralCommons",
+    "description": "Flocks graze on common land. Bees drift between wildflowers. Porridge simmers over low fires while gentle hands shape the future. A peaceful place—but peace is fragile, and predators are always circling.",
+    "image_path": "res://Assets/Biomes/PastoralCommons.png",
+    "music_path": "res://Assets/Audio/Music/PastoralCommons.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.3, "y": 0.4},
+      {"x": 0.5, "y": 0.35},
+      {"x": 0.7, "y": 0.4},
+      {"x": 0.5, "y": 0.6}
+    ],
+    "emojis": ["🐑", "🐝", "🥣", "🫙", "🤲", "🌿"],
+    "native_factions": [],
+    "tags": ["pastoral", "peaceful", "agricultural", "vulnerable"],
+    "icon_components": {
+      "🐑": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "👥": 0.02,
+          "🌿": 0.03
+        },
+        "lindblad_outgoing": {
+          "🧵": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "💀",
+          "comment": "Sheep are vulnerable"
+        }
+      },
+      "🐝": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🌿": 0.06
+        },
+        "lindblad_outgoing": {
+          "🫙": 0.04
+        },
+        "decay": {
+          "rate": 0.06,
+          "target": "🍂",
+          "comment": "Colony collapse"
+        }
+      },
+      "🥣": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🌿": 0.04,
+          "🫖": 0.03
+        },
+        "lindblad_outgoing": {
+          "👥": 0.02
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🍂",
+          "comment": "Food spoils"
+        }
+      },
+      "🫙": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🐝": 0.04,
+          "🍞": 0.02,
+          "💧": 0.03
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🍂"
+        }
+      },
+      "🤲": {
+        "self_energy": 0.15,
+        "lindblad_outgoing": {
+          "🍼": 0.02,
+          "🌱": 0.02
+        }
+      },
+      "🌿": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "♻️": 0.03,
+          "💧": 0.04,
+          "🍂": 0.04
+        },
+        "lindblad_outgoing": {
+          "🥣": 0.04,
+          "🐝": 0.06,
+          "🐑": 0.03,
+          "♻️": 0.03
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🍂"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "FreshwaterSpring": ["💧"]
+      },
+      "outgoing": {
+        "Apiary": ["🐝", "🫙"],
+        "WeaversLoft": ["🧵"]
+      }
+    }
+  },
+
+  {
+    "name": "Apiary",
+    "description": "Hives hum with focused industry. Honey accumulates in jars, beginning its slow transformation. The bees know their work; the keepers know theirs. A small, sweet place where fermentation begins.",
+    "image_path": "res://Assets/Biomes/Apiary.png",
+    "music_path": "res://Assets/Audio/Music/Apiary.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🐝", "🫙", "🌿", "🌾"],
+    "native_factions": ["Yeast Prophets"],
+    "tags": ["agricultural", "honey", "fermentation", "focused"],
+    "icon_components": {
+      "🐝": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🌿": 0.06,
+          "🌾": 0.03
+        },
+        "lindblad_outgoing": {
+          "🫙": 0.05
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🍂"
+        }
+      },
+      "🫙": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🐝": 0.05,
+          "🍞": 0.02,
+          "💧": 0.03
+        },
+        "lindblad_outgoing": {
+          "🍞": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🍂"
+        }
+      },
+      "🌿": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "♻️": 0.03,
+          "💧": 0.04,
+          "🍂": 0.04
+        },
+        "lindblad_outgoing": {
+          "🐝": 0.06,
+          "♻️": 0.03
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🍂"
+        }
+      },
+      "🌾": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🍂": 0.02
+        },
+        "lindblad_outgoing": {
+          "🐝": 0.03,
+          "♻️": 0.06,
+          "💨": 0.05
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🍂"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "PastoralCommons": ["🐝", "🫙"]
+      },
+      "outgoing": {
+        "Village": ["🫙", "🌾"]
+      }
+    }
+  },
+
+  {
+    "name": "Harbor",
+    "description": "Salt air and creaking rope. Vessels rest at anchor while rust accumulates on hooks and chains. Ice melts in bilgewater. The harbor is a pause between voyages—a place where things wait, and waiting has its own entropy.",
+    "image_path": "res://Assets/Biomes/Harbor.png",
+    "music_path": "res://Assets/Audio/Music/Harbor.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.3, "y": 0.4},
+      {"x": 0.5, "y": 0.35},
+      {"x": 0.7, "y": 0.4},
+      {"x": 0.5, "y": 0.6}
+    ],
+    "emojis": ["⚓", "🪝", "🛶", "🪣", "💧", "🧊"],
+    "native_factions": [],
+    "tags": ["maritime", "coastal", "waiting", "rust"],
+    "icon_components": {
+      "⚓": {
+        "self_energy": 0.35,
+        "lindblad_outgoing": {
+          "🪝": 0.03
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑",
+          "comment": "Anchors are stable"
+        }
+      },
+      "🪝": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "⚓": 0.03
+        },
+        "lindblad_outgoing": {
+          "🐠": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑",
+          "comment": "Metal rusts"
+        }
+      },
+      "🛶": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "💧": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑",
+          "comment": "Small boats are fragile"
+        }
+      },
+      "🪣": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "💧": 0.03
+        },
+        "lindblad_outgoing": {
+          "💧": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "💧": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🧊": 0.05,
+          "🌧": 0.05,
+          "♻️": 0.04
+        },
+        "lindblad_outgoing": {
+          "🔥": 0.08,
+          "🛶": 0.02,
+          "🪣": 0.03
+        }
+      },
+      "🧊": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "💧": 0.05
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "💧",
+          "comment": "Ice melts"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "FreshwaterSpring": ["💧", "🧊"]
+      },
+      "outgoing": {
+        "TidalPools": ["💧"]
+      }
+    }
+  },
+
+  {
+    "name": "FreshwaterSpring",
+    "description": "Source water wells up from deep stone. Ice melts at the margins. Bubbles rise and pop in an instant. This is where water begins its journey through the world—fundamental, flowing, feeding everything downstream.",
+    "image_path": "res://Assets/Biomes/FreshwaterSpring.png",
+    "music_path": "res://Assets/Audio/Music/FreshwaterSpring.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["💧", "🧊", "🫧", "🌊"],
+    "native_factions": ["Irrigation Jury"],
+    "tags": ["water", "source", "fundamental", "flow"],
+    "icon_components": {
+      "💧": {
+        "self_energy": 0.2,
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.02,
+          "amplitude": 0.3,
+          "phase": 0.0,
+          "comment": "Seasonal flow variations"
+        },
+        "lindblad_incoming": {
+          "🧊": 0.05,
+          "🌧": 0.05,
+          "♻️": 0.04,
+          "🌊": 0.02
+        },
+        "lindblad_outgoing": {
+          "🔥": 0.08,
+          "🌿": 0.04,
+          "🌊": 0.03
+        }
+      },
+      "🧊": {
+        "self_energy": 0.25,
+        "lindblad_outgoing": {
+          "💧": 0.05
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "💧"
+        }
+      },
+      "🫧": {
+        "self_energy": 0.05,
+        "lindblad_incoming": {
+          "🕳": 0.04,
+          "💧": 0.02
+        },
+        "decay": {
+          "rate": 0.1,
+          "target": "🗑",
+          "comment": "Bubbles are ephemeral"
+        }
+      },
+      "🌊": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "💧": 0.03
+        },
+        "lindblad_outgoing": {
+          "💧": 0.02
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "Harbor": ["💧", "🧊"],
+        "TidalPools": ["💧", "🌊"],
+        "PastoralCommons": ["💧"],
+        "Village": ["💧"]
+      }
+    }
+  },
+
+  {
+    "name": "Battlefield",
+    "description": "Steel meets steel in thunder and blood. Shields splinter. Explosions tear the air. The dead pile up, awaiting the ash-brothers who will give them proper ending. This is where violence concentrates, fast and hot and hungry.",
+    "image_path": "res://Assets/Biomes/Battlefield.png",
+    "music_path": "res://Assets/Audio/Music/Battlefield.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.3, "y": 0.4},
+      {"x": 0.5, "y": 0.3},
+      {"x": 0.7, "y": 0.4},
+      {"x": 0.5, "y": 0.6}
+    ],
+    "emojis": ["⚔", "🛡", "💥", "🩸", "💀", "⚱"],
+    "native_factions": ["Brotherhood of Ash", "Iron Shepherds"],
+    "tags": ["warfare", "violence", "death", "fast"],
+    "icon_components": {
+      "⚔": {
+        "self_energy": 0.25,
+        "lindblad_outgoing": {
+          "💀": 0.06,
+          "🩸": 0.05,
+          "💥": 0.04
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🛡": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "⚔": 0.05
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.02
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑",
+          "comment": "Shields break under assault"
+        }
+      },
+      "💥": {
+        "self_energy": 0.4,
+        "lindblad_incoming": {
+          "⚔": 0.04,
+          "🧨": 0.08
+        },
+        "lindblad_outgoing": {
+          "💀": 0.08,
+          "🩸": 0.06,
+          "🗑": 0.05
+        },
+        "decay": {
+          "rate": 0.15,
+          "target": "🗑",
+          "comment": "Explosions are instantaneous"
+        }
+      },
+      "🩸": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "⚔": 0.05,
+          "💥": 0.06,
+          "🫀": 0.04
+        },
+        "lindblad_outgoing": {
+          "💀": 0.08
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
+        }
+      },
+      "💀": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "⚔": 0.06,
+          "💥": 0.08,
+          "🩸": 0.08
+        },
+        "lindblad_outgoing": {
+          "⚱": 0.07
+        }
+      },
+      "⚱": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "💀": 0.07
+        },
+        "decay": {
+          "rate": 0.003,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "ShrineOfAshes": ["💀", "⚱"]
+      },
+      "incoming": {
+        "DemolitionSite": ["💥"]
+      }
+    }
+  },
+
+  {
+    "name": "RevolutionSquare",
+    "description": "Fists raised against the sky. Flags snap in the wind. Manifestos are shouted to crowds who may or may not be listening. Movements coalesce here, burn bright, and fragment. The bureaucrats watch from distant windows.",
+    "image_path": "res://Assets/Biomes/RevolutionSquare.png",
+    "music_path": "res://Assets/Audio/Music/RevolutionSquare.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["✊", "🚩", "📜", "🗣"],
+    "native_factions": [],
+    "tags": ["political", "revolution", "movement", "volatile"],
+    "icon_components": {
+      "✊": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "⛓": 0.05
+        },
+        "lindblad_outgoing": {
+          "🚩": 0.06
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑",
+          "comment": "Fervor fades"
+        }
+      },
+      "🚩": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "✊": 0.06
+        },
+        "lindblad_outgoing": {
+          "📜": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑",
+          "comment": "Movements fragment"
+        }
+      },
+      "📜": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🚩": 0.03
+        },
+        "lindblad_outgoing": {
+          "🗣": 0.04,
+          "📘": 0.02
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🗣": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "📜": 0.04
+        },
+        "lindblad_outgoing": {
+          "📶": 0.03,
+          "✊": 0.02
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "BureaucraticAbyss": ["⛓"]
+      },
+      "outgoing": {
+        "BroadcastTower": ["🗣"]
+      }
+    }
+  },
+
+  {
+    "name": "OrbitalStrike",
+    "description": "Space warfare at its most brutal. Warships hunt cargo vessels among the stars. Explosions bloom in vacuum silence. What the 🛸 destroy, the 🚀 cannot deliver. The distant stars bear witness to commerce interrupted by fire.",
+    "image_path": "res://Assets/Biomes/OrbitalStrike.png",
+    "music_path": "res://Assets/Audio/Music/OrbitalStrike.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🛸", "💥", "🚀", "⭐"],
+    "native_factions": ["Iron Shepherds"],
+    "tags": ["space", "warfare", "destruction", "orbital"],
+    "icon_components": {
+      "🛸": {
+        "self_energy": 0.35,
+        "is_driver": true,
+        "driver": {
+          "type": "pulse",
+          "frequency": 0.06,
+          "amplitude": 0.6,
+          "phase": 0.0,
+          "comment": "Attack wave pulses"
+        },
+        "lindblad_outgoing": {
+          "💥": 0.08,
+          "🚀": 0.04
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "💥": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🛸": 0.08
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.1,
+          "🛰": 0.02
+        },
+        "decay": {
+          "rate": 0.2,
+          "target": "🗑"
+        }
+      },
+      "🚀": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🛸": 0.04
+        },
+        "lindblad_outgoing": {
+          "💥": 0.03,
+          "🚢": 0.01
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💥",
+            "gate": "🛸",
+            "rate": 0.06,
+            "power": 1.2,
+            "inverse": false,
+            "comment": "Cargo destroyed when warships attack"
+          }
+        ],
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "⭐": {
+        "self_energy": 0.3,
+        "lindblad_outgoing": {
+          "🕳": 0.03,
+          "✨": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🕳"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "SatelliteGraveyard": ["🛰"],
+        "CyberDebtMegacity": ["🚀"]
+      }
+    }
+  },
+
+  {
+    "name": "Archives",
+    "description": "Records accumulate in endless stacks. Filing systems slowly fail. Precedent decays into ambiguity. The scales of justice gather dust. Here, knowledge persists imperfectly—better than memory, worse than truth.",
+    "image_path": "res://Assets/Biomes/Archives.png",
+    "music_path": "res://Assets/Audio/Music/Archives.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.3, "y": 0.4},
+      {"x": 0.5, "y": 0.35},
+      {"x": 0.7, "y": 0.4},
+      {"x": 0.5, "y": 0.6}
+    ],
+    "emojis": ["📒", "📋", "📘", "📐", "🧮", "⚖"],
+    "native_factions": ["Chronicle Keepers"],
+    "tags": ["records", "knowledge", "bureaucratic", "persistence"],
+    "icon_components": {
+      "📒": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "📘": 0.03
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.005,
+          "🚔": 0.02
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "📋": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🛂": 0.03,
+          "🔬": 0.04
+        },
+        "lindblad_outgoing": {
+          "📘": 0.02,
+          "💳": 0.04
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        }
+      },
+      "📘": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "📐": 0.03,
+          "🧮": 0.02,
+          "🕴️": 0.03,
+          "📜": 0.04
+        },
+        "lindblad_outgoing": {
+          "📒": 0.03
+        },
+        "decay": {
+          "rate": 0.003,
+          "target": "🗑",
+          "comment": "Bound books persist"
+        }
+      },
+      "📐": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🔬": 0.03,
+          "🔭": 0.02
+        },
+        "lindblad_outgoing": {
+          "📘": 0.03,
+          "🧮": 0.03
+        }
+      },
+      "🧮": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "📐": 0.03
+        },
+        "lindblad_outgoing": {
+          "📘": 0.02,
+          "📊": 0.03
+        }
+      },
+      "⚖": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🔭": 0.03,
+          "📜": 0.02
+        },
+        "lindblad_outgoing": {
+          "📜": 0.02
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "BureaucraticAbyss": ["📜"]
+      },
+      "outgoing": {
+        "EnforcementPost": ["📒"]
+      }
+    }
+  },
+
+  {
+    "name": "AbandonedQuarter",
+    "description": "What remains when power withdraws. Crumbling monuments to forgotten purposes. Empty urns that once held meaning. Stone slowly claims what was built upon it. Time moves differently here—geological, patient, absolute.",
+    "image_path": "res://Assets/Biomes/AbandonedQuarter.png",
+    "music_path": "res://Assets/Audio/Music/AbandonedQuarter.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🏚️", "🏛", "🏺", "🪨"],
+    "native_factions": [],
+    "tags": ["ruins", "decay", "slow", "geological"],
+    "icon_components": {
+      "🏚️": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🏰": 0.01,
+          "⚜": 0.002
+        },
+        "lindblad_outgoing": {
+          "🏛": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🏛"
+        }
+      },
+      "🏛": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🏚️": 0.03,
+          "📐": 0.02,
+          "🧱": 0.03
+        },
+        "lindblad_outgoing": {
+          "🏺": 0.01
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🏺"
+        }
+      },
+      "🏺": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🏛": 0.01
+        },
+        "lindblad_outgoing": {
+          "🪨": 0.005
+        },
+        "decay": {
+          "rate": 0.003,
+          "target": "🗑"
+        }
+      },
+      "🪨": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "🏺": 0.005,
+          "⛰": 0.02
+        },
+        "lindblad_outgoing": {
+          "💎": 0.01,
+          "🧱": 0.02
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "ForgottenCastle": ["🏰"],
+        "GildedRot": ["⚜"]
+      },
+      "outgoing": {
+        "VolcanicWorlds": ["🪨"]
+      }
+    }
+  },
+
+  {
+    "name": "ForgottenCastle",
+    "description": "The party ended centuries ago. Edicts yellow on the walls. Eagles circle the towers, waiting for scraps that no longer come. Roses have wilted into memory. What was once the seat of power is now a monument to its absence.",
+    "image_path": "res://Assets/Biomes/ForgottenCastle.png",
+    "music_path": "res://Assets/Audio/Music/ForgottenCastle.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🏰", "📜", "🦅", "🥀"],
+    "native_factions": [],
+    "tags": ["ruins", "aristocracy", "faded", "slow"],
+    "icon_components": {
+      "🏰": {
+        "self_energy": 0.4,
+        "lindblad_incoming": {
+          "⚜": 0.01
+        },
+        "lindblad_outgoing": {
+          "📜": 0.07,
+          "🏚️": 0.01
+        },
+        "decay": {
+          "rate": 0.001,
+          "target": "🏚",
+          "comment": "Castles decay slowest of all"
+        }
+      },
+      "📜": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🏰": 0.07,
+          "⚜": 0.02
+        },
+        "lindblad_outgoing": {
+          "🏢": 0.05,
+          "📘": 0.04
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🦅": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "💀": 0.03,
+          "🐇": 0.12
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "💀"
+        }
+      },
+      "🥀": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🌹": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "GildedRot": ["🏰", "🌹"]
+      },
+      "outgoing": {
+        "AbandonedQuarter": ["🏰"]
+      }
+    }
+  },
+
+  {
+    "name": "DemolitionSite",
+    "description": "Controlled destruction. Dynamite cracks. Flames consume. Bricks scatter. What took years to build comes down in moments. A necessary violence that clears the way for what comes next.",
+    "image_path": "res://Assets/Biomes/DemolitionSite.png",
+    "music_path": "res://Assets/Audio/Music/DemolitionSite.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🧨", "💥", "🧱", "🔥"],
+    "native_factions": [],
+    "tags": ["destruction", "fast", "violent", "clearing"],
+    "icon_components": {
+      "🧨": {
+        "self_energy": 0.3,
+        "lindblad_outgoing": {
+          "💥": 0.1,
+          "🔥": 0.1
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🔥"
+        }
+      },
+      "💥": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "🧨": 0.1
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.08,
+          "🧱": 0.04
+        },
+        "decay": {
+          "rate": 0.15,
+          "target": "🗑"
+        }
+      },
+      "🧱": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "💥": 0.04,
+          "⛓": 0.03,
+          "🪨": 0.02
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.03,
+          "🪨": 0.02
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "🔥": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🧨": 0.1,
+          "🪵": 0.05,
+          "🌋": 0.3,
+          "🌬": 0.05,
+          "🍂": 0.1
+        },
+        "lindblad_outgoing": {
+          "🪨": 0.03,
+          "🍂": 0.08
+        },
+        "decay": {
+          "rate": 0.1,
+          "target": "🍂"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "Battlefield": ["💥"],
+        "ScrapYard": ["🧱"]
+      }
+    }
+  },
+
+  {
+    "name": "Woodlot",
+    "description": "Timber country. Axes ring against trunks. Trees become lumber become firewood become ash. The forest gives and the forest takes, and the cycle turns with every swing of the blade.",
+    "image_path": "res://Assets/Biomes/Woodlot.png",
+    "music_path": "res://Assets/Audio/Music/Woodlot.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🪵", "🌲", "🪓", "🔥"],
+    "native_factions": [],
+    "tags": ["timber", "resource", "harvest", "cycle"],
+    "icon_components": {
+      "🪵": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🌲": 0.04,
+          "🪓": 0.05
+        },
+        "lindblad_outgoing": {
+          "🔥": 0.04
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🌲": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🌬": 0.02,
+          "🍂": 0.01
+        },
+        "lindblad_outgoing": {
+          "🪵": 0.04,
+          "🍂": 0.08
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🍂"
+        }
+      },
+      "🪓": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🪵": 0.05,
+          "🌲": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🔥": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🪵": 0.04,
+          "🍂": 0.1
+        },
+        "lindblad_outgoing": {
+          "🍂": 0.08
+        },
+        "decay": {
+          "rate": 0.1,
+          "target": "🍂"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "StarterForest": ["🌲"]
+      },
+      "outgoing": {
+        "Village": ["🪵"],
+        "Workshop": ["🪵"]
+      }
+    }
+  },
+
+  {
+    "name": "MirrorChamber",
+    "description": "A space of reflection—literal and otherwise. Candlelight flickers across silvered glass. Shadows gather in corners. The self observes the self observing. Identity becomes uncertain here, and what looks back may not be what looks in.",
+    "image_path": "res://Assets/Biomes/MirrorChamber.png",
+    "music_path": "res://Assets/Audio/Music/MirrorChamber.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🪞", "👤", "🕯", "🌑"],
+    "native_factions": ["Memory Weavers"],
+    "tags": ["liminal", "identity", "reflection", "measurement"],
+    "icon_components": {
+      "🪞": {
+        "self_energy": 0.25,
+        "lindblad_outgoing": {
+          "👤": 0.04,
+          "✨": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑",
+          "comment": "Mirrors crack slowly"
+        }
+      },
+      "👤": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "🪞": 0.04,
+          "🤫": 0.04,
+          "🧷": 0.02
+        },
+        "lindblad_outgoing": {
+          "🫥": 0.05
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🫥",
+          "comment": "Identity dissolves"
+        }
+      },
+      "🕯": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🔥": 0.03
+        },
+        "lindblad_outgoing": {
+          "🔥": 0.02,
+          "🌑": 0.01
+        },
+        "decay": {
+          "rate": 0.035,
+          "target": "🗑"
+        }
+      },
+      "🌑": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "⛓": 0.02,
+          "💀": 0.03,
+          "🕯": 0.01
+        },
+        "lindblad_outgoing": {
+          "⚫": 0.01
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "outgoing": {
+        "EchoingChasm": ["👤", "🫥"]
+      }
+    }
+  },
+
+  {
+    "name": "TrappersCamp",
+    "description": "Where hunters wait. Snares are set in careful patterns. Hooks bait the unwary. Rabbits wander in; bones remain. A patient, predatory place where capture is the craft and remains are the record.",
+    "image_path": "res://Assets/Biomes/TrappersCamp.png",
+    "music_path": "res://Assets/Audio/Music/TrappersCamp.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🪤", "🪝", "🐇", "🦴"],
+    "native_factions": ["Bone Merchants"],
+    "tags": ["predation", "hunting", "patience", "death"],
+    "icon_components": {
+      "🪤": {
+        "self_energy": 0.2,
+        "gated_lindblad_source": [
+          {
+            "target": "💀",
+            "gate": "🐇",
+            "rate": 0.06,
+            "power": 1.2,
+            "inverse": false,
+            "comment": "Traps kill when prey is present"
+          }
+        ],
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑",
+          "comment": "Traps spring or rust"
+        }
+      },
+      "🪝": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "⚓": 0.03
+        },
+        "lindblad_outgoing": {
+          "🐠": 0.02,
+          "💀": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🐇": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🌿": 0.1
+        },
+        "lindblad_outgoing": {
+          "🦅": 0.12,
+          "🐺": 0.15
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "💀"
+        }
+      },
+      "🦴": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "💀": 0.06,
+          "🐇": 0.03
+        },
+        "lindblad_outgoing": {
+          "💰": 0.03
+        },
+        "decay": {
+          "rate": 0.008,
+          "target": "🗑",
+          "comment": "Bones persist"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "StarterForest": ["🐇"]
+      },
+      "outgoing": {
+        "MarketDistrict": ["🦴"]
+      }
+    }
+  },
+
+  {
+    "name": "EnforcementPost",
+    "description": "Law's presence, however temporary. Patrol cars wait. Keys jingle on belts that may unlock or bind. Chains rattle in holding cells. Clipboards track the processed. Authority asserts itself here—until the shift ends.",
+    "image_path": "res://Assets/Biomes/EnforcementPost.png",
+    "music_path": "res://Assets/Audio/Music/EnforcementPost.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🚔", "🔓", "⛓", "📋"],
+    "native_factions": ["Debt Wardens"],
+    "tags": ["enforcement", "law", "authority", "processing"],
+    "icon_components": {
+      "🚔": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "📒": 0.02
+        },
+        "lindblad_outgoing": {
+          "⛓": 0.03,
+          "🔓": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑",
+          "comment": "Patrols end"
+        }
+      },
+      "🔓": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🕵️": 0.03,
+          "🚔": 0.02
+        },
+        "lindblad_outgoing": {
+          "⛓": 0.02
+        }
+      },
+      "⛓": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "💸": 0.05,
+          "🚔": 0.03
+        },
+        "lindblad_outgoing": {
+          "🗑": 0.04,
+          "🔓": 0.04,
+          "✊": 0.05
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "📋": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🛂": 0.03,
+          "🔬": 0.04
+        },
+        "lindblad_outgoing": {
+          "📘": 0.02,
+          "💳": 0.04
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "Archives": ["📒"],
+        "CyberDebtMegacity": ["⛓"]
+      },
+      "outgoing": {
+        "RevolutionSquare": ["⛓"],
+        "BureaucraticAbyss": ["📋"]
+      }
+    }
+  },
+
+  {
+    "name": "PowerStation",
+    "description": "The grid's heart. Electricity hums through transformers. Batteries charge and discharge. Gears turn generators. Connections fail and are repaired in endless cycles. The Kilowatt Collective keeps the lights on—usually.",
+    "image_path": "res://Assets/Biomes/PowerStation.png",
+    "music_path": "res://Assets/Audio/Music/PowerStation.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🔌", "⚡", "🔋", "⚙"],
+    "native_factions": ["Kilowatt Collective"],
+    "tags": ["infrastructure", "power", "grid", "energy"],
+    "icon_components": {
+      "🔌": {
+        "self_energy": 0.15,
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 1.0,
+          "amplitude": 0.5,
+          "phase": 0.0,
+          "comment": "AC power cycle"
+        },
+        "lindblad_incoming": {
+          "♻️": 0.04
+        },
+        "lindblad_outgoing": {
+          "⚡": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "♻️"
+        }
+      },
+      "⚡": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🔌": 0.03,
+          "🔋": 0.06
+        },
+        "lindblad_outgoing": {
+          "🔋": 0.06
+        }
+      },
+      "🔋": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "⚡": 0.06
+        },
+        "lindblad_outgoing": {
+          "⚡": 0.06,
+          "🔌": 0.04
+        }
+      },
+      "⚙": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "🔩": 0.04,
+          "🛠": 0.03,
+          "🔨": 0.03,
+          "🌀": 0.02
+        },
+        "lindblad_outgoing": {
+          "🏭": 0.02,
+          "🔧": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "Workshop": ["🔌"],
+        "StellarForges": ["⚡"]
+      },
+      "outgoing": {
+        "StellarForges": ["⚡", "🔋"]
+      }
+    }
+  },
+
+  {
+    "name": "MagneticAnomaly",
+    "description": "Something wrong with the local physics. Compasses spin. Instruments give impossible readings. Vortices form in electromagnetic fields. Signals bend around the anomaly's heart. A small, strange place where the rules are merely suggestions.",
+    "image_path": "res://Assets/Biomes/MagneticAnomaly.png",
+    "music_path": "res://Assets/Audio/Music/MagneticAnomaly.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.4, "y": 0.4},
+      {"x": 0.6, "y": 0.4},
+      {"x": 0.4, "y": 0.6},
+      {"x": 0.6, "y": 0.6}
+    ],
+    "emojis": ["🧲", "⚡", "🌀", "📡"],
+    "native_factions": [],
+    "tags": ["anomaly", "physics", "strange", "electromagnetic"],
+    "icon_components": {
+      "🧲": {
+        "self_energy": 0.35,
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.08,
+          "amplitude": 0.6,
+          "phase": 0.0,
+          "comment": "Magnetic field oscillations"
+        },
+        "lindblad_outgoing": {
+          "⚡": 0.04,
+          "🌀": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "⚡": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "🧲": 0.04
+        },
+        "lindblad_outgoing": {
+          "📡": 0.03
+        }
+      },
+      "🌀": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🧲": 0.03,
+          "🌞": 0.03
+        },
+        "lindblad_outgoing": {
+          "⚙": 0.02
+        }
+      },
+      "📡": {
+        "self_energy": 0.2,
+        "lindblad_incoming": {
+          "⚡": 0.03,
+          "🔊": 0.04,
+          "👘": 0.02
+        },
+        "lindblad_outgoing": {
+          "🔇": 0.05,
+          "📶": 0.03
+        },
+        "decay": {
+          "rate": 0.008,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "BroadcastTower": ["📡"]
+      },
+      "outgoing": {
+        "StellarForges": ["🌀"],
+        "BroadcastTower": ["📡"]
+      }
+    }
+  },
+
+  {
+    "name": "AntimatterFoundry",
+    "description": "Where annihilation is harvested. Void-stuff and starlight collide in magnetic containment. The energy released is beyond measure—and so is the danger. When containment fails, the void claims its due. This is where the Black Horizon's physics are put to work.",
+    "image_path": "res://Assets/Biomes/AntimatterFoundry.png",
+    "music_path": "res://Assets/Audio/Music/AntimatterFoundry.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {"x": 0.3, "y": 0.4},
+      {"x": 0.5, "y": 0.3},
+      {"x": 0.7, "y": 0.4},
+      {"x": 0.5, "y": 0.6}
+    ],
+    "emojis": ["⚫", "✨", "💥", "🌀", "🕳", "⚡"],
+    "native_factions": ["Black Horizon"],
+    "tags": ["physics", "annihilation", "dangerous", "energy"],
+    "icon_components": {
+      "⚫": {
+        "self_energy": 0.4,
+        "lindblad_incoming": {
+          "🌑": 0.03,
+          "🕳": 0.02
+        },
+        "lindblad_outgoing": {
+          "✨": 0.04,
+          "🌑": 0.01
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💥",
+            "gate": "✨",
+            "rate": 0.1,
+            "power": 1.5,
+            "inverse": false,
+            "comment": "Annihilation when matter meets antimatter"
+          },
+          {
+            "target": "🕳",
+            "gate": "🌀",
+            "rate": 0.02,
+            "power": 0.8,
+            "inverse": true,
+            "comment": "Void expands when containment weakens"
+          }
+        ]
+      },
+      "✨": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "⚫": 0.04,
+          "🕳": 0.03,
+          "💎": 0.02
+        },
+        "lindblad_outgoing": {
+          "💥": 0.05,
+          "🗑": 0.12
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💥",
+            "gate": "⚫",
+            "rate": 0.1,
+            "power": 1.5,
+            "inverse": false,
+            "comment": "Annihilation when antimatter meets matter"
+          }
+        ],
+        "decay": {
+          "rate": 0.1,
+          "target": "🗑"
+        }
+      },
+      "💥": {
+        "self_energy": 0.5,
+        "lindblad_incoming": {
+          "⚫": 0.1,
+          "✨": 0.1
+        },
+        "lindblad_outgoing": {
+          "⚡": 0.15,
+          "🕳": 0.05
+        },
+        "decay": {
+          "rate": 0.2,
+          "target": "⚡",
+          "comment": "Explosions become pure energy"
+        }
+      },
+      "🌀": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🧲": 0.03,
+          "🌞": 0.03
+        },
+        "lindblad_outgoing": {
+          "⚫": 0.02,
+          "✨": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🕳",
+          "comment": "Containment eventually fails"
+        }
+      },
+      "🕳": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "⚫": 0.02,
+          "🪐": 0.04,
+          "🌀": 0.02,
+          "💥": 0.05
+        },
+        "lindblad_outgoing": {
+          "✨": 0.03,
+          "🫧": 0.04
+        }
+      },
+      "⚡": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "💥": 0.15
+        },
+        "lindblad_outgoing": {
+          "🔋": 0.06
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "HorizonFracture": ["⚫", "🕳"]
+      },
+      "outgoing": {
+        "PowerStation": ["⚡"],
+        "HorizonFracture": ["🕳"]
+      }
+    }
+  }
+]

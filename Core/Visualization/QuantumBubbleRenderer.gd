@@ -188,6 +188,16 @@ func _draw_quantum_bubble(graph: Node2D, node, biomes: Dictionary, time_accumula
 	if not is_celestial and node.biome_name != "":
 		_draw_sink_flux_particles(graph, node, biomes, effective_radius, anim_alpha, time_accumulator)
 
+	# === LAYER 6f: AZIMUTHAL SEASON RINGS ===
+	# Three colored arcs showing phi decomposition into RGB-like "seasons"
+	if not is_celestial and node.biome_name != "":
+		_draw_season_rings(graph, node, effective_radius, anim_alpha, time_accumulator)
+
+	# === LAYER 6g: BERRY PHASE RING ===
+	# Golden ring showing accumulated geometric phase (Bloch sphere path integral)
+	if not is_celestial and node.biome_name != "":
+		_draw_berry_phase_ring(graph, node, effective_radius, anim_alpha)
+
 	# === LAYER 7: Dual emoji system ===
 	_draw_emojis(graph, node, is_celestial)
 
@@ -360,6 +370,116 @@ func _draw_sink_flux_particles(graph: Node2D, node, biomes: Dictionary, effectiv
 	"""Draw particles showing decoherence rate."""
 	# Disabled: sink flux is not provided by native viz cache.
 	return
+
+
+func _draw_season_rings(graph: Node2D, node, effective_radius: float, anim_alpha: float, time: float) -> void:
+	"""Draw three azimuthal 'season' rings showing phi decomposition.
+
+	Physics: phi is projected onto 3 basis vectors at 0°, 120°, 240°
+	Each ring's intensity = (1 + cos(phi - season_angle)) / 2 × coherence
+
+	Visual: Three colored arcs that "whirlpool" based on quantum phase evolution.
+	- Red (0°), Green (120°), Blue (240°) - like RGB primaries
+	- Arc length/opacity shows projection strength
+	- Position rotates with phi for visual coherence
+
+	The rings create emergent angular force when combined across nodes.
+	"""
+	# Season ring constants
+	const SEASON_ANGLES: Array[float] = [0.0, TAU / 3.0, 2.0 * TAU / 3.0]
+	const SEASON_COLORS: Array[Color] = [
+		Color(1.0, 0.3, 0.3),  # Season 0: Red
+		Color(0.3, 1.0, 0.4),  # Season 1: Green
+		Color(0.4, 0.4, 1.0),  # Season 2: Blue
+	]
+
+	var ring_radius = effective_radius * 1.4  # Outside the main bubble
+	var max_arc_length = TAU / 4.0  # Each season covers up to 90° of arc
+	var ring_width = 3.0
+
+	# Get season data from node (properties added to QuantumNode)
+	var projections: Array[float] = node.season_projections
+	var angular_momentum: float = node.season_angular_momentum
+	var phi: float = node.phi_raw
+
+	# Rotation offset: phi drives the ring rotation so it "points" in the phase direction
+	var rotation_offset = phi
+
+	for i in range(3):
+		var intensity = projections[i] if i < projections.size() else 0.33
+
+		# Skip very weak projections
+		if intensity < 0.05:
+			continue
+
+		# Arc parameters
+		var base_angle = SEASON_ANGLES[i] + rotation_offset
+		var arc_length = max_arc_length * intensity
+		var start_angle = base_angle - arc_length / 2.0
+		var end_angle = base_angle + arc_length / 2.0
+
+		# Color with intensity-based alpha
+		var ring_color = SEASON_COLORS[i]
+		ring_color.a = 0.4 + 0.5 * intensity  # 0.4 to 0.9 alpha
+		ring_color.a *= anim_alpha
+
+		# Draw the arc
+		graph.draw_arc(node.position, ring_radius, start_angle, end_angle, 16, ring_color, ring_width, true)
+
+		# Draw glow for strong projections
+		if intensity > 0.5:
+			var glow_color = ring_color
+			glow_color.a *= 0.4
+			graph.draw_arc(node.position, ring_radius, start_angle, end_angle, 16, glow_color, ring_width * 2.5, true)
+
+	# Draw angular momentum indicator (whirlpool direction)
+	if absf(angular_momentum) > 0.01:
+		var indicator_radius = effective_radius * 1.6
+		var spin_color = Color(1.0, 1.0, 1.0, 0.3 * anim_alpha)
+		var spin_length = clampf(absf(angular_momentum) * 5.0, 0.1, 0.5)
+
+		# Arrow showing spin direction
+		var arrow_angle = phi + (PI / 2.0 if angular_momentum > 0 else -PI / 2.0)
+		var arrow_start = node.position + Vector2(cos(arrow_angle - spin_length), sin(arrow_angle - spin_length)) * indicator_radius
+		var arrow_end = node.position + Vector2(cos(arrow_angle + spin_length), sin(arrow_angle + spin_length)) * indicator_radius
+		graph.draw_line(arrow_start, arrow_end, spin_color, 2.0, true)
+
+
+func _draw_berry_phase_ring(graph: Node2D, node, effective_radius: float, anim_alpha: float) -> void:
+	"""Draw golden ring showing accumulated berry (geometric) phase.
+
+	Physics: Berry phase = solid angle enclosed by Bloch sphere path
+	- Computed from: dβ = -(1/2) × (1 - cos(θ)) × dφ
+	- Wraps at 2π (full geometric cycle)
+
+	Visual: Golden arc that fills clockwise as berry phase accumulates.
+	Full circle = one complete geometric cycle through parameter space.
+	"""
+	var berry = node.berry_phase
+	if berry < 0.01:
+		return
+
+	var ring_radius = effective_radius * 1.55  # Outside the season rings
+	var ring_width = 2.5
+
+	# Berry phase as fraction of full cycle [0, 1]
+	var berry_fraction = berry / TAU
+
+	# Golden color that brightens with accumulation
+	var berry_color = Color(1.0, 0.85, 0.3, 0.6 + 0.3 * berry_fraction)
+	berry_color.a *= anim_alpha
+
+	# Draw arc from top, clockwise
+	var start_angle = -PI / 2.0
+	var end_angle = start_angle + berry * sign(node.season_angular_momentum + 0.001)
+
+	graph.draw_arc(node.position, ring_radius, start_angle, end_angle, 24, berry_color, ring_width, true)
+
+	# Glow for high berry phase (approaching full cycle)
+	if berry_fraction > 0.5:
+		var glow_color = berry_color
+		glow_color.a = 0.3 * (berry_fraction - 0.5) * 2.0 * anim_alpha
+		graph.draw_arc(node.position, ring_radius, start_angle, end_angle, 24, glow_color, ring_width * 3.0, true)
 
 
 func _draw_emojis(graph: Node2D, node, is_celestial: bool) -> void:

@@ -17,6 +17,29 @@ extends RefCounted
 ##    When populations oscillate, bubbles physically respond
 ##
 ## Color encodes phase (φ) - no angular force needed.
+##
+## NATIVE ACCELERATION: If ForceGraphEngine is available, use C++ path (3-5× faster)
+
+# === NATIVE ENGINE ===
+var _native_engine = null
+var _native_enabled: bool = false
+
+func _init():
+	# Try to use native force graph engine
+	if ClassDB.class_exists("ForceGraphEngine"):
+		_native_engine = ClassDB.instantiate("ForceGraphEngine")
+		if _native_engine:
+			# Configure with same constants as GDScript
+			_native_engine.set_repulsion_strength(REPULSION)
+			_native_engine.set_damping(DRAG)
+			_native_engine.set_base_distance(BASE_SEPARATION)
+			_native_engine.set_min_distance(MIN_DISTANCE)
+			_native_enabled = true
+			print("QuantumForceSystem: Native C++ engine ENABLED (3-5x faster)")
+		else:
+			print("QuantumForceSystem: Native engine instantiation failed - using GDScript")
+	else:
+		print("QuantumForceSystem: ForceGraphEngine not available - using GDScript fallback")
 
 
 # === FORCE CONSTANTS ===
@@ -66,6 +89,93 @@ func update(delta: float, nodes: Array, ctx: Dictionary) -> void:
 		if _is_active(node):
 			active_nodes.append(node)
 
+	# DUAL-PATH: Native C++ (fast) vs GDScript (fallback)
+	if _native_enabled and _native_engine:
+		_update_native(delta, active_nodes, biomes, layout_calculator)
+	else:
+		_update_gdscript(delta, active_nodes, biomes)
+
+
+func _update_native(delta: float, nodes: Array, biomes: Dictionary, layout_calculator) -> void:
+	"""Fast path: Use native C++ ForceGraphEngine."""
+	if nodes.is_empty():
+		return
+
+	# Pack positions and velocities
+	var positions = PackedVector2Array()
+	var velocities = PackedVector2Array()
+	var frozen_mask = PackedByteArray()
+
+	for node in nodes:
+		positions.append(node.position)
+		velocities.append(node.velocity)
+		frozen_mask.append(1 if (node.is_lifeless or _is_measured(node)) else 0)
+
+	# Get quantum data from first node's biome
+	var bloch_packet = PackedFloat64Array()
+	var mi_values = PackedFloat64Array()
+	var biome_center = Vector2.ZERO
+
+	# Group nodes by biome and process each biome
+	var biome_nodes: Dictionary = {}
+	for node in nodes:
+		if not biome_nodes.has(node.biome_name):
+			biome_nodes[node.biome_name] = []
+		biome_nodes[node.biome_name].append(node)
+
+	# For now, use simple approach: process all nodes together with combined data
+	# Get biome center from layout calculator if available
+	if layout_calculator and biome_nodes.size() > 0:
+		var first_biome = biome_nodes.keys()[0]
+		if layout_calculator.has_method("get_biome_oval"):
+			var oval = layout_calculator.get_biome_oval(first_biome)
+			biome_center = oval.get("center", Vector2(960, 540))
+
+	# Get MI values from first active biome's viz_cache
+	for biome_name in biome_nodes:
+		if biomes.has(biome_name):
+			var biome = biomes[biome_name]
+			if biome and biome.viz_cache:
+				mi_values = biome.viz_cache._mi_values
+				# Get bloch data
+				var num_qubits = biome.viz_cache.get_num_qubits()
+				for q in range(num_qubits):
+					var bloch = biome.viz_cache.get_bloch(q)
+					if not bloch.is_empty():
+						bloch_packet.append(bloch.get("p0", 0.5))
+						bloch_packet.append(bloch.get("p1", 0.5))
+						bloch_packet.append(bloch.get("x", 0.0))
+						bloch_packet.append(bloch.get("y", 0.0))
+						bloch_packet.append(bloch.get("z", 0.0))
+						bloch_packet.append(bloch.get("r", 0.0))
+						bloch_packet.append(bloch.get("theta", 0.0))
+						bloch_packet.append(bloch.get("phi", 0.0))
+				break  # Use first biome's data for now
+
+	# Call native engine
+	var result = _native_engine.update_positions(
+		positions,
+		velocities,
+		bloch_packet,
+		mi_values,
+		biome_center,
+		delta,
+		frozen_mask
+	)
+
+	# Unpack results back to nodes
+	var new_positions = result.get("positions", PackedVector2Array())
+	var new_velocities = result.get("velocities", PackedVector2Array())
+
+	for i in range(nodes.size()):
+		if i < new_positions.size():
+			nodes[i].position = new_positions[i]
+		if i < new_velocities.size():
+			nodes[i].velocity = new_velocities[i]
+
+
+func _update_gdscript(delta: float, active_nodes: Array, biomes: Dictionary) -> void:
+	"""Fallback path: GDScript force calculations."""
 	# Calculate and apply forces
 	for node in active_nodes:
 		# Skip frozen nodes

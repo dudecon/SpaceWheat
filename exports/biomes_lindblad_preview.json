@@ -1,9 +1,818 @@
 [
   {
+    "name": "BioticFlux",
+    "description": "The quantum heart of the ecosystem. Sun and moon cycle through wheat and mushroom growth, while matter flows through detritus and death.",
+    "image_path": "res://Assets/Biomes/Quantum_Fields.png",
+    "music_path": "res://Assets/Audio/Music/Entropic Bread Rise.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {
+        "x": 0.38,
+        "y": 0.5
+      },
+      {
+        "x": 0.46,
+        "y": 0.42
+      },
+      {
+        "x": 0.54,
+        "y": 0.58
+      },
+      {
+        "x": 0.62,
+        "y": 0.5
+      }
+    ],
+    "emojis": [
+      "☀",
+      "🌙",
+      "🌾",
+      "🍄",
+      "🍂",
+      "💀"
+    ],
+    "native_factions": [],
+    "tags": [
+      "ecosystem",
+      "natural",
+      "quantum"
+    ],
+    "icon_components": {
+      "💀": {
+        "lindblad_outgoing": {
+          "⚱": 0.05
+        }
+      },
+      "🌾": {
+        "lindblad_outgoing": {
+          "♻️": 0.06
+        },
+        "lindblad_incoming": {
+          "🍂": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🍂"
+        }
+      },
+      "🍄": {
+        "lindblad_outgoing": {
+          "💀": 0.01
+        },
+        "lindblad_incoming": {
+          "🌙": 0.06,
+          "🍂": 0.12,
+          "💀": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🍂"
+        }
+      },
+      "🍂": {
+        "lindblad_incoming": {
+          "💀": 0.08,
+          "🌲": 0.08,
+          "🌿": 0.15
+        },
+        "lindblad_outgoing": {
+          "⛰": 0.005
+        }
+      }
+    }
+  },
+  {
+    "name": "CyberDebtMegacity",
+    "description": "A sprawling cyberpunk megacity where debt fuels the neon lights and criminal syndicates rule from towering spires. Spaceships dock in skyports amid a haze of digital crime and endless obligations. Everyone owes someone. The pulse of arriving rockets marks the rhythm of commerce; the chains of debt mark everything else.",
+    "image_path": "res://Assets/Biomes/CyberDebtMegacity.png",
+    "music_path": "res://Assets/Audio/Music/CyberDebt Megacity.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {
+        "x": 0.35,
+        "y": 0.4
+      },
+      {
+        "x": 0.65,
+        "y": 0.4
+      },
+      {
+        "x": 0.35,
+        "y": 0.6
+      },
+      {
+        "x": 0.65,
+        "y": 0.6
+      }
+    ],
+    "emojis": [
+      "⛓",
+      "💸",
+      "👥",
+      "🗝",
+      "🕵️",
+      "💀",
+      "🩸",
+      "🚀",
+      "💰",
+      "⚙️"
+    ],
+    "native_factions": [
+      "Debt Wardens",
+      "Umbra Exchange",
+      "Station Lords",
+      "Chop Docs"
+    ],
+    "tags": [
+      "cyberpunk",
+      "dystopian",
+      "urban",
+      "criminal",
+      "debt"
+    ],
+    "icon_components": {
+      "🚀": {
+        "self_energy": 0.3,
+        "is_driver": true,
+        "driver": {
+          "type": "pulse",
+          "frequency": 0.08,
+          "amplitude": 0.5,
+          "phase": 0.0,
+          "comment": "Ships arrive in irregular pulses, driving commerce"
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        },
+        "lindblad_outgoing": {
+          "🚢": 0.01
+        }
+      },
+      "⛓": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "💸": 0.05
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💀",
+            "gate": "💸",
+            "rate": 0.04,
+            "power": 1.2,
+            "inverse": false,
+            "comment": "Debt leads to death when chains tighten"
+          }
+        ],
+        "lindblad_outgoing": {
+          "🗑": 0.04,
+          "🔓": 0.04
+        }
+      },
+      "💸": {
+        "self_energy": -0.3,
+        "lindblad_incoming": {
+          "👥": 0.03
+        },
+        "lindblad_outgoing": {
+          "⛓": 0.05
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "⛓",
+            "gate": "🚀",
+            "rate": 0.03,
+            "power": 0.8,
+            "inverse": true,
+            "comment": "Debt accumulates faster when ships don't come"
+          }
+        ]
+      },
+      "👥": {
+        "self_energy": 0.02,
+        "lindblad_outgoing": {
+          "💀": 0.02,
+          "💸": 0.05
+        }
+      },
+      "🗝": {
+        "self_energy": 0.3,
+        "gated_lindblad_source": [
+          {
+            "target": "💰",
+            "gate": "🕵️",
+            "rate": 0.04,
+            "power": 1.0,
+            "inverse": false,
+            "comment": "Keys unlock wealth when spies find secrets"
+          }
+        ],
+        "lindblad_incoming": {
+          "🛂": 0.02
+        }
+      },
+      "🕵️": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "💀": 0.04
+        }
+      },
+      "💀": {
+        "self_energy": 0.1,
+        "decay": {
+          "rate": 0.0,
+          "target": "🍂"
+        },
+        "lindblad_outgoing": {
+          "⚱": 0.05
+        }
+      },
+      "🩸": {
+        "self_energy": 0.1,
+        "lindblad_outgoing": {
+          "💀": 0.08
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💀",
+            "gate": "⛓",
+            "rate": 0.05,
+            "power": 1.1,
+            "inverse": false,
+            "comment": "Blood flows when chains bind"
+          }
+        ],
+        "lindblad_incoming": {
+          "🫀": 0.04,
+          "⚔": 0.03
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
+        }
+      },
+      "💰": {
+        "self_energy": 0.3,
+        "lindblad_incoming": {
+          "🚀": 0.04,
+          "🌱": 0.02,
+          "🍞": 0.04,
+          "💾": 0.03,
+          "🚢": 0.04,
+          "🔍": 0.03,
+          "🪞": 0.04,
+          "✨": 0.02,
+          "💎": 0.03
+        },
+        "lindblad_outgoing": {
+          "💸": 0.02,
+          "📦": 0.05
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💸",
+            "gate": "🚀",
+            "rate": 0.03,
+            "power": 0.8,
+            "inverse": true,
+            "comment": "Wealth bleeds to debt when trade slows"
+          }
+        ]
+      },
+      "⚙️": {
+        "self_energy": 0.15,
+        "lindblad_outgoing": {
+          "🔧": 0.02
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "GildedRot": [
+          "💰"
+        ],
+        "BureaucraticAbyss": [
+          "📜"
+        ]
+      },
+      "outgoing": {
+        "BureaucraticAbyss": [
+          "💸",
+          "👥"
+        ]
+      }
+    }
+  },
+  {
+    "name": "EchoingChasm",
+    "description": "A labyrinth of resonant canyons where forgotten songs unravel reality. Faint bells toll in the wind, webs of memory trap the unwary, and identities fade into silent graves under a perpetual twilight. The acoustics here amplify dissolution—what the Chorus sings, the walls remember and repeat until meaning erodes.",
+    "image_path": "res://Assets/Biomes/EchoingChasm.png",
+    "music_path": "res://Assets/Audio/Music/Echoing Chasm.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {
+        "x": 0.4,
+        "y": 0.35
+      },
+      {
+        "x": 0.6,
+        "y": 0.35
+      },
+      {
+        "x": 0.5,
+        "y": 0.5
+      },
+      {
+        "x": 0.5,
+        "y": 0.65
+      }
+    ],
+    "emojis": [
+      "🎶",
+      "🔔",
+      "🫥",
+      "🪦",
+      "🕸",
+      "🕯",
+      "🔇",
+      "🌑",
+      "💫",
+      "🌀"
+    ],
+    "native_factions": [
+      "Chorus of Oblivion",
+      "Memory Weavers",
+      "Void Troubadours"
+    ],
+    "tags": [
+      "acoustic",
+      "dissolution",
+      "ethereal",
+      "memory"
+    ],
+    "icon_components": {
+      "🔇": {
+        "self_energy": 0.1,
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.1,
+          "amplitude": 0.8,
+          "phase": 0.0,
+          "comment": "Waves of silence that amplify dissolution"
+        },
+        "lindblad_incoming": {
+          "🤫": 0.03
+        }
+      },
+      "🎶": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🫥": 0.05
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🫥",
+            "gate": "🔇",
+            "rate": 0.08,
+            "power": 1.3,
+            "inverse": true,
+            "comment": "Songs dissolve identity when silence ebbs"
+          }
+        ]
+      },
+      "🔔": {
+        "self_energy": 0.2
+      },
+      "🫥": {
+        "self_energy": -0.1,
+        "lindblad_incoming": {
+          "🎶": 0.05,
+          "🕸": 0.03
+        },
+        "lindblad_outgoing": {
+          "👤": 0.04,
+          "🪦": 0.04
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🪦"
+        }
+      },
+      "🪦": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🫥": 0.04
+        }
+      },
+      "🕸": {
+        "self_energy": 0.15,
+        "lindblad_outgoing": {
+          "🫥": 0.03
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🫥",
+            "gate": "🎶",
+            "rate": 0.04,
+            "power": 1.0,
+            "inverse": false,
+            "comment": "Webs trap the song-dissolved"
+          }
+        ]
+      },
+      "🕯": {
+        "self_energy": 0.2,
+        "decay": {
+          "rate": 0.035,
+          "target": "🗑"
+        },
+        "lindblad_incoming": {
+          "🔥": 0.03
+        }
+      },
+      "🌑": {
+        "self_energy": -0.1,
+        "lindblad_incoming": {
+          "⛓": 0.02,
+          "💀": 0.03
+        },
+        "lindblad_outgoing": {
+          "⚫": 0.01
+        }
+      },
+      "💫": {
+        "self_energy": 0.15,
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.4,
+          "amplitude": 0.15,
+          "phase": 1.57
+        },
+        "lindblad_incoming": {
+          "🎼": 0.04,
+          "✨": 0.04
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🗑"
+        }
+      },
+      "🌀": {
+        "self_energy": 0.2,
+        "decay": {
+          "rate": 0.0,
+          "target": "⚫"
+        },
+        "lindblad_incoming": {
+          "🌞": 0.03
+        }
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "HorizonFracture": [
+          "🌀",
+          "⚫"
+        ]
+      },
+      "outgoing": {
+        "HorizonFracture": [
+          "🫥"
+        ]
+      }
+    }
+  },
+  {
+    "name": "FungalNetworks",
+    "description": "Networked fungal colonies thrive in moonlight and moisture, spreading through insects and spores, cycling between health and death.",
+    "image_path": "res://Assets/Biomes/Fungal_Networks.png",
+    "music_path": "res://Assets/Audio/Music/Fungal Lattice Symphony.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {
+        "x": 0.5,
+        "y": 0.4
+      },
+      {
+        "x": 0.58,
+        "y": 0.5
+      },
+      {
+        "x": 0.5,
+        "y": 0.6
+      },
+      {
+        "x": 0.42,
+        "y": 0.5
+      }
+    ],
+    "emojis": [
+      "🦗",
+      "🐜",
+      "🍄",
+      "🦠",
+      "🧫",
+      "🍂",
+      "🌙",
+      "☀"
+    ],
+    "native_factions": [],
+    "tags": [
+      "fungal",
+      "network",
+      "microbial"
+    ],
+    "icon_components": {
+      "🦠": {
+        "lindblad_outgoing": {
+          "🌫": 0.06,
+          "💀": 0.05
+        },
+        "lindblad_incoming": {
+          "🧫": 0.07,
+          "🌾": 0.06,
+          "🐇": 0.08,
+          "🐝": 0.1
+        },
+        "decay": {
+          "rate": 0.15,
+          "target": "🍂"
+        }
+      },
+      "🧫": {
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        },
+        "lindblad_incoming": {
+          "🧪": 0.03
+        }
+      },
+      "🐜": {
+        "lindblad_incoming": {
+          "🧫": 0.04
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "💀"
+        }
+      },
+      "🦗": {
+        "lindblad_incoming": {
+          "♻️": 0.03,
+          "🧫": 0.05
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "💀"
+        },
+        "lindblad_outgoing": {
+          "🚫": 0.04
+        }
+      },
+      "🍄": {
+        "lindblad_outgoing": {
+          "💀": 0.01
+        },
+        "lindblad_incoming": {
+          "🌙": 0.06,
+          "🍂": 0.12,
+          "💀": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🍂"
+        }
+      },
+      "🍂": {
+        "lindblad_incoming": {
+          "💀": 0.08,
+          "🌲": 0.08,
+          "🌿": 0.15
+        },
+        "lindblad_outgoing": {
+          "⛰": 0.005
+        }
+      }
+    }
+  },
+  {
+    "name": "HorizonFracture",
+    "description": "Fractured rifts at the world's edge, where planets dissolve into swirling voids. Boundaries blur between something and nothing, with fleeting stars guiding nomads through probabilistic paths amid decaying horizons. The Cartographers chart what they can; the Black Horizon claims the rest.",
+    "image_path": "res://Assets/Biomes/HorizonFracture.png",
+    "music_path": "res://Assets/Audio/Music/Horizon Fracture.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {
+        "x": 0.5,
+        "y": 0.3
+      },
+      {
+        "x": 0.35,
+        "y": 0.5
+      },
+      {
+        "x": 0.65,
+        "y": 0.5
+      },
+      {
+        "x": 0.5,
+        "y": 0.7
+      }
+    ],
+    "emojis": [
+      "🕳",
+      "🪐",
+      "🌀",
+      "⚫",
+      "🧭",
+      "📍",
+      "🗺",
+      "🔭",
+      "🌠",
+      "🫥"
+    ],
+    "native_factions": [
+      "Black Horizon",
+      "Cartographers of the Impossible"
+    ],
+    "tags": [
+      "boundary",
+      "cosmic",
+      "nomadic",
+      "probabilistic"
+    ],
+    "icon_components": {
+      "🌠": {
+        "self_energy": 0.1,
+        "is_driver": true,
+        "driver": {
+          "type": "pulse",
+          "frequency": 0.05,
+          "amplitude": 0.5,
+          "phase": 0.0,
+          "comment": "Shooting stars pulse irregularly, guiding navigation"
+        },
+        "lindblad_incoming": {
+          "💫": 0.03
+        },
+        "decay": {
+          "rate": 0.08,
+          "target": "🗑"
+        }
+      },
+      "🕳": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "⚫": 0.02,
+          "🪐": 0.04
+        }
+      },
+      "🪐": {
+        "self_energy": 0.1,
+        "lindblad_outgoing": {
+          "🕳": 0.03
+        },
+        "decay": {
+          "rate": 0.0,
+          "target": "🕳"
+        }
+      },
+      "🌀": {
+        "self_energy": 0.2,
+        "decay": {
+          "rate": 0.0,
+          "target": "⚫"
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🕳",
+            "gate": "⚫",
+            "rate": 0.03,
+            "power": 1.2,
+            "inverse": false,
+            "comment": "Vortices feed the void when darkness is high"
+          }
+        ],
+        "lindblad_incoming": {
+          "🌞": 0.03
+        }
+      },
+      "⚫": {
+        "self_energy": 0.4,
+        "lindblad_outgoing": {
+          "✨": 0.04,
+          "🌑": 0.01
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🕳",
+            "gate": "🌠",
+            "rate": 0.02,
+            "power": 0.8,
+            "inverse": true,
+            "comment": "Void expands when stars don't guide"
+          }
+        ]
+      },
+      "🧭": {
+        "self_energy": 0.3,
+        "lindblad_outgoing": {
+          "📍": 0.03
+        }
+      },
+      "📍": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "🧭": 0.06
+        },
+        "lindblad_outgoing": {
+          "🗺": 0.03
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🗺": {
+        "self_energy": 0.25,
+        "lindblad_incoming": {
+          "📍": 0.06,
+          "🔭": 0.08,
+          "📡": 0.02,
+          "🧩": 0.03
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        }
+      },
+      "🔭": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🗺": 0.04
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "📍",
+            "gate": "🌠",
+            "rate": 0.05,
+            "power": 1.0,
+            "inverse": false,
+            "comment": "Telescopes find markers when stars pulse"
+          }
+        ]
+      },
+      "🫥": {
+        "self_energy": -0.1,
+        "lindblad_incoming": {
+          "🎶": 0.05,
+          "🕸": 0.03
+        },
+        "lindblad_outgoing": {
+          "👤": 0.04
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🪦"
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🕳",
+            "gate": "⚫",
+            "rate": 0.03,
+            "power": 1.0,
+            "inverse": false,
+            "comment": "Dissolved identities feed the void"
+          }
+        ]
+      }
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "EchoingChasm": [
+          "🫥"
+        ]
+      },
+      "outgoing": {
+        "EchoingChasm": [
+          "🌀",
+          "⚫"
+        ]
+      }
+    }
+  },
+  {
     "name": "StarterForest",
     "description": "A quiet forest edge where celestial cycles drive life. Sun and moon oscillate above while creatures and plants dance between survival and growth.",
-    "image_path": "res://assets/biomes/starter_forest.png",
-    "music_path": "res://assets/music/starter_forest.ogg",
+    "image_path": "res://Assets/Biomes/Starter_Forest.png",
+    "music_path": "res://Assets/Audio/Music/Peripheral Arbor.mp3",
     "discovered": true,
     "plot_layout": [
       {
@@ -129,195 +938,10 @@
     }
   },
   {
-    "name": "Village",
-    "description": "A farming settlement where fire and ice oscillate in hearths, labor produces bread, and gears grind flour into commerce.",
-    "image_path": "res://assets/biomes/village.png",
-    "music_path": "res://assets/music/village.ogg",
-    "discovered": true,
-    "plot_layout": [
-      {
-        "x": 0.4,
-        "y": 0.4
-      },
-      {
-        "x": 0.6,
-        "y": 0.4
-      },
-      {
-        "x": 0.6,
-        "y": 0.6
-      },
-      {
-        "x": 0.4,
-        "y": 0.6
-      }
-    ],
-    "emojis": [
-      "🔥",
-      "❄️",
-      "👥",
-      "🍞",
-      "⚙️",
-      "💨",
-      "💰",
-      "🧺"
-    ],
-    "native_factions": [],
-    "tags": [
-      "starter",
-      "civilization",
-      "domestic"
-    ],
-    "icon_components": {
-      "👥": {
-        "lindblad_outgoing": {
-          "💸": 0.02,
-          "💀": 0.02
-        }
-      },
-      "🔥": {
-        "lindblad_incoming": {
-          "🧨": 0.12,
-          "🍞": 0.1,
-          "🕯": 0.02,
-          "🪵": 0.05,
-          "🌋": 0.3,
-          "🌬": 0.05,
-          "🍂": 0.1
-        },
-        "lindblad_outgoing": {
-          "🪨": 0.03,
-          "🍂": 0.08
-        },
-        "decay": {
-          "rate": 0.1,
-          "target": "🍂"
-        }
-      },
-      "💰": {
-        "lindblad_incoming": {
-          "🌱": 0.02,
-          "🍞": 0.04,
-          "💾": 0.03,
-          "🚢": 0.04,
-          "🔍": 0.03,
-          "🪞": 0.04,
-          "✨": 0.02,
-          "💎": 0.03
-        },
-        "lindblad_outgoing": {
-          "📦": 0.05
-        }
-      },
-      "🧺": {
-        "lindblad_incoming": {
-          "🍞": 0.03
-        },
-        "decay": {
-          "rate": 0.01,
-          "target": "🍂"
-        }
-      },
-      "🍞": {
-        "lindblad_incoming": {
-          "💨": 0.08,
-          "🔥": 0.05
-        }
-      },
-      "💨": {
-        "lindblad_incoming": {
-          "🌾": 0.05
-        }
-      }
-    }
-  },
-  {
-    "name": "BioticFlux",
-    "description": "The quantum heart of the ecosystem. Sun and moon cycle through wheat and mushroom growth, while matter flows through detritus and death.",
-    "image_path": "res://assets/biomes/biotic_flux.png",
-    "music_path": "res://assets/music/biotic_flux.ogg",
-    "discovered": false,
-    "plot_layout": [
-      {
-        "x": 0.38,
-        "y": 0.5
-      },
-      {
-        "x": 0.46,
-        "y": 0.42
-      },
-      {
-        "x": 0.54,
-        "y": 0.58
-      },
-      {
-        "x": 0.62,
-        "y": 0.5
-      }
-    ],
-    "emojis": [
-      "☀",
-      "🌙",
-      "🌾",
-      "🍄",
-      "🍂",
-      "💀"
-    ],
-    "native_factions": [],
-    "tags": [
-      "ecosystem",
-      "natural",
-      "quantum"
-    ],
-    "icon_components": {
-      "💀": {
-        "lindblad_outgoing": {
-          "⚱": 0.05
-        }
-      },
-      "🌾": {
-        "lindblad_outgoing": {
-          "♻️": 0.06
-        },
-        "lindblad_incoming": {
-          "🍂": 0.02
-        },
-        "decay": {
-          "rate": 0.02,
-          "target": "🍂"
-        }
-      },
-      "🍄": {
-        "lindblad_outgoing": {
-          "💀": 0.01
-        },
-        "lindblad_incoming": {
-          "🌙": 0.06,
-          "🍂": 0.12,
-          "💀": 0.03
-        },
-        "decay": {
-          "rate": 0.03,
-          "target": "🍂"
-        }
-      },
-      "🍂": {
-        "lindblad_incoming": {
-          "💀": 0.08,
-          "🌲": 0.08,
-          "🌿": 0.15
-        },
-        "lindblad_outgoing": {
-          "⛰": 0.005
-        }
-      }
-    }
-  },
-  {
     "name": "StellarForges",
     "description": "Industrial space. Energy cycles through power and storage while production shifts between active fabrication and raw materials, outputting rockets and saucers.",
-    "image_path": "res://assets/biomes/stellar_forges.png",
-    "music_path": "res://assets/music/stellar_forges.ogg",
+    "image_path": "res://Assets/Biomes/Stellar_Forges.png",
+    "music_path": "res://Assets/Audio/Music/Black Horizon Whisper.mp3",
     "discovered": false,
     "plot_layout": [
       {
@@ -393,115 +1017,103 @@
     }
   },
   {
-    "name": "FungalNetworks",
-    "description": "Networked fungal colonies thrive in moonlight and moisture, spreading through insects and spores, cycling between health and death.",
-    "image_path": "res://assets/biomes/fungal_networks.png",
-    "music_path": "res://assets/music/fungal_networks.ogg",
-    "discovered": false,
+    "name": "Village",
+    "description": "A farming settlement where fire and ice oscillate in hearths, labor produces bread, and gears grind flour into commerce.",
+    "image_path": "res://Assets/Biomes/Village.png",
+    "music_path": "res://Assets/Audio/Music/Heisenberg Township, Poppenoff-ulation.mp3",
+    "discovered": true,
     "plot_layout": [
       {
-        "x": 0.5,
+        "x": 0.4,
         "y": 0.4
       },
       {
-        "x": 0.58,
-        "y": 0.5
+        "x": 0.6,
+        "y": 0.4
       },
       {
-        "x": 0.5,
+        "x": 0.6,
         "y": 0.6
       },
       {
-        "x": 0.42,
-        "y": 0.5
+        "x": 0.4,
+        "y": 0.6
       }
     ],
     "emojis": [
-      "🦗",
-      "🐜",
-      "🍄",
-      "🦠",
-      "🧫",
-      "🍂",
-      "🌙",
-      "☀"
+      "🔥",
+      "❄️",
+      "👥",
+      "🍞",
+      "⚙️",
+      "💨",
+      "💰",
+      "🧺"
     ],
     "native_factions": [],
     "tags": [
-      "fungal",
-      "network",
-      "microbial"
+      "starter",
+      "civilization",
+      "domestic"
     ],
     "icon_components": {
-      "🦠": {
+      "👥": {
         "lindblad_outgoing": {
-          "🌫": 0.06,
-          "💀": 0.05
-        },
+          "💸": 0.02
+        }
+      },
+      "🔥": {
         "lindblad_incoming": {
-          "🧫": 0.07,
-          "🌾": 0.06,
-          "🐇": 0.08,
-          "🐝": 0.1
+          "🧨": 0.12,
+          "🍞": 0.1,
+          "🕯": 0.02,
+          "🪵": 0.05,
+          "🌋": 0.3,
+          "🌬": 0.05,
+          "🍂": 0.1
+        },
+        "lindblad_outgoing": {
+          "🪨": 0.03,
+          "🍂": 0.08
         },
         "decay": {
-          "rate": 0.15,
+          "rate": 0.1,
           "target": "🍂"
         }
       },
-      "🧫": {
-        "decay": {
-          "rate": 0.025,
-          "target": "🗑"
-        },
+      "💰": {
         "lindblad_incoming": {
-          "🧪": 0.03
-        }
-      },
-      "🐜": {
-        "lindblad_incoming": {
-          "🧫": 0.04
-        },
-        "decay": {
-          "rate": 0.03,
-          "target": "💀"
-        }
-      },
-      "🦗": {
-        "lindblad_incoming": {
-          "♻️": 0.03,
-          "🧫": 0.05
-        },
-        "decay": {
-          "rate": 0.04,
-          "target": "💀"
+          "🌱": 0.02,
+          "🍞": 0.04,
+          "💾": 0.03,
+          "🚢": 0.04,
+          "🔍": 0.03,
+          "🪞": 0.04,
+          "✨": 0.02,
+          "💎": 0.03
         },
         "lindblad_outgoing": {
-          "🚫": 0.04
+          "📦": 0.05
         }
       },
-      "🍄": {
-        "lindblad_outgoing": {
-          "💀": 0.01
-        },
+      "🧺": {
         "lindblad_incoming": {
-          "🌙": 0.06,
-          "🍂": 0.12,
-          "💀": 0.03
+          "🍞": 0.03
         },
         "decay": {
-          "rate": 0.03,
+          "rate": 0.01,
           "target": "🍂"
         }
       },
-      "🍂": {
+      "🍞": {
         "lindblad_incoming": {
-          "💀": 0.08,
-          "🌲": 0.08,
-          "🌿": 0.15
-        },
-        "lindblad_outgoing": {
-          "⛰": 0.005
+          "💨": 0.08,
+          "🔥": 0.05
+        }
+      },
+      "💨": {
+        "lindblad_incoming": {
+          "🌾": 0.05
         }
       }
     }
@@ -509,8 +1121,8 @@
   {
     "name": "VolcanicWorlds",
     "description": "Extreme geology. Fire forges stone into crystal while mining and steam shape the environment into glowing vitality.",
-    "image_path": "res://assets/biomes/volcanic_worlds.png",
-    "music_path": "res://assets/music/volcanic_worlds.ogg",
+    "image_path": "res://Assets/Biomes/Volcanic_Worlds.png",
+    "music_path": "res://Assets/Audio/Music/Yeast Prophet_s Eclipse.mp3",
     "discovered": false,
     "plot_layout": [
       {
@@ -545,20 +1157,6 @@
       "harsh"
     ],
     "icon_components": {
-      "✨": {
-        "lindblad_outgoing": {
-          "⚫": 0.04
-        },
-        "lindblad_incoming": {
-          "⚫": 0.02,
-          "🕳": 0.03,
-          "💎": 0.02
-        },
-        "decay": {
-          "rate": 0.05,
-          "target": "🌫"
-        }
-      },
       "🌫": {
         "lindblad_incoming": {
           "🔥": 0.09
@@ -601,6 +1199,17 @@
           "target": "🗑"
         }
       },
+      "✨": {
+        "lindblad_incoming": {
+          "⚫": 0.02,
+          "🕳": 0.03,
+          "💎": 0.02
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🌫"
+        }
+      },
       "💎": {
         "lindblad_incoming": {
           "🧊": 0.02,
@@ -610,6 +1219,1265 @@
         "decay": {
           "rate": 0.005,
           "target": "🪨"
+        }
+      }
+    }
+  },
+  {
+    "name": "TidalPools",
+    "description": "A liminal shore where cosmic tides expose and submerge quantum states in eternal rhythm. The spiral pools are natural measurement apparatuses—when the moon floods them, coherence spreads; when it drains, probability collapses and the stranded reveal their fates. The environment doesn't choose sides. It simply processes.",
+    "image_path": "res://Assets/Biomes/Tidal_Pools.png",
+    "music_path": "res://Assets/Audio/Music/Tidal Pools.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {
+        "x": 0.35,
+        "y": 0.45
+      },
+      {
+        "x": 0.5,
+        "y": 0.35
+      },
+      {
+        "x": 0.65,
+        "y": 0.45
+      },
+      {
+        "x": 0.5,
+        "y": 0.6
+      }
+    ],
+    "emojis": [
+      "🌊",
+      "🪨",
+      "🌀",
+      "🦀",
+      "🐙",
+      "🪸",
+      "🐚",
+      "🧂",
+      "✨",
+      "🐠",
+      "👁",
+      "📜"
+    ],
+    "native_factions": [
+      "The Submersed",
+      "Vortex Readers",
+      "Salt Scribes"
+    ],
+    "tags": [
+      "tidal",
+      "measurement",
+      "coastal",
+      "quantum"
+    ],
+    "icon_components": {
+      "🌙": {
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.08,
+          "amplitude": 0.6,
+          "phase": 0.0,
+          "targets": {
+            "🌊": 1.0,
+            "🪨": -1.0
+          }
+        }
+      },
+      "🌊": {
+        "self_energy": 0.1,
+        "lindblad_incoming": {
+          "💧": 0.03
+        }
+      },
+      "🪨": {
+        "self_energy": 0.15,
+        "lindblad_incoming": {
+          "⛰": 0.02
+        },
+        "lindblad_outgoing": {
+          "💎": 0.01
+        }
+      },
+      "🌀": {
+        "self_energy": 0.0,
+        "gated_lindblad_source": [
+          {
+            "target": "✨",
+            "gate": "🪨",
+            "rate": 0.15,
+            "power": 1.5,
+            "inverse": false
+          }
+        ],
+        "lindblad_incoming": {
+          "🌞": 0.03
+        }
+      },
+      "🦀": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🐙": 0.04
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🐚",
+            "gate": "🪨",
+            "rate": 0.06,
+            "power": 1.2,
+            "inverse": false
+          }
+        ],
+        "lindblad_incoming": {
+          "🪸": 0.025,
+          "🌊": 0.015
+        }
+      },
+      "🐙": {
+        "self_energy": 0.3
+      },
+      "🪸": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🐚": 0.02
+        },
+        "lindblad_incoming": {
+          "🌊": 0.02
+        }
+      },
+      "🐚": {
+        "self_energy": -0.1,
+        "gated_lindblad_source": [
+          {
+            "target": "🦀",
+            "gate": "🌊",
+            "rate": 0.03,
+            "power": 0.8,
+            "inverse": false
+          },
+          {
+            "target": "🪸",
+            "gate": "🌊",
+            "rate": 0.02,
+            "power": 1.0,
+            "inverse": false
+          }
+        ]
+      },
+      "🧂": {
+        "self_energy": 0.3,
+        "decay": {
+          "rate": 0.015,
+          "target": "🪨"
+        }
+      },
+      "🌊_evap": {
+        "gated_lindblad_source": [
+          {
+            "target": "🧂",
+            "gate": "🪨",
+            "rate": 0.08,
+            "power": 1.0,
+            "inverse": false
+          }
+        ]
+      },
+      "✨": {
+        "self_energy": 0.35,
+        "lindblad_outgoing": {
+          "🗑": 0.12
+        },
+        "decay": {
+          "rate": 0.1,
+          "target": "🗑"
+        },
+        "lindblad_incoming": {
+          "⚫": 0.02,
+          "🕳": 0.03,
+          "💎": 0.02
+        }
+      },
+      "🐠": {
+        "self_energy": 0.15,
+        "lindblad_outgoing": {
+          "🐙": 0.05
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🐚",
+            "gate": "🪨",
+            "rate": 0.08,
+            "power": 1.0,
+            "inverse": false
+          }
+        ],
+        "lindblad_incoming": {
+          "🌊": 0.02
+        }
+      },
+      "💧": {},
+      "📜": {
+        "lindblad_outgoing": {
+          "🏢": 0.05,
+          "📘": 0.04
+        },
+        "lindblad_incoming": {
+          "⚜": 0.02,
+          "🏰": 0.07
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      }
+    },
+    "cross_biome_flows": {}
+  },
+  {
+    "name": "BureaucraticAbyss",
+    "description": "The machine that processes billions. Not evil—evil requires intention. Simply thorough. Edicts descend from the Gilded Rot above, pass through endless functionaries, and eventually produce outcomes: transfers, terminations, deaths. The archives grow. The graves fill. The signatures never stop.",
+    "image_path": "res://Assets/Biomes/BureaucraticAbyss.png",
+    "music_path": "res://Assets/Audio/Music/Bureaucratic Abyss.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {
+        "x": 0.4,
+        "y": 0.4
+      },
+      {
+        "x": 0.6,
+        "y": 0.4
+      },
+      {
+        "x": 0.6,
+        "y": 0.6
+      },
+      {
+        "x": 0.4,
+        "y": 0.6
+      }
+    ],
+    "emojis": [
+      "📜",
+      "🖋",
+      "🗃",
+      "♟",
+      "👥",
+      "⛓",
+      "🕰",
+      "🪦",
+      "💀",
+      "📖"
+    ],
+    "native_factions": [
+      "Ink Wardens",
+      "Void Serfs",
+      "Chronicle Keepers"
+    ],
+    "tags": [
+      "administrative",
+      "grinding",
+      "processing",
+      "machine"
+    ],
+    "icon_components": {
+      "🕰": {
+        "self_energy": 0.15,
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.03,
+          "amplitude": 0.4,
+          "phase": 0.0
+        }
+      },
+      "📜": {
+        "self_energy": 0.2,
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🗃",
+            "gate": "🖋",
+            "rate": 0.08,
+            "power": 1.0,
+            "inverse": false
+          },
+          {
+            "target": "⛓",
+            "gate": "🕰",
+            "rate": 0.04,
+            "power": 1.0,
+            "inverse": false
+          }
+        ],
+        "lindblad_incoming": {
+          "⚜": 0.08,
+          "🏰": 0.07
+        },
+        "lindblad_outgoing": {
+          "🏢": 0.05,
+          "📘": 0.04
+        }
+      },
+      "🖋": {
+        "self_energy": 0.15
+      },
+      "🗃": {
+        "self_energy": -0.1,
+        "lindblad_outgoing": {
+          "🪦": 0.02
+        }
+      },
+      "♟": {
+        "self_energy": 0.2,
+        "decay": {
+          "rate": 0.02,
+          "target": "⚫"
+        },
+        "lindblad_incoming": {
+          "👥": 0.02
+        }
+      },
+      "👥": {
+        "self_energy": 0.05,
+        "lindblad_outgoing": {
+          "🗃": 0.03,
+          "💸": 0.02
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "💀",
+            "gate": "⛓",
+            "rate": 0.05,
+            "power": 1.3,
+            "inverse": false
+          }
+        ]
+      },
+      "⛓": {
+        "self_energy": 0.25,
+        "lindblad_outgoing": {
+          "🗑": 0.04,
+          "🔓": 0.04
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "🪦": {
+        "self_energy": 0.15,
+        "lindblad_outgoing": {
+          "💀": 0.01
+        }
+      },
+      "💀": {
+        "self_energy": 0.1,
+        "lindblad_outgoing": {
+          "⚱": 0.05
+        }
+      },
+      "📖": {
+        "self_energy": 0.25
+      },
+      "🩸": {
+        "self_energy": 0.1,
+        "lindblad_outgoing": {
+          "⚜": 0.04
+        }
+      },
+      "⚜": {}
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "GildedRot": [
+          "📜",
+          "⚜"
+        ]
+      },
+      "outgoing": {
+        "GildedRot": [
+          "🩸",
+          "💀"
+        ]
+      }
+    }
+  },
+  {
+    "name": "GildedRot",
+    "description": "The eternal party above the grinding machine. Wine flows, masks smile, roses bloom in impossible colors. The aristocracy has danced here for so long they've forgotten there's a below—or perhaps they remember perfectly and find it amusing. Blood-tribute rises through hidden channels, transformed into vintage. Edicts descend like party favors, each one a death sentence wrapped in calligraphy.",
+    "image_path": "res://Assets/Biomes/GildedRot.png",
+    "music_path": "res://Assets/Audio/Music/Afterbirth Arbor.mp3",
+    "discovered": false,
+    "plot_layout": [
+      {
+        "x": 0.35,
+        "y": 0.35
+      },
+      {
+        "x": 0.65,
+        "y": 0.35
+      },
+      {
+        "x": 0.5,
+        "y": 0.55
+      },
+      {
+        "x": 0.5,
+        "y": 0.4
+      }
+    ],
+    "emojis": [
+      "👑",
+      "⚜",
+      "🍷",
+      "🌹",
+      "🎭",
+      "💃",
+      "🦅",
+      "🩸",
+      "📜",
+      "🥀"
+    ],
+    "native_factions": [
+      "The Laughing Court",
+      "Rose Wardens"
+    ],
+    "tags": [
+      "aristocracy",
+      "decadence",
+      "beauty",
+      "cruelty"
+    ],
+    "icon_components": {
+      "🌙": {
+        "is_driver": true,
+        "driver": {
+          "type": "sine",
+          "frequency": 0.06,
+          "amplitude": 0.5,
+          "phase": 0.0,
+          "targets": {
+            "🎭": 0.8,
+            "💃": 0.7,
+            "🍷": 0.6
+          }
+        }
+      },
+      "👑": {
+        "self_energy": 0.7
+      },
+      "⚜": {
+        "self_energy": 0.6,
+        "lindblad_outgoing": {
+          "📜": 0.06
+        },
+        "lindblad_incoming": {
+          "💰": 0.02,
+          "🩸": 0.02,
+          "⚫": 0.02
+        },
+        "decay": {
+          "rate": 0.002,
+          "target": "🏚"
+        }
+      },
+      "🍷": {
+        "self_energy": 0.25,
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "📜",
+            "gate": "👑",
+            "rate": 0.05,
+            "power": 1.0,
+            "inverse": false
+          }
+        ],
+        "lindblad_incoming": {
+          "🩸": 0.04,
+          "💰": 0.03
+        },
+        "lindblad_outgoing": {
+          "💀": 0.01
+        }
+      },
+      "🌹": {
+        "self_energy": 0.25,
+        "lindblad_outgoing": {
+          "🥀": 0.03,
+          "🩸": 0.01
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🍂"
+        },
+        "gated_lindblad_source": [
+          {
+            "target": "🥀",
+            "gate": "🩸",
+            "rate": 0.04,
+            "power": 0.8,
+            "inverse": true
+          }
+        ],
+        "lindblad_incoming": {
+          "🍷": 0.02
+        }
+      },
+      "🎭": {
+        "self_energy": 0.3
+      },
+      "💃": {
+        "self_energy": 0.2
+      },
+      "🦅": {
+        "self_energy": 0.35,
+        "lindblad_incoming": {
+          "💀": 0.03,
+          "🐇": 0.12
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "💀"
+        }
+      },
+      "🩸": {
+        "self_energy": 0.1,
+        "gated_lindblad_source": [
+          {
+            "target": "🩸",
+            "gate": "🎭",
+            "rate": 0.06,
+            "power": 1.2,
+            "inverse": false,
+            "source_override": "💀"
+          }
+        ],
+        "lindblad_incoming": {
+          "💀": 0.05,
+          "🫀": 0.04,
+          "⚔": 0.03
+        },
+        "lindblad_outgoing": {
+          "💀": 0.04
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
+        }
+      },
+      "📜": {
+        "self_energy": 0.2,
+        "lindblad_outgoing": {
+          "🏢": 0.05,
+          "📘": 0.04
+        },
+        "lindblad_incoming": {
+          "⚜": 0.02,
+          "🏰": 0.07
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🥀": {
+        "self_energy": 0.1,
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "😂": {
+        "self_energy": 0.35
+      },
+      "💀": {}
+    },
+    "cross_biome_flows": {
+      "incoming": {
+        "BureaucraticAbyss": [
+          "🩸",
+          "💀"
+        ]
+      },
+      "outgoing": {
+        "BureaucraticAbyss": [
+          "📜",
+          "⚜"
+        ]
+      }
+    }
+  },
+  {
+    "name": "_orphan_lindblads",
+    "description": "Collected Lindblad terms for emojis not found in any biome",
+    "emojis": [
+      "🧨",
+      "⭐",
+      "💧",
+      "📡",
+      "📶",
+      "🔊",
+      "🔌",
+      "📒",
+      "🧵",
+      "🏚️",
+      "📦",
+      "📋",
+      "🤲",
+      "🪵",
+      "⚔",
+      "🧶",
+      "🗣",
+      "🧤",
+      "♻️",
+      "everything",
+      "🔧",
+      "⚱",
+      "🚩",
+      "🫧",
+      "🧩",
+      "✊",
+      "🏷️",
+      "🥣",
+      "🧿",
+      "🧬",
+      "📿",
+      "🧘",
+      "🐑",
+      "🛡",
+      "🪢",
+      "🚔",
+      "👘",
+      "🐂",
+      "🐻",
+      "📊",
+      "📘",
+      "📼",
+      "🏛",
+      "🧱",
+      "💱",
+      "🐝",
+      "🚫",
+      "🪝",
+      "🔓",
+      "🛰",
+      "🎵",
+      "💳",
+      "🏮",
+      "⚖",
+      "🗑",
+      "📐",
+      "🧮",
+      "🧰",
+      "👤",
+      "🫙",
+      "💉",
+      "🏰",
+      "🪤",
+      "🧪",
+      "🪣",
+      "🏭",
+      "🏺",
+      "🚧",
+      "🕴️",
+      "🩺",
+      "🛶",
+      "🔨",
+      "🧊",
+      "🪞",
+      "💊",
+      "🧲",
+      "🪛",
+      "🧷"
+    ],
+    "icon_components": {
+      "🧨": {
+        "lindblad_outgoing": {
+          "🔥": 0.1
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🔥"
+        }
+      },
+      "⭐": {
+        "lindblad_outgoing": {
+          "🕳": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🕳"
+        }
+      },
+      "💧": {
+        "lindblad_outgoing": {
+          "🔥": 0.08
+        },
+        "lindblad_incoming": {
+          "🌧": 0.05,
+          "♻️": 0.04
+        }
+      },
+      "📡": {
+        "lindblad_outgoing": {
+          "🔇": 0.05
+        },
+        "lindblad_incoming": {
+          "🔊": 0.04,
+          "👘": 0.02
+        },
+        "decay": {
+          "rate": 0.008,
+          "target": "🗑"
+        }
+      },
+      "📶": {
+        "lindblad_outgoing": {
+          "📵": 0.04,
+          "🧩": 0.02
+        },
+        "lindblad_incoming": {
+          "📡": 0.03,
+          "📻": 0.04
+        },
+        "decay": {
+          "rate": 0.06,
+          "target": "🗑"
+        }
+      },
+      "🔊": {
+        "lindblad_outgoing": {
+          "🔇": 0.06
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🗑"
+        }
+      },
+      "🔌": {
+        "lindblad_outgoing": {
+          "⚡": 0.03
+        },
+        "lindblad_incoming": {
+          "♻️": 0.04
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "♻️"
+        }
+      },
+      "📒": {
+        "lindblad_outgoing": {
+          "🗑": 0.005
+        },
+        "lindblad_incoming": {
+          "📘": 0.03
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "🧵": {
+        "lindblad_outgoing": {
+          "👘": 0.03
+        },
+        "lindblad_incoming": {
+          "🧬": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🏚️": {
+        "lindblad_outgoing": {
+          "🏛️": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🏛️"
+        }
+      },
+      "📦": {
+        "lindblad_outgoing": {
+          "💰": 0.04,
+          "🚛": 0.04
+        },
+        "lindblad_incoming": {
+          "💊": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "📋": {
+        "lindblad_outgoing": {
+          "📘": 0.02
+        },
+        "lindblad_incoming": {
+          "🛂": 0.03,
+          "🔬": 0.04
+        },
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        }
+      },
+      "🤲": {
+        "lindblad_outgoing": {
+          "🍼": 0.02
+        }
+      },
+      "🪵": {
+        "lindblad_outgoing": {
+          "🔥": 0.04
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "⚔": {
+        "lindblad_outgoing": {
+          "💀": 0.02
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🧶": {
+        "lindblad_outgoing": {
+          "🧵": 0.03
+        }
+      },
+      "🗣": {
+        "lindblad_outgoing": {
+          "📶": 0.03
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🗑"
+        }
+      },
+      "🧤": {
+        "lindblad_outgoing": {
+          "💀": 0.02
+        },
+        "lindblad_incoming": {
+          "🗑": 0.05
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "💀"
+        }
+      },
+      "♻️": {
+        "lindblad_outgoing": {
+          "🗑": 0.03
+        }
+      },
+      "everything": {
+        "lindblad_outgoing": {
+          "⚫": 0.01
+        }
+      },
+      "🔧": {
+        "lindblad_incoming": {
+          "⚙": 0.02
+        }
+      },
+      "⚱": {
+        "lindblad_incoming": {
+          "💀": 0.09
+        }
+      },
+      "🚩": {
+        "lindblad_incoming": {
+          "✊": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🫧": {
+        "lindblad_incoming": {
+          "🕳": 0.04
+        },
+        "decay": {
+          "rate": 0.05,
+          "target": "🗑"
+        }
+      },
+      "🧩": {
+        "lindblad_incoming": {
+          "📡": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "✊": {
+        "lindblad_incoming": {
+          "⛓": 0.05
+        }
+      },
+      "🏷️": {
+        "lindblad_incoming": {
+          "⚙": 0.03
+        }
+      },
+      "🥣": {
+        "lindblad_incoming": {
+          "🌿": 0.04,
+          "🫖": 0.03
+        }
+      },
+      "🧿": {
+        "lindblad_incoming": {
+          "🕯": 0.03,
+          "🏮": 0.03,
+          "🔦": 0.02,
+          "🌿": 0.03,
+          "🕵️": 0.03
+        }
+      },
+      "🧬": {
+        "lindblad_incoming": {
+          "⚗️": 0.02,
+          "🧫": 0.07,
+          "🌱": 0.03
+        }
+      },
+      "📿": {
+        "lindblad_incoming": {
+          "⛪": 0.03,
+          "🪢": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "🧘": {
+        "lindblad_incoming": {
+          "📿": 0.02,
+          "🔇": 0.02
+        }
+      },
+      "🐑": {
+        "lindblad_incoming": {
+          "👥": 0.02
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "💀"
+        }
+      },
+      "🛡": {
+        "lindblad_incoming": {
+          "⚔": 0.05
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🪢": {
+        "lindblad_incoming": {
+          "🧵": 0.07
+        }
+      },
+      "🚔": {
+        "lindblad_incoming": {
+          "📒": 0.02
+        }
+      },
+      "👘": {
+        "lindblad_incoming": {
+          "🧵": 0.08,
+          "🪡": 0.03,
+          "🧶": 0.03
+        },
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "🐂": {
+        "lindblad_incoming": {
+          "💰": 0.08
+        }
+      },
+      "🐻": {
+        "lindblad_incoming": {
+          "📦": 0.06
+        }
+      },
+      "📊": {
+        "lindblad_incoming": {
+          "🧮": 0.03
+        }
+      },
+      "📘": {
+        "lindblad_incoming": {
+          "📐": 0.03,
+          "🧮": 0.02,
+          "🕴️": 0.03
+        }
+      },
+      "📼": {
+        "lindblad_incoming": {
+          "🧩": 0.02
+        },
+        "decay": {
+          "rate": 0.03,
+          "target": "🧩"
+        }
+      },
+      "🏛": {
+        "lindblad_incoming": {
+          "📐": 0.02,
+          "🧱": 0.03
+        }
+      },
+      "🧱": {
+        "lindblad_incoming": {
+          "⛓": 0.03,
+          "🪨": 0.02
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "💱": {
+        "lindblad_incoming": {
+          "💰": 0.02
+        }
+      },
+      "🐝": {
+        "lindblad_incoming": {
+          "🌿": 0.06
+        },
+        "decay": {
+          "rate": 0.06,
+          "target": "🍂"
+        }
+      },
+      "🚫": {
+        "lindblad_incoming": {
+          "🧪": 0.03,
+          "🩺": 0.02
+        }
+      },
+      "🪝": {
+        "lindblad_incoming": {
+          "⚓": 0.03
+        },
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🔓": {
+        "lindblad_incoming": {
+          "🕵️": 0.03
+        }
+      },
+      "🛰": {
+        "lindblad_incoming": {
+          "📡": 0.02
+        },
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🎵": {
+        "lindblad_incoming": {
+          "⚙": 0.02,
+          "🔨": 0.03
+        }
+      },
+      "💳": {
+        "lindblad_incoming": {
+          "👥": 0.02,
+          "📋": 0.04
+        },
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "🏮": {
+        "lindblad_incoming": {
+          "🕯": 0.03
+        }
+      },
+      "⚖": {
+        "lindblad_incoming": {
+          "🔭": 0.03
+        }
+      },
+      "🗑": {
+        "lindblad_incoming": {
+          "🍂": 0.03,
+          "🍞": 0.02
+        }
+      },
+      "📐": {
+        "lindblad_incoming": {
+          "🔬": 0.03,
+          "🔭": 0.02
+        }
+      },
+      "🧮": {
+        "lindblad_incoming": {
+          "📐": 0.03
+        }
+      },
+      "🧰": {
+        "lindblad_incoming": {
+          "🪛": 0.02
+        }
+      },
+      "👤": {
+        "lindblad_incoming": {
+          "🤫": 0.04,
+          "🧷": 0.02
+        }
+      },
+      "🫙": {
+        "lindblad_incoming": {
+          "🍞": 0.02,
+          "💧": 0.03
+        },
+        "decay": {
+          "rate": 0.04,
+          "target": "🍂"
+        }
+      },
+      "💉": {
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🏰": {
+        "decay": {
+          "rate": 0.001,
+          "target": "🏚"
+        }
+      },
+      "🪤": {
+        "decay": {
+          "rate": 0.03,
+          "target": "🗑"
+        }
+      },
+      "🧪": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🪣": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🏭": {
+        "decay": {
+          "rate": 0.005,
+          "target": "🗑"
+        }
+      },
+      "🏺": {
+        "decay": {
+          "rate": 0.003,
+          "target": "🗑"
+        }
+      },
+      "🚧": {
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🕴️": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🩺": {
+        "decay": {
+          "rate": 0.01,
+          "target": "🗑"
+        }
+      },
+      "🛶": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🔨": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🧊": {
+        "decay": {
+          "rate": 0.03,
+          "target": "💧"
+        }
+      },
+      "🪞": {
+        "decay": {
+          "rate": 0.015,
+          "target": "🗑"
+        }
+      },
+      "💊": {
+        "decay": {
+          "rate": 0.025,
+          "target": "🗑"
+        }
+      },
+      "🧲": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
+        }
+      },
+      "🪛": {
+        "decay": {
+          "rate": 0.02,
+          "target": "♻️"
+        }
+      },
+      "🧷": {
+        "decay": {
+          "rate": 0.02,
+          "target": "🗑"
         }
       }
     }

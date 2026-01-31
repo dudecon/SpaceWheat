@@ -171,7 +171,7 @@ private:
 
     BiomeStepResult
     _evolve_biome_steps(int biome_id, const PackedFloat64Array& rho_packed,
-                        int steps, float dt, float max_dt);
+                        int steps, float dt, float max_dt, bool compute_mi = true);
 
     Dictionary _build_icon_map(int biome_id,
                                const std::vector<PackedFloat64Array>& bloch_steps);
