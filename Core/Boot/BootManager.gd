@@ -229,19 +229,19 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 	if biomes.size() > 0:
 		_verbose.info("boot", "🎨", "Building emoji atlas...")
 		var all_emojis = _collect_all_emojis(biomes)
-		print("[BootManager] DEBUG: Collected emojis: %s" % str(all_emojis))
 		_verbose.info("boot", "🎨", "  Found %d unique emojis" % all_emojis.size())
 
 		var EmojiAtlasBatcherClass = load("res://Core/Visualization/EmojiAtlasBatcher.gd")
 		var atlas_batcher = EmojiAtlasBatcherClass.new()
-		await atlas_batcher.build_atlas_async(all_emojis, quantum_viz.graph)
-		print("[BootManager] DEBUG: Atlas batcher built, _emoji_uvs size = %d" % atlas_batcher._emoji_uvs.size())
-		_verbose.info("boot", "✓", "Emoji atlas ready")
+		# CRITICAL: Call build_atlas_async() synchronously (no await)
+		# It now uses RenderingServer.force_draw() to render immediately, not awaits
+		# This ensures atlas is COMPLETELY BUILT before first frame renders
+		atlas_batcher.build_atlas_async(all_emojis, quantum_viz.graph)
+		_verbose.info("boot", "✓", "Emoji atlas ready (%d emojis)" % atlas_batcher._emoji_uvs.size())
 
 		# Pass atlas to the quantum viz context for use by bubble renderer
 		if quantum_viz.graph.has_method("set_emoji_atlas_batcher"):
 			quantum_viz.graph.set_emoji_atlas_batcher(atlas_batcher)
-			print("[BootManager] DEBUG: Set emoji atlas batcher on graph")
 
 	visualization_ready.emit()
 
