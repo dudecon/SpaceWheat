@@ -201,7 +201,7 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 	_verbose.info("boot", "✓", "BiomeLayoutCalculator ready")
 	_verbose.info("boot", "✓", "Layout positions computed")
 
-	# Build emoji atlas for GPU-accelerated emoji rendering
+	# Collect biomes for setup
 	var biomes = {}
 	if farm.biome_enabled:
 		if farm.biotic_flux_biome:
@@ -216,6 +216,15 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 			biomes["StarterForest"] = farm.starter_forest_biome
 		if farm.village_biome:
 			biomes["Village"] = farm.village_biome
+
+	# CRITICAL: Call setup() to create quantum nodes from biome registers
+	# This was missing - without it, quantum_nodes array stays empty and bubbles don't render
+	if biomes.size() > 0:
+		_verbose.info("boot", "💭", "Creating quantum nodes from biome registers...")
+		var farm_grid = farm.grid if "grid" in farm else null
+		var plot_pool = farm.plot_pool if "plot_pool" in farm else null
+		quantum_viz.graph.setup(biomes, farm_grid, plot_pool)
+		_verbose.info("boot", "✓", "Created %d quantum bubbles" % quantum_viz.graph.quantum_nodes.size())
 
 	if biomes.size() > 0:
 		_verbose.info("boot", "🎨", "Building emoji atlas...")
