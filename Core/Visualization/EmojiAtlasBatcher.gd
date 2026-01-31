@@ -394,7 +394,25 @@ func add_emoji_by_name(position: Vector2, size: Vector2, emoji: String, color: C
 	# CRITICAL: Normalize emoji string for consistent lookup
 	var normalized_emoji = _normalize_emoji(emoji)
 
-	if not _atlas_built or not _emoji_uvs.has(normalized_emoji):
+	# CRITICAL: If atlas isn't built yet, ALWAYS use fallback (don't warn about missing emojis)
+	# The atlas is being built asynchronously and may not be ready on first frame
+	if not _atlas_built:
+		# Silent fallback: try SVG texture
+		if _visual_asset_registry:
+			var tex = _visual_asset_registry.get_texture(emoji)
+			if tex:
+				_draw_textured_quad_immediate(tex, position, size, color, shadow_offset)
+				return
+		# Ultimate fallback: queue for text rendering
+		_text_fallback_queue.append({
+			"pos": position,
+			"size": size,
+			"emoji": emoji,
+			"color": color
+		})
+		return
+
+	if not _emoji_uvs.has(normalized_emoji):
 		_fallback_count += 1
 		if not _missing_emojis.has(emoji):
 			_missing_emojis[emoji] = true
