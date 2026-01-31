@@ -1417,3 +1417,96 @@ func _merge_accumulated_batches() -> void:
 			frame_buffers[biome_name] = frozen_steps
 
 
+
+# ============================================================================
+# TEST HELPERS - Buffer manipulation for diagnostic tests
+# ============================================================================
+
+func drain_buffer_to(target_steps: int) -> void:
+	"""Reduce buffer to N steps for starvation recovery test."""
+	for biome_name in frame_buffers.keys():
+		var buffer = frame_buffers.get(biome_name, [])
+		if buffer.size() > target_steps:
+			# Keep only first N steps
+			var drained = buffer.slice(0, target_steps)
+			frame_buffers[biome_name] = drained
+			
+			# Also drain MI/Bloch buffers
+			if mi_buffers.has(biome_name):
+				var mi_buf = mi_buffers[biome_name]
+				if mi_buf.size() > target_steps:
+					mi_buffers[biome_name] = mi_buf.slice(0, target_steps)
+			
+			if bloch_buffers.has(biome_name):
+				var bloch_buf = bloch_buffers[biome_name]
+				if bloch_buf.size() > target_steps:
+					bloch_buffers[biome_name] = bloch_buf.slice(0, target_steps)
+			
+			if purity_buffers.has(biome_name):
+				var purity_buf = purity_buffers[biome_name]
+				if purity_buf.size() > target_steps:
+					purity_buffers[biome_name] = purity_buf.slice(0, target_steps)
+		
+		# Reset cursor to 0
+		buffer_cursors[biome_name] = 0
+	
+	print("[TEST] Buffer drained to %d steps (%.0fms coverage)" % [target_steps, target_steps * 100.0])
+
+
+func fill_buffer_to(target_steps: int) -> void:
+	"""Extend buffer to N steps for coast test (duplicates current state)."""
+	for biome in biomes:
+		if not biome or not biome.quantum_computer:
+			continue
+		
+		var biome_name = biome.get_biome_type()
+		var buffer = frame_buffers.get(biome_name, [])
+		
+		if buffer.is_empty():
+			continue
+		
+		# Duplicate last step to reach target size
+		var last_step = buffer[buffer.size() - 1]
+		while buffer.size() < target_steps:
+			buffer.append(last_step)
+		
+		frame_buffers[biome_name] = buffer
+		
+		# Also extend MI/Bloch buffers
+		if mi_buffers.has(biome_name):
+			var mi_buf = mi_buffers[biome_name]
+			if not mi_buf.is_empty():
+				var last_mi = mi_buf[mi_buf.size() - 1]
+				while mi_buf.size() < target_steps:
+					mi_buf.append(last_mi)
+				mi_buffers[biome_name] = mi_buf
+		
+		if bloch_buffers.has(biome_name):
+			var bloch_buf = bloch_buffers[biome_name]
+			if not bloch_buf.is_empty():
+				var last_bloch = bloch_buf[bloch_buf.size() - 1]
+				while bloch_buf.size() < target_steps:
+					bloch_buf.append(last_bloch)
+				bloch_buffers[biome_name] = bloch_buf
+		
+		if purity_buffers.has(biome_name):
+			var purity_buf = purity_buffers[biome_name]
+			if not purity_buf.is_empty():
+				var last_purity = purity_buf[purity_buf.size() - 1]
+				while purity_buf.size() < target_steps:
+					purity_buf.append(last_purity)
+				purity_buffers[biome_name] = purity_buf
+		
+		# Reset cursor to 0
+		buffer_cursors[biome_name] = 0
+	
+	print("[TEST] Buffer filled to %d steps (%.0fms coverage)" % [target_steps, target_steps * 100.0])
+
+
+func set_evolution_paused(paused: bool) -> void:
+	"""Pause/unpause evolution for coast test."""
+	lookahead_enabled = not paused
+	if paused:
+		print("[TEST] Evolution PAUSED - coasting on buffer")
+	else:
+		print("[TEST] Evolution RESUMED")
