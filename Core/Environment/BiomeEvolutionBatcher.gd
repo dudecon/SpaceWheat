@@ -833,6 +833,14 @@ func _get_biome_by_name(biome_name: String):
 	return null
 
 
+func _get_engine_id_for_biome(biome_name: String) -> int:
+	"""Get C++ engine ID for a biome by name. Returns -1 if not found."""
+	for engine_id in _engine_id_to_biome:
+		if _engine_id_to_biome[engine_id] == biome_name:
+			return engine_id
+	return -1
+
+
 func _update_biome_pause_states():
 	"""Update pause state for all biomes based on peeked terminals.
 
@@ -1045,19 +1053,41 @@ func _queue_biome_packet(biome_name: String, current_depth: int):
 
 	Creates independent packet that evolves only this biome.
 	Other biomes will be frozen in the C++ call.
+
+	PRE-PACKS all biome rhos in main thread to avoid thread-safety issues.
 	"""
 	var biome = _get_biome_by_name(biome_name)
 	if not biome or not _is_valid_biome(biome):
 		return
 
 	var batch_size = _get_adaptive_batch_size()
-	var qc = biome.quantum_computer
-	var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
 
-	# Create packet request
+	# PRE-PACK ALL biomes in main thread (thread-safe)
+	# Workaround: We need all biome rhos pre-packed so worker thread doesn't call _to_packed()
+	var all_biome_rhos: Array = []
+	var engine_biome_count = lookahead_engine.get_biome_count() if lookahead_engine else 0
+
+	for engine_id in range(engine_biome_count):
+		var engine_biome_name = _engine_id_to_biome.get(engine_id, "")
+		var target_biome = _get_biome_by_name(engine_biome_name)
+
+		if target_biome and _is_valid_biome(target_biome):
+			var qc = target_biome.quantum_computer
+			var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
+			all_biome_rhos.append(rho_packed)
+		else:
+			all_biome_rhos.append(PackedFloat64Array())
+
+	# Create packet request with all rhos pre-packed
+	# COPY arrays to avoid sharing between threads (Godot thread-safety)
+	var rhos_for_thread: Array = []
+	for rho in all_biome_rhos:
+		rhos_for_thread.append(rho.duplicate())  # Copy each PackedFloat64Array
+
 	var packet_req = {
 		"biome_name": biome_name,
-		"biome_rho": rho_packed,
+		"all_biome_rhos": rhos_for_thread,  # Copied for thread safety
+		"target_biome_index": _get_engine_id_for_biome(biome_name),  # Which one to evolve
 		"num_steps": batch_size,
 		"timestamp": Time.get_ticks_msec(),
 	}
@@ -1128,32 +1158,15 @@ func _run_biome_packet_in_thread(packet_req: Dictionary) -> Dictionary:
 	- Target biome: real rho (evolve)
 	- Other biomes: frozen rho (don't evolve)
 
-	This reuses existing C++ API without modifications.
+	All rhos are PRE-PACKED in main thread - worker thread only uses data.
 	"""
 	var biome_name = packet_req["biome_name"]
-	var target_rho = packet_req["biome_rho"]
+	var all_biome_rhos = packet_req["all_biome_rhos"]  # Already packed!
+	var target_biome_index = packet_req["target_biome_index"]
 	var num_steps = packet_req["num_steps"]
 
-	# Build biome_rhos array with ONLY target biome active
-	var engine_biome_count = lookahead_engine.get_biome_count() if lookahead_engine else 0
-	var biome_rhos: Array = []
-
-	for engine_id in range(engine_biome_count):
-		var engine_biome_name = _engine_id_to_biome.get(engine_id, "")
-
-		if engine_biome_name == biome_name:
-			# Active: evolve this biome
-			biome_rhos.append(target_rho)
-		else:
-			# Frozen: keep at current state (don't evolve)
-			var other_biome = _get_biome_by_name(engine_biome_name)
-			if other_biome and _is_valid_biome(other_biome):
-				var qc = other_biome.quantum_computer
-				var frozen_rho = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
-				biome_rhos.append(frozen_rho)
-			else:
-				# Unknown or invalid biome - send empty
-				biome_rhos.append(PackedFloat64Array())
+	# Use pre-packed rhos directly (no node method calls in worker thread!)
+	var biome_rhos = all_biome_rhos
 
 	# Call C++ (evolves only target biome, freezes others)
 	var packet_start = Time.get_ticks_usec()
