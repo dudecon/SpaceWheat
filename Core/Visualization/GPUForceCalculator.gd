@@ -241,12 +241,12 @@ void main() {
 	vec2 node_pos = pos[node_id];
 
 	// === 1. PURITY RADIAL FORCE ===
-	// Pure states (purity≈1) at center, mixed (purity≈0) at edge
+	// Pure states (purity~=1) at center, mixed (purity~=0) at edge
 	uint bloch_offset = node_id * 8u;
 	if (bloch_offset + 7u < bloch.length()) {
-		float p0 = bloch[bloch_offset];      // |0⟩ probability
-		float p1 = bloch[bloch_offset + 1u]; // |1⟩ probability
-		float purity = abs(p0 - p1);         // Purity ≈ |p0 - p1|
+		float p0 = bloch[bloch_offset];      // |0> probability
+		float p1 = bloch[bloch_offset + 1u]; // |1> probability
+		float purity = abs(p0 - p1);         // Purity ~= |p0 - p1|
 
 		// Target radius: pure=center, mixed=edge
 		float target_radius = pc.max_biome_radius * (1.0 - purity);

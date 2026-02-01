@@ -53,6 +53,7 @@ var plot_pool = null
 
 # Stage 2: Lookahead engine and buffers
 var lookahead_engine = null  # MultiBiomeLookaheadEngine (C++)
+var lookahead_engine_mutex: Mutex = Mutex.new()  # Protect concurrent C++ access
 var lookahead_enabled: bool = false
 var lookahead_accumulator: float = 0.0
 var _lookahead_init_started: bool = false
@@ -1103,12 +1104,9 @@ func _queue_biome_packet(biome_name: String, current_depth: int):
 		if target_biome and _is_valid_biome(target_biome):
 			var qc = target_biome.quantum_computer
 			var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
-			# DEEP COPY: Create completely new array to avoid COW issues
-			var rho_copy = PackedFloat64Array()
-			rho_copy.resize(rho_packed.size())
-			for i in range(rho_packed.size()):
-				rho_copy[i] = rho_packed[i]
-			all_biome_rhos.append(rho_copy)
+			# Duplicate to create independent copy
+			# Note: CowData warnings may appear but are non-fatal
+			all_biome_rhos.append(rho_packed.duplicate())
 		else:
 			all_biome_rhos.append(PackedFloat64Array())
 
@@ -1198,11 +1196,16 @@ func _run_biome_packet_in_thread(packet_req: Dictionary) -> Dictionary:
 	# Call C++ (evolves ALL biomes - we filter results during merge)
 	# Note: C++ always evolves all biomes. The per-biome filtering happens in
 	# _on_biome_packet_completed() where we only save THIS biome's results.
+	#
+	# CRITICAL: Serialize C++ access with mutex - engine might not be thread-safe
+	# for concurrent calls even with different data.
+	lookahead_engine_mutex.lock()
 	var packet_start = Time.get_ticks_usec()
 	var result = lookahead_engine.evolve_all_lookahead(
 		all_biome_rhos, num_steps, LOOKAHEAD_DT, MAX_SUBSTEP_DT
 	)
 	var packet_end = Time.get_ticks_usec()
+	lookahead_engine_mutex.unlock()
 
 	# Add metadata
 	result["biome_name"] = biome_name
