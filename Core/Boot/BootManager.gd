@@ -21,12 +21,18 @@ var _current_stage: String = ""
 # Registries for O(1) lookups
 var _biome_registry = null  # BiomeRegistry (lazy-loaded)
 
+# Performance optimization (class-level const)
+const PerfOptimizer = preload("res://Core/Settings/PerformanceOptimizer.gd")
+const BiomeRegistry = preload("res://Core/Biomes/BiomeRegistry.gd")
+
 ## Autoload singleton - ready to use as global
 func _ready() -> void:
 	_verbose.info("boot", "🔧", "BootManager autoload ready")
 
+	# Optimize performance based on detected hardware
+	PerfOptimizer.optimize_for_platform()
+
 	# Pre-load BiomeRegistry for fast lookups
-	const BiomeRegistry = preload("res://Core/Biomes/BiomeRegistry.gd")
 	_biome_registry = BiomeRegistry.new()
 	_verbose.debug("boot", "📚", "BiomeRegistry initialized (%d biomes)" % _biome_registry.get_all().size())
 
@@ -290,6 +296,11 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 		var bubble_atlas = BubbleAtlasBatcherClass.new()
 		if bubble_atlas.build_atlas():
 			_verbose.info("boot", "✓", "Bubble atlas ready (%d templates)" % bubble_atlas._template_uvs.size())
+
+			# Enable software rendering mode if on llvmpipe (reduces layers for ~3x FPS)
+			if PerfOptimizer.detect_software_renderer():
+				bubble_atlas.configure_for_software_rendering(true)
+
 			# Pass atlas to the quantum viz graph for use by bubble renderer
 			if quantum_viz.graph.has_method("set_bubble_atlas_batcher"):
 				quantum_viz.graph.set_bubble_atlas_batcher(bubble_atlas)

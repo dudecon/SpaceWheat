@@ -90,6 +90,28 @@ var _arc_count: int = 0
 var _draw_calls: int = 0
 var _atlas_built: bool = false
 
+# Software rendering mode - reduces visual complexity for llvmpipe
+# Set via configure_for_software_rendering()
+var software_mode: bool = false
+var draw_glow_layers: bool = true
+var draw_data_rings: bool = true
+var enable_spin_pattern: bool = true
+var enable_season_wedges: bool = true
+
+
+func configure_for_software_rendering(enabled: bool = true) -> void:
+	"""Enable simplified rendering for software renderers (llvmpipe).
+
+	Reduces layers from ~12 to ~4 per bubble for ~3x FPS improvement.
+	"""
+	software_mode = enabled
+	draw_glow_layers = not enabled
+	draw_data_rings = not enabled
+	enable_spin_pattern = not enabled
+	enable_season_wedges = not enabled
+	if enabled:
+		print("[BubbleAtlasBatcher] Software rendering mode: ENABLED (simplified visuals)")
+
 # Arc configuration
 const ARC_SEGMENTS: int = 24  # Segments for full circle arc
 
@@ -821,10 +843,11 @@ func draw_bubble(pos: Vector2, base_radius: float, anim_scale: float, anim_alpha
 	var glow_alpha = (energy * 0.5 + 0.3) * anim_alpha
 
 	# === LAYERS 1-2: OUTER GLOWS ===
-	if is_measured and not is_celestial:
-		_draw_measured_glow(pos, base_radius, anim_scale, anim_alpha, time)
-	else:
-		_draw_unmeasured_glow(pos, effective_radius, glow_tint, glow_alpha, is_celestial)
+	if draw_glow_layers:
+		if is_measured and not is_celestial:
+			_draw_measured_glow(pos, base_radius, anim_scale, anim_alpha, time)
+		else:
+			_draw_unmeasured_glow(pos, effective_radius, glow_tint, glow_alpha, is_celestial)
 
 	# === LAYER 3: Dark background ===
 	var bg_mult = 1.12 if is_celestial else 1.08
@@ -838,7 +861,7 @@ func draw_bubble(pos: Vector2, base_radius: float, anim_scale: float, anim_alpha
 	add_circle_layer("circle_100", pos, effective_radius, main_color)
 
 	# === LAYER 4b: Spinning internal pattern (before highlight) ===
-	if not is_celestial and not is_measured and coherence > 0.05:
+	if enable_spin_pattern and not is_celestial and not is_measured and coherence > 0.05:
 		draw_spin_pattern(pos, effective_radius, phi_raw, coherence, anim_alpha)
 
 	# === LAYER 5: Glossy highlight ===
@@ -864,12 +887,12 @@ func draw_bubble(pos: Vector2, base_radius: float, anim_scale: float, anim_alpha
 		add_arc_layer(pos, effective_radius * 1.02, 0, TAU, outline_width, outline_color)
 
 	# === LAYER 6b-6e: Data rings (non-celestial only) ===
-	if not is_celestial:
+	if draw_data_rings and not is_celestial:
 		_draw_data_rings(pos, effective_radius, anim_alpha,
 			individual_purity, biome_purity, global_prob, p_north, p_south, sink_flux, time)
 
 	# === LAYER 7: Season wedges (non-celestial, non-measured only) ===
-	if not is_celestial and not is_measured and season_projections.size() >= 3:
+	if enable_season_wedges and not is_celestial and not is_measured and season_projections.size() >= 3:
 		draw_season_wedges(pos, effective_radius, phi_raw, season_projections, anim_alpha, shadow_influence)
 
 
