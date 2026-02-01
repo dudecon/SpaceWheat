@@ -722,6 +722,29 @@ func _print_cpp_profiling_report():
 	else:
 		print("  ✅ HEALTHY")
 
+	# Per-biome breakdown (parallel processing visibility)
+	if batcher.has_method("get_all_biome_diagnostics"):
+		var biome_diag = batcher.get_all_biome_diagnostics()
+		if biome_diag.size() > 1:  # Only show if multiple biomes
+			print("\n🌍 PER-BIOME STATUS (Parallel Evolution):")
+			for biome_name in biome_diag.keys():
+				var diag = biome_diag[biome_name]
+				var status_icons = []
+				if diag.get("paused", false):
+					status_icons.append("💤")
+				if diag.get("in_flight", false):
+					status_icons.append("⚡")
+				if diag.get("pending", false):
+					status_icons.append("📦")
+
+				var status_str = " ".join(status_icons) if status_icons.size() > 0 else "🟢"
+				var name_display = biome_name.substr(0, 18).rpad(18, " ")
+				print("  %s: buf=%d %s" % [
+					name_display,
+					diag.get("depth", 0),
+					status_str
+				])
+
 	# Stats
 	print("\n📈 STATS: %d refills | PFPS: %.1f Hz" % [
 		metrics.get("refill_count", 0),
