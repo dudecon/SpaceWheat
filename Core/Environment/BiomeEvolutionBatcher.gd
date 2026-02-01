@@ -250,6 +250,20 @@ func unregister_biome(biome) -> void:
 
 	var biome_name = _get_biome_name(biome)
 
+	# CRITICAL: Stop in-flight threads and clear queue BEFORE cleanup
+	# Otherwise segfault when thread accesses freed memory
+	if biome_packet_queues.has(biome_name):
+		biome_packet_queues[biome_name].clear()
+		biome_pending[biome_name] = false
+
+	# Wait for in-flight thread to complete
+	if biome_threads.has(biome_name) and biome_threads[biome_name] != null:
+		var thread = biome_threads[biome_name]
+		if thread.is_alive():
+			thread.wait_to_finish()
+		biome_threads.erase(biome_name)
+		biome_in_flight[biome_name] = false
+
 	# Remove from biomes array
 	var idx = biomes.find(biome)
 	if idx >= 0:
@@ -267,6 +281,12 @@ func unregister_biome(biome) -> void:
 	metadata_payloads.erase(biome_name)
 	coupling_payloads.erase(biome_name)
 	icon_map_payloads.erase(biome_name)
+
+	# Clean up per-biome state
+	biome_packet_queues.erase(biome_name)
+	biome_pending.erase(biome_name)
+	biome_in_flight.erase(biome_name)
+	biome_paused.erase(biome_name)
 
 	# NOTE: We do NOT remove from _biome_engine_ids or _engine_id_to_biome
 	# because the native engine still has this biome registered.
@@ -1083,8 +1103,12 @@ func _queue_biome_packet(biome_name: String, current_depth: int):
 		if target_biome and _is_valid_biome(target_biome):
 			var qc = target_biome.quantum_computer
 			var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
-			# DUPLICATE to create independent copy for this packet
-			all_biome_rhos.append(rho_packed.duplicate())
+			# DEEP COPY: Create completely new array to avoid COW issues
+			var rho_copy = PackedFloat64Array()
+			rho_copy.resize(rho_packed.size())
+			for i in range(rho_packed.size()):
+				rho_copy[i] = rho_packed[i]
+			all_biome_rhos.append(rho_copy)
 		else:
 			all_biome_rhos.append(PackedFloat64Array())
 
