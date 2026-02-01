@@ -25,15 +25,18 @@ extends RefCounted
 
 const IconBuilder = preload("res://Core/Factions/IconBuilder.gd")
 const FactionRegistry = preload("res://Core/Factions/FactionRegistry.gd")
+const BiomeRegistry = preload("res://Core/Biomes/BiomeRegistry.gd")
 const QuantumComputer = preload("res://Core/QuantumSubstrate/QuantumComputer.gd")
 const HamiltonianBuilder = preload("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
 const LindbladBuilder = preload("res://Core/QuantumSubstrate/LindbladBuilder.gd")
 const BiomeLindblad = preload("res://Core/Biomes/BiomeLindblad.gd")
 const OperatorCache = preload("res://Core/QuantumSubstrate/OperatorCache.gd")
 const CacheKey = preload("res://Core/QuantumSubstrate/CacheKey.gd")
+const DynamicBiome = preload("res://Tests/DynamicBiome.gd")
 
 ## Singleton instances (lazy-loaded)
 static var _faction_registry: FactionRegistry = null
+static var _biome_registry: BiomeRegistry = null
 static var _icon_registry = null  # Autoload reference
 
 
@@ -42,6 +45,13 @@ static func _get_faction_registry() -> FactionRegistry:
 	if _faction_registry == null:
 		_faction_registry = FactionRegistry.new()
 	return _faction_registry
+
+
+## Get or create BiomeRegistry
+static func _get_biome_registry() -> BiomeRegistry:
+	if _biome_registry == null:
+		_biome_registry = BiomeRegistry.new()
+	return _biome_registry
 
 
 ## Get IconRegistry autoload

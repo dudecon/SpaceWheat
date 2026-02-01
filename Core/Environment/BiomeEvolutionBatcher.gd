@@ -1079,14 +1079,10 @@ func _queue_biome_packet(biome_name: String, current_depth: int):
 			all_biome_rhos.append(PackedFloat64Array())
 
 	# Create packet request with all rhos pre-packed
-	# COPY arrays to avoid sharing between threads (Godot thread-safety)
-	var rhos_for_thread: Array = []
-	for rho in all_biome_rhos:
-		rhos_for_thread.append(rho.duplicate())  # Copy each PackedFloat64Array
-
+	# PackedFloat64Array is safe to pass to threads as long as we don't modify it
 	var packet_req = {
 		"biome_name": biome_name,
-		"all_biome_rhos": rhos_for_thread,  # Copied for thread safety
+		"all_biome_rhos": all_biome_rhos,  # Pre-packed in main thread
 		"target_biome_index": _get_engine_id_for_biome(biome_name),  # Which one to evolve
 		"num_steps": batch_size,
 		"timestamp": Time.get_ticks_msec(),
