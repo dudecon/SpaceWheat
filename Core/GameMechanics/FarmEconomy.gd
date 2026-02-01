@@ -213,7 +213,7 @@ func _get_missing_resources(cost: Dictionary) -> String:
 func _format_cost(cost: Dictionary) -> String:
 	var parts = []
 	for emoji in cost.keys():
-		parts.append("%d %s" % [cost[emoji] / EconomyConstants.QUANTUM_TO_CREDITS, emoji])
+		parts.append("%d %s" % [cost[emoji], emoji])
 	return ", ".join(parts)
 
 

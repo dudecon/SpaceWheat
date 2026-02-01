@@ -387,17 +387,24 @@ func _on_terminal_released(position: Vector2i, terminal_id: String, credits_earn
 			_verbose.debug("viz", "⚠️", "No graph found")
 		return
 
-	# Find and remove bubble by grid position
+	# Find bubble by grid position
 	var bubble = graph.quantum_nodes_by_grid_pos.get(position)
 	if not bubble:
 		if _verbose:
 			_verbose.debug("viz", "⚠️", "No bubble found at position %s" % position)
 		return
 
+	# CRITICAL: Only remove TERMINAL bubbles, not pure quantum register bubbles
+	# Pure quantum bubbles (has_farm_tether=false) should persist after terminal release
+	if not bubble.has_farm_tether:
+		if _verbose:
+			_verbose.debug("viz", "🔄", "Skipping removal of pure quantum bubble at %s" % position)
+		return
+
 	# Get biome name for cleanup
 	var biome_name = bubble.biome_name
 
-	# Remove from graph tracking
+	# Remove terminal bubble from graph tracking
 	graph.quantum_nodes_by_grid_pos.erase(position)
 	graph.quantum_nodes.erase(bubble)
 
@@ -405,12 +412,12 @@ func _on_terminal_released(position: Vector2i, terminal_id: String, credits_earn
 	if basis_bubbles.has(biome_name):
 		basis_bubbles[biome_name].erase(bubble)
 		if _verbose:
-			_verbose.debug("viz", "🗑️", "Removed bubble from %s (remaining: %d)" % [biome_name, basis_bubbles[biome_name].size()])
+			_verbose.debug("viz", "🗑️", "Removed terminal bubble from %s (remaining: %d)" % [biome_name, basis_bubbles[biome_name].size()])
 
 	# Trigger redraw to hide bubble
 	graph.queue_redraw()
 	if _verbose:
-		_verbose.debug("viz", "✅", "Bubble despawned at %s" % position)
+		_verbose.debug("viz", "✅", "Terminal bubble despawned at %s" % position)
 
 
 func request_plot_bubble(biome_name: String, grid_pos: Vector2i, plot) -> void:
