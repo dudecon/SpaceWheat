@@ -160,18 +160,22 @@ static func build_from_registry(
 	# Store biome definition for later reference
 	biome.set_meta("biome_def", biome_def)
 
-	# 6. Create viz_cache with metadata
+	# 6. CRITICAL: Initialize components manually (before tree add)
+	# BiomeBase._ready() normally does this, but we need it before tree entry
+	_initialize_biome_components(biome, qc)
+
+	# 7. Create viz_cache with metadata
 	var viz_metadata = _build_viz_metadata(emoji_pairs, biome_def)
 	var QuantumVizCache = load("res://Core/Visualization/QuantumVizCache.gd")
 	biome.viz_cache = QuantumVizCache.new()
 	biome.viz_cache.update_metadata_from_payload(viz_metadata)
 
-	# 7. Seed viz_cache with coupling data from icons
+	# 8. Seed viz_cache with coupling data from icons
 	# (Must be done AFTER icons are set but BEFORE biome enters tree)
 	if biome.has_method("_seed_viz_couplings"):
 		biome._seed_viz_couplings()
 
-	# 8. Add to tree (unless skip_tree_add)
+	# 9. Add to tree (unless skip_tree_add)
 	if not options.get("skip_tree_add", false) and parent_node:
 		parent_node.add_child(biome)
 
@@ -263,6 +267,50 @@ static func _build_viz_metadata(emoji_pairs: Array, biome_def) -> Dictionary:
 		metadata.emoji_list.append(pair.south)
 
 	return metadata
+
+
+## INTERNAL: Initialize BiomeBase components manually (before tree add)
+static func _initialize_biome_components(biome, quantum_computer) -> void:
+	"""Initialize BiomeBase component instances.
+
+	This is normally done in BiomeBase._ready(), but when building biomes
+	that might not immediately enter the tree, we need to initialize
+	components manually to avoid null reference errors.
+
+	IDEMPOTENCY: Sets _is_initialized flag to prevent double-initialization
+	when the node later enters the tree and _ready() is called.
+
+	Args:
+		biome: DynamicBiome or BiomeBase instance
+		quantum_computer: QuantumComputer to wire to components
+	"""
+	# Skip if already initialized
+	if biome.get("_is_initialized"):
+		return
+
+	# Load component classes
+	const BiomeResourceRegistry = preload("res://Core/Environment/Components/BiomeResourceRegistry.gd")
+	const BiomeBellGateTracker = preload("res://Core/Environment/Components/BiomeBellGateTracker.gd")
+	const BiomeQuantumObserver = preload("res://Core/Environment/Components/BiomeQuantumObserver.gd")
+	const BiomeGateOperations = preload("res://Core/Environment/Components/BiomeGateOperations.gd")
+	const BiomeQuantumSystemBuilder = preload("res://Core/Environment/Components/BiomeQuantumSystemBuilder.gd")
+	const BiomeDensityMatrixMutator = preload("res://Core/Environment/Components/BiomeDensityMatrixMutator.gd")
+
+	# Initialize components (same order as BiomeBase._ready())
+	biome._resource_registry = BiomeResourceRegistry.new()
+	biome._bell_gate_tracker = BiomeBellGateTracker.new()
+	biome._quantum_observer = BiomeQuantumObserver.new()
+	biome._gate_operations = BiomeGateOperations.new()
+	biome._system_builder = BiomeQuantumSystemBuilder.new()
+	biome._density_mutator = BiomeDensityMatrixMutator.new()
+
+	# Wire quantum_computer to components that need it
+	if quantum_computer:
+		biome._quantum_observer.set_quantum_computer(quantum_computer)
+		biome._density_mutator.set_quantum_computer(quantum_computer)
+
+	# Set flag to prevent double-initialization in _ready()
+	biome._is_initialized = true
 
 
 ## Build complete quantum system for a biome
