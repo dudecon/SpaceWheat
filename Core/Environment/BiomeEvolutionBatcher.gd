@@ -708,20 +708,14 @@ func _physics_process_lookahead(delta: float):
 		# Update buffer state based on consumption
 		_update_buffer_state()
 
-		# REFILL CHECK: Per-biome independent refills (Option A)
-		# Each biome checks its own depth and queues packets independently
-		# Prevents global starvation and non-Fibonacci accumulation
-		if lookahead_enabled:
-			_trigger_per_biome_refills()
+		# REFILL CHECK: Hybrid global packet with per-biome active_flags
+		# ONE packet evolves only biomes that need refill
+		# Per-biome buffer tracking + single C++ call = best of both worlds
+		if lookahead_enabled and lookahead_batch_queue.is_empty() and not _batch_thread:
+			_trigger_hybrid_refill()
 
 	# === PACKET PROCESSING (per physics frame at 20Hz) ===
-	# Process all biome packets in parallel (up to 6 threads)
-	# Each biome has independent thread - maximum parallelism
-	if lookahead_enabled:
-		process_all_biome_packets()
-
-	# === LEGACY GLOBAL QUEUE (DEPRECATED - for fallback only) ===
-	# OLD: Global single-thread processing (will be removed)
+	# Process ONE global packet (non-threaded, C++ is serialized via mutex anyway)
 	if lookahead_enabled and (not lookahead_batch_queue.is_empty() or _batch_thread != null):
 		process_one_lookahead_packet()
 
@@ -1048,88 +1042,85 @@ func _trigger_adaptive_refill() -> void:
 	])
 
 
-# === PER-BIOME REFILL LOGIC (Option A) ===
+# === HYBRID GLOBAL PACKET WITH PER-BIOME BUFFER TRACKING ===
 
-func _trigger_per_biome_refills():
-	"""Check each biome independently and queue refills as needed.
+func _trigger_hybrid_refill():
+	"""Hybrid approach: ONE global packet with per-biome active_flags.
 
-	Replaces global _trigger_adaptive_refill with per-biome logic.
-	Each biome queues its own packet independently.
+	Each biome tracks its own buffer depth independently.
+	When ANY biome needs refill, queue ONE packet that evolves only
+	the biomes that need it (via active_flags).
+
+	Benefits:
+	- Single C++ call (no threading issues)
+	- Per-biome buffer invalidation (independent depths)
+	- Efficient (frozen biomes don't evolve)
 	"""
 	# Update pause states (check for peeked terminals)
 	_update_biome_pause_states()
 
-	# Check each biome independently
+	# Check which biomes need refill
+	var needs_refill = false
+	var min_depth = 999999
+
 	for biome in biomes:
 		if not _is_valid_biome(biome):
 			continue
-
 		var biome_name = _get_biome_name(biome)
-
-		# Skip if already has pending packet for this biome
-		if biome_pending.get(biome_name, false):
-			continue
-
-		# Get THIS biome's depth (not minimum across all)
 		var depth = _get_biome_depth(biome_name)
 
-		# Check if THIS biome needs refill (considers pause state)
+		# Track minimum depth across all active biomes
+		if depth < min_depth:
+			min_depth = depth
+
+		# Check if this biome needs refill
 		if _should_trigger_biome_refill(biome_name, depth):
-			_queue_biome_packet(biome_name, depth)
+			needs_refill = true
+
+	# Only queue packet if at least one biome needs refill
+	if needs_refill:
+		_queue_hybrid_packet()
 
 
-func _queue_biome_packet(biome_name: String, current_depth: int):
-	"""Queue a packet request for a SINGLE biome.
+func _queue_hybrid_packet():
+	"""Queue ONE global packet with per-biome active_flags.
 
-	Creates independent packet that evolves only this biome.
-	Other biomes will be frozen in the C++ call.
-
-	PRE-PACKS all biome rhos in main thread to avoid thread-safety issues.
+	Determines which biomes need evolution based on their buffer depths.
+	Biomes with low buffers → active_flag = true
+	Biomes with full buffers → active_flag = false (frozen)
+	Biomes that were invalidated → active_flag = true
 	"""
-	var biome = _get_biome_by_name(biome_name)
-	if not biome or not _is_valid_biome(biome):
-		return
-
 	var batch_size = _get_adaptive_batch_size()
 
-	# PRE-PACK ALL biomes in main thread (thread-safe)
-	# IMPORTANT: Each packet gets INDEPENDENT copies to avoid shared references
-	var all_biome_rhos: Array = []
-	var engine_biome_count = lookahead_engine.get_biome_count() if lookahead_engine else 0
+	# Build active_flags and collect rhos for all biomes
+	var biome_rhos: Array = []
+	var active_flags_arr: Array = []
 
-	for engine_id in range(engine_biome_count):
-		var engine_biome_name = _engine_id_to_biome.get(engine_id, "")
-		var target_biome = _get_biome_by_name(engine_biome_name)
+	for biome in biomes:
+		if not _is_valid_biome(biome):
+			biome_rhos.append(PackedFloat64Array())
+			active_flags_arr.append(false)
+			continue
 
-		if target_biome and _is_valid_biome(target_biome):
-			var qc = target_biome.quantum_computer
-			var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
-			# Duplicate to create independent copy
-			# Note: CowData warnings may appear but are non-fatal
-			all_biome_rhos.append(rho_packed.duplicate())
-		else:
-			all_biome_rhos.append(PackedFloat64Array())
+		var qc = biome.quantum_computer
+		var biome_name = _get_biome_name(biome)
+		var depth = _get_biome_depth(biome_name)
 
-	# Create packet request with all rhos pre-packed
-	# Each packet has INDEPENDENT array copies (no shared references between packets)
-	var packet_req = {
-		"biome_name": biome_name,
-		"all_biome_rhos": all_biome_rhos,  # Independent copies per packet
-		"target_biome_index": _get_engine_id_for_biome(biome_name),  # Which one to evolve
-		"num_steps": batch_size,
-		"timestamp": Time.get_ticks_msec(),
-	}
+		# Pack density matrix
+		var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
+		biome_rhos.append(rho_packed)
 
-	# Add to THIS biome's queue
-	if not biome_packet_queues.has(biome_name):
-		biome_packet_queues[biome_name] = []
+		# Determine if this biome should evolve
+		var should_evolve = _should_trigger_biome_refill(biome_name, depth)
+		active_flags_arr.append(should_evolve)
 
-	biome_packet_queues[biome_name].append(packet_req)
-	biome_pending[biome_name] = true
+	# Queue ONE global packet with active_flags
+	_queue_adaptive_packet(biome_rhos, active_flags_arr, batch_size)
 
-	var state_name = "EMERGENCY" if current_depth <= 0 else BufferState.keys()[_buffer_state]
-	_log("trace", "REFILL", "🔄", "%s [%s]: queue packet (batch=%d, depth=%d, fib=%d)" % [
-		biome_name, state_name, batch_size, current_depth, _fib_index
+	# Log which biomes are being evolved
+	var active_count = active_flags_arr.count(true)
+	_log("trace", "REFILL", "🔄", "Global packet: batch=%d, %d/%d biomes active, fib=%d" % [
+		batch_size, active_count, biomes.size(), _fib_index
 	])
 
 

@@ -889,6 +889,26 @@ func is_native_enabled() -> bool:
 	return _use_native and not _use_atlas
 
 
+func is_shadow_compute_enabled() -> bool:
+	"""Check if shadow influence computation is enabled."""
+	return _shadow_compute_enabled
+
+
+func set_shadow_compute_enabled(enabled: bool) -> void:
+	"""Enable or disable shadow influence computation.
+
+	When enabled: O(n²) GDScript computation per frame (disabled by default).
+	Shadow influence tints wedges based on angular coupling between bubbles.
+
+	Args:
+		enabled: True to enable shadow influence, False to disable
+	"""
+	_shadow_compute_enabled = enabled
+	if not enabled:
+		_shadow_influences.clear()
+	print("[BatchedBubbleRenderer] Shadow compute: %s" % ("ENABLED" if enabled else "DISABLED"))
+
+
 func get_renderer_type() -> String:
 	"""Get the current active renderer type."""
 	if _use_atlas:

@@ -98,6 +98,27 @@ var frame_count: int = 0
 
 var cached_viewport_size: Vector2 = Vector2.ZERO
 
+# Detailed performance profiling
+var _perf_samples: Dictionary = {
+	"process_total": [],
+	"process_viewport": [],
+	"process_context": [],
+	"process_visuals": [],
+	"process_animations": [],
+	"process_forces": [],
+	"process_particles": [],
+	"draw_total": [],
+	"draw_context": [],
+	"draw_region": [],
+	"draw_infra": [],
+	"draw_edge": [],
+	"draw_effects": [],
+	"draw_flush": [],
+	"draw_bubble": [],
+	"draw_sun": [],
+}
+var _perf_report_interval: int = 120  # Report every N frames
+
 # Legacy compatibility properties
 var lock_dimensions: bool = false  # Used by BathQuantumVisualizationController
 
@@ -197,14 +218,24 @@ func _process(delta: float):
 	if frame_count % 2 == 0:
 		queue_redraw()
 	var t7 = Time.get_ticks_usec()
-	
-	if frame_count % 60 == 0:
-		var total_us = t7 - t0
-		var total_ms = total_us / 1000.0
-		var visuals_ms = (t3 - t2) / 1000.0
-		var forces_ms = (t5 - t4) / 1000.0
-		# Always print timing for debugging
-		print("[PROCESS] %.1fms (visuals=%.1fms forces=%.1fms)" % [total_ms, visuals_ms, forces_ms])
+
+	# Store timing samples
+	_perf_samples["process_total"].append(t7 - t0)
+	_perf_samples["process_viewport"].append(t1 - t0)
+	_perf_samples["process_context"].append(t2 - t1)
+	_perf_samples["process_visuals"].append(t3 - t2)
+	_perf_samples["process_animations"].append(t4 - t3)
+	_perf_samples["process_forces"].append(t5 - t4)
+	_perf_samples["process_particles"].append(t6 - t5)
+
+	# Trim sample arrays (keep last 300 samples)
+	for key in _perf_samples:
+		if _perf_samples[key].size() > 300:
+			_perf_samples[key].pop_front()
+
+	# Report every N frames
+	if frame_count % _perf_report_interval == 0:
+		_print_perf_report()
 
 
 func _draw():
@@ -583,6 +614,15 @@ func update_plot_positions(plot_positions: Dictionary, biome_name: String = "") 
 # ============================================================================
 
 func _unhandled_input(event):
+	# Debug key: Toggle shadow influence computation (Shift+S)
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_S and event.shift_pressed:
+			if bubble_renderer and bubble_renderer.has_method("set_shadow_compute_enabled"):
+				var new_state = not bubble_renderer.is_shadow_compute_enabled()
+				bubble_renderer.set_shadow_compute_enabled(new_state)
+				get_viewport().set_input_as_handled()
+				return
+
 	var ctx = _build_context()
 	if input_handler.handle_input(event, ctx):
 		get_viewport().set_input_as_handled()

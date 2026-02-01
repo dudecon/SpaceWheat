@@ -287,13 +287,13 @@ void main() {
 			// Tangent direction (perpendicular to radial)
 			vec2 tangent = vec2(-radial.y, radial.x) / current_radius;
 
-			// Tangent force proportional to angular error × radius
+			// Tangent force proportional to angular error * radius
 			force += tangent * (pc.phase_angular_spring * angular_error * current_radius);
 		}
 	}
 
 	// === 3. CORRELATION FORCES (MI-based springs) ===
-	// High MI → attract (shorter spring length)
+	// High MI -> attract (shorter spring length)
 	for (uint j = 0u; j < pc.num_nodes; j++) {
 		if (j == node_id) continue;
 		if (frozen[j] > 0u) continue;
