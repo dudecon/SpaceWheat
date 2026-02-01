@@ -3,6 +3,17 @@ extends RefCounted
 
 var _bloch_cache: Dictionary = {}  # qubit_index -> {p0,p1,x,y,z,r,theta,phi}
 var _purity_cache: float = -1.0
+var _purity_band: int = 1  # 0-3: bucketed purity for caching/pre-render
+
+# Pre-computed arc angles for each purity band (avoids per-frame math)
+# Band 0: [0.0-0.25] highly mixed, Band 1: [0.25-0.5] mixed
+# Band 2: [0.5-0.75] partially pure, Band 3: [0.75-1.0] nearly pure
+const PURITY_BAND_ARC_ANGLES: Array[float] = [
+	0.125 * TAU,   # Band 0: 12.5% arc (45°)
+	0.375 * TAU,   # Band 1: 37.5% arc (135°)
+	0.625 * TAU,   # Band 2: 62.5% arc (225°)
+	0.875 * TAU,   # Band 3: 87.5% arc (315°)
+]
 var _num_qubits: int = 0
 var _axes: Dictionary = {}  # qubit_index -> {north, south}
 var _emoji_to_qubit: Dictionary = {}
@@ -24,6 +35,7 @@ var _icon_map_total: float = 0.0
 func clear() -> void:
 	_bloch_cache.clear()
 	_purity_cache = -1.0
+	_purity_band = 1
 	_mi_values = PackedFloat64Array()
 	_mi_num_qubits = 0
 	_hamiltonian_couplings.clear()
@@ -70,10 +82,21 @@ func update_from_bloch_packet(packed: PackedFloat64Array, num_qubits: int) -> vo
 
 func update_purity(purity: float) -> void:
 	_purity_cache = purity
+	# Auto-bucket into bands: 0=[0-0.25], 1=[0.25-0.5], 2=[0.5-0.75], 3=[0.75-1.0]
+	_purity_band = clampi(int(purity * 4.0), 0, 3)
 
 
 func get_purity() -> float:
 	return _purity_cache
+
+
+func get_purity_band() -> int:
+	return _purity_band
+
+
+func get_purity_band_arc_angle() -> float:
+	"""Get pre-computed arc angle for current purity band (avoids per-frame math)."""
+	return PURITY_BAND_ARC_ANGLES[_purity_band]
 
 
 func update_mi_values(mi_values: PackedFloat64Array, num_qubits: int) -> void:

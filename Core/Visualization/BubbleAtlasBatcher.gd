@@ -93,6 +93,106 @@ var _atlas_built: bool = false
 # Arc configuration
 const ARC_SEGMENTS: int = 24  # Segments for full circle arc
 
+# =============================================================================
+# PURITY BAND CACHING - Pre-computed arc geometry for fast rendering
+# =============================================================================
+# Bands: 0=[0-0.25], 1=[0.25-0.5], 2=[0.5-0.75], 3=[0.75-1.0]
+# Arc angles: 45°, 135°, 225°, 315° (midpoint of each band × 360°)
+const PURITY_BAND_ANGLES: Array[float] = [
+	0.125 * TAU,   # Band 0: 45°
+	0.375 * TAU,   # Band 1: 135°
+	0.625 * TAU,   # Band 2: 225°
+	0.875 * TAU,   # Band 3: 315°
+]
+
+# Pre-computed unit arc geometry (relative to center, unit radius)
+# Format: PackedFloat64Array of [cos1, sin1, cos2, sin2] per segment, flattened
+var _purity_arc_cache: Array[PackedFloat64Array] = []  # Band index → flat array
+var _purity_arc_segment_counts: PackedInt32Array = PackedInt32Array()  # Segments per band
+var _purity_arc_cache_built: bool = false
+
+
+func _build_purity_arc_cache() -> void:
+	"""Pre-compute arc geometry for each purity band (call once at startup)."""
+	if _purity_arc_cache_built:
+		return
+
+	_purity_arc_cache.clear()
+	_purity_arc_segment_counts.clear()
+
+	for band in range(4):
+		var angle_span = PURITY_BAND_ANGLES[band]
+		var segments = maxi(8, int(absf(angle_span) * ARC_SEGMENTS / TAU))
+		var data = PackedFloat64Array()
+		data.resize(segments * 4)  # 4 floats per segment: cos1, sin1, cos2, sin2
+
+		for i in range(segments):
+			var t1 = float(i) / float(segments)
+			var t2 = float(i + 1) / float(segments)
+
+			var a1 = -PI / 2 + angle_span * t1  # Start from top (-PI/2)
+			var a2 = -PI / 2 + angle_span * t2
+
+			var base = i * 4
+			data[base + 0] = cos(a1)
+			data[base + 1] = sin(a1)
+			data[base + 2] = cos(a2)
+			data[base + 3] = sin(a2)
+
+		_purity_arc_cache.append(data)
+		_purity_arc_segment_counts.append(segments)
+
+	_purity_arc_cache_built = true
+
+
+func add_purity_ring_from_band(pos: Vector2, radius: float, width: float,
+							   band: int, color: Color) -> void:
+	"""Add purity ring using pre-cached geometry (FAST path).
+
+	Uses pre-computed cos/sin values in packed array - minimal overhead.
+	"""
+	if color.a < 0.01 or radius < 0.5 or width < 0.5:
+		return
+	if band < 0 or band > 3:
+		band = 1  # Default to middle band
+
+	var inner_radius = maxf(0.0, radius - width * 0.5)
+	var outer_radius = radius + width * 0.5
+
+	# Use pre-cached segment geometry (packed array for fast access)
+	var data = _purity_arc_cache[band]
+	var segments = _purity_arc_segment_counts[band]
+
+	for i in range(segments):
+		var base = i * 4
+		var cos1 = data[base + 0]
+		var sin1 = data[base + 1]
+		var cos2 = data[base + 2]
+		var sin2 = data[base + 3]
+
+		var inner1 = pos + Vector2(cos1 * inner_radius, sin1 * inner_radius)
+		var outer1 = pos + Vector2(cos1 * outer_radius, sin1 * outer_radius)
+		var inner2 = pos + Vector2(cos2 * inner_radius, sin2 * inner_radius)
+		var outer2 = pos + Vector2(cos2 * outer_radius, sin2 * outer_radius)
+
+		# Triangle 1: inner1, outer1, inner2
+		_arc_points.append(inner1)
+		_arc_points.append(outer1)
+		_arc_points.append(inner2)
+		_arc_colors.append(color)
+		_arc_colors.append(color)
+		_arc_colors.append(color)
+
+		# Triangle 2: inner2, outer1, outer2
+		_arc_points.append(inner2)
+		_arc_points.append(outer1)
+		_arc_points.append(outer2)
+		_arc_colors.append(color)
+		_arc_colors.append(color)
+		_arc_colors.append(color)
+
+	_arc_count += 1
+
 
 func _ensure_indices_capacity(size: int) -> void:
 	"""Ensure pre-allocated indices array is large enough."""
@@ -182,9 +282,12 @@ func build_atlas() -> bool:
 	_atlas_texture = ImageTexture.create_from_image(_atlas_image)
 	_atlas_built = true
 
+	# Pre-compute purity band arc geometry (avoids per-frame trig calls)
+	_build_purity_arc_cache()
+
 	var elapsed = Time.get_ticks_msec() - start_time
-	print("[BubbleAtlasBatcher] Atlas built: %dx%d (%d templates) in %dms" % [
-		ATLAS_WIDTH, ATLAS_HEIGHT, _template_uvs.size(), elapsed
+	print("[BubbleAtlasBatcher] Atlas built: %dx%d (%d templates) + %d purity bands in %dms" % [
+		ATLAS_WIDTH, ATLAS_HEIGHT, _template_uvs.size(), _purity_arc_cache.size(), elapsed
 	])
 
 	return true
@@ -835,19 +938,23 @@ func _draw_data_rings(pos: Vector2, effective_radius: float, anim_alpha: float,
 					  sink_flux: float, time: float) -> void:
 	"""Draw purity, probability, and uncertainty data rings."""
 
-	# Purity ring (inner)
+	# Purity ring (inner) - OPTIMIZED: uses pre-cached arc geometry
 	if individual_purity > 0.01:
+		# Bucket purity into bands for color + cached arc geometry
+		var purity_band = clampi(int(individual_purity * 4.0), 0, 3)
+		var biome_band = clampi(int(biome_purity * 4.0), 0, 3)
+
 		var purity_color: Color
-		if individual_purity > biome_purity + 0.05:
+		if purity_band > biome_band:
 			purity_color = Color(0.4, 0.9, 1.0, 0.6 * anim_alpha)  # Cyan: purer
-		elif individual_purity < biome_purity - 0.05:
+		elif purity_band < biome_band:
 			purity_color = Color(1.0, 0.4, 0.8, 0.6 * anim_alpha)  # Magenta: mixed
 		else:
 			purity_color = Color(0.9, 0.9, 0.9, 0.4 * anim_alpha)  # White: average
 
 		var purity_radius = effective_radius * 0.6
-		var purity_extent = individual_purity * TAU
-		add_arc_layer(pos, purity_radius, -PI / 2, -PI / 2 + purity_extent, 2.0, purity_color)
+		# Use cached arc geometry (no per-frame trig calls!)
+		add_purity_ring_from_band(pos, purity_radius, 2.0, purity_band, purity_color)
 
 	# Probability ring (outer)
 	if global_prob > 0.01:
