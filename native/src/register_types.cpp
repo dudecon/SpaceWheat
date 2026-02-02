@@ -4,6 +4,7 @@
 #include "multi_biome_lookahead_engine.h"    // RE-ENABLED: Pure CPU Eigen code
 #include "force_graph_engine.h"              // NEW: Native force graph calculations
 #include "batched_bubble_renderer.h"         // RE-ENABLED: CPU triangle batching (no GPU deps)
+#include "parametric_selector_native.h"      // NEW: Fast parametric music selection (100× speedup)
 
 // DISABLED HEADERS: GPU-dependent and dead code classes
 // #include "quantum_sparse_native.h"
@@ -34,6 +35,9 @@ void initialize_quantum_matrix_module(ModuleInitializationLevel p_level) {
     // RE-ENABLED: CPU-based triangle batching for bubble rendering (3-5× speedup)
     // Generates pre-triangulated geometry for RenderingServer.canvas_item_add_triangle_array()
     ClassDB::register_class<NativeBubbleRenderer>();
+
+    // NEW: Fast parametric selection for music Layer 4/5 (100× speedup over GDScript)
+    ClassDB::register_class<ParametricSelectorNative>();
 
     // DISABLED: Causes crashes in WSL due to platform/GPU dependencies
     // - QuantumSolverCPUNative (replaced by integrated QuantumComputer._apply_phase_lnn)

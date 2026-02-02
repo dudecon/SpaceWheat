@@ -267,6 +267,23 @@ func _update_display() -> void:
 
 	print("[PERF_HUD] ═══════════════════════════════════════════════════════════")
 
+func _show_engine_metrics_only(fps: int, time_process: float, time_physics: float, node_count: int) -> void:
+	"""Display engine metrics when graph data is unavailable."""
+	header_label.text = "⚡ Engine Metrics (Frame %d)" % frame_counter
+	process_label.text = "TIME_PROCESS: %.2fms" % time_process
+	draw_label.text = "TIME_PHYSICS: %.2fms" % time_physics
+	budget_label.text = "Nodes: %d | FPS: %d" % [node_count, fps]
+
+	# Show bottleneck warnings
+	var target_frame_time = 16.67  # 60 FPS target
+	if time_process > target_frame_time:
+		bottleneck_label.text = "🚨 Process %.2fms over budget" % time_process
+		bottleneck_label.visible = true
+	else:
+		bottleneck_label.text = "✅ Frame budget OK"
+		bottleneck_label.visible = true
+
+
 func _show_no_data() -> void:
 	"""Display 'no data' message."""
 	header_label.text = "🔬 Performance"
