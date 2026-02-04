@@ -1020,6 +1020,156 @@ func _invalidate_biome_buffer_for_action(action_name: String) -> void:
 		_verbose.warn("input", "⚠️", "Batcher missing invalidate_biome_buffer() method")
 
 
+func _get_target_biome_for_granularity() -> Dictionary:
+	"""Get the target biome for granularity control (-/= keys).
+
+	Returns: {biome: Node, name: String, reason: String}
+
+	Logic:
+	- Main game: ActiveBiomeManager.get_active_biome() (currently selected biome)
+	- VisualBubbleTest: get_last_generated_biome_name() (last biome created)
+	"""
+	if not farm or not farm.grid:
+		return {"biome": null, "name": "", "reason": "no_farm"}
+
+	# Check if we're in VisualBubbleTest (has get_last_generated_biome_name method)
+	var scene_root = get_tree().current_scene
+	if scene_root and scene_root.has_method("get_last_generated_biome_name"):
+		var last_biome_name = scene_root.get_last_generated_biome_name()
+		if last_biome_name.is_empty():
+			return {"biome": null, "name": "", "reason": "test_no_biomes_generated"}
+		var biome_obj = farm.grid.biomes.get(last_biome_name)
+		if biome_obj:
+			return {"biome": biome_obj, "name": last_biome_name, "reason": "test_last_generated"}
+		else:
+			return {"biome": null, "name": last_biome_name, "reason": "test_biome_not_found"}
+
+	# Main game: use ActiveBiomeManager
+	if _active_biome_mgr:
+		var active_biome_name = _active_biome_mgr.get_active_biome()
+		if active_biome_name.is_empty():
+			return {"biome": null, "name": "", "reason": "no_active_biome"}
+		var biome_obj = farm.grid.biomes.get(active_biome_name)
+		if biome_obj:
+			return {"biome": biome_obj, "name": active_biome_name, "reason": "active_biome"}
+		else:
+			return {"biome": null, "name": active_biome_name, "reason": "active_biome_not_found"}
+
+	# Fallback: no valid selection
+	return {"biome": null, "name": "", "reason": "no_selection_method"}
+
+
+func _invalidate_single_biome_buffer(biome_name: String, reason: String) -> void:
+	"""Invalidate a single biome's lookahead buffer after granularity change."""
+	if not farm:
+		_verbose.debug("input", "🔄", "No farm for buffer invalidation")
+		return
+
+	var batcher = farm.biome_evolution_batcher if "biome_evolution_batcher" in farm else null
+	if not batcher:
+		_verbose.debug("input", "🔄", "No batcher available for buffer invalidation")
+		return
+
+	if not batcher.has_method("invalidate_biome_buffer"):
+		_verbose.warn("input", "⚠️", "Batcher missing invalidate_biome_buffer() method")
+		return
+
+	batcher.invalidate_biome_buffer(biome_name)
+	_verbose.debug("input", "🔄", "[%s] Buffer invalidated: %s" % [biome_name, reason])
+
+
+func _decimate_single_biome_buffer(biome_name: String, decimation_factor: int) -> void:
+	"""Decimate a single biome's buffer when coarsening granularity."""
+	if not farm:
+		_verbose.debug("input", "✂️", "No farm for buffer decimation")
+		return
+
+	var batcher = farm.biome_evolution_batcher if "biome_evolution_batcher" in farm else null
+	if not batcher:
+		_verbose.debug("input", "✂️", "No batcher available for buffer decimation")
+		return
+
+	if not batcher.has_method("decimate_biome_buffer"):
+		# Fallback to full invalidation
+		_verbose.warn("input", "⚠️", "Batcher missing decimate_biome_buffer() - falling back to invalidation")
+		_invalidate_single_biome_buffer(biome_name, "granularity_increase_fallback")
+		return
+
+	var new_depth = batcher.decimate_biome_buffer(biome_name, decimation_factor)
+	_verbose.debug("input", "✂️", "[%s] Buffer decimated (1/%d) - preserved %d frames" % [
+		biome_name, decimation_factor, new_depth
+	])
+
+
+func _invalidate_all_biome_buffers(reason: String) -> void:
+	"""Invalidate ALL biome buffers after global parameter changes.
+
+	When simulation parameters change (granularity, time scale), all lookahead
+	buffers become invalid because they were computed with old parameters.
+
+	Args:
+		reason: Reason for invalidation (for logging)
+	"""
+	if not farm or not farm.grid:
+		_verbose.debug("input", "🔄", "No farm/grid for buffer invalidation")
+		return
+
+	# Get batcher reference from farm
+	var batcher = farm.biome_evolution_batcher if "biome_evolution_batcher" in farm else null
+	if not batcher:
+		_verbose.debug("input", "🔄", "No batcher available for buffer invalidation")
+		return
+
+	# Check if batcher has the method
+	if not batcher.has_method("invalidate_biome_buffer"):
+		_verbose.warn("input", "⚠️", "Batcher missing invalidate_biome_buffer() method")
+		return
+
+	# Invalidate ALL biomes
+	var biome_count = 0
+	for biome_name in farm.grid.biomes.keys():
+		batcher.invalidate_biome_buffer(biome_name)
+		biome_count += 1
+
+	_verbose.info("input", "🔄", "All %d biome buffers invalidated (reason: %s)" % [biome_count, reason])
+
+
+func _decimate_all_biome_buffers(decimation_factor: int) -> void:
+	"""Decimate ALL biome buffers when coarsening granularity.
+
+	When dt doubles (2x coarser), existing frames are still valid but oversampled.
+	Instead of full invalidation, keep every Nth frame to preserve computed work.
+
+	Args:
+		decimation_factor: Keep every Nth frame (2 for 2x coarsening)
+	"""
+	if not farm or not farm.grid:
+		_verbose.debug("input", "✂️", "No farm/grid for buffer decimation")
+		return
+
+	var batcher = farm.biome_evolution_batcher if "biome_evolution_batcher" in farm else null
+	if not batcher:
+		_verbose.debug("input", "✂️", "No batcher available for buffer decimation")
+		return
+
+	if not batcher.has_method("decimate_biome_buffer"):
+		# Fallback to full invalidation if decimation not available
+		_verbose.warn("input", "⚠️", "Batcher missing decimate_biome_buffer() - falling back to invalidation")
+		_invalidate_all_biome_buffers("granularity_increase_fallback")
+		return
+
+	var biome_count = 0
+	var total_preserved = 0
+	for biome_name in farm.grid.biomes.keys():
+		var new_depth = batcher.decimate_biome_buffer(biome_name, decimation_factor)
+		total_preserved += new_depth
+		biome_count += 1
+
+	_verbose.info("input", "✂️", "All %d biome buffers decimated (1/%d) - preserved %d frames total" % [
+		biome_count, decimation_factor, total_preserved
+	])
+
+
 func _execute_action(action_name: String) -> Dictionary:
 	"""Execute a specific action by name.
 
@@ -2013,16 +2163,29 @@ func get_actions_for_current_group() -> Dictionary:
 ## ============================================================================
 
 func _decrease_simulation_speed() -> void:
-	"""Decrease quantum evolution granularity - finer substeps (- key)."""
+	"""Decrease quantum evolution granularity - finer substeps (- key).
+
+	PER-BIOME CONTROL:
+	- Main game: Affects only the currently selected biome (ActiveBiomeManager)
+	- VisualBubbleTest: Affects only the last biome that was generated
+	"""
 	if not farm or not farm.grid:
 		_verbose.warn("input", "⚠️", "Cannot adjust granularity - no farm/grid")
 		return
 
-	# Use shared granularity controller
-	var biomes = farm.grid.biomes.values()
-	var result = GranularityController.decrease_granularity(biomes)
+	# Get target biome (per-biome control, not global)
+	var target_biome_info = _get_target_biome_for_granularity()
+	if not target_biome_info.has("biome") or target_biome_info.biome == null:
+		_verbose.warn("input", "⚠️", "No target biome for granularity control: %s" % target_biome_info.get("reason", "unknown"))
+		return
 
-	# Update GameState so it's saved
+	var target_biome = target_biome_info.biome
+	var target_biome_name = target_biome_info.name
+
+	# Use granularity controller on single biome
+	var result = GranularityController.decrease_granularity([target_biome])
+
+	# Update GameState so it's saved (use target biome's dt as representative value)
 	var gsm = get_node_or_null("/root/GameStateManager")
 	if gsm and gsm.current_state:
 		if not ("max_evolution_dt" in gsm.current_state):
@@ -2030,22 +2193,38 @@ func _decrease_simulation_speed() -> void:
 		else:
 			gsm.current_state.max_evolution_dt = result.new_dt
 
-	_verbose.info("input", "🔬", "Matrix granularity: %.4fs → %.4fs (finer, %d biomes)" % [
-		result.current_dt, result.new_dt, result.biome_count
+	# CRITICAL: Invalidate ONLY target biome's buffer - lookahead was computed with old dt
+	_invalidate_single_biome_buffer(target_biome_name, "granularity_decrease")
+
+	_verbose.info("input", "🔬", "[%s] Matrix granularity: %.4fs → %.4fs (finer, buffer invalidated)" % [
+		target_biome_name, result.current_dt, result.new_dt
 	])
 
 
 func _increase_simulation_speed() -> void:
-	"""Increase quantum evolution granularity - coarser substeps (= key)."""
+	"""Increase quantum evolution granularity - coarser substeps (= key).
+
+	PER-BIOME CONTROL:
+	- Main game: Affects only the currently selected biome (ActiveBiomeManager)
+	- VisualBubbleTest: Affects only the last biome that was generated
+	"""
 	if not farm or not farm.grid:
 		_verbose.warn("input", "⚠️", "Cannot adjust granularity - no farm/grid")
 		return
 
-	# Use shared granularity controller
-	var biomes = farm.grid.biomes.values()
-	var result = GranularityController.increase_granularity(biomes)
+	# Get target biome (per-biome control, not global)
+	var target_biome_info = _get_target_biome_for_granularity()
+	if not target_biome_info.has("biome") or target_biome_info.biome == null:
+		_verbose.warn("input", "⚠️", "No target biome for granularity control: %s" % target_biome_info.get("reason", "unknown"))
+		return
 
-	# Update GameState so it's saved
+	var target_biome = target_biome_info.biome
+	var target_biome_name = target_biome_info.name
+
+	# Use granularity controller on single biome
+	var result = GranularityController.increase_granularity([target_biome])
+
+	# Update GameState so it's saved (use target biome's dt as representative value)
 	var gsm = get_node_or_null("/root/GameStateManager")
 	if gsm and gsm.current_state:
 		if not ("max_evolution_dt" in gsm.current_state):
@@ -2053,6 +2232,9 @@ func _increase_simulation_speed() -> void:
 		else:
 			gsm.current_state.max_evolution_dt = result.new_dt
 
-	_verbose.info("input", "🔭", "Matrix granularity: %.4fs → %.4fs (coarser, %d biomes)" % [
-		result.current_dt, result.new_dt, result.biome_count
+	# OPTIMIZATION: Decimate buffer instead of full invalidation (10x coarser = keep every 10th frame)
+	_decimate_single_biome_buffer(target_biome_name, 10)
+
+	_verbose.info("input", "🔭", "[%s] Matrix granularity: %.4fs → %.4fs (coarser, buffer decimated)" % [
+		target_biome_name, result.current_dt, result.new_dt
 	])

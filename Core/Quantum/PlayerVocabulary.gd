@@ -5,6 +5,8 @@ extends Node
 ## Maintains a separate density matrix for player's learned vocab pairs
 ## Used for calculating affinity to biomes
 
+const QuantumComputer = preload("res://Core/QuantumSubstrate/QuantumComputer.gd")
+
 var vocab_qc: QuantumComputer = null
 var learned_pairs: Array[Dictionary] = []  # [{north, south, timestamp}]
 

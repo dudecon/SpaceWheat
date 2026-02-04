@@ -60,6 +60,11 @@ var _draw_calls: int = 0
 var _atlas_built: bool = false
 var _debug_placeholder_printed: bool = false
 
+# Track fallback usage for debugging (MUST be declared before begin() uses them)
+var _fallback_count: int = 0
+var _atlas_hit_count: int = 0
+var _missing_emojis: Dictionary = {}  # Track which emojis are missing
+
 # Fallback for visual asset registry textures
 var _visual_asset_registry = null
 
@@ -342,11 +347,26 @@ func build_atlas_async(emoji_list: Array, parent_node: Node, font_size: int = 48
 
 		cell_index += 1
 
-	# Log rendering breakdown and stored emojis
+	# Log rendering breakdown
 	print("[EmojiAtlasBatcher] Rendering breakdown: SVG=%d, Viewport=%d, Failed=%d, Total=%d" % [svg_count, viewport_count, failed_count, emoji_list.size()])
 	print("[EmojiAtlasBatcher] Stored %d emojis in UV map:" % _emoji_uvs.size())
-	for e in _emoji_uvs.keys():
-		print("  - '%s'" % e)
+
+	# Track which emojis failed
+	var failed_emojis: Array = []
+	for emoji in emoji_list:
+		var normalized = _normalize_emoji(emoji)
+		if not _emoji_uvs.has(normalized):
+			failed_emojis.append(emoji)
+
+	if failed_emojis.size() > 0:
+		print("[EmojiAtlasBatcher] ⚠️ Failed to render %d emojis (will use text fallback):" % failed_emojis.size())
+		for e in failed_emojis:
+			print("  - '%s'" % e)
+
+	# List successfully stored emojis (only if not too many)
+	if _emoji_uvs.size() <= 50:
+		for e in _emoji_uvs.keys():
+			print("  ✓ '%s'" % e)
 
 	# Cleanup viewport
 	viewport.queue_free()
@@ -379,6 +399,13 @@ func build_atlas_cached(emoji_list: Array, parent_node: Node, font_size: int = 4
 
 	if emoji_list.is_empty():
 		push_warning("[EmojiAtlasBatcher] No emojis provided for atlas")
+		return
+
+	# Skip building in headless mode (can't render SubViewport without display)
+	var is_headless = DisplayServer.get_name() == "headless"
+	if is_headless:
+		print("[EmojiAtlasBatcher] Headless mode - skipping atlas build")
+		_atlas_built = false
 		return
 
 	# Initialize cache if needed
@@ -460,6 +487,7 @@ func begin(canvas_item: RID) -> void:
 	_points.clear()
 	_uvs.clear()
 	_colors.clear()
+	_text_fallback_queue.clear()
 	_emoji_count = 0
 	_draw_calls = 0
 	_fallback_count = 0
@@ -494,6 +522,11 @@ func add_emoji_by_name(position: Vector2, size: Vector2, emoji: String, color: C
 
 	This is the FAST path - all emojis batch into one draw call!
 
+	Fallback chain:
+	  1. Atlas (if built and emoji present) → batched GPU call
+	  2. SVG texture (if VisualAssetRegistry has it) → immediate draw
+	  3. Text box fallback → rendered at end of frame via flush_text_fallbacks()
+
 	CRITICAL: The emoji atlas is built synchronously at boot time via
 	EmojiAtlasBatcher.build_atlas_async() called from BootManager.
 	Therefore, _atlas_built is GUARANTEED to be true on all frames.
@@ -501,35 +534,44 @@ func add_emoji_by_name(position: Vector2, size: Vector2, emoji: String, color: C
 	# Normalize emoji string to handle variation selector inconsistencies
 	var normalized_emoji = _normalize_emoji(emoji)
 
-	if not _emoji_uvs.has(normalized_emoji):
-		_fallback_count += 1
-		if not _missing_emojis.has(emoji):
-			_missing_emojis[emoji] = true
-			# Only warn once per emoji to avoid spam (use push_warning for proper filtering)
-			push_warning("[EmojiAtlasBatcher] Missing from atlas: '%s'" % emoji)
-		# Fallback: try SVG texture
-		if _visual_asset_registry:
-			var tex = _visual_asset_registry.get_texture(emoji)
-			if tex:
-				_draw_textured_quad_immediate(tex, position, size, color, shadow_offset)
-				return
-		# Ultimate fallback: draw a placeholder shape (text rendering doesn't work for unsupported emojis)
-		_draw_placeholder(position, size, color, shadow_offset)
+	# PRIMARY PATH: Atlas hit (most common case)
+	if _emoji_uvs.has(normalized_emoji):
+		_atlas_hit_count += 1
+		var uv_rect = _emoji_uvs[normalized_emoji]
+		_add_quad_to_batch(position, size, uv_rect, color, shadow_offset)
+		_emoji_count += 1
 		return
 
-	_atlas_hit_count += 1
-	var uv_rect = _emoji_uvs[normalized_emoji]
-	_add_quad_to_batch(position, size, uv_rect, color, shadow_offset)
-	_emoji_count += 1
+	# ATLAS MISS - try fallbacks
+	_fallback_count += 1
+
+	# Warn once per emoji (only if atlas was built - don't warn if atlas is disabled)
+	if not _missing_emojis.has(emoji):
+		_missing_emojis[emoji] = true
+		if _atlas_built:
+			push_warning("[EmojiAtlasBatcher] Missing from atlas: '%s' (will use text fallback)" % emoji)
+
+	# FALLBACK 1: Try SVG texture from VisualAssetRegistry
+	if _visual_asset_registry:
+		var tex = _visual_asset_registry.get_texture(emoji)
+		if tex:
+			_draw_textured_quad_immediate(tex, position, size, color, shadow_offset)
+			_emoji_count += 1
+			return
+
+	# FALLBACK 2: Queue for text box rendering
+	# This is the last-resort fallback - will render as a bordered box with emoji text
+	_text_fallback_queue.append({
+		"position": position,
+		"size": size,
+		"emoji": emoji,
+		"color": color,
+		"shadow_offset": shadow_offset
+	})
 
 
 # Queue for text fallback (emojis not in atlas)
 var _text_fallback_queue: Array = []
-
-# Track fallback usage for debugging
-var _fallback_count: int = 0
-var _atlas_hit_count: int = 0
-var _missing_emojis: Dictionary = {}  # Track which emojis are missing
 
 
 func _add_quad_to_batch(position: Vector2, size: Vector2, uv_rect: Rect2, color: Color, shadow_offset: Vector2) -> void:
@@ -598,57 +640,6 @@ func _draw_textured_quad_immediate(texture: Texture2D, position: Vector2, size: 
 	_emoji_count += 1
 
 
-func _draw_placeholder(position: Vector2, size: Vector2, color: Color, shadow_offset: Vector2) -> void:
-	"""Draw a placeholder rectangle for missing emojis (avoids invisible bubbles).
-
-	Uses GeometryBatcher if available for batched rendering, otherwise falls back
-	to individual draw calls.
-	"""
-	var half_size = size * 0.5
-
-	# Use geometry batcher if available (batches all placeholders into ONE draw call)
-	if _geometry_batcher:
-		# Shadow quad
-		if shadow_offset != Vector2.ZERO:
-			var shadow_points = PackedVector2Array([
-				position + Vector2(-half_size.x, -half_size.y) + shadow_offset,
-				position + Vector2(half_size.x, -half_size.y) + shadow_offset,
-				position + Vector2(half_size.x, half_size.y) + shadow_offset,
-				position + Vector2(-half_size.x, half_size.y) + shadow_offset
-			])
-			_geometry_batcher.add_polygon(shadow_points, Color(0, 0, 0, 0.7 * color.a))
-
-		# Main quad
-		var main_points = PackedVector2Array([
-			position + Vector2(-half_size.x, -half_size.y),
-			position + Vector2(half_size.x, -half_size.y),
-			position + Vector2(half_size.x, half_size.y),
-			position + Vector2(-half_size.x, half_size.y)
-		])
-		var placeholder_color = Color(color.r * 0.5, color.g * 0.5, color.b * 0.5, color.a * 0.3)
-		_geometry_batcher.add_polygon(main_points, placeholder_color)
-	else:
-		# Fallback: individual draw calls (not batched)
-		if not _canvas_item.is_valid():
-			return
-
-		var rect = Rect2(position - half_size, size)
-
-		# Shadow
-		if shadow_offset != Vector2.ZERO:
-			var shadow_rect = Rect2(rect.position + shadow_offset, rect.size)
-			RenderingServer.canvas_item_add_rect(
-				_canvas_item, shadow_rect, Color(0, 0, 0, 0.7 * color.a)
-			)
-			_draw_calls += 1
-
-		# Main
-		var placeholder_color = Color(color.r * 0.5, color.g * 0.5, color.b * 0.5, color.a * 0.3)
-		RenderingServer.canvas_item_add_rect(_canvas_item, rect, placeholder_color)
-		_draw_calls += 1
-
-	_emoji_count += 1
-
 
 func add_emoji_text_fallback(graph: Node2D, position: Vector2, emoji: String, font_size: int, color: Color) -> void:
 	"""Fallback for emojis without textures - uses immediate draw_string.
@@ -696,13 +687,65 @@ func flush() -> void:
 
 
 func flush_text_fallbacks(graph: Node2D) -> void:
-	"""No-op: Text fallback has been replaced with placeholder rendering.
+	"""Render text boxes for emojis not in the atlas.
 
-	This function is kept for compatibility but does nothing since text
-	fallback doesn't work for unsupported emojis (font can't render them).
-	Placeholders are now drawn immediately via _draw_placeholder().
+	Instead of rendering black placeholders, this draws a small bordered box
+	with the emoji string as text. The text may not render as a colored emoji
+	glyph but will show the Unicode character(s), making debugging easier.
+
+	Called AFTER flush() to maintain proper z-order.
 	"""
-	pass
+	if _text_fallback_queue.is_empty():
+		return
+
+	var font = ThemeDB.fallback_font
+	if not font:
+		return
+
+	for item in _text_fallback_queue:
+		_draw_text_box(graph, font, item.position, item.size, item.emoji, item.color, item.shadow_offset)
+		_emoji_count += 1
+
+	_text_fallback_queue.clear()
+
+
+func _draw_text_box(graph: Node2D, font: Font, position: Vector2, size: Vector2, emoji: String, color: Color, shadow_offset: Vector2) -> void:
+	"""Draw a bordered text box with the emoji string inside.
+
+	Fallback rendering for emojis missing from atlas. Creates a visible
+	bordered box containing the emoji text as a last-resort fallback.
+
+	Box styling:
+	  - Fill: Very translucent dark background (0.13 * color.a)
+	  - Border: Semi-transparent color-tinted border (0.6 * color.a)
+	  - Text: White emoji at full opacity (color.a)
+	"""
+	var half_size = size * 0.5
+	var rect = Rect2(position - half_size, size)
+
+	# Box colors - keep translucent to not block SVGs rendered at same position
+	# but make border visible enough to identify fallback
+	var box_fill = Color(0.1, 0.1, 0.15, 0.13 * color.a)
+	var box_border = Color(color.r * 0.7, color.g * 0.7, color.b * 0.7, 0.6 * color.a)
+
+	# Draw background fill (very translucent)
+	graph.draw_rect(rect, box_fill, true)
+
+	# Draw border (2px, color-tinted for debugging)
+	graph.draw_rect(rect, box_border, false, 2.0)
+
+	# Text rendering - centered in the box
+	var font_size = int(size.y * 0.65)
+	var text_size = font.get_string_size(emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+
+	# Center text horizontally and vertically in box
+	var text_x = position.x - text_size.x * 0.5
+	var text_y = position.y - text_size.y * 0.5  # True vertical center
+	var text_pos = Vector2(text_x, text_y)
+
+	# Draw emoji text (full opacity for readability)
+	var text_color = Color(1.0, 1.0, 1.0, color.a)
+	graph.draw_string(font, text_pos, emoji, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
 
 
 func has_emoji(emoji: String) -> bool:

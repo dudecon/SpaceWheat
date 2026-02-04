@@ -231,15 +231,16 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 		if farm.village_biome:
 			biomes["Village"] = farm.village_biome
 
-	# PRODUCTION: Setup quantum viz in terminal-driven mode
-	# Bubbles only appear when terminals bind via EXPLORE action (not at boot)
+	# Quantum visualization setup
+	# WSL2 dev: Shows bubbles at boot for testing
+	# Windows prod: Will use terminal-driven mode (set skip_boot_bubbles=true for prod)
 	if biomes.size() > 0:
-		_verbose.info("boot", "💭", "Setting up quantum visualization (terminal-driven mode)...")
+		_verbose.info("boot", "💭", "Setting up quantum visualization with boot-time bubbles...")
 		var farm_grid = farm.grid if "grid" in farm else null
 		var plot_pool = farm.plot_pool if "plot_pool" in farm else null
-		var skip_boot_bubbles = true  # PRODUCTION: Only show terminal bubbles
+		var skip_boot_bubbles = false  # false = show bubbles at boot (for WSL2 dev testing)
 		quantum_viz.graph.setup(biomes, farm_grid, plot_pool, skip_boot_bubbles)
-		_verbose.info("boot", "✓", "Quantum viz ready (bubbles appear on EXPLORE)")
+		_verbose.info("boot", "✓", "Quantum viz ready (bubbles created at boot)")
 
 	# Pre-compile GPU shaders before creating force graph
 	if biomes.size() > 0:
@@ -280,13 +281,24 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 		var all_emojis = emoji_set.keys()
 		_verbose.info("boot", "🎨", "  Total unique: %d emojis" % all_emojis.size())
 
-		# Build atlas with caching (loads from cache if available, else builds + saves)
+		# Build atlas with graceful fallback (skip in headless mode)
 		var EmojiAtlasBatcherClass = load("res://Core/Visualization/EmojiAtlasBatcher.gd")
 		var atlas_batcher = EmojiAtlasBatcherClass.new()
-		atlas_batcher.build_atlas_cached(all_emojis, quantum_viz.graph)
-		_verbose.info("boot", "✓", "Emoji atlas ready (%d emojis)" % atlas_batcher._emoji_uvs.size())
 
-		# Pass atlas to the quantum viz context for use by bubble renderer
+		# Check if we're in headless mode (can't render emojis without viewport)
+		var is_headless = DisplayServer.get_name() == "headless"
+		if is_headless:
+			_verbose.warn("boot", "⚠️", "Headless mode detected - skipping atlas build (will use text fallback)")
+		else:
+			# Try to build atlas, but don't fail if it errors
+			_verbose.info("boot", "🎨", "  Attempting atlas build (may take 10-30 seconds)...")
+			atlas_batcher.build_atlas_cached(all_emojis, quantum_viz.graph)
+			if atlas_batcher._atlas_built:
+				_verbose.info("boot", "✓", "Emoji atlas ready (%d emojis)" % atlas_batcher._emoji_uvs.size())
+			else:
+				_verbose.warn("boot", "⚠️", "Atlas build failed - using text fallback for all emojis")
+
+		# Pass atlas to quantum viz (even if empty - will use text fallback)
 		if quantum_viz.graph.has_method("set_emoji_atlas_batcher"):
 			quantum_viz.graph.set_emoji_atlas_batcher(atlas_batcher)
 
@@ -323,11 +335,14 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 		return
 
 	# Load and instantiate FarmUI scene
+	_verbose.info("boot", "🔍", "Loading FarmUI.tscn...")
 	var farm_ui_scene = load("res://UI/FarmUI.tscn")
 	assert(farm_ui_scene != null, "FarmUI.tscn not found!")
 
+	_verbose.info("boot", "🔍", "Instantiating FarmUI...")
 	var farm_ui = farm_ui_scene.instantiate() as Control
 	assert(farm_ui != null, "FarmUI failed to instantiate!")
+	_verbose.info("boot", "✓", "FarmUI instantiated")
 
 	# INJECT DEPENDENCIES BEFORE ADD_CHILD
 	# This allows PlotGridDisplay._ready() to have all dependencies available,
@@ -359,6 +374,7 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 				_verbose.info("boot", "📡", "PlotGridDisplay connected to QuantumForceGraph anchors")
 
 	# NOW add to tree - _ready() runs with all dependencies available
+	_verbose.info("boot", "🔍", "Mounting FarmUI in shell (triggers _ready)...")
 	shell.load_farm_ui(farm_ui)
 	_verbose.info("boot", "✓", "FarmUI mounted in shell")
 
@@ -368,15 +384,20 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 
 	# Setup remaining FarmUI parts (ResourcePanel wiring, signal connections)
 	# PlotGridDisplay injection is idempotent - guards prevent double tile creation
+	_verbose.info("boot", "🔍", "Calling farm_ui.setup_farm()...")
 	farm_ui.setup_farm(farm)
+	_verbose.info("boot", "✓", "farm_ui.setup_farm() complete")
 
 	# Create and inject QuantumInstrumentInput (single input system)
 	# Uses the new musical instrument spindle interface for tool groups + fractal navigation
+	_verbose.info("boot", "🔍", "Creating QuantumInstrumentInput...")
 	var input_handler = Node.new()
 	var QuantumInstrumentScript = load("res://UI/Core/QuantumInstrumentInput.gd")
 	input_handler.set_script(QuantumInstrumentScript)
 	input_handler.name = "QuantumInstrumentInput"
+	_verbose.info("boot", "🔍", "Adding QuantumInstrumentInput to shell (triggers _ready)...")
 	shell.add_child(input_handler)
+	_verbose.info("boot", "✓", "QuantumInstrumentInput added to tree")
 
 	# Inject dependencies
 	input_handler.inject_farm(farm)

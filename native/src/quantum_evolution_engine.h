@@ -44,7 +44,7 @@ public:
     // Evolution (single call per frame!)
     PackedFloat64Array evolve_step(const PackedFloat64Array& rho_data, float dt);
 
-    // Batch evolution with subcycling
+    // Single evolution step (max_dt kept for API compatibility, not used)
     PackedFloat64Array evolve(const PackedFloat64Array& rho_data, float dt, float max_dt);
 
     // Mutual information computation (piggybacks on evolution)

@@ -1,0 +1,106 @@
+{
+  "header": {
+    "version_major": 4,
+    "version_minor": 3
+  },
+  "builtin_class_sizes": [],
+  "builtin_class_member_offsets": [],
+  "global_constants": [],
+  "global_enums": [],
+  "utility_functions": [],
+  "builtin_classes": [
+    {
+      "name": "String",
+      "indexing_return_type": "",
+      "is_keyed": false,
+      "members": [],
+      "constants": [],
+      "operators": [],
+      "methods": [],
+      "constructors": [],
+      "has_destructor": false
+    },
+    {
+      "name": "Dictionary",
+      "indexing_return_type": "",
+      "is_keyed": true,
+      "members": [],
+      "constants": [],
+      "operators": [],
+      "methods": [],
+      "constructors": [],
+      "has_destructor": false
+    },
+    {
+      "name": "Array",
+      "indexing_return_type": "",
+      "is_keyed": true,
+      "members": [],
+      "constants": [],
+      "operators": [],
+      "methods": [],
+      "constructors": [],
+      "has_destructor": false
+    },
+    {
+      "name": "PackedFloat64Array",
+      "indexing_return_type": "float",
+      "is_keyed": false,
+      "members": [],
+      "constants": [],
+      "operators": [],
+      "methods": [],
+      "constructors": [],
+      "has_destructor": false
+    },
+    {
+      "name": "PackedVector2Array",
+      "indexing_return_type": "Vector2",
+      "is_keyed": false,
+      "members": [],
+      "constants": [],
+      "operators": [],
+      "methods": [],
+      "constructors": [],
+      "has_destructor": false
+    },
+    {
+      "name": "PackedInt32Array",
+      "indexing_return_type": "int",
+      "is_keyed": false,
+      "members": [],
+      "constants": [],
+      "operators": [],
+      "methods": [],
+      "constructors": [],
+      "has_destructor": false
+    },
+    {
+      "name": "Vector2",
+      "indexing_return_type": "",
+      "is_keyed": false,
+      "members": [],
+      "constants": [],
+      "operators": [],
+      "methods": [],
+      "constructors": [],
+      "has_destructor": false
+    }
+  ],
+  "classes": [
+    {
+      "name": "RefCounted",
+      "is_refcounted": true,
+      "is_instantiable": true,
+      "inherits": "Object",
+      "api_type": "core",
+      "enums": [],
+      "methods": [],
+      "properties": [],
+      "signals": [],
+      "constants": []
+    }
+  ],
+  "singletons": [],
+  "native_structures": []
+}

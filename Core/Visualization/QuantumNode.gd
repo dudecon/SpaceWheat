@@ -48,6 +48,11 @@ var emoji_south: String = "👥"  # South pole emoji (e.g., 👥 for wheat)
 var emoji_north_opacity: float = 1.0  # Probability-weighted opacity
 var emoji_south_opacity: float = 0.0  # Probability-weighted opacity
 
+# Mass accumulation history (rolling window for radius calculation)
+const MASS_HISTORY_SIZE: int = 13  # ~1.3 seconds at 10 Hz physics
+var _mass_history: Array = []  # Last 13 frames of (p0 + p1)
+var _accumulated_mass: float = 0.0  # Sum of _mass_history
+
 # Parametric biome coordinates (for auto-scaling layout)
 # Position is computed by BiomeLayoutCalculator from these coords
 var parametric_t: float = 0.5      # Angular parameter [0, 1] around biome oval
@@ -304,7 +309,10 @@ func update_from_quantum_state(batcher = null):
 		else:
 			snap = biome.viz_cache.get_snapshot(qubit_index)
 
-	# 1. EMOJI OPACITY ← Normalized probabilities (θ-like)
+	# 1. EMOJI OPACITY ← Bloch sphere polarity via theta
+	# theta = 0 (north pole) → north full, south zero
+	# theta = π (south pole) → north zero, south full
+	# theta = π/2 (equator) → equal superposition
 	var north_prob = 0.5
 	var south_prob = 0.5
 	if snap.is_empty():
@@ -316,13 +324,18 @@ func update_from_quantum_state(batcher = null):
 		emoji_north_opacity = 0.0
 		emoji_south_opacity = 0.0
 		return
+
+	# Get theta from Bloch sphere (polar angle)
+	var theta = snap.get("theta", PI / 2.0)
 	north_prob = snap.get("p0", 0.5)
 	south_prob = snap.get("p1", 0.5)
 	var mass = north_prob + south_prob  # Total probability in our subspace
 
 	if mass > 0.001:
-		emoji_north_opacity = north_prob / mass
-		emoji_south_opacity = south_prob / mass
+		# Use theta for polarity: cos²(θ/2) = (1+cos(θ))/2 for north pole
+		var cos_theta = cos(theta)
+		emoji_north_opacity = (1.0 + cos_theta) * 0.5
+		emoji_south_opacity = (1.0 - cos_theta) * 0.5
 	else:
 		# No probability in our subspace - show dim
 		emoji_north_opacity = 0.1
@@ -375,8 +388,16 @@ func update_from_quantum_state(batcher = null):
 	# High coherence = stable/slow pulse, low = jittery/fast
 	coherence = coh_magnitude
 
-	# 5. RADIUS ← Mass in subspace + quadratic purity boost
-	# Base radius from probability mass
+	# 5. RADIUS ← Accumulated mass over last 13 physics frames + quadratic purity boost
+	# TEMPORARY: Disabled mass accumulation for debugging
+	# Update mass history (rolling 13-frame window)
+	# _mass_history.append(mass)
+	# if _mass_history.size() > MASS_HISTORY_SIZE:
+	# 	var oldest = _mass_history.pop_front()
+	# 	_accumulated_mass -= oldest
+	# _accumulated_mass += mass
+
+	# Base radius from current mass (not accumulated) - TEMPORARY FIX
 	var base_radius = lerpf(MIN_RADIUS, MAX_RADIUS * 0.7, clampf(mass * 2.0, 0.0, 1.0))
 
 	# Quadratic purity boost: makes pure states visibly larger
@@ -390,7 +411,7 @@ func update_from_quantum_state(batcher = null):
 	# 6. Berry phase - REAL geometric phase from Bloch sphere path integral
 	# Formula: dβ = -(1/2) × (1 - cos(θ)) × dφ
 	# This is the solid angle swept on the Bloch sphere per frame
-	var theta = snap.get("theta", PI / 2.0)  # Polar angle from Bloch metrics
+	# theta already defined above at line 329 from snap.get("theta")
 	var dphi = season_angular_momentum       # Phase velocity (already smoothed)
 	var berry_increment = -0.5 * (1.0 - cos(theta)) * dphi
 	berry_phase += berry_increment

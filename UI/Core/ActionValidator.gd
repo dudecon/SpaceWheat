@@ -136,18 +136,6 @@ static func _can_execute_tool_action(
 			return true  # Available if plots selected
 
 		# ═══════════════════════════════════════════════════════════════
-		# v2 INDUSTRY Tool (Tool 4)
-		# ═══════════════════════════════════════════════════════════════
-		"place_mill", "place_market":
-			return true  # Available if plots selected
-		"place_kitchen":
-			return selected_plots.size() == 3  # Kitchen needs exactly 3 plots
-		"harvest_flour", "market_sell":
-			return true  # Available if plots selected
-		"bake_bread":
-			return selected_plots.size() == 3  # Baking needs exactly 3 plots
-
-		# ═══════════════════════════════════════════════════════════════
 		# BUILD MODE - Tool 1 (BIOME)
 		# ═══════════════════════════════════════════════════════════════
 		"submenu_biome_assign":

@@ -43,6 +43,7 @@ __pycache__/
 *.tmp
 *.bak
 *.log
+logs/
 
 # WSL artifacts
 *Zone.Identifier

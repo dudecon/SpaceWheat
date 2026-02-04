@@ -19,7 +19,6 @@ const BiomeHandler = preload("res://UI/Handlers/BiomeHandler.gd")
 const IconHandler = preload("res://UI/Handlers/IconHandler.gd")
 const SystemHandler = preload("res://UI/Handlers/SystemHandler.gd")
 const ProbeHandler = preload("res://UI/Handlers/ProbeHandler.gd")
-const IndustryHandler = preload("res://UI/Handlers/IndustryHandler.gd")
 
 # Signals
 signal action_completed(action: String, success: bool, message: String, result: Dictionary)
@@ -101,13 +100,6 @@ const DISPATCH_TABLE = {
 	"system_debug": ["SystemHandler", "system_debug", "Debug mode toggled"],
 	"peek_state": ["SystemHandler", "peek_state", "State peeked"],
 
-	# ═══════════════════════════════════════════════════════════════════════════
-	# INDUSTRY ACTIONS (Tool 4)
-	# ═══════════════════════════════════════════════════════════════════════════
-	"place_kitchen": ["IndustryHandler", "place_kitchen", "Kitchen created with triplet entanglement"],
-	"harvest_flour": ["IndustryHandler", "harvest_flour", "Harvested {total_flour} flour from {harvested_count} mills"],
-	"market_sell": ["IndustryHandler", "market_sell", "Sold {sold_count} items (+{total_credits} credits)"],
-	"bake_bread": ["IndustryHandler", "bake_bread", "Baked bread! (+{bread_yield} bread)"],
 }
 
 
@@ -183,8 +175,6 @@ func _call_handler(
 			return _call_lindblad_handler(method_name, farm, positions)
 		"SystemHandler":
 			return _call_system_handler(method_name, farm, positions, extra)
-		"IndustryHandler":
-			return _call_industry_handler(method_name, farm, positions, extra)
 		_:
 			return {"success": false, "error": "unknown_handler", "message": "Unknown handler: %s" % handler_name}
 
@@ -322,23 +312,6 @@ func _call_system_handler(method_name: String, farm, positions: Array[Vector2i],
 			return {"success": false, "error": "unknown_method"}
 
 
-func _call_industry_handler(method_name: String, farm, positions: Array[Vector2i], extra: Dictionary) -> Dictionary:
-	"""Route to IndustryHandler methods."""
-	var mill_state = extra.get("mill_state", {})
-
-	match method_name:
-		"place_kitchen":
-			return IndustryHandler.place_kitchen(farm, positions)
-		"harvest_flour":
-			return IndustryHandler.harvest_flour(farm, positions)
-		"market_sell":
-			return IndustryHandler.market_sell(farm, positions)
-		"bake_bread":
-			return IndustryHandler.bake_bread(farm, positions)
-		_:
-			return {"success": false, "error": "unknown_method"}
-
-
 ## ============================================================================
 ## MESSAGE FORMATTING
 ## ============================================================================
@@ -356,18 +329,6 @@ func _format_message(template: String, result: Dictionary) -> String:
 ## ============================================================================
 ## SPECIAL ACTIONS (not in dispatch table)
 ## ============================================================================
-
-func execute_build(farm, build_type: String, positions: Array[Vector2i]) -> Dictionary:
-	"""Execute batch build action."""
-	var result = IndustryHandler.batch_build(farm, build_type, positions)
-	var msg = ""
-	if result.success:
-		msg = "Built %d/%d %s structures" % [result.success_count, result.total_count, build_type]
-	else:
-		msg = "Failed to build %s" % build_type
-	action_completed.emit("build_%s" % build_type, result.success, msg, result)
-	return result
-
 
 func execute_assign_biome(farm, biome_name: String, positions: Array[Vector2i]) -> Dictionary:
 	"""Execute biome assignment action."""
@@ -390,28 +351,4 @@ func execute_icon_assign(farm, emoji: String, positions: Array[Vector2i], gsm = 
 	else:
 		msg = result.get("message", "Assignment failed")
 	action_completed.emit("icon_assign_%s" % emoji, result.success, msg, result)
-	return result
-
-
-func execute_mill_select_power(farm, power_key: String, positions: Array[Vector2i], mill_state: Dictionary) -> Dictionary:
-	"""Execute mill power selection (stage 1)."""
-	var result = IndustryHandler.mill_select_power(farm, power_key, positions, mill_state)
-	var msg = ""
-	if result.success:
-		msg = "Mill power selected: %s %s" % [result.power_emoji, result.power_label]
-	else:
-		msg = result.get("message", "Power selection failed")
-	action_completed.emit("mill_select_power_%s" % power_key, result.success, msg, result)
-	return result
-
-
-func execute_mill_convert(farm, conversion_key: String, positions: Array[Vector2i], mill_state: Dictionary) -> Dictionary:
-	"""Execute mill conversion (stage 2) and place mill."""
-	var result = IndustryHandler.mill_convert(farm, conversion_key, positions, mill_state)
-	var msg = ""
-	if result.success:
-		msg = "Mill placed: %s" % result.mill_status
-	else:
-		msg = result.get("message", "Mill placement failed")
-	action_completed.emit("mill_convert_%s" % conversion_key, result.success, msg, result)
 	return result

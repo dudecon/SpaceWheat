@@ -4,12 +4,12 @@ class_name GranularityController
 ## Shared granularity control logic for quantum evolution substep size
 ## Used by: QuantumInstrumentInput, VisualBubbleTest, and any other tools
 
-## Adjust granularity by halving/doubling the substep size
+## Adjust granularity by 10x the substep size
 ## - Smaller dt = finer granularity = more accurate but slower
 ## - Larger dt = coarser granularity = faster but less accurate
 
-const MIN_DT: float = 0.0001  # 0.1ms - ultra fine
-const MAX_DT: float = 1.0     # 1000ms - ultra coarse
+const MIN_DT: float = 0.0001  # 0.1ms - ultra fine (10^-4)
+const MAX_DT: float = 10000.0 # 10000s - ultra coarse (10^4, symmetric with MIN)
 
 static func decrease_granularity(biomes: Array) -> Dictionary:
 	"""Make substeps finer (more accurate, slower) - triggered by `-` key.
@@ -25,8 +25,8 @@ static func decrease_granularity(biomes: Array) -> Dictionary:
 	if "max_evolution_dt" in first_biome:
 		current_dt = first_biome.max_evolution_dt
 
-	# Halve the substep size = finer granularity
-	var new_dt = max(current_dt * 0.5, MIN_DT)
+	# 10x finer substep size = finer granularity
+	var new_dt = max(current_dt * 0.1, MIN_DT)
 
 	# Apply to all biomes
 	var biome_count = 0
@@ -56,8 +56,8 @@ static func increase_granularity(biomes: Array) -> Dictionary:
 	if "max_evolution_dt" in first_biome:
 		current_dt = first_biome.max_evolution_dt
 
-	# Double the substep size = coarser granularity
-	var new_dt = min(current_dt * 2.0, MAX_DT)
+	# 10x coarser substep size = coarser granularity
+	var new_dt = min(current_dt * 10.0, MAX_DT)
 
 	# Apply to all biomes
 	var biome_count = 0

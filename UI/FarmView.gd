@@ -103,8 +103,11 @@ func _ready():
 
 	# CRITICAL: Connect visualization signals BEFORE boot emits game_ready
 	# Otherwise EXPLORE will emit plot_planted before viz is connected to listen
-	if farm.biome_enabled and quantum_viz:
+	if quantum_viz:
+		# ALWAYS connect - connect_to_farm handles missing biomes gracefully
 		quantum_viz.connect_to_farm(farm)
+	else:
+		push_error("FarmView: quantum_viz is NULL - cannot connect to farm!")
 
 	# ═══════════════════════════════════════════════════════════════════════
 	# BOOT UI - Visualization + UI setup after core is ready
@@ -116,6 +119,11 @@ func _ready():
 	# ═══════════════════════════════════════════════════════════════════════
 	# POST-BOOT: Additional signal connections and final setup
 	# ═══════════════════════════════════════════════════════════════════════
+
+	# Reconnect to PlotGridDisplay now that it's created during boot_ui
+	if quantum_viz and quantum_viz.has_method("_connect_to_plot_grid_display"):
+		quantum_viz._connect_to_plot_grid_display()
+		_verbose.info("ui", "✅", "PlotGridDisplay reconnected to visualization")
 
 	# Connect touch gesture signals from QuantumForceGraph
 	if quantum_viz and quantum_viz.graph:

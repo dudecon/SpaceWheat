@@ -489,8 +489,7 @@ func _draw_emojis(graph: Node2D, node, is_celestial: bool) -> void:
 
 	# South emoji (behind)
 	if node.emoji_south != "" and node.emoji_south_opacity > 0.01:
-		var south_opacity = node.emoji_south_opacity * (0.9 if is_celestial else 1.0)
-		_draw_emoji_with_opacity(graph, font, text_pos, node.emoji_south, font_size, south_opacity)
+		_draw_emoji_with_opacity(graph, font, text_pos, node.emoji_south, font_size, node.emoji_south_opacity)
 
 	# North emoji (front)
 	if node.emoji_north != "" and node.emoji_north_opacity > 0.01:

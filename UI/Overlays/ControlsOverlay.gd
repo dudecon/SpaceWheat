@@ -125,7 +125,7 @@ func _create_tool_section() -> Control:
 		["1", "Probe", "Explore/Measure/Pop (core loop)"],
 		["2", "Gates", "X/H/Ry + F-cycle to Z/S/T"],
 		["3", "Entangle", "CNOT/SWAP/CZ + F-cycle to Bell/Disentangle"],
-		["4", "Industry", "Mill/Market/Kitchen + F-cycle to Harvest"]
+		["4", "Industry", "Deprecated (buildings removed)"]
 	]
 
 	for entry in play_entries:
@@ -326,8 +326,8 @@ func _create_advanced_section() -> Control:
 	t4_label.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0))
 	content.add_child(t4_label)
 
-	content.add_child(_create_help_row("Build", "Mill/Market/Kitchen", "Place structures"))
-	content.add_child(_create_help_row("Harvest", "Flour/Sell/Bake", "Operate structures"))
+	content.add_child(_create_help_row("Build", "Deprecated", "Mill/Market/Kitchen removed"))
+	content.add_child(_create_help_row("Harvest", "Disabled", "Industry structures no longer exist"))
 
 	return content
 

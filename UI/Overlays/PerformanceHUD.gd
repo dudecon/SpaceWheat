@@ -11,6 +11,10 @@ const UPDATE_INTERVAL: int = 30  # Update display every 30 frames (~0.5s at 60fp
 var graph_ref = null  # QuantumForceGraph reference
 var frame_counter: int = 0
 
+# Performance logging to file (silent console mode)
+var _perf_log_file: FileAccess = null
+var _perf_log_path: String = ""
+
 # UI elements
 var panel: PanelContainer
 var vbox: VBoxContainer
@@ -23,6 +27,40 @@ var bottleneck_label: Label
 func _ready() -> void:
 	_build_ui()
 	set_process(true)
+	_open_perf_log()
+
+func _exit_tree() -> void:
+	"""Close performance log file on cleanup."""
+	if _perf_log_file:
+		_perf_log_file.close()
+		_perf_log_file = null
+
+func _open_perf_log() -> void:
+	"""Open performance log file for writing."""
+	var timestamp = Time.get_datetime_string_from_system().replace(":", "-")
+
+	# Use absolute path to logs directory
+	var log_dir = ProjectSettings.globalize_path("res://logs")
+
+	# Ensure directory exists
+	if not DirAccess.dir_exists_absolute(log_dir):
+		DirAccess.make_dir_absolute(log_dir)
+
+	_perf_log_path = "%s/perf_godot_%s.log" % [log_dir, timestamp]
+	_perf_log_file = FileAccess.open(_perf_log_path, FileAccess.WRITE)
+	if _perf_log_file:
+		_perf_log_file.store_line("=== Godot Performance Log Started: %s ===" % Time.get_datetime_string_from_system())
+		_perf_log_file.store_line("Frame | FPS | TIME_PROCESS (ms) | TIME_PHYSICS (ms) | Nodes | Orphans")
+		_perf_log_file.store_line("=".repeat(80))
+		print("[PerformanceHUD] Logging to: %s" % _perf_log_path)
+	else:
+		push_warning("[PerformanceHUD] Failed to open log file: %s" % _perf_log_path)
+
+func _log_perf(message: String) -> void:
+	"""Write performance data to log file (silent - no console spam)."""
+	if _perf_log_file:
+		_perf_log_file.store_line(message)
+		_perf_log_file.flush()  # Ensure data is written immediately
 
 func _process(_delta: float) -> void:
 	frame_counter += 1
@@ -94,10 +132,10 @@ func _update_display() -> void:
 	var node_count = Performance.get_monitor(Performance.OBJECT_NODE_COUNT)
 	var orphan_nodes = Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
 
-	# Print detailed metrics to console
-	print("[PERF_GODOT] Frame: %d | FPS: %d" % [frame_counter, fps])
-	print("[PERF_GODOT] TIME_PROCESS: %.2fms | TIME_PHYSICS: %.2fms" % [time_process, time_physics])
-	print("[PERF_GODOT] Nodes: %d | Orphans: %d" % [node_count, orphan_nodes])
+	# Log detailed metrics to file (silent - no console spam)
+	_log_perf("%6d | %3d | %8.2f | %8.2f | %5d | %5d" % [
+		frame_counter, fps, time_process, time_physics, node_count, orphan_nodes
+	])
 
 	# If graph is available, also show graph-specific data
 	if not graph_ref or not "_perf_samples" in graph_ref:

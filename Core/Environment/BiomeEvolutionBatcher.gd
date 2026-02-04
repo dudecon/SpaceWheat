@@ -559,11 +559,17 @@ func _prime_all_biomes_native(biomes_to_prime: Array) -> void:
 		if qc and qc.density_matrix:
 			biome_rhos.append(qc.density_matrix._to_packed())
 		else:
+			# Skip calculation - empty array signals C++ to skip this biome
+			# (C++ should check if array is empty before unpacking)
 			biome_rhos.append(PackedFloat64Array())
 
+	# Get actual granularity from first biome (all biomes share same granularity)
+	var actual_dt = biomes_to_prime[0].max_evolution_dt if biomes_to_prime.size() > 0 and "max_evolution_dt" in biomes_to_prime[0] else LOOKAHEAD_DT
+
 	# Batched evolution: all biomes × LOOKAHEAD_STEPS in one native call
+	# Pass actual_dt as BOTH dt and max_dt (no subcycling, max_dt is the timestep)
 	var evo_result = lookahead_engine.evolve_all_lookahead(
-		biome_rhos, LOOKAHEAD_STEPS, LOOKAHEAD_DT, MAX_SUBSTEP_DT
+		biome_rhos, LOOKAHEAD_STEPS, actual_dt, actual_dt
 	)
 
 	# Unpack results into per-biome buffers
@@ -1203,13 +1209,13 @@ func _trigger_adaptive_refill() -> void:
 		var biome = active_biome_names.get(biome_name, null)
 
 		if biome and _is_valid_biome(biome):
-			# Active biome: include current rho
+			# Active biome: include current rho (empty = skip calculation)
 			var qc = biome.quantum_computer
 			var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
 			biome_rhos.append(rho_packed)
 			refill_active_flags.append(true)
 		else:
-			# Unregistered biome or unknown: send empty rho (engine will skip or use frozen)
+			# Unregistered biome or unknown: skip calculation (empty array)
 			biome_rhos.append(PackedFloat64Array())
 			refill_active_flags.append(false)
 
@@ -1294,12 +1300,12 @@ func _queue_emergency_packet(starving_biomes: Array[String]) -> void:
 		var biome_name = _engine_id_to_biome.get(engine_id, "")
 
 		if biome_name == "" or biome_name not in starving_biomes:
-			# Skip non-starving biomes
+			# Skip non-starving biomes (empty = skip calculation)
 			biome_rhos.append(PackedFloat64Array())
 			active_flags_arr.append(false)
 			continue
 
-		# Include starving biome
+		# Include starving biome (empty = skip if invalid)
 		var biome = _find_biome_by_name(biome_name)
 		if biome and biome.quantum_computer:
 			var qc = biome.quantum_computer
@@ -1308,6 +1314,7 @@ func _queue_emergency_packet(starving_biomes: Array[String]) -> void:
 			active_flags_arr.append(true)
 			rescued_count += 1
 		else:
+			# Invalid biome - skip calculation
 			biome_rhos.append(PackedFloat64Array())
 			active_flags_arr.append(false)
 
@@ -1399,29 +1406,55 @@ func _queue_hybrid_packet():
 
 	C++ evolves all active biomes for MAX(batch_sizes).
 	Merge saves only needed steps per biome.
+
+	IMPORTANT: Arrays are built in ENGINE_ID ORDER (not biomes array order)
+	to ensure correct mapping during merge. Uses _engine_id_to_biome for
+	consistent ordering across packet queue/complete cycle.
 	"""
-	# Build active_flags and collect rhos for all biomes
+	# Get engine biome count for proper array sizing
+	var engine_biome_count = lookahead_engine.get_biome_count() if lookahead_engine else 0
+	if engine_biome_count == 0:
+		return
+
+	# Build lookup of active biomes for fast access
+	var active_biome_lookup: Dictionary = {}
+	for biome in biomes:
+		if _is_valid_biome(biome):
+			var biome_name = _get_biome_name(biome)
+			active_biome_lookup[biome_name] = biome
+
+	# Build active_flags and collect rhos in ENGINE_ID ORDER (critical!)
 	var biome_rhos: Array = []
 	var active_flags_arr: Array = []
 	var max_batch_size = 0
 	var max_fib_index = 0
 
-	for biome in biomes:
+	for engine_id in range(engine_biome_count):
+		var biome_name = _engine_id_to_biome.get(engine_id, "")
+
+		# Biome not in batcher or invalid engine mapping - skip calculation
+		if biome_name == "" or not active_biome_lookup.has(biome_name):
+			biome_rhos.append(PackedFloat64Array())
+			active_flags_arr.append(false)
+			continue
+
+		var biome = active_biome_lookup[biome_name]
 		if not _is_valid_biome(biome):
 			biome_rhos.append(PackedFloat64Array())
 			active_flags_arr.append(false)
 			continue
 
 		var qc = biome.quantum_computer
-		var biome_name = _get_biome_name(biome)
 		var depth = _get_biome_depth(biome_name)
 
-		# Pack density matrix
+		# Pack density matrix - send empty array if invalid (C++ should check active_flag)
+		# Don't invent fake states - a zero state has no Hamiltonian meaning
 		var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
 		biome_rhos.append(rho_packed)
 
 		# Determine if this biome should evolve
-		var should_evolve = _should_trigger_biome_refill(biome_name, depth)
+		# Skip calculation if density_matrix is invalid (no Hamiltonian meaning)
+		var should_evolve = qc.density_matrix != null and _should_trigger_biome_refill(biome_name, depth)
 		active_flags_arr.append(should_evolve)
 
 		# Track max batch size AND fib_index (C++ uses max, delay uses fib_index)
@@ -1437,13 +1470,18 @@ func _queue_hybrid_packet():
 		max_batch_size = FIB_SEQUENCE[4]  # Default if no biomes active
 		max_fib_index = 4
 
+	# Validate: don't queue packet if ALL biomes are inactive (no work to do)
+	var active_count = active_flags_arr.count(true)
+	if active_count == 0:
+		_log("trace", "REFILL", "⏭️", "Skipping packet - all biomes inactive")
+		return
+
 	# Queue ONE global packet with active_flags and fib_index for delay calculation
 	_queue_adaptive_packet(biome_rhos, active_flags_arr, max_batch_size, max_fib_index)
 
 	# Log which biomes are being evolved (with their individual batch sizes)
-	var active_count = active_flags_arr.count(true)
-	_log("trace", "REFILL", "🔄", "Global packet: batch=%d (max), %d/%d biomes active" % [
-		max_batch_size, active_count, biomes.size()
+	_log("trace", "REFILL", "🔄", "Global packet: batch=%d (max), %d/%d biomes active (engine_count=%d)" % [
+		max_batch_size, active_count, biomes.size(), engine_biome_count
 	])
 
 
@@ -1642,6 +1680,67 @@ func invalidate_biome_buffer(biome_name: String):
 	_log("info", "INVALIDATE", "📦", "Next packet will refill %s (active_flag=true)" % biome_name)
 
 
+func decimate_biome_buffer(biome_name: String, decimation_factor: int) -> int:
+	"""Decimate buffer when coarsening granularity (keep every Nth frame).
+
+	When dt doubles (2x coarser), existing frames are still valid but oversampled.
+	Instead of full invalidation, keep every 2nd frame to preserve computed work.
+
+	Args:
+		biome_name: Biome to decimate
+		decimation_factor: Keep every Nth frame (2 for 2x coarsening)
+
+	Returns:
+		New buffer depth after decimation
+	"""
+	if decimation_factor < 2:
+		return frame_buffers.get(biome_name, []).size()
+
+	# Decimate all 6 buffers in lockstep (from cursor position, not start)
+	var cursor = buffer_cursors.get(biome_name, 0)
+
+	# Get unconsumed portions
+	var frames = frame_buffers.get(biome_name, [])
+	var mi = mi_buffers.get(biome_name, [])
+	var bloch = bloch_buffers.get(biome_name, [])
+	var purity = purity_buffers.get(biome_name, [])
+	var positions = position_buffers.get(biome_name, [])
+	var velocities = velocity_buffers.get(biome_name, [])
+
+	# Slice from cursor (unconsumed) then decimate
+	var unconsumed_frames = frames.slice(cursor) if cursor < frames.size() else []
+	var unconsumed_mi = mi.slice(cursor) if cursor < mi.size() else []
+	var unconsumed_bloch = bloch.slice(cursor) if cursor < bloch.size() else []
+	var unconsumed_purity = purity.slice(cursor) if cursor < purity.size() else []
+	var unconsumed_positions = positions.slice(cursor) if cursor < positions.size() else []
+	var unconsumed_velocities = velocities.slice(cursor) if cursor < velocities.size() else []
+
+	# Decimate: keep every Nth frame
+	frame_buffers[biome_name] = _decimate_array(unconsumed_frames, decimation_factor)
+	mi_buffers[biome_name] = _decimate_array(unconsumed_mi, decimation_factor)
+	bloch_buffers[biome_name] = _decimate_array(unconsumed_bloch, decimation_factor)
+	purity_buffers[biome_name] = _decimate_array(unconsumed_purity, decimation_factor)
+	position_buffers[biome_name] = _decimate_array(unconsumed_positions, decimation_factor)
+	velocity_buffers[biome_name] = _decimate_array(unconsumed_velocities, decimation_factor)
+	buffer_cursors[biome_name] = 0  # Reset cursor (we sliced unconsumed)
+
+	var new_depth = frame_buffers[biome_name].size()
+	_log("info", "DECIMATE", "✂️", "%s: kept every %d frames → depth=%d" % [
+		biome_name, decimation_factor, new_depth
+	])
+	return new_depth
+
+
+func _decimate_array(arr: Array, factor: int) -> Array:
+	"""Keep every factor-th element: [0, factor, 2*factor, ...]"""
+	if arr.is_empty() or factor < 2:
+		return arr
+	var decimated: Array = []
+	for i in range(0, arr.size(), factor):
+		decimated.append(arr[i])
+	return decimated
+
+
 func _prime_single_biome_frozen(biome):
 	"""Prime a single biome with frozen buffers (for invalidation recovery)."""
 	if not _is_valid_biome(biome):
@@ -1649,6 +1748,7 @@ func _prime_single_biome_frozen(biome):
 
 	var qc = biome.quantum_computer
 	var biome_name = _get_biome_name(biome)
+	# Skip calculation if no valid state (empty = skip)
 	var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
 
 	# Fill with frozen current state
@@ -1831,7 +1931,15 @@ func _prime_single_biome(biome, biome_id: int) -> void:
 		return
 
 	var biome_name = _get_biome_name(biome)
-	var rho = biome.quantum_computer.density_matrix._to_packed()
+	# NEVER send empty rho to C++ (crashes on unpack)
+	var qc = biome.quantum_computer
+	var rho: PackedFloat64Array
+	if qc.density_matrix:
+		rho = qc.density_matrix._to_packed()
+	else:
+		# Return early if no valid state - can't prime
+		_log("warn", "biome", "⚠️", "Cannot prime '%s' - density_matrix is null" % biome_name)
+		return
 	var result = lookahead_engine.evolve_single_biome(
 		biome_id, rho, LOOKAHEAD_STEPS, LOOKAHEAD_DT, MAX_SUBSTEP_DT
 	)
@@ -1925,11 +2033,16 @@ func _refill_all_lookahead_buffers(force_all: bool = false):
 				if not biome.quantum_evolution_enabled or biome.evolution_paused:
 					active = false
 
-			var rho = biome.quantum_computer.density_matrix._to_packed()
+			# Skip calculation if no valid state (empty = skip)
+			var qc = biome.quantum_computer
+			var rho = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
+			if rho.is_empty():
+				active = false  # Don't evolve if invalid state
+
 			biome_rhos.append(rho)
 			refill_active_flags.append(active)
 		else:
-			# Unregistered biome: send empty rho
+			# Unregistered biome: skip calculation
 			biome_rhos.append(PackedFloat64Array())
 			refill_active_flags.append(false)
 
@@ -1946,7 +2059,8 @@ func _refill_all_lookahead_buffers(force_all: bool = false):
 	var packet_size = _get_adaptive_batch_size()
 	_queue_adaptive_packet(biome_rhos, refill_active_flags, packet_size)
 
-	# Initialize frozen buffers for inactive biomes immediately
+	# Initialize frozen buffers for inactive biomes immediately (only if buffer empty)
+	# PHASE 2 FIX: Preserve unconsumed frames instead of blindly overwriting
 	for engine_id in range(engine_biome_count):
 		var biome_name = _engine_id_to_biome.get(engine_id, "")
 		if biome_name == "" or not active_biome_names.has(biome_name):
@@ -1954,12 +2068,15 @@ func _refill_all_lookahead_buffers(force_all: bool = false):
 		var biome = active_biome_names[biome_name]
 		if engine_id < refill_active_flags.size() and not refill_active_flags[engine_id]:
 			if _is_valid_biome(biome):
-				var rho = biome_rhos[engine_id] if engine_id < biome_rhos.size() else PackedFloat64Array()
-				frame_buffers[biome_name] = _create_frozen_buffer(rho, LOOKAHEAD_STEPS)
-				buffer_cursors[biome_name] = 0
-				mi_buffers[biome_name] = []
-				bloch_buffers[biome_name] = []
-				purity_buffers[biome_name] = []
+				# Only create frozen buffer if buffer is empty (preserve unconsumed frames)
+				var current_depth = _get_biome_depth(biome_name)
+				if current_depth <= 0:
+					var rho = biome_rhos[engine_id] if engine_id < biome_rhos.size() else PackedFloat64Array()
+					frame_buffers[biome_name] = _create_frozen_buffer(rho, LOOKAHEAD_STEPS)
+					buffer_cursors[biome_name] = 0
+					mi_buffers[biome_name] = []
+					bloch_buffers[biome_name] = []
+					purity_buffers[biome_name] = []
 
 
 func _physics_process_rotation(delta: float):
@@ -2175,7 +2292,8 @@ func _prime_frozen_buffers_only(biome_rhos: Array = []) -> void:
 		if i < biome_rhos.size() and biome_rhos[i] is PackedFloat64Array:
 			rho = biome_rhos[i]
 		if rho.is_empty():
-			rho = qc.density_matrix._to_packed()
+			# Skip calculation if no valid state
+			rho = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
 
 		var biome_name = _get_biome_name(biome)
 
@@ -2559,22 +2677,34 @@ func _queue_adaptive_packet(biome_rhos: Array, active_flags_arr: Array, packet_s
 
 	Args:
 		fib_index: Fibonacci index (0-based) for delay calculation (delay_ms = fib_index + 1)
+
+	IMPORTANT: active_flags_arr is stored IN THE PACKET REQUEST, not as global state.
+	This prevents race conditions when new biomes are registered while packets are in-flight.
+	The merge logic reads active_flags from _current_batch_request, ensuring array size matches
+	what was queued (not what exists now).
 	"""
 	if biome_rhos.is_empty():
 		return
 
+	# Validate: C++ bug - it doesn't check active_flags before unpacking rhos
+	# Log warning if we're sending empty rhos for active biomes (will crash!)
+	for i in range(mini(biome_rhos.size(), active_flags_arr.size())):
+		if active_flags_arr[i] and biome_rhos[i].is_empty():
+			var biome_name = _engine_id_to_biome.get(i, "unknown")
+			push_error("BiomeEvolutionBatcher: Active biome '%s' (engine_id=%d) has empty rho! C++ will crash. Marking inactive." % [biome_name, i])
+			active_flags_arr[i] = false  # Force inactive to prevent crash
+
 	# Clear any previous partial results
 	_batches_in_flight.clear()
 
-	# Store active flags for later merge
-	self.active_flags = active_flags_arr
-
 	# Queue SINGLE packet with adaptive phrame count
+	# active_flags stored IN packet request for correct merge behavior
 	var packet_request = {
 		"batch_num": 0,  # Legacy key name (packet number)
 		"start_step": 0,
 		"num_steps": packet_size,  # Number of phrames to compute
 		"biome_rhos": biome_rhos,
+		"active_flags": active_flags_arr,  # NEW: Per-packet active flags (engine_id order)
 		"total_batches": 1,  # Legacy key: always 1 packet per refill in adaptive mode
 		"fib_index": fib_index,  # For proportional delay calculation
 	}
@@ -2696,10 +2826,14 @@ func _run_packet_in_thread(packet_req: Dictionary) -> Dictionary:
 	var num_phrames = packet_req["num_steps"]  # Number of phrames (evolution frames) to compute
 	var total_packets = packet_req.get("total_batches", 1)  # Legacy key, means total packets
 
+	# Get actual granularity from first biome (all biomes share same granularity)
+	var actual_dt = biomes[0].max_evolution_dt if biomes.size() > 0 and "max_evolution_dt" in biomes[0] else LOOKAHEAD_DT
+
 	# Time the C++ call (this blocks the WORKER thread, not main thread)
 	var packet_start = Time.get_ticks_usec()
+	# Pass actual_dt as BOTH dt and max_dt (no subcycling, max_dt is the timestep)
 	var result = lookahead_engine.evolve_all_lookahead(
-		biome_rhos, num_phrames, LOOKAHEAD_DT, MAX_SUBSTEP_DT
+		biome_rhos, num_phrames, actual_dt, actual_dt
 	)
 	var packet_end = Time.get_ticks_usec()
 
@@ -2848,6 +2982,11 @@ func _merge_accumulated_packets() -> void:
 			if engine_id < velocity_steps.size():
 				accumulated_velocity_steps[biome_name].append_array(velocity_steps[engine_id])
 
+	# Get active_flags from the PACKET REQUEST (not global state!)
+	# This ensures we use the flags that were valid when the packet was queued,
+	# not the current global state which may have been modified by new biome registration.
+	var packet_active_flags = _current_batch_request.get("active_flags", [])
+
 	# Distribute to phrame buffers - ONLY for biomes still in batcher.biomes!
 	for engine_id in range(engine_biome_count):
 		var biome_name = _engine_id_to_biome.get(engine_id, "")
@@ -2862,8 +3001,16 @@ func _merge_accumulated_packets() -> void:
 		if not _is_valid_biome(biome):
 			continue
 
+		# PHASE 1 FIX: Handle engine_id >= packet_active_flags.size()
+		# This happens when a new biome was registered AFTER this packet was queued.
+		# DON'T TOUCH its buffer - it wasn't part of this packet's evolution.
+		if engine_id >= packet_active_flags.size():
+			# New biome added after packet queued - leave existing buffer intact
+			# It will be primed separately or included in the next packet
+			continue
+
 		# Check if this biome was marked active in the refill request
-		if engine_id < active_flags.size() and active_flags[engine_id]:
+		if packet_active_flags[engine_id]:
 			# Get unconsumed phrames from existing buffer using helper
 			var unconsumed_frames = _extract_unconsumed_buffer(biome_name, frame_buffers)
 			var unconsumed_mi = _extract_unconsumed_buffer(biome_name, mi_buffers)
@@ -2894,11 +3041,17 @@ func _merge_accumulated_packets() -> void:
 			unconsumed_velocities.append_array(accumulated_velocity_steps.get(biome_name, []))
 			velocity_buffers[biome_name] = unconsumed_velocities
 		else:
-			# Frozen buffer for inactive biomes
-			var qc = biome.quantum_computer
-			var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
-			frame_buffers[biome_name] = _create_frozen_buffer(rho_packed, LOOKAHEAD_STEPS)
-			buffer_cursors[biome_name] = 0
+			# PHASE 2 FIX: Only create frozen buffer if buffer is empty
+			# If buffer has unconsumed frames, preserve them (don't overwrite with frozen)
+			# This prevents data loss when biomes temporarily become "inactive"
+			var current_depth = _get_biome_depth(biome_name)
+			if current_depth <= 0:
+				# Buffer empty/depleted - create frozen buffer
+				var qc = biome.quantum_computer
+				var rho_packed = qc.density_matrix._to_packed() if qc.density_matrix else PackedFloat64Array()
+				frame_buffers[biome_name] = _create_frozen_buffer(rho_packed, LOOKAHEAD_STEPS)
+				buffer_cursors[biome_name] = 0
+			# else: Keep existing buffer intact (has unconsumed frames)
 
 	# Emergency de-escalation removed (handled by normal per-biome escalation logic)
 

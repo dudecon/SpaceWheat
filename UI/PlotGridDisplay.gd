@@ -58,6 +58,7 @@ var _skip_next_click: bool = false  # Skip click handler after multi-plot drag
 
 # Signals for selection state changes
 signal selection_count_changed(count: int)
+signal plot_selection_changed(position: Vector2i, is_selected: bool)  # NEW: individual plot selection
 signal plot_positions_changed(positions: Dictionary, biome_name: String)
 
 # Rejection effects (for visual feedback when actions are rejected)
@@ -69,6 +70,9 @@ var time_accumulator: float = 0.0
 func _ready():
 	"""Initialize plot grid display with parametric positioning"""
 	_verbose.debug("ui", "🌾", "PlotGridDisplay._ready() called (Instance: %s, child_count before: %d)" % [get_instance_id(), get_child_count()])
+
+	# Add to group for discovery by BathQuantumViz
+	add_to_group("plot_grid_display")
 
 	# Safety check: if tiles already exist, DON'T recreate them
 	if tiles.size() > 0:
@@ -600,13 +604,6 @@ func inject_farm(farm_ref: Node) -> void:
 			if _verbose:
 				_verbose.debug("ui", "📡", "Connected to plot_pool.terminal_unbound_at")
 
-	# Connect to structure_built for industry building tile updates
-	if farm.has_signal("structure_built"):
-		if not farm.structure_built.is_connected(_on_structure_built):
-			farm.structure_built.connect(_on_structure_built)
-			if _verbose:
-				_verbose.debug("ui", "📡", "Connected to farm.structure_built")
-
 	# Connect to biome_loaded for dynamic biome injection
 	if farm.has_signal("biome_loaded"):
 		if not farm.biome_loaded.is_connected(_on_biome_loaded):
@@ -946,11 +943,6 @@ func _on_terminal_unbound_at(pos: Vector2i, _terminal_id: String) -> void:
 	update_tile_from_farm(pos)
 
 
-func _on_structure_built(pos: Vector2i, structure_type: String, _emoji_pair: Dictionary) -> void:
-	"""Handle structure built event from industry building - update tile to show structure"""
-	_verbose.debug("ui", "🏭", "Farm.structure_built received at PlotGridDisplay: %s → %s" % [pos, structure_type])
-	update_tile_from_farm(pos)
-
 
 ## KEYBOARD SELECTION SUPPORT
 
@@ -999,11 +991,16 @@ func toggle_plot_selection(pos: Vector2i) -> void:
 	tiles[pos].set_checkbox_selected(now_selected)
 
 	_verbose.debug("ui", "☑️", "Plot %s %s (total selected: %d)" % [pos, "selected" if now_selected else "deselected", selected_plots.size()])
+	plot_selection_changed.emit(pos, now_selected)  # NEW: emit individual selection change
 	selection_count_changed.emit(selected_plots.size())
 
 
 func clear_all_selection() -> void:
 	"""Clear all plot selections ([ key)"""
+	# Emit deselection for each plot before clearing
+	for pos in selected_plots.keys():
+		plot_selection_changed.emit(pos, false)
+
 	selected_plots.clear()
 
 	# Update all tiles
@@ -1022,6 +1019,10 @@ func select_all_plots() -> void:
 	if biome_mgr and biome_mgr.has_method("get_active_biome"):
 		active_biome = biome_mgr.get_active_biome()
 
+	# Emit deselection for currently selected plots
+	for pos in selected_plots.keys():
+		plot_selection_changed.emit(pos, false)
+
 	# Clear current selections first
 	selected_plots.clear()
 
@@ -1034,6 +1035,7 @@ func select_all_plots() -> void:
 			if plot_biome == active_biome:
 				selected_plots[pos] = true
 				tile.set_checkbox_selected(true)
+				plot_selection_changed.emit(pos, true)  # NEW: emit selection
 				count += 1
 			else:
 				tile.set_checkbox_selected(false)
@@ -1042,6 +1044,7 @@ func select_all_plots() -> void:
 			if tile.visible:
 				selected_plots[pos] = true
 				tile.set_checkbox_selected(true)
+				plot_selection_changed.emit(pos, true)  # NEW: emit selection
 				count += 1
 
 	_verbose.debug("ui", "✅", "Selected all %d plots in %s" % [count, active_biome])
@@ -1251,6 +1254,7 @@ func _end_drag() -> void:
 			selected_plots[pos] = true
 			if tiles.has(pos):
 				tiles[pos].set_checkbox_selected(true)
+			plot_selection_changed.emit(pos, true)  # NEW: emit selection
 		# Note: We don't toggle off during drag - drag is always additive
 
 	selection_count_changed.emit(selected_plots.size())

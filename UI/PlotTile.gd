@@ -350,65 +350,25 @@ func _show_growing_state():
 func _show_mature_state():
 	growth_bar.visible = false
 
-	# Phase 4: Use PlotUIData - no plot_type enum, use string instead
-	match plot_ui_data.get("plot_type", ""):
-		"tomato":
-			emoji_label_north.emoji = "🍅"
+	var north_emoji = plot_ui_data.get("north_emoji", "")
+	var south_emoji = plot_ui_data.get("south_emoji", "")
+
+	if not plot_ui_data.get("has_been_measured", false):
+		emoji_label_north.emoji = north_emoji
+		emoji_label_south.emoji = south_emoji
+		emoji_label_north.modulate.a = plot_ui_data.get("north_probability", 0.5)
+		emoji_label_south.modulate.a = plot_ui_data.get("south_probability", 0.5)
+	else:
+		var north_prob = plot_ui_data.get("north_probability", 0.5)
+		var south_prob = plot_ui_data.get("south_probability", 0.5)
+		if north_prob >= south_prob:
+			emoji_label_north.emoji = north_emoji
 			emoji_label_south.emoji = ""
-			emoji_label_north.modulate.a = 1.0
-			emoji_label_south.modulate.a = 0.0
-		"mushroom":
-			emoji_label_north.emoji = "🍄"
+		else:
+			emoji_label_north.emoji = south_emoji
 			emoji_label_south.emoji = ""
-			emoji_label_north.modulate.a = 1.0
-			emoji_label_south.modulate.a = 0.0
-		"mill":
-			emoji_label_north.emoji = "🏭"
-			emoji_label_south.emoji = ""
-			emoji_label_north.modulate.a = 1.0
-			emoji_label_south.modulate.a = 0.0
-		"market":
-			emoji_label_north.emoji = "💰"
-			emoji_label_south.emoji = ""
-			emoji_label_north.modulate.a = 1.0
-			emoji_label_south.modulate.a = 0.0
-		"fire", "water", "flour":
-			# Kitchen ingredients: QUANTUM SUPERPOSITION - dual label with probability-weighted opacity
-			if not plot_ui_data.get("has_been_measured", false):
-				# Show both emojis with probability-weighted opacity
-				emoji_label_north.emoji = plot_ui_data.get("north_emoji", "")
-				emoji_label_south.emoji = plot_ui_data.get("south_emoji", "")
-				emoji_label_north.modulate.a = plot_ui_data.get("north_probability", 0.5)
-				emoji_label_south.modulate.a = plot_ui_data.get("south_probability", 0.5)
-			else:
-				# Measured - show single dominant emoji
-				if plot_ui_data.get("north_probability", 0.5) > plot_ui_data.get("south_probability", 0.5):
-					emoji_label_north.emoji = plot_ui_data.get("north_emoji", "")
-					emoji_label_south.emoji = ""
-				else:
-					emoji_label_north.emoji = plot_ui_data.get("south_emoji", "")
-					emoji_label_south.emoji = ""
-				emoji_label_north.modulate.a = 1.0
-				emoji_label_south.modulate.a = 0.0
-		_:
-			# Wheat: QUANTUM SUPERPOSITION - dual label with probability-weighted opacity
-			if not plot_ui_data.get("has_been_measured", false):
-				# Show both emojis with probability-weighted opacity
-				emoji_label_north.emoji = plot_ui_data.get("north_emoji", "")
-				emoji_label_south.emoji = plot_ui_data.get("south_emoji", "")
-				emoji_label_north.modulate.a = plot_ui_data.get("north_probability", 0.5)
-				emoji_label_south.modulate.a = plot_ui_data.get("south_probability", 0.5)
-			else:
-				# Measured - show single dominant emoji
-				# (choose dominant based on which has higher probability)
-				if plot_ui_data.get("north_probability", 0.5) > plot_ui_data.get("south_probability", 0.5):
-					emoji_label_north.emoji = plot_ui_data.get("north_emoji", "")
-					emoji_label_south.emoji = ""
-				else:
-					emoji_label_north.emoji = plot_ui_data.get("south_emoji", "")
-					emoji_label_south.emoji = ""
-				emoji_label_north.modulate.a = 1.0
-				emoji_label_south.modulate.a = 0.0
+		emoji_label_north.modulate.a = 1.0
+		emoji_label_south.modulate.a = 0.0
 
 	# Golden glow for mature crops (uses shared glow value - not per-tile sin())
 	var base_golden = COLOR_MATURE

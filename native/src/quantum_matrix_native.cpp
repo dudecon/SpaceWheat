@@ -54,10 +54,27 @@ PackedFloat64Array QuantumMatrixNative::pack_matrix(const Eigen::MatrixXcd& mat,
 }
 
 void QuantumMatrixNative::from_packed(const PackedFloat64Array& data, int dim) {
+    // Validate input size: need dim*dim*2 elements (real + imag for each element)
+    int required_size = dim * dim * 2;
+    if ((int)data.size() < required_size) {
+        // Size mismatch - avoid buffer overflow by returning early
+        // This prevents segfault when array is too small
+        m_dim = 0;
+        m_matrix.resize(0, 0);
+        return;
+    }
+
     m_dim = dim;
     m_matrix.resize(dim, dim);
 
     const double* ptr = data.ptr();
+    if (ptr == nullptr) {
+        // Null pointer - bail out safely
+        m_dim = 0;
+        m_matrix.resize(0, 0);
+        return;
+    }
+
     for (int i = 0; i < dim; i++) {
         for (int j = 0; j < dim; j++) {
             int idx = (i * dim + j) * 2;

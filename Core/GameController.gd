@@ -28,35 +28,7 @@ var get_tile_callback: Callable
 signal action_feedback(message: String, success: bool)
 signal visual_effect_requested(effect_type: String, position: Vector2, data: Dictionary)
 
-# Build configuration - use Farm.BUILD_CONFIGS as source of truth for costs
-# This table only adds UI-specific metadata (colors, messages)
-const BUILD_UI_CONFIGS = {
-	"mill": {
-		"farm_method": "place_mill",
-		"visual_color": Color(0.8, 0.6, 0.4),
-		"success_message": "🏭 Mill placed!",
-		"failure_message": "Plot must be empty!",
-		"updates_quantum_graph": false
-	},
-	"market": {
-		"farm_method": "place_market",
-		"visual_color": Color(1.0, 0.85, 0.2),
-		"success_message": "💰 Market placed!",
-		"failure_message": "Plot must be empty!",
-		"updates_quantum_graph": false
-	},
-	"kitchen": {
-		"farm_method": "place_kitchen",
-		"visual_color": Color(0.9, 0.5, 0.3),
-		"success_message": "🍳 Kitchen placed!",
-		"failure_message": "Plot must be empty!",
-		"updates_quantum_graph": false
-	},
-	# NOTE: energy_tap removed (2026-01) - energy tap system deprecated
-}
-
-# Import cost configs from Farm (canonical source)
-const Farm = preload("res://Core/Farm.gd")
+# Import economy helper for currency operations
 const FarmEconomy = preload("res://Core/GameMechanics/FarmEconomy.gd")
 
 
@@ -65,96 +37,6 @@ func _ready():
 
 
 ## Public API - Game Actions
-
-func build(pos: Vector2i, build_type: String) -> bool:
-	"""Unified build method - handles all types
-
-	Args:
-		pos: Grid position to build at
-		build_type: Type identifier ("mill", "market", "kitchen", etc.)
-
-	Returns:
-		bool: True if successful, False if failed
-	"""
-	# 1. Validate build type exists in both configs
-	if not Farm.BUILD_CONFIGS.has(build_type):
-		push_error("Unknown build type: %s" % build_type)
-		return false
-
-	if not BUILD_UI_CONFIGS.has(build_type):
-		push_error("Missing UI config for: %s" % build_type)
-		return false
-
-	var cost_config = Farm.BUILD_CONFIGS[build_type]
-	var ui_config = BUILD_UI_CONFIGS[build_type]
-
-	# 2. PRE-VALIDATION: Check if building is possible BEFORE spending money
-	var plot = farm_grid.get_plot(pos)
-	if plot == null or plot.is_planted:
-		action_feedback.emit(ui_config["failure_message"], false)
-		return false
-
-	# 3. ECONOMY CHECK: Use unified emoji-credits API
-	var costs = cost_config["cost"]  # e.g. {"🌾": 10} or {"👥": 10}
-
-	if not economy.can_afford_cost(costs):
-		var missing = _format_missing_resources(costs)
-		action_feedback.emit("Not enough resources! Need: %s" % missing, false)
-		return false
-
-	# Spend emoji-credits
-	economy.spend_cost(costs, build_type)
-
-	# 4. FARM OPERATION: Call appropriate farm_grid method
-	var success = false
-	var farm_method = ui_config["farm_method"]
-	match farm_method:
-		"place_mill":
-			success = farm_grid.place_mill(pos)
-		"place_market":
-			success = farm_grid.place_market(pos)
-		"place_kitchen":
-			success = farm_grid.place_kitchen(pos) if farm_grid.has_method("place_kitchen") else false
-		# NOTE: place_energy_tap case removed (2026-01) - energy tap system deprecated
-
-	# 5. Handle failure - refund emoji-credits
-	if not success:
-		for emoji in costs.keys():
-			economy.add_resource(emoji, costs[emoji], "refund")
-		action_feedback.emit(ui_config["failure_message"], false)
-		return false
-
-	# 6. POST-PROCESSING: Visual effects and feedback
-	if get_tile_callback.is_valid():
-		var tile = get_tile_callback.call(pos)
-		if tile:
-			var effect_pos = tile.global_position + tile.size / 2
-			visual_effect_requested.emit("plant", effect_pos, {"color": ui_config["visual_color"]})
-
-	# 7. Quantum graph update (only for wheat)
-	if ui_config["updates_quantum_graph"] and quantum_graph:
-		quantum_graph.print_snapshot("%s at %s" % [build_type.capitalize(), pos])
-
-	# 8. Trigger UI updates
-	_trigger_updates()
-
-	# 9. Success feedback
-	action_feedback.emit(ui_config["success_message"], true)
-
-	return true
-
-
-func _format_missing_resources(costs: Dictionary) -> String:
-	"""Format missing resources for error message"""
-	var missing = []
-	for emoji in costs.keys():
-		var need = costs[emoji]
-		var have = economy.get_resource(emoji)
-		if have < need:
-			var shortfall = (need - have) / EconomyConstants.QUANTUM_TO_CREDITS
-			missing.append("%d %s" % [shortfall, emoji])
-	return ", ".join(missing)
-
 
 func measure_plot(pos: Vector2i) -> String:
 	"""Measure plot (collapse quantum state)"""

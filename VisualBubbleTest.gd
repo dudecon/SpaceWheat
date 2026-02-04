@@ -27,6 +27,9 @@ var test_phase = "init"
 var screen_center: Vector2 = Vector2.ZERO
 var window_ready: bool = false
 
+# Track biome generation order for per-biome granularity control
+var _biome_generation_order: Array[String] = []
+
 # Benchmark
 var benchmark: ComputeBenchmark = null
 var benchmark_results: Dictionary = {}
@@ -151,14 +154,16 @@ func _start_boot():
 	print("\n[BOOT] Starting TestBootManager boot sequence...")
 
 	# Load 6 biomes (exclude Village, StarterForest) - mapped to TYUIOP
-	var result = await boot_manager.boot_biomes(self, [
+	# Track generation order for per-biome granularity control (-/= keys affect last biome)
+	_biome_generation_order = [
 		"CyberDebtMegacity",    # T
 		"StellarForges",        # Y
 		"VolcanicWorlds",       # U
 		"BioticFlux",           # I
 		"FungalNetworks",       # O
 		"TidalPools"            # P
-	])
+	]
+	var result = await boot_manager.boot_biomes(self, _biome_generation_order)
 
 	if not result.get("success", false):
 		print("\nBOOT FAILED: %s" % result.get("error", "unknown"))
@@ -876,3 +881,14 @@ func _invalidate_biome(index: int):
 		print("    ✅ ESCALATED: fib %d→%d" % [fib_before, batcher._fib_index])
 	else:
 		print("    ⏳ Waiting for escalation...")
+
+
+
+## Get last generated biome name for per-biome granularity control
+func get_last_generated_biome_name() -> String:
+	"""Return the name of the last biome that was generated.
+	
+	Used by QuantumInstrumentInput to determine which biome should be affected
+	by granularity changes (-/= keys) in test mode.
+	"""
+	return _biome_generation_order[-1] if not _biome_generation_order.is_empty() else ""

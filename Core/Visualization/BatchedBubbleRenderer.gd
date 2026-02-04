@@ -3,6 +3,8 @@ extends RefCounted
 
 # Shared constants
 const VisualizationConstants = preload("res://Core/Visualization/VisualizationConstants.gd")
+const QuantumBubbleRenderer = preload("res://Core/Visualization/QuantumBubbleRenderer.gd")
+const EmojiAtlasBatcher = preload("res://Core/Visualization/EmojiAtlasBatcher.gd")
 
 ## Batched Bubble Renderer - Rendering Tier Coordinator
 ##
@@ -738,7 +740,6 @@ func _draw_emoji_pass(graph: Node2D) -> void:
 		var emoji_south = emoji_data["emoji_south"]
 		var south_opacity = emoji_data["emoji_south_opacity"]
 		if emoji_south != "" and south_opacity > 0.01:
-			south_opacity *= (0.9 if is_celestial else 1.0)
 			# Use atlas-based rendering (fast path)
 			_emoji_batcher.add_emoji_by_name(pos, size, emoji_south, Color(1, 1, 1, south_opacity))
 
@@ -773,7 +774,6 @@ func _draw_emoji_pass_legacy(graph: Node2D) -> void:
 		var emoji_south = emoji_data["emoji_south"]
 		var south_opacity = emoji_data["emoji_south_opacity"]
 		if emoji_south != "" and south_opacity > 0.01:
-			south_opacity *= (0.9 if is_celestial else 1.0)
 			_draw_emoji(graph, visual_asset_registry, font, text_pos, emoji_south, font_size, south_opacity)
 
 		# North emoji (front)

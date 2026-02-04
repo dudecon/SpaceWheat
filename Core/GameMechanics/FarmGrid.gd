@@ -8,7 +8,6 @@ extends Node
 ## - BiomeRoutingManager: Multi-biome registry and routing
 ## - EntanglementManager: Quantum entanglement operations
 ## - PlantingManager: (removed) legacy planting system
-## - BuildingManager: Mill, market, kitchen placement
 ## - HarvestMeasurementManager: Harvest and measurement operations
 ##
 ## All public methods are preserved for backward compatibility.
@@ -38,7 +37,6 @@ signal visualization_changed()
 const GridPlotManager = preload("res://Core/GameMechanics/Grid/GridPlotManager.gd")
 const BiomeRoutingManager = preload("res://Core/GameMechanics/Grid/BiomeRoutingManager.gd")
 const EntanglementManager = preload("res://Core/GameMechanics/Grid/EntanglementManager.gd")
-const BuildingManager = preload("res://Core/GameMechanics/Grid/BuildingManager.gd")
 const HarvestMeasurementManager = preload("res://Core/GameMechanics/Grid/HarvestMeasurementManager.gd")
 
 const FarmPlot = preload("res://Core/GameMechanics/FarmPlot.gd")
@@ -51,7 +49,6 @@ const Icon = preload("res://Core/QuantumSubstrate/Icon.gd")
 var _plot_manager: GridPlotManager
 var _biome_routing: BiomeRoutingManager
 var _entanglement: EntanglementManager
-var _buildings: BuildingManager
 var _harvest: HarvestMeasurementManager
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -76,10 +73,6 @@ var biome = null
 var base_temperature: float = 20.0
 var active_icons: Array = []
 var icon_scopes: Dictionary = {}  # Icon → Array[String]
-
-# PERFORMANCE: Throttle slower subsystems
-const MILL_MARKET_UPDATE_INTERVAL: float = 0.1
-var _mill_market_accumulator: float = 0.0
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FACADE ACCESSORS (for direct access when needed)
@@ -110,16 +103,6 @@ var entangled_clusters: Array:
 	get:
 		return _entanglement.entangled_clusters if _entanglement else []
 
-## Direct access to quantum_mills
-var quantum_mills: Dictionary:
-	get:
-		return _buildings.quantum_mills if _buildings else {}
-
-## Direct access to quantum_markets
-var quantum_markets: Dictionary:
-	get:
-		return _buildings.quantum_markets if _buildings else {}
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # LIFECYCLE
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -135,7 +118,6 @@ func _init(width: int = 6, height: int = 4):
 	_plot_manager = GridPlotManager.new(grid_width, grid_height)
 	_biome_routing = BiomeRoutingManager.new()
 	_entanglement = EntanglementManager.new()
-	_buildings = BuildingManager.new()
 	_harvest = HarvestMeasurementManager.new()
 
 
@@ -170,13 +152,10 @@ func _ready():
 	if plot_pool:
 		_biome_routing.set_plot_pool(plot_pool)
 	_entanglement.set_verbose(_verbose)
-	_buildings.set_verbose(_verbose)
 	_harvest.set_verbose(_verbose)
 
 	# Wire component dependencies
 	_entanglement.set_dependencies(_plot_manager, _biome_routing)
-	_buildings.set_dependencies(_plot_manager, _biome_routing, _entanglement)
-	_buildings.set_parent_node(self)
 	_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
 
 	# Wire external references
@@ -214,12 +193,6 @@ func _process(delta):
 		if plot.is_planted:
 			var plot_biome = _biome_routing.get_biome_for_plot(position)
 			plot.grow(delta, plot_biome, faction_territory_manager, icon_network, conspiracy_network)
-
-	# PERFORMANCE: Throttle slower subsystems to 10 Hz
-	_mill_market_accumulator += delta
-	if _mill_market_accumulator >= MILL_MARKET_UPDATE_INTERVAL:
-		_mill_market_accumulator = 0.0
-		# Mills and markets are now passive (no per-frame processing needed)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -318,30 +291,6 @@ func get_grid_stats() -> Dictionary:
 func print_grid_state():
 	"""Debug: Print current grid state"""
 	_plot_manager.print_grid_state()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# BUILDING OPERATIONS (delegates to BuildingManager)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-func place_mill(position: Vector2i) -> bool:
-	"""Place quantum mill building"""
-	return _buildings.place_mill(position)
-
-
-func place_market(position: Vector2i, target_emoji: String = "🌾") -> bool:
-	"""Place market building"""
-	return _buildings.place_market(position, target_emoji)
-
-
-func place_kitchen(position: Vector2i) -> bool:
-	"""Place kitchen building"""
-	return _buildings.place_kitchen(position)
-
-
-func place_kitchen_triplet(positions: Array[Vector2i]) -> bool:
-	"""Place kitchen with triplet entanglement"""
-	return _buildings.place_kitchen_triplet(positions)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -478,26 +427,6 @@ func _build_icon_network() -> Dictionary:
 			icon_network["imperium"] = icon
 
 	return icon_network
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ECONOMY INTEGRATION (kept for mill processing)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-func process_mill_flour(flour_amount: int) -> void:
-	"""Convert mill-produced flour to economy resources.
-
-	Called by QuantumMill.perform_quantum_measurement() when flour outcomes occur.
-	"""
-	if not farm_economy or flour_amount <= 0:
-		_verbose.error("farm", "❌", "process_mill_flour called with invalid params (amount=%d)" % flour_amount)
-		return
-
-	const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
-	var flour_credits = flour_amount * EconomyConstants.QUANTUM_TO_CREDITS
-	farm_economy.add_resource("💨", flour_credits, "mill_quantum_measurement")
-
-	_verbose.info("economy", "🏭", "Mill: Produced %d flour → %d credits" % [flour_amount, flour_credits])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

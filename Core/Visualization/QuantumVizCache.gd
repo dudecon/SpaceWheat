@@ -231,7 +231,7 @@ func _mi_index(i: int, j: int, n: int) -> int:
 
 
 func get_snapshot(qubit_index: int) -> Dictionary:
-	"""Return {p0,p1,r_xy,phi,purity} or {} if cache missing."""
+	"""Return {p0,p1,r_xy,phi,purity,theta} or {} if cache missing."""
 	var bloch = _bloch_cache.get(qubit_index, {})
 	if bloch.is_empty():
 		return {}
@@ -241,11 +241,13 @@ func get_snapshot(qubit_index: int) -> Dictionary:
 	var y = bloch.get("y", 0.0)
 	var r_xy = clampf(sqrt(x * x + y * y), 0.0, 1.0)
 	var phi = bloch.get("phi", 0.0)
+	var theta = bloch.get("theta", PI / 2.0)
 	var purity = _purity_cache
 	return {
 		"p0": p0,
 		"p1": p1,
 		"r_xy": r_xy,
 		"phi": phi,
+		"theta": theta,
 		"purity": purity
 	}

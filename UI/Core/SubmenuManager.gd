@@ -7,7 +7,6 @@ extends RefCounted
 ## Decouples submenu logic from QuantumInstrumentInput.
 
 const ToolConfig = preload("res://Core/GameState/ToolConfig.gd")
-const QuantumMill = preload("res://Core/GameMechanics/QuantumMill.gd")
 const GateSelectionSubmenu = preload("res://UI/Core/Submenus/GateSelectionSubmenu.gd")
 
 # Current submenu name (empty = not in submenu)
@@ -107,13 +106,6 @@ func enter_submenu(submenu_name: String, farm, menu_position: Vector2i, selectio
 		if submenu.get("dynamic", false):
 			submenu = ToolConfig.get_dynamic_submenu(submenu_name, farm, menu_position)
 
-		# Special handling for mill_power submenu: inject availability
-		if submenu_name == "mill_power" and farm and farm.grid:
-			submenu = submenu.duplicate(true)  # Make copy to add availability
-			var biome = farm.grid.get_biome_for_plot(menu_position)
-			var availability = QuantumMill.check_power_availability(biome)
-			submenu["_availability"] = availability
-
 	current_submenu = submenu_name
 	_cached_submenu = submenu
 
@@ -129,28 +121,6 @@ func exit_submenu() -> void:
 	_cached_submenu = {}
 
 	submenu_changed.emit("", {})
-
-
-func enter_mill_conversion_submenu(farm, menu_position: Vector2i) -> void:
-	"""Enter mill conversion submenu (stage 2 of mill placement).
-
-	Args:
-		farm: Farm instance
-		menu_position: Position for biome lookup
-	"""
-	if not farm or not farm.grid:
-		return
-
-	var biome = farm.grid.get_biome_for_plot(menu_position)
-	var conv_availability = QuantumMill.check_conversion_availability(biome)
-
-	var submenu = ToolConfig.SUBMENUS.get("mill_conversion", {}).duplicate(true)
-	submenu["_availability"] = conv_availability
-
-	current_submenu = "mill_conversion"
-	_cached_submenu = submenu
-
-	submenu_changed.emit("mill_conversion", submenu)
 
 
 ## ============================================================================

@@ -26,6 +26,7 @@ extends RefCounted
 const IconBuilder = preload("res://Core/Factions/IconBuilder.gd")
 const FactionRegistry = preload("res://Core/Factions/FactionRegistry.gd")
 const BiomeRegistry = preload("res://Core/Biomes/BiomeRegistry.gd")
+const BiomeCharacteristics = preload("res://Core/Biomes/BiomeCharacteristics.gd")
 const QuantumComputer = preload("res://Core/QuantumSubstrate/QuantumComputer.gd")
 const HamiltonianBuilder = preload("res://Core/QuantumSubstrate/HamiltonianBuilder.gd")
 const LindbladBuilder = preload("res://Core/QuantumSubstrate/LindbladBuilder.gd")
@@ -174,6 +175,9 @@ static func build_from_registry(
 	# (Must be done AFTER icons are set but BEFORE biome enters tree)
 	if biome.has_method("_seed_viz_couplings"):
 		biome._seed_viz_couplings()
+
+	# 8b. Apply optimal evolution granularity from characteristics
+	BiomeCharacteristics.apply_to_biome(biome)
 
 	# 9. Add to tree (unless skip_tree_add)
 	if not options.get("skip_tree_add", false) and parent_node:

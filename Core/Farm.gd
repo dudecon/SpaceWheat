@@ -128,23 +128,6 @@ const MAX_PLOTS_PER_BIOME = 7  # J K L ; ' H G
 var biome_row_map: Dictionary = {}  # biome_name -> row index
 var row_biome_map: Dictionary = {}  # row index -> biome_name
 
-# PHASE 6 (PARAMETRIC): Infrastructure building costs
-# Plant costs are queried from biome capabilities, not hard-coded here
-# Costs are in emoji-credits (1 quantum unit = 10 credits)
-const INFRASTRUCTURE_COSTS = {
-	"mill": {"🌾": 30},      # 3 wheat = 30 wheat-credits
-	"market": {"🌾": 30},    # 3 wheat = 30 wheat-credits
-	"kitchen": {"🌾": 30, "💨": 10},  # 3 wheat + 1 flour
-	# NOTE: energy_tap removed (2026-01) - energy tap system deprecated
-}
-
-# Source of truth for GameController build system
-const BUILD_CONFIGS = {
-	"mill": {"cost": INFRASTRUCTURE_COSTS.mill},
-	"market": {"cost": INFRASTRUCTURE_COSTS.market},
-	"kitchen": {"cost": INFRASTRUCTURE_COSTS.kitchen},
-}
-
 # Special gather actions (not plantable, not buildings)
 const GATHER_ACTIONS = {
 	"forest_harvest": {
@@ -181,12 +164,6 @@ signal biome_loaded(biome_name: String, biome_ref)
 # STRUCTURE LIFECYCLE SIGNALS (BUILD mode actions)
 # These trigger plot tile updates in PlotGridDisplay
 # ═══════════════════════════════════════════════════════════════════════════════
-
-## Emitted when BUILD creates a new structure (mill, market, kitchen, crop)
-signal structure_built(grid_position: Vector2i, structure_type: String, emoji_pair: Dictionary)
-
-## Emitted when structure is demolished
-signal structure_demolished(grid_position: Vector2i, structure_type: String)
 
 ## Emitted when biome quantum system expands (new axis added)
 signal biome_expanded(biome_name: String, qubit_index: int, emoji_pair: Dictionary)
@@ -239,7 +216,16 @@ func emit_action_signal(action: String, result: Dictionary, grid_pos: Vector2i =
 				# Set grid_position on terminal if not already set
 				if "grid_position" in terminal and grid_pos != Vector2i(-1, -1):
 					terminal.grid_position = grid_pos
+				# DEBUG: Log exploration to help diagnose bubble rendering issues
+				print("\n🚨🚨🚨 FARM EMITTING terminal_bound SIGNAL 🚨🚨🚨")
+				print("  grid_pos: %s" % grid_pos)
+				print("  terminal_id: %s" % terminal.terminal_id)
+				print("  biome: %s" % result.get("biome_name", "?"))
+				print("  emoji_pair: %s" % result.get("emoji_pair", {}))
+				
 				terminal_bound.emit(grid_pos, terminal.terminal_id, result.get("emoji_pair", {}))
+				
+				print("✅ terminal_bound signal emitted!\n")
 
 		"measure":
 			var terminal = result.get("terminal")
@@ -263,13 +249,6 @@ func emit_action_signal(action: String, result: Dictionary, grid_pos: Vector2i =
 					tid = harvest.terminal_id
 				if h_pos != Vector2i(-1, -1) and tid != "":
 					terminal_released.emit(h_pos, tid, int(harvest.get("total_credits", 0)))
-
-		"build":
-			structure_built.emit(grid_pos, result.get("structure_type", ""),
-				result.get("emoji_pair", {}))
-
-		"demolish":
-			structure_demolished.emit(grid_pos, result.get("structure_type", ""))
 
 
 func _ready():
@@ -1280,102 +1259,6 @@ func _assign_plots_for_biome(biome_name: String) -> void:
 			grid.assign_plot_to_biome(pos, biome_name)
 
 
-func build(pos: Vector2i, build_type: String) -> bool:
-	"""Build at position - unified method for build/gather (planting deprecated).
-
-	Infrastructure buildings use INFRASTRUCTURE_COSTS constant.
-	Gather actions use GATHER_ACTIONS.
-	Planting is deprecated and will fail.
-	"""
-	# Determine action type and get cost
-	var action_type = ""  # "build" or "gather"
-	var cost = {}
-	var config = {}
-
-	# Check if it's an infrastructure building
-	if INFRASTRUCTURE_COSTS.has(build_type):
-		action_type = "build"
-		cost = INFRASTRUCTURE_COSTS[build_type]
-		config = {"type": "build"}
-
-	# Check if it's a gather action
-	elif GATHER_ACTIONS.has(build_type):
-		action_type = "gather"
-		config = GATHER_ACTIONS[build_type]
-		cost = config.get("cost", {})
-
-	# Planting deprecated
-	else:
-		action_result.emit("build", false, "Planting is deprecated")
-		return false
-
-	# 1. PRE-VALIDATION: Check if we can build here (skip for gather actions)
-	var plot = grid.get_plot(pos)
-	if config["type"] != "gather":
-		if not plot or plot.is_planted:
-			var reason = "Plot already occupied!"
-			action_result.emit("build_%s" % build_type, false, reason)
-			action_rejected.emit("build_%s" % build_type, pos, reason)
-			return false
-
-	# 1b. BIOME VALIDATION: Check if gather action is in correct biome
-	# Only check for gather actions that require specific biomes
-	if action_type == "gather" and config.has("biome_required"):
-		# Get biome name from plot_biome_assignments (in grid)
-		var biome_name = ""
-		if grid and grid.plot_biome_assignments.has(pos):
-			biome_name = grid.plot_biome_assignments[pos]
-		if biome_name != config["biome_required"]:
-			var reason = "Must be in %s biome!" % config["biome_required"]
-			action_result.emit("build_%s" % build_type, false, reason)
-			action_rejected.emit("build_%s" % build_type, pos, reason)
-			return false
-
-	# 2. ECONOMY CHECK: Can we afford it?
-	if not _can_afford_cost(cost):
-		var missing = _get_missing_resources(cost)
-		var reason = "Cannot afford! Missing: %s" % missing
-		action_result.emit("build_%s" % build_type, false, reason)
-		action_rejected.emit("build_%s" % build_type, pos, reason)
-		return false
-
-	# 3. DEDUCT COST
-	_spend_resources(cost, build_type)
-
-	# 4. EXECUTE BUILD
-	var success = false
-	match config["type"]:
-		"build":
-			# Route to specific building
-			match build_type:
-				"mill":
-					success = grid.place_mill(pos)
-				"market":
-					success = grid.place_market(pos)
-				"kitchen":
-					success = grid.place_kitchen(pos)
-				# NOTE: energy_tap case removed (2026-01) - energy tap system deprecated
-		"gather":
-			# Gather resources directly from environment
-			if config.has("yields"):
-				for emoji in config["yields"]:
-					var amount = config["yields"][emoji]
-					economy.add_resource(emoji, amount * 10, "gather_%s" % build_type)  # Convert to credits
-				success = true
-
-	if success:
-		_verbose.debug("farm", "🏗️", "Emitting structure_built signal for %s at %s" % [build_type, pos])
-		structure_built.emit(pos, build_type, {})  # No emoji_pair for infrastructure
-		_emit_state_changed()
-		action_result.emit("build_%s" % build_type, true, "%s placed successfully!" % build_type.capitalize())
-		return true
-	else:
-		# Refund if operation failed
-		_refund_resources(cost)
-		action_result.emit("build_%s" % build_type, false, "Failed to place %s" % build_type)
-		return false
-
-
 func do_action(action: String, params: Dictionary) -> Dictionary:
 	"""Universal action dispatcher - routes to appropriate method
 
@@ -1607,11 +1490,6 @@ func batch_harvest(positions: Array[Vector2i]) -> Dictionary:
 	var result = _batch_operation(positions, "Harvested", harvest_op)
 	result["total_yield"] = total_yield
 	return result
-
-
-func batch_build(positions: Array[Vector2i], build_type: String) -> Dictionary:
-	"""Build structures (mill, market, kitchen) on multiple plots."""
-	return _batch_operation(positions, "Built", func(pos): return build(pos, build_type))
 
 
 func get_plot(position: Vector2i):

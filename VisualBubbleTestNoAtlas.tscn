@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://bok9k6frtl0d9"]
+
+[ext_resource type="Script" path="res://VisualBubbleTestNoAtlas.gd" id="1_0m5qd"]
+[ext_resource type="Script" path="res://UI/Core/CameraController.gd" id="2_8m0ca"]
+
+[node name="VisualBubbleTestNoAtlas" type="Node2D"]
+script = ExtResource("1_0m5qd")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("2_8m0ca")

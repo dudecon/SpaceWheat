@@ -265,58 +265,11 @@ PackedFloat64Array QuantumEvolutionEngine::evolve(const PackedFloat64Array& rho_
         return rho_data;
     }
 
-    // Subcycling for numerical stability
-    if (dt <= max_dt) {
-        return evolve_step(rho_data, dt);
-    }
-
-    // Multiple steps needed
-    int num_steps = static_cast<int>(std::ceil(dt / max_dt));
-    float sub_dt = dt / num_steps;
-
-    // Unpack once, evolve multiple times, pack once
-    Eigen::MatrixXcd rho = unpack_dense(rho_data);
-
-    // Use pre-allocated buffer for drho (avoid allocation per substep)
-    Eigen::MatrixXcd& drho = m_drho_buffer;
-
-    for (int step = 0; step < num_steps; step++) {
-        drho.setZero();  // Much faster than allocating new matrix
-
-        // Term 1: Hamiltonian -i[H, ρ]
-        if (m_has_hamiltonian) {
-            // Compute commutator using temp buffer to reduce allocations
-            m_temp_buffer.noalias() = m_hamiltonian * rho;
-            drho.noalias() = m_temp_buffer - rho * m_hamiltonian;
-            drho *= std::complex<double>(0.0, -1.0);
-        }
-
-        // Term 2: Lindblad dissipation Σ_k (L_k ρ L_k† - ½{L_k†L_k, ρ})
-        for (size_t k = 0; k < m_lindblads.size(); k++) {
-            const auto& L = m_lindblads[k];
-            const auto& L_dag = m_lindblad_dags[k];
-            const auto& LdagL = m_LdagLs[k];
-
-            // L ρ L† using temp buffer
-            m_temp_buffer.noalias() = L * rho;
-            Eigen::MatrixXcd L_rho_Ldag = m_temp_buffer * L_dag;
-
-            // Anticommutator {L†L, ρ} = L†L ρ + ρ L†L
-            Eigen::MatrixXcd LdagL_rho = LdagL * rho;
-            Eigen::MatrixXcd rho_LdagL = rho * LdagL;
-
-            // Accumulate: L ρ L† - 0.5 * (L†L ρ + ρ L†L)
-            drho += L_rho_Ldag;
-            drho -= 0.5 * LdagL_rho;
-            drho -= 0.5 * rho_LdagL;
-        }
-
-        // Euler step
-        rho += static_cast<double>(sub_dt) * drho;
-        cap_trace_and_clamp_diag(rho);
-    }
-
-    return pack_dense(rho);
+    // Single evolution step using max_dt as the actual timestep (no subcycling)
+    // max_dt is the granularity setting (user-adjustable)
+    // dt parameter is ignored (legacy from subcycling era)
+    float actual_dt = (max_dt > 0.0f) ? max_dt : dt;
+    return evolve_step(rho_data, actual_dt);
 }
 
 Eigen::MatrixXcd QuantumEvolutionEngine::unpack_dense(const PackedFloat64Array& data) const {

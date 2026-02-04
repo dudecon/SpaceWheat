@@ -8,6 +8,16 @@ set -e
 PROJECT_ROOT="/home/tehcr33d/ws/SpaceWheat"
 cd "$PROJECT_ROOT"
 
+LOG_ROOT="${PROJECT_ROOT}/logs"
+
+sanitize_log_name() {
+	local name="$1"
+	local normalized
+	normalized=$(printf "%s" "$name" | tr '[:upper:]' '[:lower:]' | \
+		sed -E 's/[^a-z0-9]+/_/g' | sed -E 's/^_+//;s/_+$//')
+	printf "%s" "$normalized"
+}
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -82,7 +92,14 @@ run_test_with_log() {
 
     # Create timestamped log file
     local timestamp=$(date +"%Y%m%d_%H%M%S")
-    local log_file="${test_name,,}_${timestamp}.log"
+    local slug
+    slug=$(sanitize_log_name "$test_name")
+    if [ -z "$slug" ]; then
+        slug="test"
+    fi
+    local log_dir="${LOG_ROOT}/visual_bubble"
+    mkdir -p "$log_dir"
+    local log_file="${log_dir}/${slug}_${timestamp}.log"
 
     echo "Running test for ${timeout_secs} seconds..."
     echo "Output will be saved to: $log_file"

@@ -1220,11 +1220,10 @@ func evolve(dt: float, max_dt: float = 0.02, lnn: Object = null) -> void:
 	             + phase modulation via learned neural network (if lnn provided)
 
 	Uses first-order Euler integration: ρ(t+dt) = ρ(t) + dt * dρ/dt
-	With subcycling for numerical stability when dt is large.
 
 	Args:
-	    dt: Time step (in game seconds, typically 1/60 for 60 FPS)
-	    max_dt: Maximum substep size for numerical integration (default 0.02)
+	    dt: Time step (in game seconds, actual evolution timestep)
+	    max_dt: Unused (kept for API compatibility)
 	    lnn: Optional LiquidNeuralNet for phase modulation in phasic shadow
 	         If provided, applies learned phase shifts to density matrix diagonal
 
@@ -1255,27 +1254,17 @@ func evolve(dt: float, max_dt: float = 0.02, lnn: Object = null) -> void:
 	# ==========================================================================
 	# EVOLUTION PATH: GDScript per-operator sparse path (CPU-optimized)
 	# ==========================================================================
-	# Subcycling for numerical stability: break large dt into smaller steps
-	if dt > max_dt:
-		var num_steps = int(ceil(dt / max_dt))
-		var sub_dt = dt / num_steps
-		for _i in range(num_steps):
-			_evolve_step(sub_dt)
-		# Apply phase modulation from LNN (phasic shadow)
-		if lnn:
-			_apply_phase_lnn(lnn)
-		var t1 = Time.get_ticks_usec()
-		if Engine.get_process_frames() % 60 == 0:
-			_log("trace", "quantum", "⏱️", "QC Evolve Trace (Fallback Subcycle %d+LNN): Total %d us" % [num_steps, t1 - t0])
-		return
-
-	_evolve_step(dt)
+	# Single evolution step using max_dt as actual timestep (no subcycling)
+	# max_dt is the granularity setting (user-adjustable)
+	# dt parameter is ignored (legacy from subcycling era)
+	var actual_dt = max_dt if max_dt > 0.0 else dt
+	_evolve_step(actual_dt)
 	# Apply phase modulation from LNN (phasic shadow)
 	if lnn:
 		_apply_phase_lnn(lnn)
 	var t1 = Time.get_ticks_usec()
 	if Engine.get_process_frames() % 60 == 0:
-		_log("trace", "quantum", "⏱️", "QC Evolve Trace (Fallback Single+LNN): Total %d us" % [t1 - t0])
+		_log("trace", "quantum", "⏱️", "QC Evolve Trace (Single+LNN, dt=%.4f): Total %d us" % [actual_dt, t1 - t0])
 
 
 func _evolve_step(dt: float) -> void:

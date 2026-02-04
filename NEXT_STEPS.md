@@ -35,7 +35,7 @@ Once build completes, run the verification script:
 
 ```bash
 cd /home/tehcr33d/ws/SpaceWheat
-godot --headless -s verify_native_engines.gd
+godot --headless -s legacy_tests/verify_native_engines.gd
 ```
 
 **Expected output:**

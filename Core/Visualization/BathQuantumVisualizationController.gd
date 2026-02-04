@@ -30,6 +30,10 @@ var biomes: Dictionary = {}
 # Farm reference (for plot-to-biome lookups)
 var farm_ref = null
 
+# Plot selection tracking (synced with PlotGridDisplay)
+var plot_grid_display_ref = null
+var selected_plot_positions: Dictionary = {}  # Vector2i -> true (which plots are selected)
+
 # Basis state bubbles (biome_name → Array[QuantumNode])
 # V2.2 Architecture: This is REDUNDANT with graph.quantum_nodes
 # Kept for backward compatibility but should be phased out
@@ -170,12 +174,100 @@ func _on_active_biome_changed(new_biome: String, _old_biome: String) -> void:
 			_verbose.debug("viz", "🔄", "BathQuantumViz: Biome changed to %s - bubbles filtered" % new_biome)
 
 
+func _connect_to_plot_grid_display() -> void:
+	"""Connect to PlotGridDisplay for selection-based bubble rendering.
+
+	ARCHITECTURE: Bubbles only render for plots that are BOTH:
+	1. Selected (checkmark in PlotGridDisplay)
+	2. Explored (terminal bound to register)
+
+	This ties visualization directly to UI selection state.
+	"""
+	# Find PlotGridDisplay in scene tree
+	# It's typically under PlayerShell -> QuantumInstrument -> PlotGridDisplay
+	if not farm_ref:
+		if _verbose:
+			_verbose.debug("viz", "⚠️", "Cannot connect to PlotGridDisplay - no farm_ref")
+		return
+
+	# Try to find PlotGridDisplay via common paths
+	var shell = get_tree().get_first_node_in_group("player_shell")
+	if shell:
+		plot_grid_display_ref = shell.get_node_or_null("QuantumInstrument/PlotGridDisplay")
+
+	if not plot_grid_display_ref:
+		# Fallback: search entire tree
+		plot_grid_display_ref = get_tree().get_first_node_in_group("plot_grid_display")
+
+	if plot_grid_display_ref:
+		# Connect to selection signals
+		if plot_grid_display_ref.has_signal("plot_selection_changed"):
+			plot_grid_display_ref.plot_selection_changed.connect(_on_plot_selection_changed)
+			if _verbose:
+				_verbose.info("viz", "📡", "Connected to PlotGridDisplay.plot_selection_changed")
+
+		# Sync initial selection state
+		if plot_grid_display_ref.has_method("get_selected_plots"):
+			var selected = plot_grid_display_ref.get_selected_plots()
+			for pos in selected:
+				selected_plot_positions[pos] = true
+			if _verbose:
+				_verbose.info("viz", "✅", "Synced initial plot selection: %d plots selected (positions: %s)" % [selected.size(), selected])
+
+		# Also sync selected_plots dictionary directly for debugging
+		if "selected_plots" in plot_grid_display_ref:
+			if _verbose:
+				_verbose.info("viz", "🔍", "PlotGridDisplay.selected_plots has %d entries: %s" % [
+					plot_grid_display_ref.selected_plots.size(),
+					plot_grid_display_ref.selected_plots.keys()
+				])
+	else:
+		if _verbose:
+			_verbose.warn("viz", "⚠️", "PlotGridDisplay not found - selection-based filtering disabled")
+
+
+func _on_plot_selection_changed(position: Vector2i, is_selected: bool) -> void:
+	"""Handle plot selection change - show/hide bubble based on selection state.
+
+	Args:
+		position: Grid position of the plot
+		is_selected: True if plot was selected, False if deselected
+	"""
+	print("\n☑️  PLOT SELECTION CHANGED")
+	print("  Position: %s" % position)
+	print("  Selected: %s" % is_selected)
+
+	# Update selection tracking
+	if is_selected:
+		selected_plot_positions[position] = true
+	else:
+		selected_plot_positions.erase(position)
+
+	print("  Total selected: %d" % selected_plot_positions.size())
+
+	# Show/hide bubble based on selection state
+	if graph and graph.quantum_nodes_by_grid_pos.has(position):
+		var bubble = graph.quantum_nodes_by_grid_pos[position]
+		if bubble:
+			# Set bubble visibility based on selection
+			bubble.visible = is_selected
+			print("  ✅ Updated bubble visibility: %s" % is_selected)
+			graph.queue_redraw()
+		else:
+			print("  ⚠️  Bubble exists in lookup but is null")
+	else:
+		print("  🔍 No bubble at this position yet (will show when created)")
+
+
 func connect_to_farm(farm) -> void:
 	"""Connect to farm signals to auto-request bubbles when terminals are bound
 
 	Args:
 		farm: Farm instance with terminal lifecycle signals
 	"""
+	if _verbose:
+		_verbose.debug("viz", "🔌", "BathQuantumViz.connect_to_farm() called")
+
 	if not farm:
 		push_warning("BathQuantumViz: null farm reference")
 		return
@@ -198,9 +290,14 @@ func connect_to_farm(farm) -> void:
 	# Connect to terminal lifecycle signals (EXPLORE/MEASURE/POP)
 	if farm.has_signal("terminal_bound"):
 		farm.terminal_bound.connect(_on_terminal_bound)
-		if _verbose:
-			_verbose.debug("viz", "📡", "Connected to farm.terminal_bound for bubble spawn")
+		print("\n🔗 SIGNAL CONNECTION SUCCESS")
+		print("  Connected BathQuantumViz._on_terminal_bound to farm.terminal_bound")
+		print("  Farm: %s" % farm)
+		print("  Signal exists: %s\n" % farm.has_signal("terminal_bound"))
 	else:
+		print("\n❌ SIGNAL CONNECTION FAILED")
+		print("  Farm has no terminal_bound signal!")
+		print("  Farm: %s\n" % farm)
 		push_warning("BathQuantumViz: farm has no terminal_bound signal")
 
 	if farm.has_signal("terminal_measured"):
@@ -221,6 +318,9 @@ func connect_to_farm(farm) -> void:
 		farm.biome_loaded.connect(_on_biome_loaded)
 		if _verbose:
 			_verbose.debug("viz", "📡", "Connected to farm.biome_loaded for dynamic biomes")
+
+	# CRITICAL: Connect to PlotGridDisplay for selection-based bubble filtering
+	_connect_to_plot_grid_display()
 
 	# If visualization is already initialized, sync any bound terminals now.
 	if graph:
@@ -283,20 +383,43 @@ func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dic
 	"""
 	var north_emoji = emoji_pair.get("north", "?")
 	var south_emoji = emoji_pair.get("south", "?")
-	if _verbose:
-		_verbose.debug("viz", "🔔", "Terminal %s bound at %s (%s/%s)" % [terminal_id, position, north_emoji, south_emoji])
+
+	print("\n" + "=".repeat(70))
+	print("🔔 TERMINAL_BOUND SIGNAL RECEIVED")
+	print("  Position: %s" % position)
+	print("  Terminal ID: %s" % terminal_id)
+	print("  Emojis: %s/%s" % [north_emoji, south_emoji])
+	print("  farm_ref: %s" % ("EXISTS" if farm_ref else "NULL"))
+	print("  graph: %s" % ("EXISTS" if graph else "NULL"))
+	print("=".repeat(70) + "\n")
 
 	# Get plot's biome assignment from stored farm reference
 	if not farm_ref or not farm_ref.grid:
-		if _verbose:
-			_verbose.debug("viz", "⚠️", "No farm reference or grid found")
+		print("❌ EARLY EXIT: No farm reference or grid found")
+		print("  farm_ref: %s" % farm_ref)
+		print("  farm_ref.grid: %s" % (farm_ref.grid if farm_ref else "N/A"))
 		return
 
 	var biome_name = farm_ref.grid.plot_biome_assignments.get(position, "")
+	print("📍 Biome lookup for position %s:" % position)
+	print("  plot_biome_assignments.get(): '%s'" % biome_name)
+	print("  Total assignments: %d" % farm_ref.grid.plot_biome_assignments.size())
+
 	if biome_name.is_empty():
-		if _verbose:
-			_verbose.debug("viz", "⚠️", "No biome assignment for position %s" % position)
-		return
+		print("  ⚠️  Empty biome name, trying fallback...")
+		# FALLBACK: Try to get biome from terminal's bound_biome_name
+		# This handles cases where plot_biome_assignments isn't populated yet
+		var terminal_temp = farm_ref.plot_pool.get_terminal(terminal_id) if farm_ref.plot_pool else null
+		if terminal_temp and not terminal_temp.bound_biome_name.is_empty():
+			biome_name = terminal_temp.bound_biome_name
+			print("  ✅ Using terminal's biome: %s" % biome_name)
+		else:
+			print("❌ EARLY EXIT: No biome assignment found")
+			print("  terminal_temp: %s" % terminal_temp)
+			print("  bound_biome_name: %s" % (terminal_temp.bound_biome_name if terminal_temp else "N/A"))
+			return
+	else:
+		print("  ✅ Found biome: %s" % biome_name)
 
 	if _verbose:
 		_verbose.debug("viz", "📍", "Plot at %s assigned to biome: %s" % [position, biome_name])
@@ -324,9 +447,23 @@ func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dic
 			_verbose.debug("viz", "⚠️", "Could not find terminal %s in plot_pool" % terminal_id)
 
 	# Create bubble with terminal reference (enables state queries)
+	# Bubble visibility will be set based on plot selection state
+	print("🎨 Calling _create_bubble_for_terminal...")
+	print("  biome_name: %s" % biome_name)
+	print("  position: %s" % position)
+	print("  emojis: %s/%s" % [north_emoji, south_emoji])
+	print("  plot: %s" % ("EXISTS" if plot else "NULL"))
+	print("  terminal: %s" % ("EXISTS" if terminal else "NULL"))
+
 	_create_bubble_for_terminal(biome_name, position, north_emoji, south_emoji, plot, terminal)
+
 	if graph:
+		print("✅ Calling graph.queue_redraw()")
 		graph.queue_redraw()
+	else:
+		print("❌ No graph to redraw!")
+
+	print("=".repeat(70) + "\n")
 
 
 func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: String, probability: float) -> void:
@@ -590,21 +727,29 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 		plot: Optional FarmPlot reference (enables entanglement visualization)
 		terminal: Terminal instance (v2.2 - single source of truth)
 	"""
+	print("🏗️  _create_bubble_for_terminal ENTRY")
+	print("  biome_name: %s" % biome_name)
+	print("  grid_pos: %s" % grid_pos)
+
 	if not biomes.has(biome_name):
-		if _verbose:
-			_verbose.debug("viz", "⚠️", "Unknown biome: %s" % biome_name)
+		print("❌ EARLY EXIT: Unknown biome '%s'" % biome_name)
+		print("  Available biomes: %s" % biomes.keys())
 		return
 
 	var biome = biomes.get(biome_name)
 	if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
-		if _verbose:
-			_verbose.debug("viz", "⚠️", "Biome %s has no viz payload" % biome_name)
+		print("❌ EARLY EXIT: Biome %s has no viz payload" % biome_name)
+		print("  biome: %s" % biome)
+		print("  viz_cache: %s" % (biome.viz_cache if biome else "N/A"))
 		return
 
 	if not graph or not graph.layout_calculator:
-		if _verbose:
-			_verbose.warn("viz", "⚠️", "Cannot create bubble: graph or layout_calculator not initialized")
+		print("❌ EARLY EXIT: graph or layout_calculator not initialized")
+		print("  graph: %s" % graph)
+		print("  layout_calculator: %s" % (graph.layout_calculator if graph else "N/A"))
 		return
+
+	print("  ✅ Passed all early exit checks")
 
 	# Determine initial position (scatter around biome oval)
 	var initial_pos = stored_center
@@ -650,13 +795,19 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 	# Add to tracking
 	if not basis_bubbles.has(biome_name):
 		basis_bubbles[biome_name] = []
+
+	print("  📊 Adding bubble to tracking structures...")
 	basis_bubbles[biome_name].append(bubble)
 	graph.quantum_nodes.append(bubble)
 	graph.quantum_nodes_by_grid_pos[grid_pos] = bubble
+	print("    ✅ Added to basis_bubbles[%s] (now %d bubbles)" % [biome_name, basis_bubbles[biome_name].size()])
+	print("    ✅ Added to graph.quantum_nodes (now %d total)" % graph.quantum_nodes.size())
+	print("    ✅ Added to graph.quantum_nodes_by_grid_pos[%s]" % grid_pos)
 
 	# Register by plot_id for entanglement lookup (only if plot provided)
 	if plot and bubble.plot_id:
 		graph.node_by_plot_id[bubble.plot_id] = bubble
+		print("    ✅ Registered by plot_id: %s" % bubble.plot_id)
 
 	# Start spawn animation so visual_scale/alpha go from 0→1
 	# CRITICAL: Must use graph.time_accumulator, NOT real time, because
@@ -665,11 +816,30 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 	# visual_scale to stay at 0 forever (bubbles invisible).
 	bubble.start_spawn_animation(graph.time_accumulator)
 
-	if _verbose:
-		_verbose.debug("viz", "🔵", "Created terminal bubble (%s/%s) at grid %s%s" % [
-			north_emoji, south_emoji, grid_pos,
-			" [with plot for entanglement]" if plot else ""
-		])
+	# Set initial visibility based on plot selection state
+	# ARCHITECTURE: Bubbles only visible for SELECTED plots
+	# FALLBACK: If PlotGridDisplay not fully synced yet, default to visible
+	var is_selected = selected_plot_positions.has(grid_pos)
+
+	# Only apply selection-based visibility if:
+	# 1. PlotGridDisplay was found AND
+	# 2. Selection has been synced (selected_plot_positions is not empty OR plot was explicitly selected)
+	if plot_grid_display_ref and selected_plot_positions.size() > 0:
+		bubble.visible = is_selected
+	else:
+		# FALLBACK: Show all bubbles if selection system not ready yet
+		print("  ⚠️  PlotGridDisplay not ready (size=%d), defaulting to visible" % selected_plot_positions.size())
+		bubble.visible = true
+
+	print("✅ BUBBLE CREATED SUCCESSFULLY!")
+	print("  Position: %s" % bubble.position)
+	print("  Visible: %s" % bubble.visible)
+	print("  Is selected: %s" % is_selected)
+	print("  Visual scale: %s" % bubble.visual_scale)
+	print("  Visual alpha: %s" % bubble.visual_alpha)
+	print("  Radius: %s" % bubble.radius)
+	print("  Biome: %s" % bubble.biome_name)
+
 	graph.queue_redraw()
 
 

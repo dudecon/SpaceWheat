@@ -135,7 +135,7 @@ func compute_mi_gpu(
 	if _rho_buffer == RID():
 		_rho_buffer = rd.storage_buffer_create(rho_bytes.size(), rho_bytes)
 	else:
-		rd.buffer_update(_rho_buffer, 0, rho_bytes)
+		rd.buffer_update(_rho_buffer, 0, rho_bytes.size(), rho_bytes)
 
 	# Create MI output buffer if needed
 	if _mi_buffer == RID():

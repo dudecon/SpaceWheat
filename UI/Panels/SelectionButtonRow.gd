@@ -100,11 +100,16 @@ func _create_button(spec: Dictionary) -> Dictionary:
 
 	var has_icon = false
 	if icon_path != "":
-		var icon_tex = load(icon_path)
-		if icon_tex:
-			icon_rect.texture = icon_tex
-			has_icon = true
+		# Check if resource exists before loading (graceful fallback)
+		if ResourceLoader.exists(icon_path):
+			var icon_tex = load(icon_path)
+			if icon_tex:
+				icon_rect.texture = icon_tex
+				has_icon = true
+			else:
+				icon_rect.visible = false
 		else:
+			# SVG missing - hide icon, use text label only
 			icon_rect.visible = false
 	else:
 		icon_rect.visible = false

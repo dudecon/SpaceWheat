@@ -194,8 +194,27 @@ Dictionary MultiBiomeLookaheadEngine::evolve_all_lookahead(
     for (int biome_id = 0; biome_id < num_biomes; biome_id++) {
         PackedFloat64Array rho_packed = biome_rhos[biome_id];
 
-        // Evolve this biome for all steps
-        auto biome_result = _evolve_biome_steps(biome_id, rho_packed, steps, dt, max_dt);
+        // Skip empty or all-zero rhos (inactive biomes - no Hamiltonian meaning)
+        // Don't try to unpack - just return empty results and continue
+        bool is_zero = rho_packed.is_empty();
+        if (!is_zero) {
+            // Check if all zeros
+            bool all_zeros = true;
+            for (int64_t i = 0; i < rho_packed.size(); i++) {
+                if (rho_packed[i] != 0.0) {
+                    all_zeros = false;
+                    break;
+                }
+            }
+            is_zero = all_zeros;
+        }
+
+        BiomeStepResult biome_result;
+        if (!is_zero) {
+            // Evolve this biome for all steps (only if valid state)
+            biome_result = _evolve_biome_steps(biome_id, rho_packed, steps, dt, max_dt);
+        }
+        // else: biome_result remains empty (skip calculation)
 
         // Convert step_results to Godot Array
         Array biome_steps;
@@ -282,8 +301,26 @@ Dictionary MultiBiomeLookaheadEngine::evolve_single_biome(
         return result;
     }
 
-    // Evolve this biome
-    auto biome_result = _evolve_biome_steps(biome_id, rho_packed, steps, dt, max_dt);
+    // Skip empty or all-zero rhos (no Hamiltonian meaning)
+    bool is_zero = rho_packed.is_empty();
+    if (!is_zero) {
+        // Check if all zeros
+        bool all_zeros = true;
+        for (int64_t i = 0; i < rho_packed.size(); i++) {
+            if (rho_packed[i] != 0.0) {
+                all_zeros = false;
+                break;
+            }
+        }
+        is_zero = all_zeros;
+    }
+
+    BiomeStepResult biome_result;
+    if (!is_zero) {
+        // Evolve this biome (only if valid state)
+        biome_result = _evolve_biome_steps(biome_id, rho_packed, steps, dt, max_dt);
+    }
+    // else: biome_result remains empty (skip calculation)
 
     // Convert to Godot types
     Array biome_steps;

@@ -513,10 +513,13 @@ func _apply_buffered_metrics(
 	var p1 = snap.get("p1", 0.5)
 	var r_xy = snap.get("r_xy", 0.0)
 	var phi = snap.get("phi", 0.0)
+	var theta = snap.get("theta", PI / 2.0)
 	var purity = snap.get("purity", -1.0)
 
-	node.emoji_north_opacity = p0
-	node.emoji_south_opacity = p1
+	# Use theta for Bloch sphere polarity
+	var cos_theta = cos(theta)
+	node.emoji_north_opacity = (1.0 + cos_theta) * 0.5
+	node.emoji_south_opacity = (1.0 - cos_theta) * 0.5
 
 	var hue = (phi + PI) / TAU
 	node.color = Color.from_hsv(hue, r_xy * 0.8, 0.9, 0.8)
@@ -525,7 +528,26 @@ func _apply_buffered_metrics(
 	node.coherence = r_xy * 0.5
 
 	var mass = p0 + p1
-	# Base radius from probability mass
+
+	# TEMPORARY: Disabled mass accumulation for debugging
+	# # Update mass history (rolling 13-frame window)
+	# # Safety: Initialize if not present (for backwards compatibility)
+	# if not "_mass_history" in node or node._mass_history == null:
+	# 	node._mass_history = []
+	# if not "_accumulated_mass" in node or typeof(node._accumulated_mass) != TYPE_FLOAT:
+	# 	node._accumulated_mass = 0.0
+	#
+	# node._mass_history.append(mass)
+	# if node._mass_history.size() > node.MASS_HISTORY_SIZE:
+	# 	var oldest = node._mass_history.pop_front()
+	# 	node._accumulated_mass -= oldest
+	# node._accumulated_mass += mass
+	#
+	# # Base radius from accumulated mass (grows over 13 frames)
+	# var avg_mass = node._accumulated_mass / float(max(1, node._mass_history.size()))
+	# var base_radius = lerpf(node.MIN_RADIUS, node.MAX_RADIUS * 0.7, clampf(avg_mass * 2.0, 0.0, 1.0))
+
+	# Base radius from current mass (not accumulated) - TEMPORARY FIX
 	var base_radius = lerpf(node.MIN_RADIUS, node.MAX_RADIUS * 0.7, clampf(mass * 2.0, 0.0, 1.0))
 
 	# Purity boost: makes pure states visibly larger
@@ -565,15 +587,20 @@ func update_animations(nodes: Array, time_accumulator: float, delta: float) -> v
 func filter_nodes_for_biome(nodes: Array, active_biome: String) -> void:
 	"""Update node visibility based on active biome.
 
+	DISABLED: Visibility now controlled by plot selection (PlotGridDisplay checkmarks).
+	This function is kept for API compatibility but doesn't change visibility.
+
 	Args:
 	    nodes: Array of QuantumNode instances
 	    active_biome: Name of active biome, or "" for all biomes
 	"""
-	for node in nodes:
-		if active_biome == "":
-			node.visible = true
-		else:
-			node.visible = (node.biome_name == active_biome)
+	# DISABLED: Don't override selection-based visibility
+	# for node in nodes:
+	#	if active_biome == "":
+	#		node.visible = true
+	#	else:
+	#		node.visible = (node.biome_name == active_biome)
+	pass
 
 
 func is_node_in_active_biome(node, active_biome: String) -> bool:

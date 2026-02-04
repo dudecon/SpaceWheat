@@ -700,7 +700,7 @@ static func _build_icon_from_biome_and_factions(
 	biome_component: Dictionary,
 	faction_list: Array,
 	faction_standings: Dictionary
-) -> Icon:
+) -> IconScript:
 	## Start with biome component, then addively merge faction contributions
 	## Each faction is weighted by its standing (0.0 = ignored, 1.0 = full strength)
 

@@ -26,7 +26,6 @@ const QuantumVizCache = preload("res://Core/Visualization/QuantumVizCache.gd")
 
 # Core imports
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
-const QuantumRegister = preload("res://Core/QuantumSubstrate/QuantumRegister.gd")
 const QuantumComputer = preload("res://Core/QuantumSubstrate/QuantumComputer.gd")
 const LiquidNeuralNet = preload("res://Core/Visualization/LiquidNeuralNet.gd")
 # QuantumGateLibrary - moved to BiomeGateOperations component
