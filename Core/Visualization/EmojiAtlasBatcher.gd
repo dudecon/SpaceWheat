@@ -380,6 +380,22 @@ func build_atlas_async(emoji_list: Array, parent_node: Node, font_size: int = 48
 		_atlas_width, _atlas_height, _emoji_uvs.size(), elapsed
 	])
 
+	# Early warning: Check VisualAssetRegistry for missing SVG files
+	if _visual_asset_registry:
+		var missing_svg_files: Array = []
+		# Get all registered emojis from the registry
+		for emoji in emoji_list:
+			if _visual_asset_registry.has_texture(emoji):
+				# Check if the SVG actually exists
+				var tex = _visual_asset_registry.get_texture(emoji)
+				if not tex:
+					missing_svg_files.append(emoji)
+
+		if missing_svg_files.size() > 0:
+			missing_svg_files.sort()
+			var missing_str = " ".join(missing_svg_files) if missing_svg_files.size() <= 10 else "%d emojis" % missing_svg_files.size()
+			push_warning("[EmojiAtlasBatcher] 🎨 ⚠️ %d emoji(s) registered in VisualAssetRegistry but missing SVG files, will render as text boxes: %s" % [missing_svg_files.size(), missing_str])
+
 
 func build_atlas_cached(emoji_list: Array, parent_node: Node, font_size: int = 48) -> void:
 	"""Build atlas with cache support (preferred method).
@@ -708,13 +724,13 @@ func flush_text_fallbacks(graph: Node2D) -> void:
 		_draw_text_box(graph, font, item.position, item.size, item.emoji, item.color, item.shadow_offset)
 		_emoji_count += 1
 
-	# Emit batched warning for all missing emojis at end of frame
+	# Log batched info for all missing emojis at end of frame (verbose debugging)
 	if _missing_emojis_this_frame.size() > 0:
 		var emoji_list = _missing_emojis_this_frame.values()
 		var count = emoji_list.size()
-		emoji_list.sort()  # Sort for consistent warning message
+		emoji_list.sort()  # Sort for consistent message
 		var emojis_str = " ".join(emoji_list) if count <= 10 else "%d emojis" % count
-		push_warning("[EmojiAtlasBatcher] %d emoji(s) missing from atlas, rendering as text boxes: %s" % [count, emojis_str])
+		print("[EmojiAtlasBatcher] ℹ️  %d emoji(s) missing from atlas, rendering as text boxes: %s" % [count, emojis_str])
 
 	_text_fallback_queue.clear()
 
