@@ -50,7 +50,7 @@ jobs:
           mv bin/*.so bin/linux/
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-extension
           path: native/bin/linux/*.so
@@ -63,7 +63,7 @@ jobs:
           submodules: recursive
 
       - name: Set up MSVC
-        uses: microsoft/setup-msbuild@v1.1
+        uses: microsoft/setup-msbuild@v2
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -87,7 +87,7 @@ jobs:
           cl.exe /std:c++17 /EHsc /MD /O2 /I include /I include\godot_cpp /I include\gdextension /DWINDOWS_ENABLED /DGDEXTENSION /LD src\*.cpp ..\godot-cpp\bin\libgodot-cpp.windows.template_release.x86_64.lib /Fe:bin\windows\libquantummatrix.windows.template_release.x86_64.dll
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-extension
           path: native/bin/windows/*.dll
@@ -126,7 +126,7 @@ jobs:
             -o bin/macos/libquantummatrix.macos.template_release.framework
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-extension
           path: native/bin/macos/*.framework
@@ -161,7 +161,7 @@ jobs:
             -o bin/web/libquantummatrix.wasm
 
       - name: Upload Web artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: web-extension
           path: native/bin/web/*.wasm
@@ -171,7 +171,7 @@ jobs:
     needs: [build-linux, build-windows, build-macos, build-web]
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Organize builds
         run: |
@@ -182,7 +182,7 @@ jobs:
           cp web-extension/* builds/web/ 2>/dev/null || true
 
       - name: Upload combined build
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: all-platforms
           path: builds/**
@@ -198,7 +198,7 @@ jobs:
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           body: |
