@@ -33,19 +33,37 @@ func create_quantum_nodes(ctx: Dictionary, _skip_quantum_register_bubbles: bool 
 
 	var nodes: Array = []
 
-	# TEST BUBBLE: One bubble at (-1,-1) to validate rendering pipeline
-	# Uses register 0 from the first biome that has viz_cache
-	for biome_name in biomes:
-		var biome = biomes[biome_name]
+	# BOOT BUBBLE: One bubble to validate rendering pipeline and trigger music/evolution
+	# Prefers StarterForest if available, otherwise uses first biome with viz_cache
+	# Made to look like an explored terminal bubble so music and evolution start immediately
+	var boot_biome_name = ""
+
+	# First try to find StarterForest
+	if biomes.has("StarterForest"):
+		var biome = biomes["StarterForest"]
 		if biome and biome.viz_cache and biome.viz_cache.has_metadata():
-			var test_node = _create_node_for_register(biome_name, 0, biomes, layout_calculator)
-			if test_node:
-				test_node.plot_id = "boot_test"
-				nodes.append(test_node)
-				var verbose = _get_verbose()
-				if verbose:
-					verbose.debug("viz", "🧪", "Boot test bubble created: %s:r0" % biome_name)
-			break  # Only one test bubble
+			boot_biome_name = "StarterForest"
+
+	# Fallback to first available biome
+	if boot_biome_name == "":
+		for biome_name in biomes:
+			var biome = biomes[biome_name]
+			if biome and biome.viz_cache and biome.viz_cache.has_metadata():
+				boot_biome_name = biome_name
+				break
+
+	if boot_biome_name != "":
+		var test_node = _create_node_for_register(boot_biome_name, 0, biomes, layout_calculator)
+		if test_node:
+			test_node.plot_id = "boot_test"
+			# Make it look like an explored terminal bubble (triggers music/evolution)
+			test_node.has_farm_tether = true
+			test_node.is_terminal_bubble = true
+			test_node.grid_position = Vector2i(0, 0)  # Fake grid position instead of (-1,-1)
+			nodes.append(test_node)
+			var verbose = _get_verbose()
+			if verbose:
+				verbose.debug("viz", "🧪", "Boot bubble created: %s:r0 (explored style)" % boot_biome_name)
 
 	# TERMINAL BUBBLES: Create bubbles for terminals already bound (from save/load)
 	if terminal_pool and terminal_pool.has_method("get_bound_terminals"):

@@ -103,10 +103,77 @@ func get_grid_snapshot() -> Dictionary:
 	return snapshot
 
 
+func add_resource(emoji: String, credits_amount: int, reason: String = "rig_seed") -> bool:
+	"""Add emoji-credits directly to economy (used by QA rigs)."""
+	if not farm or not ("economy" in farm) or not farm.economy:
+		return false
+	if not farm.economy.has_method("add_resource"):
+		return false
+	farm.economy.add_resource(emoji, credits_amount, reason)
+	return true
+
+
 func get_active_quests() -> Array:
 	if quest_manager and quest_manager.has_method("get_active_quests"):
 		return quest_manager.get_active_quests()
 	return []
+
+
+func get_quest_offers_for_current_biome() -> Array:
+	"""Return quest offers for the current biome (does not accept)."""
+	if not quest_manager or not farm:
+		return []
+	if not quest_manager.has_method("offer_all_faction_quests"):
+		return []
+	var current_biome = farm.get_current_biome() if farm.has_method("get_current_biome") else null
+	if not current_biome and farm.grid and farm.grid.biomes and not farm.grid.biomes.is_empty():
+		current_biome = farm.grid.biomes.values()[0]
+	if not current_biome:
+		return []
+	return quest_manager.offer_all_faction_quests(current_biome)
+
+
+func accept_quest_data(quest_data: Dictionary) -> bool:
+	if not quest_manager:
+		return false
+	return quest_manager.accept_quest(quest_data)
+
+
+func complete_quest(quest_id: int) -> bool:
+	if not quest_manager:
+		return false
+	return quest_manager.complete_quest(quest_id)
+
+
+func claim_quest(quest_id: int) -> bool:
+	if not quest_manager:
+		return false
+	return quest_manager.claim_quest(quest_id)
+
+
+func get_known_vocab_pairs() -> Array:
+	if farm and farm.has_method("get_known_pairs"):
+		return farm.get_known_pairs()
+	return []
+
+
+func get_known_vocab_emojis() -> Array:
+	if farm and farm.has_method("get_known_emojis"):
+		return farm.get_known_emojis()
+	return []
+
+
+func get_biome_positions(biome_name: String) -> Array:
+	"""Return plot positions for a biome name."""
+	if not farm or not ("grid" in farm) or not farm.grid:
+		return []
+	if not ("plot_biome_assignments" in farm.grid):
+		return []
+	var positions: Array = []
+	for pos in farm.grid.plot_biome_assignments:
+		if farm.grid.plot_biome_assignments[pos] == biome_name:
+			positions.append(pos)
+	return positions
 
 
 func accept_quest_by_id(quest_id: int) -> bool:
@@ -124,8 +191,10 @@ func offer_all_quests_for_current_biome() -> void:
 	if not quest_manager.has_method("offer_all_faction_quests"):
 		return
 	var current_biome = farm.get_current_biome() if farm.has_method("get_current_biome") else null
-	var biome_name = current_biome.get_biome_type() if current_biome and current_biome.has_method("get_biome_type") else ""
-	quest_manager.offer_all_faction_quests(biome_name)
+	if not current_biome and farm.grid and farm.grid.biomes and not farm.grid.biomes.is_empty():
+		current_biome = farm.grid.biomes.values()[0]
+	if current_biome:
+		quest_manager.offer_all_faction_quests(current_biome)
 
 
 func log_action(action: String, details: Dictionary = {}) -> void:
