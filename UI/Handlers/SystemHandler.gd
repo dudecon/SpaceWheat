@@ -159,8 +159,8 @@ static func system_debug(farm, positions: Array[Vector2i], current_selection: Ve
 		debug_info.quantum_computer = {"exists": false}
 
 	# Terminal info (v2 model)
-	if farm.plot_pool:
-		var terminal = farm.plot_pool.get_terminal_at_grid_pos(target_pos)
+	if farm.terminal_pool:
+		var terminal = farm.terminal_pool.get_terminal_at_grid_pos(target_pos)
 		if terminal:
 			debug_info.terminal = {
 				"exists": true,
@@ -219,8 +219,8 @@ static func peek_state(farm, positions: Array[Vector2i]) -> Dictionary:
 		var emoji = ""
 		var register_id = -1
 
-		if farm.plot_pool:
-			var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		if farm.terminal_pool:
+			var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 			if terminal and terminal.is_bound:
 				emoji = terminal.north_emoji
 				register_id = terminal.bound_register_id

@@ -64,7 +64,7 @@ var conspiracy_network = null
 var faction_territory_manager = null
 var farm_economy = null
 var vocabulary_evolution = null
-var plot_pool = null
+var terminal_pool = null
 
 # Legacy biome reference (for backward compatibility)
 var biome = null
@@ -149,14 +149,14 @@ func _ready():
 	# Wire verbose logger to all components (requires @onready _verbose)
 	_plot_manager.set_verbose(_verbose)
 	_biome_routing.set_verbose(_verbose)
-	if plot_pool:
-		_biome_routing.set_plot_pool(plot_pool)
+	if terminal_pool:
+		_biome_routing.set_terminal_pool(terminal_pool)
 	_entanglement.set_verbose(_verbose)
 	_harvest.set_verbose(_verbose)
 
 	# Wire component dependencies
 	_entanglement.set_dependencies(_plot_manager, _biome_routing)
-	_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
+	_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, terminal_pool, null)
 
 	# Wire external references
 	_plot_manager.faction_territory_manager = faction_territory_manager
@@ -215,13 +215,13 @@ func assign_plot_to_biome(position: Vector2i, biome_name: String) -> bool:
 	return _biome_routing.assign_plot_to_biome(position, biome_name)
 
 
-func set_plot_pool(pool) -> void:
-	"""Inject PlotPool for terminal-based register resolution."""
-	plot_pool = pool
+func set_terminal_pool(pool) -> void:
+	"""Inject TerminalPool for terminal-based register resolution."""
+	terminal_pool = pool
 	if _biome_routing:
-		_biome_routing.set_plot_pool(pool)
+		_biome_routing.set_terminal_pool(pool)
 	if _harvest:
-		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
+		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, terminal_pool, null)
 
 
 func get_biome_for_plot(position: Vector2i):
@@ -301,9 +301,9 @@ func harvest_wheat(position: Vector2i) -> Dictionary:
 	"""Harvest wheat at position"""
 	# Ensure economy is wired
 	if farm_economy and not _harvest._economy:
-		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
-	elif plot_pool and not _harvest._plot_pool:
-		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, plot_pool, null)
+		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, terminal_pool, null)
+	elif terminal_pool and not _harvest._terminal_pool:
+		_harvest.set_dependencies(_plot_manager, _biome_routing, farm_economy, _entanglement, terminal_pool, null)
 	return _harvest.harvest_wheat(position)
 
 

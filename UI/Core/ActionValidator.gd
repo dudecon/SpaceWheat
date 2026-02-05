@@ -194,11 +194,11 @@ static func _can_execute_explore(farm, current_selection: Vector2i) -> bool:
 	EXPLORE binds an unbound terminal to a register in the current biome.
 	Available when: unbound terminals exist AND biome has unbound registers.
 	"""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return false
 
 	# Need unbound terminals
-	if farm.plot_pool.get_unbound_count() == 0:
+	if farm.terminal_pool.get_unbound_count() == 0:
 		return false
 
 	# Get biome from current selection
@@ -210,7 +210,7 @@ static func _can_execute_explore(farm, current_selection: Vector2i) -> bool:
 		return false
 
 	# Must have unbound registers
-	var available_registers = biome.get_available_registers_v2(farm.plot_pool) if biome.has_method("get_available_registers_v2") else []
+	var available_registers = biome.get_available_registers_v2(farm.terminal_pool) if biome.has_method("get_available_registers_v2") else []
 	var has_unbound = not available_registers.is_empty()
 
 	# Debug: Log availability
@@ -229,7 +229,7 @@ static func _can_execute_measure(farm, selected_plots: Array[Vector2i]) -> bool:
 	MEASURE collapses an active terminal (bound but not measured).
 	Available when: active terminal exists at any selected position.
 	"""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return false
 
 	if selected_plots.is_empty():
@@ -237,7 +237,7 @@ static func _can_execute_measure(farm, selected_plots: Array[Vector2i]) -> bool:
 
 	# Check any selected plot has an active terminal
 	for pos in selected_plots:
-		var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 		if terminal and terminal.can_measure():
 			return true
 
@@ -250,7 +250,7 @@ static func _can_execute_pop(farm, selected_plots: Array[Vector2i]) -> bool:
 	POP harvests a measured terminal and unbinds it.
 	Available when: measured terminal exists at any selected position.
 	"""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return false
 
 	if selected_plots.is_empty():
@@ -258,7 +258,7 @@ static func _can_execute_pop(farm, selected_plots: Array[Vector2i]) -> bool:
 
 	# Check any selected plot has a measured terminal
 	for pos in selected_plots:
-		var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 		if terminal and terminal.can_pop():
 			return true
 
@@ -313,17 +313,17 @@ static func _can_execute_submenu_action(
 
 static func has_active_terminal_at(farm, pos: Vector2i) -> bool:
 	"""Check if there's an active (bound but not measured) terminal at position."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return false
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+	var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 	return terminal != null and terminal.can_measure()
 
 
 static func has_measured_terminal_at(farm, pos: Vector2i) -> bool:
 	"""Check if there's a measured terminal at position."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return false
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+	var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 	return terminal != null and terminal.can_pop()
 
 

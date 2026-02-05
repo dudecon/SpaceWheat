@@ -9,27 +9,27 @@ LDFLAGS = -shared ./lib/libgodot-cpp.linux.template_release.x86_64.a
 
 SOURCES = $(wildcard src/*.cpp)
 OBJECTS = $(SOURCES:.cpp=.o)
-TARGET = bin/libquantummatrix.linux.template_release.x86_64.so
+TARGET = bin/linux/libquantummatrix.linux.template_release.x86_64.so
 
 all: $(TARGET)
 
-$(TARGET): | bin
+$(TARGET): | bin/linux
 
-bin:
-	mkdir -p bin
+bin/linux:
+	mkdir -p bin/linux
 
 $(TARGET): $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $@ $(LDFLAGS)
-	@cd bin && ln -sf libquantummatrix.linux.template_release.x86_64.so libquantummatrix.linux.template_debug.x86_64.so
+	@cd bin/linux && ln -sf libquantummatrix.linux.template_release.x86_64.so libquantummatrix.linux.template_debug.x86_64.so
 	@echo ""
 	@echo "✓ Build complete: $(TARGET)"
-	@ls -lh bin/*.so
+	@ls -lh bin/linux/*.so
 
 %.o: %.cpp
 	@echo "Compiling $<..."
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f src/*.o bin/*.so
+	rm -f src/*.o bin/linux/*.so bin/windows/*.dll bin/macos/*.framework bin/web/*.wasm
 
 .PHONY: all clean

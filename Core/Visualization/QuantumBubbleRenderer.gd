@@ -36,12 +36,12 @@ func draw(graph: Node2D, ctx: Dictionary) -> void:
 
 	Args:
 	    graph: The QuantumForceGraph node (for drawing calls)
-	    ctx: Context with {quantum_nodes, biomes, time_accumulator, plot_pool, etc.}
+	    ctx: Context with {quantum_nodes, biomes, time_accumulator, terminal_pool, etc.}
 	"""
 	var quantum_nodes = ctx.get("quantum_nodes", [])
 	var biomes = ctx.get("biomes", {})
 	var time_accumulator = ctx.get("time_accumulator", 0.0)
-	var plot_pool = ctx.get("plot_pool")
+	var terminal_pool = ctx.get("terminal_pool")
 	var frame_count = ctx.get("frame_count", 0)
 
 	for node in quantum_nodes:
@@ -56,7 +56,7 @@ func draw(graph: Node2D, ctx: Dictionary) -> void:
 		# NOTE: Visuals are updated by QuantumNodeManager (including terminal bubbles)
 
 		# Draw the bubble
-		_draw_quantum_bubble(graph, node, biomes, time_accumulator, plot_pool, false)
+		_draw_quantum_bubble(graph, node, biomes, time_accumulator, terminal_pool, false)
 
 
 func draw_sun_qubit(graph: Node2D, ctx: Dictionary) -> void:
@@ -70,7 +70,7 @@ func draw_sun_qubit(graph: Node2D, ctx: Dictionary) -> void:
 	var biotic_flux_biome = ctx.get("biotic_flux_biome")
 	var biomes = ctx.get("biomes", {})
 	var time_accumulator = ctx.get("time_accumulator", 0.0)
-	var plot_pool = ctx.get("plot_pool")
+	var terminal_pool = ctx.get("terminal_pool")
 
 	if not sun_qubit_node:
 		return
@@ -100,7 +100,7 @@ func draw_sun_qubit(graph: Node2D, ctx: Dictionary) -> void:
 				graph.draw_line(ray_start, ray_end, ray_color, 1.5, true)
 
 	# Draw with celestial styling
-	_draw_quantum_bubble(graph, sun_qubit_node, biomes, time_accumulator, plot_pool, true)
+	_draw_quantum_bubble(graph, sun_qubit_node, biomes, time_accumulator, terminal_pool, true)
 
 	# Celestial label
 	var font = ThemeDB.fallback_font
@@ -109,7 +109,7 @@ func draw_sun_qubit(graph: Node2D, ctx: Dictionary) -> void:
 	graph.draw_string(font, label_pos, "Celestial", HORIZONTAL_ALIGNMENT_CENTER, -1, 10, label_color)
 
 
-func _draw_quantum_bubble(graph: Node2D, node, biomes: Dictionary, time_accumulator: float, plot_pool, is_celestial: bool) -> void:
+func _draw_quantum_bubble(graph: Node2D, node, biomes: Dictionary, time_accumulator: float, terminal_pool, is_celestial: bool) -> void:
 	"""Draw a single quantum bubble with all visual encodings."""
 	var anim_scale = node.visual_scale
 	var anim_alpha = node.visual_alpha
@@ -118,7 +118,7 @@ func _draw_quantum_bubble(graph: Node2D, node, biomes: Dictionary, time_accumula
 		return
 
 	# Check if measured
-	var is_measured = _is_node_measured(node, plot_pool)
+	var is_measured = _is_node_measured(node, terminal_pool)
 
 	# No pulse animation - replaced by berry phase glow (see line 143)
 	var pulse_scale = 1.0
@@ -599,7 +599,7 @@ func _get_measurement_uncertainty(node, biomes: Dictionary, is_celestial: bool) 
 	return 2.0 * sqrt(p_n * p_s)
 
 
-func _is_node_measured(node, plot_pool) -> bool:
+func _is_node_measured(node, terminal_pool) -> bool:
 	"""Check if node has been measured."""
 	if not node:
 		return false
@@ -612,9 +612,9 @@ func _is_node_measured(node, plot_pool) -> bool:
 	if node.terminal and node.terminal.is_measured:
 		return true
 
-	# Fallback: lookup terminal from plot_pool by grid position
-	if plot_pool and node.grid_position != Vector2i(-1, -1):
-		var terminal = plot_pool.get_terminal_at_grid_pos(node.grid_position) if plot_pool.has_method("get_terminal_at_grid_pos") else null
+	# Fallback: lookup terminal from terminal_pool by grid position
+	if terminal_pool and node.grid_position != Vector2i(-1, -1):
+		var terminal = terminal_pool.get_terminal_at_grid_pos(node.grid_position) if terminal_pool.has_method("get_terminal_at_grid_pos") else null
 		if terminal and terminal.is_measured:
 			return true
 

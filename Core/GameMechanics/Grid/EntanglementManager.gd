@@ -87,14 +87,20 @@ func create_entanglement(pos_a: Vector2i, pos_b: Vector2i, bell_type: String = "
 			_verbose.warn("farm", "❌", "Entanglement blocked: plots must be assigned to a biome")
 		return false
 
-	# NEW: Set up plot infrastructure FIRST (works even if not planted)
-	if not plot_a.plot_infrastructure_entanglements.has(pos_b):
-		plot_a.plot_infrastructure_entanglements.append(pos_b)
+	# NEW: Set up register-level entanglement blueprints (works even if not planted)
+	var reg_a = _biome_routing.get_register_for_plot(pos_a)
+	var reg_b = _biome_routing.get_register_for_plot(pos_b)
+	var biome_ref = _biome_routing.get_biome_for_plot(pos_a)
+	if biome_ref and biome_ref.quantum_computer and reg_a >= 0 and reg_b >= 0:
+		var qc = biome_ref.quantum_computer
+		var infra_a = qc._ensure_register_infra(reg_a)
+		var infra_b = qc._ensure_register_infra(reg_b)
+		if reg_b not in infra_a["entanglement_blueprints"]:
+			infra_a["entanglement_blueprints"].append(reg_b)
+		if reg_a not in infra_b["entanglement_blueprints"]:
+			infra_b["entanglement_blueprints"].append(reg_a)
 		if _verbose:
-			_verbose.debug("farm", "🏗️", "Plot infrastructure: %s ↔ %s (entanglement gate installed)" % [pos_a, pos_b])
-
-	if not plot_b.plot_infrastructure_entanglements.has(pos_a):
-		plot_b.plot_infrastructure_entanglements.append(pos_a)
+			_verbose.debug("farm", "🏗️", "Register infrastructure: reg %d ↔ reg %d (entanglement blueprint installed)" % [reg_a, reg_b])
 
 	# Mark Bell gate in biome layer (historical entanglement record)
 	var biome_a = _biome_routing.get_biome_for_plot(pos_a)
@@ -217,30 +223,48 @@ func are_plots_entangled(pos_a: Vector2i, pos_b: Vector2i) -> bool:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 func auto_entangle_from_infrastructure(position: Vector2i) -> void:
-	"""Auto-entangle quantum states when planting in infrastructurally entangled plot"""
+	"""Auto-entangle quantum states when planting in infrastructurally entangled plot.
+
+	Reads entanglement blueprints from register_infrastructure instead of plot fields.
+	"""
 	var plot = _plot_manager.get_plot(position)
 	if not plot or not plot.is_planted:
 		return
 
-	# Check all infrastructure entanglement links
-	for partner_pos in plot.plot_infrastructure_entanglements:
+	var reg_id = _biome_routing.get_register_for_plot(position)
+	if reg_id < 0:
+		return
+
+	var biome = _biome_routing.get_biome_for_plot(position)
+	if not biome or not biome.quantum_computer:
+		return
+
+	var qc = biome.quantum_computer
+	var blueprints = qc.get_register_infra_field(reg_id, "entanglement_blueprints", [])
+
+	# Check all register-level entanglement blueprints
+	for partner_reg in blueprints:
+		# Find the plot bound to that register
+		var partner_pos = _biome_routing.get_plot_for_register(partner_reg)
+		if partner_pos == Vector2i(-1, -1):
+			continue
+
 		var partner_plot = _plot_manager.get_plot(partner_pos)
 
 		# If partner is planted, entangle their quantum states
 		if partner_plot and partner_plot.is_planted:
 			# Check if already entangled (avoid duplicates)
 			if not plot.entangled_plots.has(partner_plot.plot_id):
-				# Create quantum entanglement
 				_create_quantum_entanglement(position, partner_pos)
 				if _verbose:
-					_verbose.info("quantum", "⚡", "Auto-entangled %s ↔ %s (infrastructure activated)" % [position, partner_pos])
+					_verbose.info("quantum", "⚡", "Auto-entangled %s ↔ %s (register blueprint activated)" % [position, partner_pos])
 
 
 func auto_apply_persistent_gates(position: Vector2i) -> void:
 	"""Apply persistent gate infrastructure to newly planted qubit.
 
 	Called automatically from plant() after auto_entangle_from_infrastructure().
-	Gates marked as 'active' on the plot are applied to the new quantum state.
+	Gates read from register_infrastructure (not plot fields).
 	"""
 	var plot = _plot_manager.get_plot(position)
 
@@ -248,30 +272,39 @@ func auto_apply_persistent_gates(position: Vector2i) -> void:
 	if not plot or not plot.is_planted:
 		return
 
-	# Check if plot has quantum state via register_id
-	if plot.register_id < 0:
+	var reg_id = _biome_routing.get_register_for_plot(position)
+	if reg_id < 0:
 		return
 
-	var active_gates = plot.get_active_gates()
+	var biome = _biome_routing.get_biome_for_plot(position)
+	if not biome or not biome.quantum_computer:
+		return
+
+	var qc = biome.quantum_computer
+	var active_gates = qc.get_active_gates_for_register(reg_id)
 	if active_gates.is_empty():
 		return
 
 	if _verbose:
-		_verbose.debug("farm", "🔧", "Auto-applying %d persistent gates to %s" % [active_gates.size(), position])
+		_verbose.debug("farm", "🔧", "Auto-applying %d persistent gates to %s (reg %d)" % [active_gates.size(), position, reg_id])
 
 	for gate in active_gates:
 		var gate_type = gate.get("type", "")
-		var linked_plots = gate.get("linked_plots", [])
+		var linked_registers = gate.get("linked_registers", [])
+
+		# Convert linked_registers to plot positions for cluster creation
+		var linked_plots: Array = []
+		for linked_reg in linked_registers:
+			var linked_pos = _biome_routing.get_plot_for_register(linked_reg)
+			if linked_pos != Vector2i(-1, -1):
+				linked_plots.append(linked_pos)
 
 		match gate_type:
 			"bell":
-				# Bell gate - 2-qubit persistent entanglement
 				_auto_cluster_from_gate(position, linked_plots)
 			"cluster":
-				# Cluster gate - N-qubit persistent entanglement
 				_auto_cluster_from_gate(position, linked_plots)
 			"measure_trigger":
-				# Mark plot for cascade measurement when triggered
 				if _verbose:
 					_verbose.debug("farm", "👁️", "Measure trigger active on %s" % position)
 			_:

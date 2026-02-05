@@ -7,7 +7,7 @@ const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
 
 var farm: Node = null
 var biotic_flux: Node = null
-var plot_pool: Node = null
+var terminal_pool: Node = null
 var economy: Node = null
 
 # Test state
@@ -26,12 +26,12 @@ func _ready():
 	farm = get_node_or_null("/root/FarmView/Farm")
 	if farm:
 		biotic_flux = farm.biotic_flux_biome
-		plot_pool = farm.plot_pool
+		terminal_pool = farm.terminal_pool
 		economy = farm.economy
 
 func start_stress_test(cycles: int = 20):
 	"""Start collecting stress test data"""
-	if not farm or not biotic_flux or not plot_pool:
+	if not farm or not biotic_flux or not terminal_pool:
 		push_error("StressTestController: Farm not initialized")
 		return
 
@@ -64,8 +64,8 @@ func _run_cycle():
 	"""Execute one EXPLORE → MEASURE → POP cycle"""
 	var cycle_data = {
 		"cycle": cycle_count,
-		"bound_before": plot_pool.get_bound_terminals().size(),
-		"unbound_before": plot_pool.get_unbound_terminals().size(),
+		"bound_before": terminal_pool.get_bound_terminals().size(),
+		"unbound_before": terminal_pool.get_unbound_terminals().size(),
 		"explore_ok": false,
 		"measure_ok": false,
 		"pop_ok": false,
@@ -76,7 +76,7 @@ func _run_cycle():
 	}
 
 	# EXPLORE
-	var exp_result = ProbeActions.action_explore(plot_pool, biotic_flux)
+	var exp_result = ProbeActions.action_explore(terminal_pool, biotic_flux)
 	if not exp_result or not exp_result.success:
 		cycle_history.append(cycle_data)
 		return
@@ -93,15 +93,15 @@ func _run_cycle():
 	cycle_data["measure_ok"] = true
 
 	# POP
-	var pop_result = ProbeActions.action_pop(terminal, plot_pool, economy, farm)
+	var pop_result = ProbeActions.action_pop(terminal, terminal_pool, economy, farm)
 	cycle_data["pop_ok"] = pop_result and pop_result.success
 
 	# COLLECT DATA
-	cycle_data["bound_after"] = plot_pool.get_bound_terminals().size()
+	cycle_data["bound_after"] = terminal_pool.get_bound_terminals().size()
 
 	# Coherence
 	var coherences = []
-	for t in plot_pool.get_bound_terminals():
+	for t in terminal_pool.get_bound_terminals():
 		if t.bound_biome_name != "" and t.north_emoji and t.south_emoji:
 			var coh = biotic_flux.get_emoji_coherence(t.north_emoji, t.south_emoji)
 			if coh:

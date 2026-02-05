@@ -12,73 +12,49 @@ const QuantumNode = preload("res://Core/Visualization/QuantumNode.gd")
 ## - Animation updates
 
 
-func create_quantum_nodes(ctx: Dictionary, skip_quantum_register_bubbles: bool = false) -> Array:
-	"""Create quantum nodes from quantum registers (first-class architecture).
+func create_quantum_nodes(ctx: Dictionary, _skip_quantum_register_bubbles: bool = false) -> Array:
+	"""Create quantum nodes: one test bubble + bubbles for already-bound terminals.
+
+	Architecture:
+	  1. ONE test bubble at (-1,-1) validates the rendering pipeline at boot
+	  2. Terminal bubbles for any pre-bound terminals (from save/load)
+	  3. New terminals create bubbles dynamically via _on_terminal_bound signal
 
 	Args:
-	    ctx: Context dictionary with {biomes, farm_grid, plot_pool, layout_calculator}
-	    skip_quantum_register_bubbles: If true, skip boot-time bubble creation.
-	        Only creates bubbles when terminals bind via _on_terminal_bound().
-	        DEFAULT=false to preserve test behavior.
-	        Set to true in BootManager for production (terminal-driven mode).
+	    ctx: Context dictionary with {biomes, farm_grid, terminal_pool, layout_calculator}
+	    _skip_quantum_register_bubbles: Deprecated (kept for API compat, ignored)
 
 	Returns:
 	    Array of created QuantumNode instances
-
-	NEW ARCHITECTURE:
-	  1. Create bubbles FROM quantum registers (primary source) - unless skipped
-	  2. Optionally overlay terminal/plot data (secondary game mechanics)
-	  3. Plots are UI-only, don't drive bubble creation
 	"""
 	var biomes = ctx.get("biomes", {})
-	var farm_grid = ctx.get("farm_grid")
-	var plot_pool = ctx.get("plot_pool")
+	var terminal_pool = ctx.get("terminal_pool")
 	var layout_calculator = ctx.get("layout_calculator")
 
 	var nodes: Array = []
-	var nodes_by_register: Dictionary = {}  # Key: "biome_name:register_id"
 
-	# GATE: Skip boot-time bubble creation in production (terminal-driven mode)
-	if skip_quantum_register_bubbles:
-		print("  [QuantumNodeManager] Skipping quantum register bubbles (terminal-driven mode)")
-		print("  [QuantumNodeManager] Bubbles will appear when terminals bind via EXPLORE")
-		return nodes
-
-	# PRIMARY: Create nodes from quantum registers (one bubble per register)
-	var total_registers = 0
+	# TEST BUBBLE: One bubble at (-1,-1) to validate rendering pipeline
+	# Uses register 0 from the first biome that has viz_cache
 	for biome_name in biomes:
 		var biome = biomes[biome_name]
-		if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
-			print("  [QuantumNodeManager] Skipping biome %s (no viz_cache)" % biome_name)
-			continue
+		if biome and biome.viz_cache and biome.viz_cache.has_metadata():
+			var test_node = _create_node_for_register(biome_name, 0, biomes, layout_calculator)
+			if test_node:
+				test_node.plot_id = "boot_test"
+				nodes.append(test_node)
+				print("  [QuantumNodeManager] Boot test bubble created (%s:r0)" % biome_name)
+			break  # Only one test bubble
 
-		var num_registers = biome.viz_cache.get_num_qubits()
-		total_registers += num_registers
-		for register_id in range(num_registers):
-			var node = _create_node_for_register(biome_name, register_id, biomes, layout_calculator)
+	# TERMINAL BUBBLES: Create bubbles for terminals already bound (from save/load)
+	if terminal_pool and terminal_pool.has_method("get_bound_terminals"):
+		var bound_count = 0
+		for terminal in terminal_pool.get_bound_terminals():
+			var node = _create_node_for_terminal(terminal, layout_calculator, biomes)
 			if node:
 				nodes.append(node)
-				var key = "%s:%d" % [biome_name, register_id]
-				nodes_by_register[key] = node
-
-	print("  [QuantumNodeManager] Created %d bubbles from %d quantum registers" % [nodes.size(), total_registers])
-
-	# SECONDARY: Overlay terminal data on existing nodes (optional game mechanics)
-	if plot_pool and plot_pool.has_method("get_all_terminals"):
-		for terminal in plot_pool.get_all_terminals():
-			if not terminal.is_bound:
-				continue
-
-			var key = "%s:%d" % [terminal.bound_biome_name, terminal.bound_register_id]
-			var node = nodes_by_register.get(key)
-			if node:
-				# Attach terminal to existing bubble (game mechanic overlay)
-				node.terminal = terminal
-				node.grid_position = terminal.grid_position
-				node.has_farm_tether = true
-				# Emojis come from terminal binding for gameplay
-				node.emoji_north = terminal.north_emoji if terminal.north_emoji else node.emoji_north
-				node.emoji_south = terminal.south_emoji if terminal.south_emoji else node.emoji_south
+				bound_count += 1
+		if bound_count > 0:
+			print("  [QuantumNodeManager] Restored %d terminal bubbles from save" % bound_count)
 
 	return nodes
 
@@ -140,12 +116,6 @@ func _create_node_for_register(biome_name: String, register_id: int, biomes: Dic
 	var axis = biome.viz_cache.get_axis(register_id) if biome.viz_cache else {}
 	node.emoji_north = axis.get("north", "")
 	node.emoji_south = axis.get("south", "")
-
-	# DEBUG: Check if emojis are set
-	if register_id == 0:  # Only print for first register per biome
-		print("    [DEBUG] Node for %s:r%d - north='%s', south='%s', biome_name='%s'" % [
-			biome_name, register_id, node.emoji_north, node.emoji_south, node.biome_name
-		])
 
 	# Not a terminal bubble (pure quantum visualization)
 	node.is_terminal_bubble = false

@@ -1,7 +1,7 @@
-class_name PlotPool
+class_name TerminalPool
 extends RefCounted
 
-## PlotPool - Pool of generic terminals for quantum soup probing (v2 Architecture)
+## TerminalPool - Pool of generic terminals for quantum soup probing (v2 Architecture)
 ##
 ## Manages a pool of Terminal objects and tracks their binding state to registers.
 ## Enforces the unique binding constraint: each register can only be bound by ONE terminal.
@@ -13,7 +13,7 @@ extends RefCounted
 ##   - Unique binding constraint enforcement
 ##
 ## Usage:
-##   var pool = PlotPool.new(12)  # Create pool with 12 terminals
+##   var pool = TerminalPool.new(12)  # Create pool with 12 terminals
 ##   var terminal = pool.get_unbound_terminal()  # Get first available
 ##   pool.bind_terminal(terminal, register_id, biome)  # Bind to register
 ##   pool.unbind_terminal(terminal)  # Release binding
@@ -253,7 +253,7 @@ func _on_terminal_measured(outcome: String, terminal: RefCounted) -> void:
 
 ## String representation for debugging
 func _to_string() -> String:
-	return "PlotPool[%d terminals, %d bound, %d free]" % [
+	return "TerminalPool[%d terminals, %d bound, %d free]" % [
 		pool_size, get_bound_count(), get_unbound_count()
 	]
 

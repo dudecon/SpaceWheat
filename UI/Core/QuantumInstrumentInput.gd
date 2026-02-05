@@ -934,10 +934,10 @@ func _get_biome_for_position(pos: Vector2i):
 
 func _get_qubit_for_position(pos: Vector2i, biome) -> int:
 	"""Get qubit index for a grid position via terminal binding."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return -1
 
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+	var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 	if terminal and terminal.is_bound:
 		return terminal.bound_register_id
 
@@ -1344,7 +1344,7 @@ func _refresh_plot_tiles(positions: Array[Vector2i]) -> void:
 
 func _action_explore() -> Dictionary:
 	"""Execute EXPLORE action - bind terminal to register."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	if current_selection.plot_idx < 0:
@@ -1362,7 +1362,7 @@ func _action_explore() -> Dictionary:
 	var grid_pos = _get_grid_position()
 	_verbose.debug("input", "?", "Explore at %s in %s" % [grid_pos, biome.name if biome else "null"])
 
-	var result = ProbeActions.action_explore(farm.plot_pool, biome, farm.economy)
+	var result = ProbeActions.action_explore(farm.terminal_pool, biome, farm.economy)
 
 	if result.get("success", false):
 		_verbose.debug("input", "?", "Terminal %s bound to grid %s" % [result.terminal.terminal_id, grid_pos])
@@ -1374,13 +1374,13 @@ func _action_explore() -> Dictionary:
 
 func _action_measure() -> Dictionary:
 	"""Execute MEASURE action - collapse terminal state."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var grid_pos = _get_grid_position()
 	_verbose.debug("input", "🔍", "MEASURE DEBUG: grid_pos=%s, current_selection=%s" % [grid_pos, current_selection])
 
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
+	var terminal = farm.terminal_pool.get_terminal_at_grid_pos(grid_pos)
 
 	if not terminal:
 		_verbose.warn("input", "❌", "MEASURE DEBUG: No terminal found at %s" % grid_pos)
@@ -1411,7 +1411,7 @@ func _action_measure() -> Dictionary:
 
 func _action_reap() -> Dictionary:
 	"""Execute REAP action - harvest credits and unbind terminal."""
-	if not farm or not farm.plot_pool or not farm.economy:
+	if not farm or not farm.terminal_pool or not farm.economy:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var grid_pos = _get_grid_position()
@@ -1420,7 +1420,7 @@ func _action_reap() -> Dictionary:
 	if not terminal:
 		return {"success": false, "error": "no_terminal", "message": "No terminal at selection"}
 
-	var result = ProbeActions.action_reap(terminal, farm.plot_pool, farm.economy, farm)
+	var result = ProbeActions.action_reap(terminal, farm.terminal_pool, farm.economy, farm)
 
 	# Central signal emission
 	farm.emit_action_signal("reap", result, grid_pos)
@@ -1430,7 +1430,7 @@ func _action_reap() -> Dictionary:
 
 func _action_pop() -> Dictionary:
 	"""Execute POP action - harvest credits and unbind terminal."""
-	if not farm or not farm.plot_pool or not farm.economy:
+	if not farm or not farm.terminal_pool or not farm.economy:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var grid_pos = _get_grid_position()
@@ -1439,7 +1439,7 @@ func _action_pop() -> Dictionary:
 	if not terminal:
 		return {"success": false, "error": "no_terminal", "message": "No terminal at selection"}
 
-	var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy, farm)
+	var result = ProbeActions.action_pop(terminal, farm.terminal_pool, farm.economy, farm)
 
 	# Central signal emission
 	farm.emit_action_signal("pop", result, grid_pos)
@@ -1449,11 +1449,11 @@ func _action_pop() -> Dictionary:
 
 func _action_harvest_all() -> Dictionary:
 	"""Execute SHIFT+R/harvest_all: harvest density matrix, clear selections, unexplore plots."""
-	if not farm or not farm.plot_pool or not farm.economy:
+	if not farm or not farm.terminal_pool or not farm.economy:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
 	var biome = _get_current_biome()
-	var result = ProbeActions.action_harvest_all(farm.plot_pool, farm.economy, biome)
+	var result = ProbeActions.action_harvest_all(farm.terminal_pool, farm.economy, biome)
 
 	# Central signal emission (handles all terminal_released signals internally)
 	farm.emit_action_signal("harvest_all", result)
@@ -1469,10 +1469,10 @@ func _action_harvest_all() -> Dictionary:
 
 func _action_clear_all() -> Dictionary:
 	"""Execute SHIFT+R/clear_all: unbind all terminals without harvesting."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return {"success": false, "error": "no_farm", "message": "Farm not ready"}
 
-	var result = ProbeActions.action_clear_all(farm.plot_pool)
+	var result = ProbeActions.action_clear_all(farm.terminal_pool)
 
 	# Central signal emission (handles all terminal_released signals internally)
 	farm.emit_action_signal("clear_all", result)
@@ -1632,7 +1632,7 @@ func _action_remove_vocabulary() -> Dictionary:
 	var pair_to_remove = {}
 	var grid_pos = _get_grid_position()
 	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos) if farm and farm.plot_pool else null
+	var terminal = farm.terminal_pool.get_terminal_at_grid_pos(grid_pos) if farm and farm.terminal_pool else null
 	if terminal and terminal.is_bound and terminal.bound_biome_name == biome_name:
 		target_qubit = terminal.bound_register_id
 		pair_to_remove = _get_pair_for_qubit(rm, target_qubit)
@@ -1784,19 +1784,19 @@ func _reindex_entanglement_graph(quantum_computer, removed_qubit: int) -> void:
 
 
 func _unbind_terminals_for_register(biome, register_id: int) -> void:
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return
 	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
-	for terminal in farm.plot_pool.get_all_terminals():
+	for terminal in farm.terminal_pool.get_all_terminals():
 		if terminal.is_bound and terminal.bound_biome_name == biome_name and terminal.bound_register_id == register_id:
-			farm.plot_pool.unbind_terminal(terminal)
+			farm.terminal_pool.unbind_terminal(terminal)
 
 
 func _reindex_bound_terminals(biome, removed_qubit: int) -> void:
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return
 	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
-	for terminal in farm.plot_pool.get_all_terminals():
+	for terminal in farm.terminal_pool.get_all_terminals():
 		if not terminal.is_bound or terminal.bound_biome_name != biome_name:
 			continue
 		if terminal.bound_register_id > removed_qubit:
@@ -1947,22 +1947,22 @@ func _get_selected_positions() -> Array[Vector2i]:
 
 func _resolve_terminal_for_harvest(grid_pos: Vector2i) -> RefCounted:
 	"""Locate the terminal that should be harvested for a given selection."""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return null
 
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
+	var terminal = farm.terminal_pool.get_terminal_at_grid_pos(grid_pos)
 	if terminal:
 		return terminal
 
 	# Fallback: try the last selected plot (useful when selection resets after MEASURE)
 	if last_selected_plot_position != Vector2i(-1, -1) and last_selected_plot_position != grid_pos:
-		var fallback = farm.plot_pool.get_terminal_at_grid_pos(last_selected_plot_position)
+		var fallback = farm.terminal_pool.get_terminal_at_grid_pos(last_selected_plot_position)
 		if fallback and fallback.is_measured:
 			return fallback
 
 	# Final fallback: search measured terminals exactly at the requested grid
-	if farm.plot_pool.has_method("get_measured_terminals"):
-		for candidate in farm.plot_pool.get_measured_terminals():
+	if farm.terminal_pool.has_method("get_measured_terminals"):
+		for candidate in farm.terminal_pool.get_measured_terminals():
 			if candidate.grid_position == grid_pos:
 				return candidate
 

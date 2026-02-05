@@ -1,13 +1,15 @@
 class_name BasePlot
 extends Resource
 
-## BasePlot - Foundation class for all farm plots (Model C)
+## BasePlot - Foundation class for all farm plots (Thin Plot Architecture)
 ##
-## Model C: Plot is a MEASUREMENT BASIS on a biome's QuantumComputer.
-## Does NOT own quantum state - only tracks which register to measure.
+## Terminal is the single source of truth for game mechanics state.
+## Plot keeps only visual projection + infrastructure.
 ##
-## OLD (Model B): Plot referenced QuantumComputer register (digital/discrete)
-## NEW (Model C): Plot references QuantumBath measurement axis (analog/continuous)
+## Accessors delegate to bound_terminal:
+##   get_register_id(), get_biome_name(), is_active(),
+##   get_north_emoji(), get_south_emoji(),
+##   get_is_measured(), get_measured_outcome()
 
 const DualEmojiQubit = preload("res://Core/QuantumSubstrate/DualEmojiQubit.gd")
 const QuantumRigorConfig = preload("res://Core/GameState/QuantumRigorConfig.gd")
@@ -33,54 +35,69 @@ signal growth_complete
 signal state_collapsed(final_state: String)
 
 # ============================================================================
-# MODEL C: Bath Measurement Axis (NOT Independent Quantum State)
+# IDENTITY (kept on plot)
 # ============================================================================
 
-# Plot identification
 @export var plot_id: String = ""
 @export var grid_position: Vector2i = Vector2i.ZERO
 
-# Model C: Quantum register reference (which register in biome's quantum computer)
-# NEW: register_id identifies which qubit in biome's QuantumComputer holds this plot's state
-@export var register_id: int = -1  # QuantumComputer register ID (-1 = not planted)
-var parent_biome: Node = null  # Reference to BiomeBase that owns quantum computer
+# ============================================================================
+# TERMINAL BINDING (single source of truth for game mechanics)
+# ============================================================================
 
-# Measurement basis labels (defines which qubit axis to measure)
-@export var north_emoji: String = "🌾"
-@export var south_emoji: String = "🌽"
-
-# Plot metadata (NOT quantum state)
-@export var is_planted: bool = false
-@export var has_been_measured: bool = false  # DEPRECATED: use is_measured() for v2 terminals
-@export var theta_frozen: bool = false  # Measurement locked the theta value (stops Hamiltonian drift)
-@export var measured_outcome: String = ""  # Measurement result ("north", "south", or empty)
-
-# V2 Architecture: Reference to bound terminal (when using terminal-based binding)
-# When bound_terminal is set, query it for is_measured, emoji_pair, etc.
+## Reference to bound terminal — source of truth for register_id, biome,
+## emoji pair, measurement state, and outcome.
 var bound_terminal = null  # Terminal instance
 
-# Conspiracy network connection
-@export var conspiracy_node_id: String = ""
-@export var conspiracy_bond_strength: float = 0.0
+## Cached biome Node (resolved from bound_terminal.bound_biome_name)
+var _cached_biome = null
 
-# Berry phase accumulator (plot memory)
+# ============================================================================
+# INFRASTRUCTURE (computed from register_infrastructure — survives harvest/replant)
+# ============================================================================
+
+## theta_frozen: delegates to register_infrastructure
+var theta_frozen: bool:
+	get: return _get_infra_field("theta_frozen", false)
+	set(value): _set_infra_field("theta_frozen", value)
+
+# Positional — NOT per-register
 @export var replant_cycles: int = 0
-@export var berry_phase: float = 0.0
 
 # Entanglement tracking (updated via parent_biome quantum computer)
 var entangled_plots: Dictionary = {}  # plot_id -> strength
-var plot_infrastructure_entanglements: Array[Vector2i] = []
 const MAX_ENTANGLEMENTS = 3
 
-# Persistent gate infrastructure (survives harvest/replant)
-var persistent_gates: Array[Dictionary] = []
+## persistent_gates: delegates to register_infrastructure
+var persistent_gates: Array[Dictionary]:
+	get:
+		var raw = _get_infra_field("persistent_gates", [])
+		var typed: Array[Dictionary] = []
+		for g in raw:
+			typed.append(g)
+		return typed
+	set(value): _set_infra_field("persistent_gates", value)
 
-# Persistent Lindblad effects (Tool 2: Drain/Pump)
-var lindblad_pump_active: bool = false
-var lindblad_drain_active: bool = false
-var lindblad_pump_rate: float = 0.5
-var lindblad_drain_rate: float = 0.5
-var lindblad_drain_accumulator: float = 0.0
+## Lindblad computed properties — delegate to register_infrastructure
+var lindblad_pump_active: bool:
+	get: return _get_infra_field("lindblad_pump_active", false)
+	set(value): _set_infra_field("lindblad_pump_active", value)
+
+var lindblad_drain_active: bool:
+	get: return _get_infra_field("lindblad_drain_active", false)
+	set(value): _set_infra_field("lindblad_drain_active", value)
+
+var lindblad_pump_rate: float:
+	get: return _get_infra_field("lindblad_pump_rate", 0.5)
+	set(value): _set_infra_field("lindblad_pump_rate", value)
+
+var lindblad_drain_rate: float:
+	get: return _get_infra_field("lindblad_drain_rate", 0.5)
+	set(value): _set_infra_field("lindblad_drain_rate", value)
+
+var lindblad_drain_accumulator: float:
+	get: return _get_infra_field("lindblad_drain_accumulator", 0.0)
+	set(value): _set_infra_field("lindblad_drain_accumulator", value)
 
 
 func _init():
@@ -88,42 +105,161 @@ func _init():
 
 
 # ============================================================================
-# MODEL C: Quantum State Access (Computed from Parent Biome's Bath)
+# TERMINAL ACCESSORS (delegate to bound_terminal)
 # ============================================================================
 
-## Get current measurement outcome (or empty if unmeasured)
-func get_measurement_outcome() -> String:
-	return measured_outcome
+func get_register_id() -> int:
+	return bound_terminal.bound_register_id if bound_terminal else -1
+
+func get_biome_name() -> String:
+	return bound_terminal.bound_biome_name if bound_terminal else ""
+
+func is_active() -> bool:
+	return bound_terminal != null and bound_terminal.is_bound
+
+func get_north_emoji() -> String:
+	return bound_terminal.north_emoji if bound_terminal else ""
+
+func get_south_emoji() -> String:
+	return bound_terminal.south_emoji if bound_terminal else ""
+
+func get_is_measured() -> bool:
+	return bound_terminal.is_measured if bound_terminal else false
+
+func get_measured_outcome() -> String:
+	return bound_terminal.measured_outcome if bound_terminal else ""
+
+# ============================================================================
+# BIOME RESOLUTION (cached from terminal binding)
+# ============================================================================
+
+func _resolve_biome():
+	"""Resolve biome Node from bound_terminal.bound_biome_name."""
+	if _cached_biome:
+		return _cached_biome
+	if not bound_terminal:
+		return null
+	var tree = Engine.get_main_loop()
+	if tree and tree is SceneTree:
+		var abm = tree.root.get_node_or_null("/root/ActiveBiomeManager")
+		if abm and abm.has_method("get_biome_by_name"):
+			_cached_biome = abm.get_biome_by_name(bound_terminal.bound_biome_name)
+			return _cached_biome
+		# Fallback: try farm.grid.biomes
+		var farm = tree.root.get_node_or_null("Farm")
+		if farm and farm.grid and "biomes" in farm.grid:
+			_cached_biome = farm.grid.biomes.get(bound_terminal.bound_biome_name)
+			return _cached_biome
+	return null
+
+
+func _resolve_quantum_computer():
+	var biome = _resolve_biome()
+	if biome and "quantum_computer" in biome and biome.quantum_computer:
+		return biome.quantum_computer
+	return null
+
+
+func _get_infra_field(field: String, default = null):
+	if not bound_terminal or bound_terminal.bound_register_id < 0:
+		return default
+	var qc = _resolve_quantum_computer()
+	if not qc: return default
+	return qc.get_register_infra_field(bound_terminal.bound_register_id, field, default)
+
+
+func _set_infra_field(field: String, value) -> void:
+	if not bound_terminal or bound_terminal.bound_register_id < 0: return
+	var qc = _resolve_quantum_computer()
+	if not qc: return
+	qc.set_register_infra_field(bound_terminal.bound_register_id, field, value)
+
+# ============================================================================
+# BACKWARD-COMPATIBLE PROPERTIES
+# These allow existing code to read plot.is_planted, plot.register_id, etc.
+# without changing every caller at once. They delegate to bound_terminal.
+# ============================================================================
+
+## is_planted: true when terminal is bound (backward compat)
+var is_planted: bool:
+	get:
+		return is_active()
+	set(value):
+		pass  # No-op: terminal binding is the source of truth
+
+## register_id: from bound terminal (backward compat)
+var register_id: int:
+	get:
+		return get_register_id()
+	set(value):
+		pass  # No-op: terminal binding is the source of truth
+
+## parent_biome: resolved from terminal's biome name (backward compat)
+var parent_biome:
+	get:
+		return _resolve_biome()
+	set(value):
+		_cached_biome = value  # Allow explicit set for legacy code paths
+
+## north_emoji: from bound terminal (backward compat)
+var north_emoji: String:
+	get:
+		return get_north_emoji()
+	set(value):
+		pass  # No-op: terminal binding is the source of truth
+
+## south_emoji: from bound terminal (backward compat)
+var south_emoji: String:
+	get:
+		return get_south_emoji()
+	set(value):
+		pass  # No-op: terminal binding is the source of truth
+
+## has_been_measured: from bound terminal (backward compat)
+var has_been_measured: bool:
+	get:
+		return get_is_measured()
+	set(value):
+		pass  # No-op: terminal binding is the source of truth
+
+## measured_outcome: from bound terminal (backward compat)
+var measured_outcome: String:
+	get:
+		return get_measured_outcome()
+	set(value):
+		pass  # No-op: terminal binding is the source of truth
+
+# ============================================================================
+# QUANTUM STATE ACCESS (Computed from Terminal → Biome's Bath)
+# ============================================================================
 
 ## Get basis labels for this plot's measurement basis
 func get_basis_labels() -> Array[String]:
-	return [north_emoji, south_emoji]
+	return [get_north_emoji(), get_south_emoji()]
 
 ## Get purity from parent biome's quantum computer
 func get_purity() -> float:
-	"""Query purity from parent biome's quantum computer.
-
-	Model C: Purity is computed from the density matrix as Tr(ρ²).
-	Returns 0 if plot not planted or no parent_biome.
-	"""
-	if not is_planted or not parent_biome:
+	"""Query purity from parent biome's quantum computer."""
+	if not is_active():
 		return 0.0
-	if not parent_biome.viz_cache:
+	var biome = _resolve_biome()
+	if not biome or not biome.viz_cache:
 		return 0.0
-	var purity = parent_biome.viz_cache.get_purity()
+	var purity = biome.viz_cache.get_purity()
 	return purity if purity >= 0.0 else 0.0
 
 ## Get coherence from parent biome's quantum computer
 func get_coherence() -> float:
 	"""Query coherence from parent biome's quantum computer."""
-	if not is_planted or not parent_biome:
+	if not is_active():
 		return 0.0
-	if not parent_biome.viz_cache:
+	var biome = _resolve_biome()
+	if not biome or not biome.viz_cache:
 		return 0.0
-	var q = parent_biome.viz_cache.get_qubit(north_emoji)
+	var q = biome.viz_cache.get_qubit(get_north_emoji())
 	if q < 0:
 		return 0.0
-	var bloch = parent_biome.viz_cache.get_bloch(q)
+	var bloch = biome.viz_cache.get_bloch(q)
 	if bloch.is_empty():
 		return 0.0
 	var x = bloch.get("x", 0.0)
@@ -133,14 +269,15 @@ func get_coherence() -> float:
 ## Get mass (probability in subspace)
 func get_mass() -> float:
 	"""Get probability mass in measurement basis subspace."""
-	if not is_planted or not parent_biome:
+	if not is_active():
 		return 0.0
-	if not parent_biome.viz_cache:
+	var biome = _resolve_biome()
+	if not biome or not biome.viz_cache:
 		return 0.0
-	var q = parent_biome.viz_cache.get_qubit(north_emoji)
+	var q = biome.viz_cache.get_qubit(get_north_emoji())
 	if q < 0:
 		return 0.0
-	var snap = parent_biome.viz_cache.get_snapshot(q)
+	var snap = biome.viz_cache.get_snapshot(q)
 	if snap.is_empty():
 		return 0.0
 	var p_north = snap.get("p0", 0.5)
@@ -150,253 +287,179 @@ func get_mass() -> float:
 ## Core Methods
 
 func get_dominant_emoji() -> String:
-	"""Get the current outcome emoji (measured or measurement outcome)
-
-	Model B: Returns measurement_outcome if measured, or basis label based on marginal.
-	"""
-	if has_been_measured and measured_outcome != "":
-		return measured_outcome
-
-	# If unmeasured, return dominant basis state based on purity
-	# This is approximate - true outcome only known after measurement
-	var p_north = get_purity() * 0.5  # Simplified; real impl queries marginal
-	return north_emoji if (randf() < 0.5) else south_emoji
+	"""Get the current outcome emoji (measured or dominant basis state)."""
+	if get_is_measured() and get_measured_outcome() != "":
+		return get_measured_outcome()
+	return get_north_emoji() if (randf() < 0.5) else get_south_emoji()
 
 
 func get_plot_emojis() -> Dictionary:
-	"""Get the dual-emoji pair for this plot type
+	"""Get the dual-emoji pair for this plot.
 
-	V2 Architecture: Delegates to bound_terminal when available.
-	Falls back to legacy behavior for v1 compatibility.
-
-	PHASE 5 (PARAMETRIC): Queries parent biome capabilities for emoji pair.
-	Falls back to current north/south emojis if no biome or capability found.
-
-	Subclasses can override to customize per-plot basis.
+	Delegates to bound_terminal when available.
+	Falls back to biome capabilities or empty dict.
 	"""
-	# V2: If bound_terminal exists, delegate to it (single source of truth)
 	if bound_terminal and bound_terminal.is_bound:
 		return bound_terminal.get_emoji_pair()
 
-	# PARAMETRIC: Query parent biome for capability if plot_type_name is set
-	if parent_biome and parent_biome.has_method("get_plantable_capabilities"):
-		# Get plot_type_name from subclass (FarmPlot has this property)
+	var biome = _resolve_biome()
+	if biome and biome.has_method("get_plantable_capabilities"):
 		var type_name = get("plot_type_name")
 		if type_name:
-			# Find capability matching plot_type_name
-			for cap in parent_biome.get_plantable_capabilities():
+			for cap in biome.get_plantable_capabilities():
 				if cap.plant_type == type_name:
 					return cap.emoji_pair
 
-	# Fallback: Return current basis labels (set during planting)
-	return {"north": north_emoji, "south": south_emoji}
+	return {"north": get_north_emoji(), "south": get_south_emoji()}
 
 
-## V2 computed property: is this plot measured?
-## Delegates to bound_terminal when available, falls back to has_been_measured
+## Is this plot measured? Delegates to bound_terminal.
 func is_measured() -> bool:
-	if bound_terminal:
-		return bound_terminal.is_measured
-	return has_been_measured
+	return get_is_measured()
 
 
-## V2 computed property: is this plot occupied (bound to a terminal)?
-## For v2 architecture, a plot is "occupied" if it has a bound terminal
+## Is this plot occupied (bound to a terminal)?
 func is_occupied() -> bool:
-	return bound_terminal != null and bound_terminal.is_bound
+	return is_active()
 
 
 func register_in_biome(biome: Node) -> bool:
 	"""Register this plot's measurement axis in the biome's quantum computer.
 
 	Called by FarmGrid.plant() after emoji pairs are set.
-	Assumes north_emoji and south_emoji are already configured.
-
-	Args:
-		biome: BiomeBase with quantum_computer
-
-	Returns:
-		true if successful, false if failed
+	Caches biome reference for _resolve_biome().
 	"""
 	if not biome or not "quantum_computer" in biome or not biome.quantum_computer:
 		push_error("Biome has no quantum_computer for plot %s!" % grid_position)
 		return false
 
-	parent_biome = biome
+	_cached_biome = biome
 
 	# Get register_id - axis should already exist from expand_quantum_system
+	var reg_id = -1
+	var n_emoji = get_north_emoji()
 	if biome.viz_cache:
-		register_id = biome.viz_cache.get_qubit(north_emoji)
-	if register_id < 0 and biome.quantum_computer and biome.quantum_computer.register_map:
-		if biome.quantum_computer.register_map.has(north_emoji):
-			register_id = biome.quantum_computer.register_map.qubit(north_emoji)
-	if register_id < 0:
+		reg_id = biome.viz_cache.get_qubit(n_emoji)
+	if reg_id < 0 and biome.quantum_computer and biome.quantum_computer.register_map:
+		if biome.quantum_computer.register_map.has(n_emoji):
+			reg_id = biome.quantum_computer.register_map.qubit(n_emoji)
+	if reg_id < 0:
 		push_error("Axis %s/%s not found in quantum computer - was expand_quantum_system called?" % [
-			north_emoji, south_emoji])
+			get_north_emoji(), get_south_emoji()])
 		return false
 
-	is_planted = true
-	has_been_measured = false
-	measured_outcome = ""
-
-	_log("debug", "farm", "🌱", "Plot %s: registered axis %d (%s/%s) in %s" % [
-		grid_position, register_id, north_emoji, south_emoji, biome.get_biome_type()])
+	_log("debug", "farm", "~", "Plot %s: registered axis %d (%s/%s) in %s" % [
+		grid_position, reg_id, get_north_emoji(), get_south_emoji(), biome.get_biome_type()])
 	return true
 
 
 func measure(_icon_network = null) -> String:
-	"""Measure (collapse) quantum state at this plot
+	"""Measure (collapse) quantum state at this plot.
 
-	Model C: Delegates to parent_biome's quantum_computer.measure_axis() for measurement.
-
-	Returns: The measurement outcome emoji (north_emoji or south_emoji)
-	Sets: has_been_measured = true and measured_outcome on success
+	Delegates to parent biome's quantum_computer.measure_axis().
 	"""
-	if not parent_biome:
+	var biome = _resolve_biome()
+	if not biome:
 		push_error("Plot %s not properly planted - no parent biome!" % grid_position)
 		return ""
 
-	if not is_planted:
+	if not is_active():
 		push_error("Cannot measure unplanted plot!")
 		return ""
 
-	if has_been_measured:
-		push_warning("Plot %s already measured - outcome: %s" % [grid_position, measured_outcome])
-		if measured_outcome == north_emoji:
+	if get_is_measured():
+		var outcome = get_measured_outcome()
+		push_warning("Plot %s already measured - outcome: %s" % [grid_position, outcome])
+		if outcome == get_north_emoji():
 			return "north"
-		elif measured_outcome == south_emoji:
+		elif outcome == get_south_emoji():
 			return "south"
-		return measured_outcome
+		return outcome
 
-	if not parent_biome.quantum_computer:
-		push_error("Parent biome %s has no quantum_computer!" % parent_biome.get_biome_type())
+	if not biome.quantum_computer:
+		push_error("Parent biome %s has no quantum_computer!" % biome.get_biome_type())
 		return ""
 
-	# Measure north/south axis using quantum_computer
-	var outcome_emoji = parent_biome.quantum_computer.measure_axis(north_emoji, south_emoji)
+	var outcome_emoji = biome.quantum_computer.measure_axis(get_north_emoji(), get_south_emoji())
 
 	if outcome_emoji == "":
 		push_error("Measurement failed for plot %s!" % grid_position)
 		return ""
 
-	# Convert emoji outcome to basis name for internal storage
-	var basis_outcome = "north" if outcome_emoji == north_emoji else "south"
+	var basis_outcome = "north" if outcome_emoji == get_north_emoji() else "south"
 
-	# Record outcome
-	has_been_measured = true
-	measured_outcome = basis_outcome
-
-	_log("debug", "farm", "🔬", "Plot %s measured: outcome=%s (emoji: %s)" % [grid_position, basis_outcome, outcome_emoji])
+	_log("debug", "farm", "~", "Plot %s measured: outcome=%s (emoji: %s)" % [grid_position, basis_outcome, outcome_emoji])
 
 	return basis_outcome
 
 
 func harvest() -> Dictionary:
-	"""Harvest this plot - collect yield and clear quantum state
+	"""Harvest this plot - collect yield and clear quantum state."""
+	if not is_active():
+		return {"success": false, "yield": 0, "energy": 0.0}
 
-	Model C: Queries purity from parent_biome's quantum_computer.
-
-	Returns: Dictionary with:
-		- success: bool
-		- outcome: String (emoji)
-		- energy: float (raw quantum energy for credits calculation)
-		- yield: int (credits)
-		- purity: float (quantum state purity)
-		- purity_multiplier: float (yield multiplier from purity)
-	"""
-	if not is_planted or not parent_biome:
+	var biome = _resolve_biome()
+	if not biome:
 		return {"success": false, "yield": 0, "energy": 0.0}
 
 	var outcome = ""
 
-	# Auto-measure if not already measured
-	if not has_been_measured:
+	if not get_is_measured():
 		measure()
 
-	# Double-check measurement succeeded
-	if not has_been_measured:
+	if not get_is_measured():
 		return {"success": false, "yield": 0, "energy": 0.0}
 
-	# Map basis outcome to emoji (measured_outcome is basis name "north" or "south")
-	if measured_outcome == "north":
-		outcome = north_emoji
-	elif measured_outcome == "south":
-		outcome = south_emoji
+	var measured = get_measured_outcome()
+	if measured == "north" or measured == get_north_emoji():
+		outcome = get_north_emoji()
+	elif measured == "south" or measured == get_south_emoji():
+		outcome = get_south_emoji()
 	else:
-		outcome = "?"
+		outcome = measured if measured != "" else "?"
 
 	var purity = get_purity()
 	if purity == 0.0:
-		purity = 1.0  # Default to pure if no quantum state access
+		purity = 1.0
 
-	# Purity multiplier for yield:
-	# - Pure state (Tr(ρ²) = 1.0) → 2.0× yield
-	# - Mixed state (Tr(ρ²) = 0.5) → 1.0× yield
-	# - Maximally mixed (Tr(ρ²) ≈ 0.17) → 0.34× yield
 	var purity_multiplier = 2.0 * purity
-
-	# Base yield: 10 credits if measurement succeeded
-	# (Manifest Section 4.4: outcome-based, not radius-based)
 	var base_yield = 10.0
-
-	# Apply purity multiplier
 	var yield_with_purity = base_yield * purity_multiplier
-
-	# Final yield (integer credits)
 	var yield_amount = max(1, int(yield_with_purity))
 
-	# Clear the plot
-	is_planted = false
-	register_id = -1
-	has_been_measured = false
-	measured_outcome = ""  # Clear stored outcome
 	replant_cycles += 1
 
-	# OLD (Model B): Remove register from parent biome
-	# if parent_biome and parent_biome.has_method("clear_register_for_plot"):
-	# 	parent_biome.clear_register_for_plot(grid_position)
-
-	# NEW (Model C): Clear subplot from parent biome (if method exists)
-	if parent_biome and parent_biome.has_method("clear_subplot_for_plot"):
-		parent_biome.clear_subplot_for_plot(grid_position)
-	# Note: Bath state persists - not cleared on individual plot harvest
+	if biome.has_method("clear_subplot_for_plot"):
+		biome.clear_subplot_for_plot(grid_position)
 
 	var result_dict = {
 		"success": true,
 		"outcome": outcome,
-		"energy": base_yield,  # Legacy key - now represents base yield
+		"energy": base_yield,
 		"yield": yield_amount,
-		"purity": purity,  # Quantum state purity Tr(ρ²)
-		"purity_multiplier": purity_multiplier  # Yield multiplier from purity
+		"purity": purity,
+		"purity_multiplier": purity_multiplier
 	}
 
-	_log("debug", "farm", "✂️", "Plot %s harvested: purity=%.3f (×%.2f), outcome=%s, yield=%d" % [
+	_log("debug", "farm", "~", "Plot %s harvested: purity=%.3f (x%.2f), outcome=%s, yield=%d" % [
 		grid_position, purity, purity_multiplier, outcome, yield_amount])
 
 	return result_dict
 
 
 func collapse_to_measurement(outcome: String) -> void:
-	"""Collapse quantum state based on measurement outcome (Model B version)"""
-	# Model B: Measurement collapse is handled by parent biome's quantum computer
-	has_been_measured = true
-	measured_outcome = outcome
+	"""Legacy: No-op in thin plot architecture.
+	Measurement state lives on Terminal, not Plot."""
 	state_collapsed.emit(outcome)
 
 
 func reset() -> void:
-	"""Reset plot to initial unplanted state.
-	Called after harvest or when clearing the plot.
-	NOTE: persistent_gates is NOT cleared - infrastructure survives harvest."""
-	is_planted = false
-	has_been_measured = false
-	measured_outcome = ""
-	register_id = -1
+	"""Reset plot to initial state.
+	NOTE: Infrastructure (gates, lindblad, etc.) lives on register_infrastructure
+	and naturally survives harvest/replant."""
+	bound_terminal = null
+	_cached_biome = null
 	entangled_plots.clear()
-	plot_infrastructure_entanglements.clear()
-	conspiracy_node_id = ""
-	conspiracy_bond_strength = 0.0
-	# persistent_gates intentionally NOT cleared - survives harvest/replant
 
 
 func remove_entanglement(partner_id: String) -> void:
@@ -412,18 +475,17 @@ func remove_entanglement(partner_id: String) -> void:
 
 func add_persistent_gate(gate_type: String, linked_plots: Array[Vector2i] = []) -> void:
 	"""Add a persistent gate to this plot. Gates survive harvest/replant."""
-	persistent_gates.append({
-		"type": gate_type,
-		"active": true,
-		"linked_plots": linked_plots.duplicate()
-	})
+	if not bound_terminal or bound_terminal.bound_register_id < 0: return
+	var qc = _resolve_quantum_computer()
+	if not qc: return
+	qc.add_persistent_gate_to_register(bound_terminal.bound_register_id, gate_type, [])
 	_log("debug", "farm", "🔧", "Added persistent gate '%s' to plot %s (linked: %d plots)" % [gate_type, grid_position, linked_plots.size()])
 
 
 func clear_persistent_gates() -> void:
 	"""Remove ALL persistent gate infrastructure from this plot."""
 	var count = persistent_gates.size()
-	persistent_gates.clear()
+	_set_infra_field("persistent_gates", [])
 	if count > 0:
 		_log("debug", "farm", "🔧", "Cleared %d persistent gates from plot %s" % [count, grid_position])
 

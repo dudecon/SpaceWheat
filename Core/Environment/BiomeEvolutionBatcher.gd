@@ -48,8 +48,8 @@ var biomes: Array = []  # All registered biomes
 var current_index: int = 0
 var evolution_accumulator: float = 0.0
 
-# PlotPool reference for bound terminal checks
-var plot_pool = null
+# TerminalPool reference for bound terminal checks
+var terminal_pool = null
 
 # Stage 2: Lookahead engine and buffers
 var lookahead_engine = null  # MultiBiomeLookaheadEngine (C++)
@@ -195,14 +195,14 @@ func _cleanup_lookahead_engine() -> void:
 		lookahead_engine = null
 
 
-func initialize(biome_array: Array, p_plot_pool = null):
+func initialize(biome_array: Array, p_terminal_pool = null):
 	"""Initialize batcher with all farm biomes.
 
 	Args:
 		biome_array: Array of BiomeBase instances
-		p_plot_pool: Optional PlotPool for bound terminal optimization
+		p_terminal_pool: Optional TerminalPool for bound terminal optimization
 	"""
-	plot_pool = p_plot_pool
+	terminal_pool = p_terminal_pool
 
 	# Filter valid biomes (not null, has quantum computer)
 	biomes = biome_array.filter(func(b):
@@ -226,7 +226,7 @@ func initialize(biome_array: Array, p_plot_pool = null):
 		if ENABLE_LOOKAHEAD:
 			print("  Note: Lookahead engine initializing asynchronously (may activate shortly...)")
 
-	if plot_pool:
+	if terminal_pool:
 		print("  Optimization: Skip evolution for biomes with no bound terminals")
 
 
@@ -1018,14 +1018,14 @@ func _biome_has_peeked_terminals(biome) -> bool:
 	# Check if any qubits have been peeked
 	for i in range(num_qubits):
 		# Check via quantum computer's peek tracking
-		# (Assumes QC has peeked state tracking - if not, check plot_pool instead)
+		# (Assumes QC has peeked state tracking - if not, check terminal_pool instead)
 		var qubit_data = qc.get_qubit_data(i) if qc.has_method("get_qubit_data") else null
 		if qubit_data and qubit_data.get("peeked", false):
 			return true
 
-	# Fallback: check via plot_pool if biome has bound terminals
-	if plot_pool and plot_pool.has_method("get_biome_peek_count"):
-		var peek_count = plot_pool.get_biome_peek_count(biome.get_biome_type())
+	# Fallback: check via terminal_pool if biome has bound terminals
+	if terminal_pool and terminal_pool.has_method("get_biome_peek_count"):
+		var peek_count = terminal_pool.get_biome_peek_count(biome.get_biome_type())
 		return peek_count > 0
 
 	# Default: assume active if we can't determine (safe fallback)
@@ -2028,7 +2028,7 @@ func _refill_all_lookahead_buffers(force_all: bool = false):
 		if biome and _is_valid_biome(biome):
 			var active = true
 			if not force_all:
-				if plot_pool and not _biome_has_bound_terminals(biome):
+				if terminal_pool and not _biome_has_bound_terminals(biome):
 					active = false
 				if not biome.quantum_evolution_enabled or biome.evolution_paused:
 					active = false
@@ -2160,7 +2160,7 @@ func _evolve_batch(dt: float):
 				skipped_count += 1
 				continue
 
-			if plot_pool and not _biome_has_bound_terminals(biome):
+			if terminal_pool and not _biome_has_bound_terminals(biome):
 				skipped_count += 1
 				continue
 
@@ -2183,12 +2183,12 @@ func _evolve_batch(dt: float):
 
 func _biome_has_bound_terminals(biome) -> bool:
 	"""Check if a biome has any bound terminals (planted plots)."""
-	if not plot_pool:
+	if not terminal_pool:
 		return true
 
-	if plot_pool.has_method("get_terminals_in_biome"):
+	if terminal_pool.has_method("get_terminals_in_biome"):
 		var biome_name = _get_biome_name(biome)  # Use helper with proper type checking
-		return plot_pool.get_terminals_in_biome(biome_name).size() > 0
+		return terminal_pool.get_terminals_in_biome(biome_name).size() > 0
 
 	return true
 
@@ -2270,7 +2270,7 @@ func _any_active_biomes() -> bool:
 			continue
 		if not biome.quantum_evolution_enabled or biome.evolution_paused:
 			continue
-		if plot_pool and not _biome_has_bound_terminals(biome):
+		if terminal_pool and not _biome_has_bound_terminals(biome):
 			continue
 		return true
 	return false

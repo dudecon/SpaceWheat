@@ -28,7 +28,7 @@ x86_64-w64-mingw32-g++ -std=c++17 -shared -fPIC -O2 \
   -DWINDOWS_ENABLED -DGDEXTENSION \
   src/*.cpp \
   ./lib/libgodot-cpp.windows.template_release.x86_64.a \
-  -o bin/libquantummatrix.windows.template_release.x86_64.dll \
+  -o bin/windows/libquantummatrix.windows.template_release.x86_64.dll \
   -static-libgcc -static-libstdc++
 ```
 

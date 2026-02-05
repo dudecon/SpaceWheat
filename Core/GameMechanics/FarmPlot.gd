@@ -67,25 +67,23 @@ func get_plot_emojis() -> Dictionary:
 
 
 func get_semantic_emoji() -> String:
-	"""Get the dominant emoji based on quantum state (Model B version)"""
-	if not is_planted:
+	"""Get the dominant emoji based on quantum state."""
+	if not is_active():
 		var emojis = get_plot_emojis()
-		return emojis["north"]  # Default to north emoji
+		return emojis.get("north", "")
 
-	# Model B: Determine emoji based on purity from parent biome
-	var purity = get_purity()
-	if purity > 0.5:
-		return measured_outcome if measured_outcome else get_basis_labels()[0]
-	else:
-		return measured_outcome if measured_outcome else get_basis_labels()[0]
+	var outcome = get_measured_outcome()
+	if outcome != "":
+		return outcome
+	return get_basis_labels()[0]
 
 
 ## Growth & Evolution
 
 
 func grow(delta: float, biome = null, territory_manager = null, icon_network = null, conspiracy_network = null) -> float:
-	"""Evolve quantum state with energy growth from biome (Model B version)"""
-	if not is_planted:
+	"""Evolve quantum state with energy growth from biome."""
+	if not is_active():
 		return 0.0
 
 	# Model B: Quantum evolution is handled by parent biome's quantum computer

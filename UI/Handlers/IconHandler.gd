@@ -146,23 +146,26 @@ static func icon_swap(farm, positions: Array[Vector2i]) -> Dictionary:
 
 	for pos in positions:
 		var plot = farm.grid.get_plot(pos)
-		if not plot or not plot.is_planted:
+		if not plot or not plot.is_active():
 			continue
 
-		# Swap north and south emojis
-		var old_north = plot.north_emoji
-		var old_south = plot.south_emoji
+		# Swap north and south emojis via terminal
+		var old_north = plot.get_north_emoji()
+		var old_south = plot.get_south_emoji()
 
-		plot.north_emoji = old_south
-		plot.south_emoji = old_north
+		if plot.bound_terminal and plot.bound_terminal.has_method("set_emoji_pair"):
+			plot.bound_terminal.set_emoji_pair({"north": old_south, "south": old_north})
+		elif plot.bound_terminal:
+			plot.bound_terminal.north_emoji = old_south
+			plot.bound_terminal.south_emoji = old_north
 
 		swap_count += 1
 		results.append({
 			"position": pos,
 			"old_north": old_north,
 			"old_south": old_south,
-			"new_north": plot.north_emoji,
-			"new_south": plot.south_emoji
+			"new_north": plot.get_north_emoji(),
+			"new_south": plot.get_south_emoji()
 		})
 
 	return {
@@ -199,25 +202,27 @@ static func icon_clear(farm, positions: Array[Vector2i]) -> Dictionary:
 		if not plot:
 			continue
 
-		var old_north = plot.north_emoji
-		var old_south = plot.south_emoji
+		var old_north = plot.get_north_emoji()
+		var old_south = plot.get_south_emoji()
 
-		# Get default icons from biome
+		# Get default icons from biome and set on terminal
 		var biome = farm.grid.get_biome_for_plot(pos)
-		if biome and biome.producible_emojis.size() >= 2:
-			plot.north_emoji = biome.producible_emojis[0]
-			plot.south_emoji = biome.producible_emojis[1]
-		else:
-			plot.north_emoji = ""
-			plot.south_emoji = ""
+		if plot.bound_terminal:
+			if biome and biome.producible_emojis.size() >= 2:
+				var new_pair = {"north": biome.producible_emojis[0], "south": biome.producible_emojis[1]}
+				if plot.bound_terminal.has_method("set_emoji_pair"):
+					plot.bound_terminal.set_emoji_pair(new_pair)
+				else:
+					plot.bound_terminal.north_emoji = new_pair["north"]
+					plot.bound_terminal.south_emoji = new_pair["south"]
 
 		clear_count += 1
 		results.append({
 			"position": pos,
 			"old_north": old_north,
 			"old_south": old_south,
-			"new_north": plot.north_emoji,
-			"new_south": plot.south_emoji
+			"new_north": plot.get_north_emoji(),
+			"new_south": plot.get_south_emoji()
 		})
 
 	return {

@@ -6,17 +6,17 @@ compatibility_minimum = "4.1"
 [libraries]
 
 # Linux (native - built and working)
-linux.x86_64 = "res://native/bin/libquantummatrix.linux.template_release.x86_64.so"
-linux.debug.x86_64 = "res://native/bin/libquantummatrix.linux.template_debug.x86_64.so"
-linux.release.x86_64 = "res://native/bin/libquantummatrix.linux.template_release.x86_64.so"
+linux.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_release.x86_64.so"
+linux.debug.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_release.x86_64.so"
 
 # Windows (optional - omit to use GDScript fallback)
-# windows.debug.x86_64 = "res://native/bin/libquantummatrix.windows.template_debug.x86_64.dll"
-# windows.release.x86_64 = "res://native/bin/libquantummatrix.windows.template_release.x86_64.dll"
+# windows.debug.x86_64 = "res://native/bin/windows/libquantummatrix.windows.template_debug.x86_64.dll"
+# windows.release.x86_64 = "res://native/bin/windows/libquantummatrix.windows.template_release.x86_64.dll"
 
 # Web/WASM (optional - omit to use GDScript fallback, RECOMMENDED)
-# web.wasm32 = "res://native/bin/libquantummatrix.wasm"
+# web.wasm32 = "res://native/bin/web/libquantummatrix.wasm"
 
 # macOS (optional)
-# macos.debug = "res://native/bin/libquantummatrix.macos.template_debug.framework"
-# macos.release = "res://native/bin/libquantummatrix.macos.template_release.framework"
+# macos.debug = "res://native/bin/macos/libquantummatrix.macos.template_debug.framework"
+# macos.release = "res://native/bin/macos/libquantummatrix.macos.template_release.framework"

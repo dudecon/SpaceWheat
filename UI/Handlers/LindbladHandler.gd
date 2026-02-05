@@ -85,8 +85,8 @@ static func lindblad_drive(farm, positions: Array[Vector2i]) -> Dictionary:
 
 		# V2 MODEL: Get emoji from terminal
 		var emoji = ""
-		if farm.plot_pool:
-			var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		if farm.terminal_pool:
+			var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 			if terminal and terminal.is_bound and terminal.has_method("get_emoji_pair"):
 				var pair = terminal.get_emoji_pair()
 				emoji = pair.get("north", "")
@@ -144,8 +144,8 @@ static func lindblad_decay(farm, positions: Array[Vector2i]) -> Dictionary:
 
 		# V2 MODEL: Get emoji from terminal
 		var emoji = ""
-		if farm.plot_pool:
-			var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		if farm.terminal_pool:
+			var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 			if terminal and terminal.is_bound and terminal.has_method("get_emoji_pair"):
 				var pair = terminal.get_emoji_pair()
 				emoji = pair.get("north", "")
@@ -357,12 +357,12 @@ static func lindblad_transfer(farm, positions: Array[Vector2i]) -> Dictionary:
 	var emoji_from = ""
 	var emoji_to = ""
 
-	if farm.plot_pool:
-		var terminal_from = farm.plot_pool.get_terminal_at_grid_pos(pos_from)
+	if farm.terminal_pool:
+		var terminal_from = farm.terminal_pool.get_terminal_at_grid_pos(pos_from)
 		if terminal_from and terminal_from.is_bound and terminal_from.has_method("get_emoji_pair"):
 			emoji_from = terminal_from.get_emoji_pair().get("north", "")
 
-		var terminal_to = farm.plot_pool.get_terminal_at_grid_pos(pos_to)
+		var terminal_to = farm.terminal_pool.get_terminal_at_grid_pos(pos_to)
 		if terminal_to and terminal_to.is_bound and terminal_to.has_method("get_emoji_pair"):
 			emoji_to = terminal_to.get_emoji_pair().get("north", "")
 
@@ -454,8 +454,8 @@ static func pump_to_wheat(farm, positions: Array[Vector2i]) -> Dictionary:
 
 static func _resolve_north_emoji(farm, pos: Vector2i) -> String:
 	"""Resolve north emoji from terminal first, then planted plot."""
-	if farm.plot_pool:
-		var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+	if farm.terminal_pool:
+		var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 		if terminal and terminal.is_bound and terminal.has_method("get_emoji_pair"):
 			var pair = terminal.get_emoji_pair()
 			var north = pair.get("north", "")

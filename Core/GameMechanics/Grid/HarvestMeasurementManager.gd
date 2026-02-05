@@ -16,20 +16,20 @@ var _plot_manager = null  # GridPlotManager (legacy)
 var _biome_routing = null  # BiomeRoutingManager
 var _economy = null  # FarmEconomy
 var _entanglement = null  # EntanglementManager (legacy)
-var _plot_pool = null  # PlotPool (terminal source of truth)
+var _terminal_pool = null  # TerminalPool (terminal source of truth)
 var _farm = null  # Farm (optional, for neighbor-based yield)
 var _verbose = null
 
 const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
 
 
-func set_dependencies(plot_manager, biome_routing, economy, entanglement, plot_pool = null, farm_ref = null, _topology_analyzer = null) -> void:
+func set_dependencies(plot_manager, biome_routing, economy, entanglement, terminal_pool = null, farm_ref = null, _topology_analyzer = null) -> void:
 	"""Inject component dependencies."""
 	_plot_manager = plot_manager
 	_biome_routing = biome_routing
 	_economy = economy
 	_entanglement = entanglement
-	_plot_pool = plot_pool
+	_terminal_pool = terminal_pool
 	_farm = farm_ref
 	# Note: topology_analyzer param kept for API compatibility but no longer used
 
@@ -41,14 +41,14 @@ func set_verbose(verbose_ref) -> void:
 
 func harvest_wheat(position: Vector2i) -> Dictionary:
 	"""Harvest a measured terminal at position (terminal-first)."""
-	if not _plot_pool:
+	if not _terminal_pool:
 		return {"success": false, "error": "no_pool"}
 
-	var terminal = _plot_pool.get_terminal_at_grid_pos(position)
+	var terminal = _terminal_pool.get_terminal_at_grid_pos(position)
 	if not terminal:
 		return {"success": false, "error": "no_terminal"}
 
-	var harvest_result = ProbeActions.action_pop(terminal, _plot_pool, _economy, _farm)
+	var harvest_result = ProbeActions.action_pop(terminal, _terminal_pool, _economy, _farm)
 	if not harvest_result.get("success", false):
 		return harvest_result
 
@@ -77,10 +77,10 @@ func harvest_wheat(position: Vector2i) -> Dictionary:
 
 func measure_plot(position: Vector2i) -> String:
 	"""Measure terminal at position (terminal-first)."""
-	if not _plot_pool:
+	if not _terminal_pool:
 		return ""
 
-	var terminal = _plot_pool.get_terminal_at_grid_pos(position)
+	var terminal = _terminal_pool.get_terminal_at_grid_pos(position)
 	if not terminal:
 		return ""
 

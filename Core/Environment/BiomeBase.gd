@@ -653,7 +653,7 @@ func get_register_probability(register_id: int) -> float:
 	return snap.get("p0", 0.5)
 
 ## Get all unbound register IDs (available for new terminal binding)
-func get_unbound_registers(plot_pool = null) -> Array[int]:
+func get_unbound_registers(terminal_pool = null) -> Array[int]:
 	"""Get all register IDs not currently bound to a terminal."""
 	if not viz_cache:
 		return []
@@ -662,16 +662,16 @@ func get_unbound_registers(plot_pool = null) -> Array[int]:
 	var biome_name = get_biome_type() if has_method("get_biome_type") else ""
 
 	for reg_id in range(num_qubits):
-		if not plot_pool or not plot_pool.is_register_bound(reg_id, biome_name):
+		if not terminal_pool or not terminal_pool.is_register_bound(reg_id, biome_name):
 			unbound.append(reg_id)
 
 	return unbound
 
 ## Get probability distribution over all unbound registers
-func get_register_probabilities(plot_pool = null) -> Dictionary:
+func get_register_probabilities(terminal_pool = null) -> Dictionary:
 	"""Get probability distribution for weighted register selection."""
 	var probs: Dictionary = {}
-	var unbound = get_unbound_registers(plot_pool)
+	var unbound = get_unbound_registers(terminal_pool)
 
 	for reg_id in unbound:
 		probs[reg_id] = get_register_probability(reg_id)
@@ -685,9 +685,9 @@ func get_total_register_count() -> int:
 	return viz_cache.get_num_qubits()
 
 ## Get registers not currently bound to any terminal (V2 Architecture)
-func get_available_registers_v2(plot_pool) -> Array[int]:
+func get_available_registers_v2(terminal_pool) -> Array[int]:
 	"""Get unbound registers for EXPLORE action."""
-	return get_unbound_registers(plot_pool)
+	return get_unbound_registers(terminal_pool)
 
 
 func _get_bloch_for_emoji(emoji: String) -> Dictionary:

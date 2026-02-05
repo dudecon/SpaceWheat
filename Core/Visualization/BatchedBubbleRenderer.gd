@@ -159,7 +159,7 @@ func draw(graph: Node2D, ctx: Dictionary) -> void:
 
 	Args:
 	    graph: The QuantumForceGraph node (for drawing calls)
-	    ctx: Context with {quantum_nodes, biomes, time_accumulator, plot_pool, etc.}
+	    ctx: Context with {quantum_nodes, biomes, time_accumulator, terminal_pool, etc.}
 	"""
 	# Check for pre-built bubble atlas in context (first-time setup)
 	var bubble_atlas = ctx.get("bubble_atlas_batcher")
@@ -205,7 +205,7 @@ func _draw_with_atlas(graph: Node2D, ctx: Dictionary) -> void:
 	var quantum_nodes = ctx.get("quantum_nodes", [])
 	var biomes = ctx.get("biomes", {})
 	var time_accumulator = ctx.get("time_accumulator", 0.0)
-	var plot_pool = ctx.get("plot_pool")
+	var terminal_pool = ctx.get("terminal_pool")
 	var batcher = ctx.get("biome_evolution_batcher", null)
 
 	# Compute shadow influences once per frame (O(n²) but n is small)
@@ -245,7 +245,7 @@ func _draw_with_atlas(graph: Node2D, ctx: Dictionary) -> void:
 		if anim_scale <= 0.0:
 			continue
 
-		var is_measured = _is_node_measured(node, plot_pool)
+		var is_measured = _is_node_measured(node, terminal_pool)
 		var is_celestial = false  # Regular bubbles, not sun
 
 		# Calculate pulse phase
@@ -260,16 +260,15 @@ func _draw_with_atlas(graph: Node2D, ctx: Dictionary) -> void:
 		var p_south = 0.0
 		var sink_flux = 0.0
 
-		# biome already looked up above
-		if biome and biome.viz_cache:
-			biome_purity = biome.viz_cache.get_purity()
-			if biome_purity < 0.0:
-				biome_purity = 0.5
+		# HIGH-TRUST: biome already looked up above (line 228)
+		biome_purity = biome.viz_cache.get_purity()
+		if biome_purity < 0.0:
+			biome_purity = 0.5
 
-			p_north = node.emoji_north_opacity
-			p_south = node.emoji_south_opacity
-			global_prob = clampf(p_north + p_south, 0.0, 1.0)
-			individual_purity = node.energy if node.energy > 0.0 else 0.5
+		p_north = node.emoji_north_opacity
+		p_south = node.emoji_south_opacity
+		global_prob = clampf(p_north + p_south, 0.0, 1.0)
+		individual_purity = node.energy if node.energy > 0.0 else 0.5
 
 		# Get shadow influence for this node (computed earlier this frame)
 		var shadow_influence = _shadow_influences.get(node.get_instance_id(), {})
@@ -386,7 +385,7 @@ func _draw_with_native(graph: Node2D, ctx: Dictionary) -> void:
 	var quantum_nodes = ctx.get("quantum_nodes", [])
 	var biomes = ctx.get("biomes", {})
 	var time_accumulator = ctx.get("time_accumulator", 0.0)
-	var plot_pool = ctx.get("plot_pool")
+	var terminal_pool = ctx.get("terminal_pool")
 	var batcher = ctx.get("biome_evolution_batcher", null)
 
 	_num_bubbles = 0
@@ -408,7 +407,7 @@ func _draw_with_native(graph: Node2D, ctx: Dictionary) -> void:
 		if node.is_terminal_bubble and node.terminal and node.terminal.is_bound:
 			node.update_from_quantum_state(batcher)
 
-		_pack_bubble_data(node, biomes, time_accumulator, plot_pool, false)
+		_pack_bubble_data(node, biomes, time_accumulator, terminal_pool, false)
 
 	# Generate and draw batched geometry
 	if _num_bubbles > 0:
@@ -570,7 +569,7 @@ func _draw_sun_qubit_with_native(graph: Node2D, ctx: Dictionary) -> void:
 	var biotic_flux_biome = ctx.get("biotic_flux_biome")
 	var biomes = ctx.get("biomes", {})
 	var time_accumulator = ctx.get("time_accumulator", 0.0)
-	var plot_pool = ctx.get("plot_pool")
+	var terminal_pool = ctx.get("terminal_pool")
 
 	if not sun_qubit_node:
 		return
@@ -601,7 +600,7 @@ func _draw_sun_qubit_with_native(graph: Node2D, ctx: Dictionary) -> void:
 	# Pack sun bubble data and render via batch
 	_num_bubbles = 0
 	_emoji_queue.clear()
-	_pack_bubble_data(sun_qubit_node, biomes, time_accumulator, plot_pool, true)
+	_pack_bubble_data(sun_qubit_node, biomes, time_accumulator, terminal_pool, true)
 
 	if _num_bubbles > 0:
 		var batches = _native_renderer.generate_draw_batches(_bubble_data, _num_bubbles, STRIDE)
@@ -630,7 +629,7 @@ func _draw_sun_qubit_with_native(graph: Node2D, ctx: Dictionary) -> void:
 	graph.draw_string(font, label_pos, "Celestial", HORIZONTAL_ALIGNMENT_CENTER, -1, 10, label_color)
 
 
-func _pack_bubble_data(node, biomes: Dictionary, time_accumulator: float, plot_pool, is_celestial: bool) -> void:
+func _pack_bubble_data(node, biomes: Dictionary, time_accumulator: float, terminal_pool, is_celestial: bool) -> void:
 	"""Pack a single bubble's data into the matrix."""
 	var offset = _num_bubbles * STRIDE
 
@@ -641,7 +640,7 @@ func _pack_bubble_data(node, biomes: Dictionary, time_accumulator: float, plot_p
 		return
 
 	# Check if measured
-	var is_measured = _is_node_measured(node, plot_pool)
+	var is_measured = _is_node_measured(node, terminal_pool)
 
 	# Calculate pulse phase (map sin output to 0-1)
 	var pulse_rate = node.get_pulse_rate()
@@ -806,7 +805,7 @@ func _draw_emoji(graph: Node2D, visual_asset_registry, font, text_pos: Vector2, 
 		graph.draw_string(font, text_pos, emoji, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, main_color)
 
 
-func _is_node_measured(node, plot_pool) -> bool:
+func _is_node_measured(node, terminal_pool) -> bool:
 	"""Check if node has been measured."""
 	if not node:
 		return false
@@ -814,8 +813,8 @@ func _is_node_measured(node, plot_pool) -> bool:
 		return true
 	if node.terminal and node.terminal.is_measured:
 		return true
-	if plot_pool and node.grid_position != Vector2i(-1, -1):
-		var terminal = plot_pool.get_terminal_at_grid_pos(node.grid_position) if plot_pool.has_method("get_terminal_at_grid_pos") else null
+	if terminal_pool and node.grid_position != Vector2i(-1, -1):
+		var terminal = terminal_pool.get_terminal_at_grid_pos(node.grid_position) if terminal_pool.has_method("get_terminal_at_grid_pos") else null
 		if terminal and terminal.is_measured:
 			return true
 	return false
@@ -1018,3 +1017,11 @@ func _compute_phi_color(node) -> Color:
 		blended_color = Color(0.5, 0.5, 0.5)
 
 	return blended_color
+
+
+func compact_buffer() -> void:
+	"""Shrink buffer to current node count (called after bulk node removal)"""
+	var required_size = (_num_bubbles + 1) * STRIDE
+	if _bubble_data.size() > required_size * 2:  # Only shrink if >2x oversized
+		_bubble_data.resize(required_size)
+		print("[BatchedBubbleRenderer] Buffer compacted to %d floats" % required_size)

@@ -68,6 +68,10 @@ var _last_driver_update_time: float = -1.0  # Track when we last updated drivers
 
 @export var entanglement_graph: Dictionary = {}  # register_id → Array[register_id] (adjacency)
 
+## Phase 3: Register-level infrastructure (gates, lindblad, theta_frozen, entanglement blueprints)
+## Persists per-biome, survives harvest/replant naturally.
+var register_infrastructure: Dictionary = {}  # register_id → {field: value}
+
 ## Phase 4: Energy tap flux tracking
 ## Accumulated energy flux per tapped emoji (accumulated this frame from Lindblad drain operators)
 var sink_flux_per_emoji: Dictionary = {}  # emoji → float (accumulated flux)
@@ -519,8 +523,60 @@ func allocate_axis(qubit_index: int, north_emoji: String, south_emoji: String) -
 	"""
 	register_map.register_axis(qubit_index, north_emoji, south_emoji)
 	_ensure_entanglement_node(qubit_index)
+	_ensure_register_infra(qubit_index)
 	_resize_density_matrix()
 	_log("debug", "quantum", "📍", "Allocated axis %d: %s (north) ↔ %s (south)" % [qubit_index, north_emoji, south_emoji])
+
+
+# ============================================================================
+# REGISTER INFRASTRUCTURE (per-register gates, lindblad, blueprints)
+# ============================================================================
+
+func _ensure_register_infra(reg_id: int) -> Dictionary:
+	if not register_infrastructure.has(reg_id):
+		register_infrastructure[reg_id] = {
+			"lindblad_pump_active": false, "lindblad_pump_rate": 0.5,
+			"lindblad_drain_active": false, "lindblad_drain_rate": 0.5,
+			"lindblad_drain_accumulator": 0.0,
+			"theta_frozen": false,
+			"persistent_gates": [],
+			"entanglement_blueprints": [],
+		}
+	return register_infrastructure[reg_id]
+
+
+func get_register_infra_field(reg_id: int, field: String, default = null):
+	var infra = _ensure_register_infra(reg_id)
+	return infra.get(field, default)
+
+
+func set_register_infra_field(reg_id: int, field: String, value) -> void:
+	var infra = _ensure_register_infra(reg_id)
+	infra[field] = value
+
+
+func add_persistent_gate_to_register(reg_id: int, gate_type: String, linked_registers: Array[int] = []) -> void:
+	var infra = _ensure_register_infra(reg_id)
+	infra["persistent_gates"].append({
+		"type": gate_type,
+		"active": true,
+		"linked_registers": linked_registers.duplicate()
+	})
+	_log("debug", "quantum", "🔧", "Added persistent gate '%s' to register %d (linked: %d registers)" % [gate_type, reg_id, linked_registers.size()])
+
+
+func get_active_gates_for_register(reg_id: int) -> Array[Dictionary]:
+	var infra = _ensure_register_infra(reg_id)
+	var active: Array[Dictionary] = []
+	for gate in infra.get("persistent_gates", []):
+		if gate.get("active", false):
+			active.append(gate)
+	return active
+
+
+func clear_register_infrastructure(reg_id: int) -> void:
+	if register_infrastructure.has(reg_id):
+		register_infrastructure.erase(reg_id)
 
 
 func _resize_density_matrix() -> void:

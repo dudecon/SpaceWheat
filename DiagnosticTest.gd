@@ -17,7 +17,8 @@ func _ready():
 	]
 
 	print("\n[CHECK] C++ Class Availability:")
-	for class_name in classes_to_check:
+	for i in classes_to_check.size():
+		var class_name = classes_to_check[i]
 		var exists = ClassDB.class_exists(class_name)
 		var status = "✅" if exists else "❌"
 		print("  %s %s" % [status, class_name])

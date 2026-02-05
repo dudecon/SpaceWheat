@@ -31,7 +31,7 @@ git push
 - Go to Actions tab
 - Click latest workflow run
 - Download "all-platforms" artifact
-- Extract to `native/bin/`
+- Extract to `native/bin/` (maintains platform subdirectories: linux/, windows/, macos/, web/)
 
 ---
 
@@ -71,14 +71,14 @@ LDFLAGS = -shared -static-libgcc -static-libstdc++ \
 
 SOURCES = $(wildcard src/*.cpp)
 OBJECTS = $(SOURCES:.cpp=.obj)
-TARGET = bin/libquantummatrix.windows.template_release.x86_64.dll
+TARGET = bin/windows/libquantummatrix.windows.template_release.x86_64.dll
 
-all: bin $(TARGET)
-	@cd bin && ln -sf libquantummatrix.windows.template_release.x86_64.dll \
-	                  libquantummatrix.windows.template_debug.x86_64.dll
+all: bin/windows $(TARGET)
+	@cd bin/windows && ln -sf libquantummatrix.windows.template_release.x86_64.dll \
+	                         libquantummatrix.windows.template_debug.x86_64.dll
 
-bin:
-	mkdir -p bin
+bin/windows:
+	mkdir -p bin/windows
 
 $(TARGET): $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $@ $(LDFLAGS)
@@ -142,12 +142,12 @@ CXXFLAGS = -std=c++17 -O3 -s SIDE_MODULE=1 -s EXPORT_ALL=1 \
            -I./include -I./include/godot_cpp -I./include/gdextension
 
 SOURCES = $(wildcard src/*.cpp)
-TARGET = bin/libquantummatrix.wasm
+TARGET = bin/web/libquantummatrix.wasm
 
-all: bin $(TARGET)
+all: bin/web $(TARGET)
 
-bin:
-	mkdir -p bin
+bin/web:
+	mkdir -p bin/web
 
 $(TARGET): $(SOURCES)
 	$(CXX) $(CXXFLAGS) $(SOURCES) -o $@
@@ -205,16 +205,16 @@ compatibility_minimum = "4.1"
 
 [libraries]
 
-linux.debug.x86_64 = "res://native/bin/libquantummatrix.linux.template_debug.x86_64.so"
-linux.release.x86_64 = "res://native/bin/libquantummatrix.linux.template_release.x86_64.so"
+linux.debug.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_release.x86_64.so"
 
-windows.debug.x86_64 = "res://native/bin/libquantummatrix.windows.template_debug.x86_64.dll"
-windows.release.x86_64 = "res://native/bin/libquantummatrix.windows.template_release.x86_64.dll"
+windows.debug.x86_64 = "res://native/bin/windows/libquantummatrix.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://native/bin/windows/libquantummatrix.windows.template_release.x86_64.dll"
 
-web.wasm32 = "res://native/bin/libquantummatrix.wasm"
+web.wasm32 = "res://native/bin/web/libquantummatrix.wasm"
 
-macos.debug = "res://native/bin/libquantummatrix.macos.template_debug.framework"
-macos.release = "res://native/bin/libquantummatrix.macos.template_release.framework"
+macos.debug = "res://native/bin/macos/libquantummatrix.macos.template_debug.framework"
+macos.release = "res://native/bin/macos/libquantummatrix.macos.template_release.framework"
 ```
 
 ---

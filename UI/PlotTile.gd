@@ -43,9 +43,7 @@ var selection_border: ColorRect
 var territory_border: ColorRect  # Shows Icon control
 var number_label: Label
 var checkbox_label: Label  # NEW: Multi-select checkbox (☐/☑)
-var purity_label: Label  # Purity indicator Tr(ρ²) - color-coded quality metric
 var lindblad_indicator: Label  # Persistent Lindblad pump/drain indicator
-var center_state_indicator: Control  # Small indicator showing quantum state at plot center
 var entanglement_indicator: Control  # Visual ring showing entanglement status
 var entanglement_counter: Label  # Shows number of entangled connections
 
@@ -185,17 +183,6 @@ func _create_ui_elements():
 	checkbox_label.z_index = 5  # Above all other elements for visibility
 	add_child(checkbox_label)
 
-	# Purity indicator (shows Tr(ρ²) in bottom-left corner)
-	purity_label = Label.new()
-	purity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	purity_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	purity_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	purity_label.add_theme_font_size_override("font_size", 12)
-	purity_label.text = ""  # Hidden by default
-	purity_label.z_index = 4  # Above most elements
-	purity_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(purity_label)
-
 	# Persistent Lindblad indicator (top-left corner)
 	lindblad_indicator = Label.new()
 	lindblad_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -206,15 +193,6 @@ func _create_ui_elements():
 	lindblad_indicator.z_index = 4
 	lindblad_indicator.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(lindblad_indicator)
-
-	# Center state indicator (shows quantum state + biome effects at plot center)
-	# Use a ColorRect as the visual indicator - small circle-like square in center
-	center_state_indicator = ColorRect.new()
-	center_state_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	center_state_indicator.z_index = 4  # Above emojis
-	center_state_indicator.color = Color(0.9, 0.9, 0.9, 0.0)  # Initially invisible
-	center_state_indicator.custom_minimum_size = Vector2(4, 4)
-	add_child(center_state_indicator)
 
 	# Entanglement indicator (glowing ring when plot is entangled)
 	entanglement_indicator = Control.new()
@@ -298,9 +276,6 @@ func _update_visuals():
 	# Update entanglement visualization
 	_update_entanglement_display()
 
-	# Update purity indicator
-	_update_purity_display()
-
 	# Update Lindblad indicator
 	_update_lindblad_indicator()
 
@@ -335,8 +310,6 @@ func _show_empty_state():
 	growth_bar.visible = false
 	background.color = COLOR_EMPTY if not is_selected else COLOR_SELECTED
 
-	# Hide center indicator for empty plots
-	center_state_indicator.queue_redraw()
 	if lindblad_indicator:
 		lindblad_indicator.text = ""
 
@@ -373,9 +346,6 @@ func _show_mature_state():
 	# Golden glow for mature crops (uses shared glow value - not per-tile sin())
 	var base_golden = COLOR_MATURE
 	background.color = base_golden.lightened(_shared_glow_value * 0.2)
-
-	# Update center state indicator (shows quantum state + biome effects)
-	_update_center_indicator()
 
 
 func update_tomato_visuals(conspiracy_network):
@@ -443,7 +413,7 @@ func _notification(what):
 
 func _layout_elements():
 	# Safety check: UI elements must exist
-	if not background or not territory_border or not selection_border or not emoji_label_north or not emoji_label_south or not growth_bar or not number_label or not checkbox_label or not center_state_indicator:
+	if not background or not territory_border or not selection_border or not emoji_label_north or not emoji_label_south or not growth_bar or not number_label or not checkbox_label:
 		return
 
 	var rect = get_rect()
@@ -478,10 +448,6 @@ func _layout_elements():
 	# Checkbox label in top-right corner (NEW - multi-select)
 	checkbox_label.position = Vector2(rect.size.x - 35, 0)
 	checkbox_label.size = Vector2(35, 32)
-
-	# Center state indicator (will be sized and positioned in _update_center_indicator)
-	center_state_indicator.position = Vector2.ZERO
-	center_state_indicator.size = rect.size
 
 	queue_redraw()
 
@@ -566,43 +532,6 @@ func _draw_circuit_traces(rect: Rect2):
 	draw_line(Vector2(8, rect.size.y - 6), Vector2(rect.size.x - 8, rect.size.y - 6), trace_color, 1.0)
 
 
-## Center State Visualization
-
-func _update_center_indicator():
-	"""Update center indicator showing quantum state + biome effects
-
-	Small glow in center of plot reflects:
-	- Size: coherence level (radius/coherence) - larger when more coherent
-	- Opacity: biome energy - brighter during high-energy times
-	"""
-	if not plot_ui_data or not plot_ui_data.get("is_planted", false):
-		var c = center_state_indicator.color
-		c.a = 0.0
-		center_state_indicator.color = c
-		return
-
-	# Phase 4: Use PlotUIData - coherence maps to radius concept
-	# Get biome energy if available (affects glow intensity)
-	var biome_energy = 0.5  # Default middle value
-	if biome and biome.has_method("get_energy_strength"):
-		biome_energy = biome.get_energy_strength()
-
-	# Calculate size and opacity based on coherence (PlotUIData equivalent of radius)
-	# Size ranges from 2 to 12 pixels based on coherence (0 to 1)
-	var glow_size = 2.0 + (plot_ui_data.get("coherence", 0.0) * 10.0)
-
-	# Center the indicator in the middle of the plot
-	var plot_center = size / 2.0
-	center_state_indicator.position = plot_center - Vector2(glow_size / 2.0, glow_size / 2.0)
-	center_state_indicator.custom_minimum_size = Vector2(glow_size, glow_size)
-	center_state_indicator.size = Vector2(glow_size, glow_size)
-
-	# Color: white, with opacity based on biome energy
-	var indicator_color = Color(0.9, 0.9, 0.9)
-	indicator_color.a = biome_energy * 0.8  # Max 80% opacity when energy is high
-	center_state_indicator.color = indicator_color
-
-
 func _update_entanglement_display():
 	"""Update entanglement visual indicators (ring + counter)"""
 	if plot_ui_data == null or not plot_ui_data.get("is_planted", false):
@@ -624,43 +553,6 @@ func _update_entanglement_display():
 
 	# Trigger redraw of entanglement indicator ring
 	entanglement_indicator.queue_redraw()
-
-
-func _update_purity_display():
-	"""Update purity indicator showing Tr(ρ²) quality metric"""
-	if plot_ui_data == null or not plot_ui_data.get("is_planted", false):
-		# Hide purity for empty plots
-		purity_label.text = ""
-		return
-
-	# Get purity from plot_ui_data if available
-	var purity = 1.0  # Default to pure state
-	if plot_ui_data.has("purity"):
-		purity = plot_ui_data.get("purity", 1.0)
-	elif plot_ui_data.has("quantum_state") and plot_ui_data.get("quantum_state"):
-		# Try to get purity from quantum state's bath
-		var quantum_state = plot_ui_data.get("quantum_state")
-		if quantum_state and quantum_state.has("bath") and quantum_state.get("bath"):
-			purity = quantum_state.get("bath").get_purity()
-
-	# Format purity as percentage
-	var purity_percent = int(purity * 100)
-
-	# Color-code based on purity level:
-	# - High purity (>80%) → Green (excellent yield)
-	# - Medium purity (50-80%) → Yellow (decent yield)
-	# - Low purity (<50%) → Red (poor yield)
-	var purity_color: Color
-	if purity > 0.8:
-		purity_color = Color(0.0, 1.0, 0.0)  # Green
-	elif purity > 0.5:
-		purity_color = Color(1.0, 1.0, 0.0)  # Yellow
-	else:
-		purity_color = Color(1.0, 0.0, 0.0)  # Red
-
-	# Set label text and color
-	purity_label.text = "Ψ%d%%" % purity_percent  # Ψ symbol for quantum purity
-	purity_label.add_theme_color_override("font_color", purity_color)
 
 
 func _update_lindblad_indicator() -> void:

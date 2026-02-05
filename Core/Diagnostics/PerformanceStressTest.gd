@@ -29,6 +29,10 @@ func _ready():
 	print("PERFORMANCE STRESS TEST - Integrated with Game")
 	print("=".repeat(80))
 
+	# Enable perf_hud logging for stress test
+	VerboseConfig.set_category_enabled("perf_hud", true)
+	VerboseConfig.set_category_level("perf_hud", VerboseConfig.LogLevel.DEBUG)
+
 	# Wait for FarmView to fully initialize (quantum_viz is created after farm)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -49,12 +53,12 @@ func _find_game_refs():
 	var farm_view = get_parent()
 	if farm_view and "farm" in farm_view and "quantum_viz" in farm_view:
 		farm = farm_view.farm
-		# quantum_viz is BathQuantumViz, the actual graph is at quantum_viz.graph
-		if farm_view.quantum_viz and "graph" in farm_view.quantum_viz:
-			quantum_viz = farm_view.quantum_viz.graph
+		# quantum_viz is now QuantumForceGraph directly (no controller middleman)
+		quantum_viz = farm_view.quantum_viz
+		if quantum_viz:
 			print("✅ Found farm and quantum visualization (QuantumForceGraph)")
 		else:
-			print("⚠️ Found farm but quantum_viz.graph is missing")
+			print("⚠️ Found farm but quantum_viz is missing")
 		return
 
 	print("ERROR: Could not find farm and visualization from FarmView")
@@ -269,7 +273,7 @@ func _diagnose_viz_packets():
 
 func _run_explore_all():
 	"""Run EXPLORE action on all plots, cycling through 4 test biomes"""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		print("  ERROR: Cannot access plot pool")
 		return
 
@@ -286,7 +290,7 @@ func _run_explore_all():
 	for i in range(24):
 		# Cycle through the 4 test biomes
 		var biome = test_biomes[i % test_biomes.size()]
-		var result = ProbeActions.action_explore(farm.plot_pool, biome, economy)
+		var result = ProbeActions.action_explore(farm.terminal_pool, biome, economy)
 		if result.success:
 			success_count += 1
 		else:

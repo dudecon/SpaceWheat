@@ -374,7 +374,7 @@ func _check_and_stop_if_empty() -> void:
 		return
 
 	var farm = get_node_or_null("/root/Farm")
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return
 
 	var has_bubbles = _biome_has_active_terminals(farm, active_biome)
@@ -412,7 +412,7 @@ func _check_register_state() -> void:
 		return
 
 	var farm = get_node_or_null("/root/Farm")
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return
 
 	# Check for ACTIVE terminals (bound but NOT measured)
@@ -484,10 +484,10 @@ func _biome_has_active_terminals(farm, biome_name: String) -> bool:
 
 	Active terminals = exploring bubbles (not frozen/measured)
 	"""
-	if not farm.plot_pool or not farm.plot_pool.has_method("get_terminals_in_biome"):
+	if not farm.terminal_pool or not farm.terminal_pool.has_method("get_terminals_in_biome"):
 		return false
 
-	var terminals = farm.plot_pool.get_terminals_in_biome(biome_name)
+	var terminals = farm.terminal_pool.get_terminals_in_biome(biome_name)
 	var active_count := 0
 	var measured_count := 0
 	var unbound_count := 0
@@ -523,7 +523,7 @@ func _on_biome_changed(new_biome: String, old_biome: String) -> void:
 	# Layer 3: Only play if new biome has active terminals (bubbles)
 	if stop_music_when_no_registers:
 		var farm = get_node_or_null("/root/Farm")
-		if farm and farm.plot_pool:
+		if farm and farm.terminal_pool:
 			var has_bubbles = _biome_has_active_terminals(farm, new_biome)
 			if not has_bubbles:
 				if _verbose:

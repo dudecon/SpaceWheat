@@ -11,7 +11,7 @@ var biomes: Dictionary = {}  # String → BiomeBase (registry of all biomes)
 var plot_biome_assignments: Dictionary = {}  # Vector2i → String (plot position → biome name)
 
 # Terminal pool (single source of truth for plot→register bindings)
-var plot_pool = null
+var terminal_pool = null
 
 # Legacy biome reference (for backward compatibility)
 var legacy_biome = null
@@ -25,9 +25,9 @@ func set_verbose(verbose_ref) -> void:
 	_verbose = verbose_ref
 
 
-func set_plot_pool(pool) -> void:
-	"""Inject PlotPool for register resolution."""
-	plot_pool = pool
+func set_terminal_pool(pool) -> void:
+	"""Inject TerminalPool for register resolution."""
+	terminal_pool = pool
 
 
 func set_legacy_biome(biome) -> void:
@@ -128,12 +128,25 @@ func get_register_for_plot(position: Vector2i) -> int:
 
 	Returns: Register ID (int) if plot is planted, -1 if not found
 	"""
-	if not plot_pool:
+	if not terminal_pool:
 		return -1
-	var terminal = plot_pool.get_terminal_at_grid_pos(position)
+	var terminal = terminal_pool.get_terminal_at_grid_pos(position)
 	if terminal and terminal.is_bound:
 		return terminal.bound_register_id
 	return -1
+
+
+func get_plot_for_register(register_id: int) -> Vector2i:
+	"""Reverse lookup: find the grid position bound to a register ID.
+
+	Returns: Grid position if found, Vector2i(-1, -1) if not found
+	"""
+	if not terminal_pool:
+		return Vector2i(-1, -1)
+	for terminal in terminal_pool.terminals:
+		if terminal.is_bound and terminal.bound_register_id == register_id:
+			return terminal.grid_position
+	return Vector2i(-1, -1)
 
 
 func is_biomes_empty() -> bool:

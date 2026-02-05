@@ -182,31 +182,9 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 		visualization_ready.emit()
 		return
 
-	# Register biomes with visualization (payload should already be primed)
-	if farm.biome_enabled:
-		if farm.biotic_flux_biome:
-			quantum_viz.add_biome("BioticFlux", farm.biotic_flux_biome)
-		if farm.stellar_forges_biome:
-			quantum_viz.add_biome("StellarForges", farm.stellar_forges_biome)
-		if farm.fungal_networks_biome:
-			quantum_viz.add_biome("FungalNetworks", farm.fungal_networks_biome)
-		if farm.volcanic_worlds_biome:
-			quantum_viz.add_biome("VolcanicWorlds", farm.volcanic_worlds_biome)
-		if farm.starter_forest_biome:
-			quantum_viz.add_biome("StarterForest", farm.starter_forest_biome)
-		if farm.village_biome:
-			quantum_viz.add_biome("Village", farm.village_biome)
-
-	# Initialize the visualization engine (may fail gracefully if no biomes)
-	quantum_viz.initialize()
-
-	# Check if graph was created (won't be if no biomes)
-	if not quantum_viz.graph:
-		_verbose.warn("boot", "⚠️", "QuantumForceGraph not created (no biomes?) - visualization disabled")
-		visualization_ready.emit()
-		return
-
-	if not quantum_viz.graph.layout_calculator:
+	# Register biomes with QuantumForceGraph (direct - no controller middleman)
+	# QuantumForceGraph now handles visualization directly
+	if not quantum_viz.layout_calculator:
 		_verbose.warn("boot", "⚠️", "BiomeLayoutCalculator not created - visualization disabled")
 		visualization_ready.emit()
 		return
@@ -231,16 +209,19 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 		if farm.village_biome:
 			biomes["Village"] = farm.village_biome
 
-	# Quantum visualization setup
-	# WSL2 dev: Shows bubbles at boot for testing
-	# Windows prod: Will use terminal-driven mode (set skip_boot_bubbles=true for prod)
+	# Quantum visualization setup (direct QuantumForceGraph - no controller)
+	# Register biomes with graph
 	if biomes.size() > 0:
-		_verbose.info("boot", "💭", "Setting up quantum visualization with boot-time bubbles...")
+		_verbose.info("boot", "💭", "Setting up quantum visualization...")
+		for biome_name in biomes:
+			quantum_viz.biomes[biome_name] = biomes[biome_name]
+
+		# Initialize layout and setup
+		quantum_viz.update_layout(true)
 		var farm_grid = farm.grid if "grid" in farm else null
-		var plot_pool = farm.plot_pool if "plot_pool" in farm else null
-		var skip_boot_bubbles = false  # false = show bubbles at boot (for WSL2 dev testing)
-		quantum_viz.graph.setup(biomes, farm_grid, plot_pool, skip_boot_bubbles)
-		_verbose.info("boot", "✓", "Quantum viz ready (bubbles created at boot)")
+		var terminal_pool = farm.terminal_pool if "terminal_pool" in farm else null
+		quantum_viz.setup(biomes, farm_grid, terminal_pool)
+		_verbose.info("boot", "✓", "Quantum viz ready")
 
 	# Pre-compile GPU shaders before creating force graph
 	if biomes.size() > 0:
@@ -292,15 +273,15 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 		else:
 			# Try to build atlas, but don't fail if it errors
 			_verbose.info("boot", "🎨", "  Attempting atlas build (may take 10-30 seconds)...")
-			atlas_batcher.build_atlas_cached(all_emojis, quantum_viz.graph)
+			atlas_batcher.build_atlas_cached(all_emojis, quantum_viz)
 			if atlas_batcher._atlas_built:
 				_verbose.info("boot", "✓", "Emoji atlas ready (%d emojis)" % atlas_batcher._emoji_uvs.size())
 			else:
 				_verbose.warn("boot", "⚠️", "Atlas build failed - using text fallback for all emojis")
 
 		# Pass atlas to quantum viz (even if empty - will use text fallback)
-		if quantum_viz.graph.has_method("set_emoji_atlas_batcher"):
-			quantum_viz.graph.set_emoji_atlas_batcher(atlas_batcher)
+		if quantum_viz.has_method("set_emoji_atlas_batcher"):
+			quantum_viz.set_emoji_atlas_batcher(atlas_batcher)
 
 		# Build bubble shape atlas for GPU-accelerated bubble rendering
 		_verbose.info("boot", "🔮", "Building bubble atlas...")
@@ -314,8 +295,8 @@ func _stage_visualization(farm: Node, quantum_viz: Node) -> void:
 				bubble_atlas.configure_for_software_rendering(true)
 
 			# Pass atlas to the quantum viz graph for use by bubble renderer
-			if quantum_viz.graph.has_method("set_bubble_atlas_batcher"):
-				quantum_viz.graph.set_bubble_atlas_batcher(bubble_atlas)
+			if quantum_viz.has_method("set_bubble_atlas_batcher"):
+				quantum_viz.set_bubble_atlas_batcher(bubble_atlas)
 		else:
 			_verbose.warn("boot", "⚠️", "Bubble atlas build failed - using C++ fallback")
 
@@ -355,9 +336,9 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 		plot_grid_display.inject_grid_config(farm.grid_config)
 
 		# Layout calculator may not exist if no biomes were loaded
-		if quantum_viz and quantum_viz.graph and quantum_viz.graph.layout_calculator:
+		if quantum_viz and quantum_viz.layout_calculator:
 			if plot_grid_display.has_method("inject_layout_calculator"):
-				plot_grid_display.inject_layout_calculator(quantum_viz.graph.layout_calculator)
+				plot_grid_display.inject_layout_calculator(quantum_viz.layout_calculator)
 		else:
 			_verbose.warn("boot", "⚠️", "No layout_calculator available - tiles will use fallback positioning")
 
@@ -368,9 +349,9 @@ func _stage_ui(farm: Node, shell: Node, quantum_viz: Node) -> void:
 			_verbose.warn("boot", "⚠️", "No biomes to inject - PlotGridDisplay will have no tiles")
 
 		# Wire plot positions to QuantumForceGraph for tethering
-		if quantum_viz and quantum_viz.graph and plot_grid_display.has_signal("plot_positions_changed"):
-			if not plot_grid_display.plot_positions_changed.is_connected(quantum_viz.graph.update_plot_positions):
-				plot_grid_display.plot_positions_changed.connect(quantum_viz.graph.update_plot_positions)
+		if quantum_viz and plot_grid_display.has_signal("plot_positions_changed"):
+			if not plot_grid_display.plot_positions_changed.is_connected(quantum_viz.update_plot_positions):
+				plot_grid_display.plot_positions_changed.connect(quantum_viz.update_plot_positions)
 				_verbose.info("boot", "📡", "PlotGridDisplay connected to QuantumForceGraph anchors")
 
 	# NOW add to tree - _ready() runs with all dependencies available

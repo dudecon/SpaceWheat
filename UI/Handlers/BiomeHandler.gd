@@ -59,11 +59,12 @@ static func assign_plots_to_biome(farm, positions: Array[Vector2i], biome_name: 
 		# Update plot if it exists
 		var plot = farm.grid.get_plot(pos)
 		if plot:
-			# Reset plot state for new biome
-			if plot.is_planted and prev_biome != biome_name:
-				plot.is_planted = false
-				plot.north_emoji = ""
-				plot.south_emoji = ""
+			# Unbind terminal when reassigning to different biome
+			if plot.is_active() and prev_biome != biome_name:
+				if plot.bound_terminal and farm.terminal_pool:
+					farm.terminal_pool.unbind_terminal(plot.bound_terminal)
+				plot.bound_terminal = null
+				plot._cached_biome = null
 
 		assigned_count += 1
 		results.append({
@@ -110,12 +111,13 @@ static func clear_biome_assignment(farm, positions: Array[Vector2i]) -> Dictiona
 			# Remove from assignment dictionary
 			farm.grid.plot_biome_assignments.erase(pos)
 
-			# Reset plot state
+			# Unbind terminal
 			var plot = farm.grid.get_plot(pos)
 			if plot:
-				plot.is_planted = false
-				plot.north_emoji = ""
-				plot.south_emoji = ""
+				if plot.bound_terminal and farm.terminal_pool:
+					farm.terminal_pool.unbind_terminal(plot.bound_terminal)
+				plot.bound_terminal = null
+				plot._cached_biome = null
 
 			cleared_count += 1
 			results.append({
@@ -184,8 +186,8 @@ static func inspect_plot(farm, positions: Array[Vector2i]) -> Dictionary:
 			info.qubit_count = biome.get_total_register_count() if biome.has_method("get_total_register_count") else -1
 
 		# Get terminal info (v2 model)
-		if farm.plot_pool:
-			var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+		if farm.terminal_pool:
+			var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 			if terminal:
 				info.has_terminal = true
 				info.terminal_id = terminal.terminal_id

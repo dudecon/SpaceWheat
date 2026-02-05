@@ -181,17 +181,17 @@ func _call_handler(
 
 func _call_probe_handler(method_name: String, farm, positions: Array[Vector2i], extra: Dictionary) -> Dictionary:
 	"""Route to ProbeHandler methods."""
-	var plot_pool = farm.plot_pool if farm else null
+	var terminal_pool = farm.terminal_pool if farm else null
 	var economy = farm.economy if farm else null
 	var current_selection = extra.get("current_selection", Vector2i.ZERO)
 
 	match method_name:
 		"explore":
-			return ProbeHandler.explore(farm, plot_pool, positions)
+			return ProbeHandler.explore(farm, terminal_pool, positions)
 		"measure":
-			return ProbeHandler.measure(farm, plot_pool, positions)
+			return ProbeHandler.measure(farm, terminal_pool, positions)
 		"pop":
-			return ProbeHandler.pop(farm, plot_pool, economy, positions)
+			return ProbeHandler.pop(farm, terminal_pool, economy, positions)
 		_:
 			return {"success": false, "error": "unknown_method"}
 

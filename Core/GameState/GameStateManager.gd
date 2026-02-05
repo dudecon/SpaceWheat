@@ -493,14 +493,13 @@ func capture_state_from_game() -> GameState:
 			var pos = Vector2i(x, y)
 			var plot = grid.get_plot(pos)
 
-			# Capture plot configuration and measurement state
-			# NOTE: Quantum state details (theta, phi, radius, energy, berry_phase) are NOT saved
-			#       They regenerate when plots are planted from the biome environment
+			# Capture plot configuration and terminal binding state
+			# Terminal is source of truth for is_planted/has_been_measured
 			var plot_data = {
 				"position": pos,
 				"type": plot.plot_type,
-				"is_planted": plot.is_planted,
-				"has_been_measured": plot.has_been_measured,
+				"is_planted": plot.is_active(),
+				"has_been_measured": plot.get_is_measured(),
 				"theta_frozen": plot.theta_frozen,
 				"entangled_with": plot.entangled_plots.keys(),
 				"lindblad_pump_active": plot.lindblad_pump_active if "lindblad_pump_active" in plot else false,
@@ -508,6 +507,16 @@ func capture_state_from_game() -> GameState:
 				"lindblad_pump_rate": plot.lindblad_pump_rate if "lindblad_pump_rate" in plot else 0.0,
 				"lindblad_drain_rate": plot.lindblad_drain_rate if "lindblad_drain_rate" in plot else 0.0
 			}
+			# Serialize terminal binding for load reconstruction
+			if plot.bound_terminal:
+				plot_data["terminal_id"] = plot.bound_terminal.terminal_id
+				plot_data["register_id"] = plot.bound_terminal.bound_register_id
+				plot_data["biome_name"] = plot.bound_terminal.bound_biome_name
+				plot_data["north_emoji"] = plot.bound_terminal.north_emoji
+				plot_data["south_emoji"] = plot.bound_terminal.south_emoji
+				if plot.bound_terminal.is_measured:
+					plot_data["measured_outcome"] = plot.bound_terminal.measured_outcome
+					plot_data["measured_probability"] = plot.bound_terminal.measured_probability
 			# Phase 5.2: Serialize persistent gate infrastructure (Tool #2 gates)
 			# These gates survive harvest/replant cycles
 			if "persistent_gates" in plot:
@@ -517,7 +526,9 @@ func capture_state_from_game() -> GameState:
 						"type": gate.get("type", ""),
 						"active": gate.get("active", true)
 					}
-					# Serialize linked_plots (Array[Vector2i] → Array[Dictionary])
+					# Serialize linked_registers (new format)
+					serialized_gate["linked_registers"] = gate.get("linked_registers", [])
+					# Backward compat: also serialize linked_plots if present
 					var linked_plots_serialized = []
 					for linked_pos in gate.get("linked_plots", []):
 						linked_plots_serialized.append({"x": linked_pos.x, "y": linked_pos.y})
@@ -701,6 +712,13 @@ func _capture_single_biome_state(biome: Node, biome_name: String) -> Dictionary:
 					"south": proj_data.south
 				})
 
+	# Phase 3 Register Infrastructure: Serialize per-register infrastructure
+	if biome.quantum_computer and biome.quantum_computer.register_infrastructure.size() > 0:
+		var infra = {}
+		for reg_id in biome.quantum_computer.register_infrastructure:
+			infra[str(reg_id)] = biome.quantum_computer.register_infrastructure[reg_id].duplicate(true)
+		state_dict["register_infrastructure"] = infra
+
 	return state_dict
 
 
@@ -817,6 +835,65 @@ func _restore_single_biome_state(biome: Node, state: Dictionary, biome_name: Str
 			for proj in state.active_projections:
 				biome.create_projection(proj.position, proj.north, proj.south)
 
+	# Restore register_infrastructure
+	if state.has("register_infrastructure") and biome.quantum_computer:
+		var qc = biome.quantum_computer
+		for reg_str in state["register_infrastructure"]:
+			qc.register_infrastructure[int(reg_str)] = state["register_infrastructure"][reg_str]
+
+
+func _migrate_plot_infra_to_register(farm: Node, state: GameState) -> void:
+	"""Backward compat: migrate per-plot infrastructure to register_infrastructure.
+
+	Called when loading old saves that don't have register_infrastructure in biome state.
+	Reads theta_frozen, lindblad_*, persistent_gates from plot_data and writes
+	to the corresponding register_infrastructure.
+	"""
+	if not farm.grid:
+		return
+
+	var migrated_count = 0
+	for plot_data in state.plots:
+		var pos = plot_data.get("position", Vector2i(-1, -1))
+		if pos == Vector2i(-1, -1):
+			continue
+
+		# Get register_id and biome for this plot
+		var reg_id = plot_data.get("register_id", -1)
+		var biome_name = plot_data.get("biome_name", "")
+		if reg_id < 0 or biome_name == "":
+			continue
+
+		var biome = farm.grid.biomes.get(biome_name, null)
+		if not biome or not biome.quantum_computer:
+			continue
+
+		var qc = biome.quantum_computer
+		var infra = qc._ensure_register_infra(reg_id)
+
+		# Migrate fields from plot data
+		infra["theta_frozen"] = plot_data.get("theta_frozen", false)
+		infra["lindblad_pump_active"] = plot_data.get("lindblad_pump_active", false)
+		infra["lindblad_drain_active"] = plot_data.get("lindblad_drain_active", false)
+		infra["lindblad_pump_rate"] = plot_data.get("lindblad_pump_rate", 0.5)
+		infra["lindblad_drain_rate"] = plot_data.get("lindblad_drain_rate", 0.5)
+
+		# Migrate persistent gates
+		if plot_data.has("persistent_gates"):
+			var gates = []
+			for gate_data in plot_data["persistent_gates"]:
+				gates.append({
+					"type": gate_data.get("type", ""),
+					"active": gate_data.get("active", true),
+					"linked_registers": []  # Old saves used linked_plots; no easy mapping
+				})
+			infra["persistent_gates"] = gates
+
+		migrated_count += 1
+
+	if migrated_count > 0 and _verbose:
+		_verbose.info("save", "🔄", "Migrated %d plot infra entries to register_infrastructure (old save compat)" % migrated_count)
+
 
 ## Phase 6: Plot-Projection Reconnection
 
@@ -839,8 +916,8 @@ func _reconnect_plots_to_projections(farm: Node, state: GameState) -> void:
 		if not plot:
 			continue
 
-		# Skip if plot not planted (check actual plot, not save data)
-		if not plot.is_planted:
+		# Skip if plot not active (check actual plot, not save data)
+		if not plot.is_active():
 			continue
 
 		# Get biome for this plot
@@ -1006,21 +1083,36 @@ func apply_state_to_game(state: GameState):
 
 		if plot:
 			plot.plot_type = plot_data["type"]
-			plot.is_planted = plot_data["is_planted"]
 
-			# Measurement state (collapses quantum superposition)
-			plot.has_been_measured = plot_data.get("has_been_measured", false)
+			# Restore terminal binding from saved data (Thin Plot Architecture)
+			# Terminal is the source of truth for is_planted/has_been_measured
+			# NOTE: Must bind terminal BEFORE setting computed properties
+			# (theta_frozen, lindblad_*) which delegate to register_infrastructure
+			if plot_data.get("is_planted", false) and farm.terminal_pool:
+				var saved_register = plot_data.get("register_id", -1)
+				var saved_biome = plot_data.get("biome_name", "")
+				var saved_north = plot_data.get("north_emoji", "")
+				var saved_south = plot_data.get("south_emoji", "")
+				if saved_register >= 0 and saved_biome != "":
+					var terminal = farm.terminal_pool.get_unbound_terminal()
+					if terminal:
+						var emoji_pair = {"north": saved_north, "south": saved_south}
+						farm.terminal_pool.bind_terminal(terminal, saved_register, saved_biome, emoji_pair)
+						terminal.grid_position = pos
+						plot.bound_terminal = terminal
+						# Restore measurement state on terminal
+						if plot_data.get("has_been_measured", false):
+							var outcome = plot_data.get("measured_outcome", "")
+							var probability = plot_data.get("measured_probability", 0.5)
+							terminal.mark_measured(outcome, probability, 0.0, {})
+
+			# Restore per-plot infrastructure via computed properties
+			# (these delegate to register_infrastructure; terminal must be bound first)
 			plot.theta_frozen = plot_data.get("theta_frozen", false)
-
-			# Restore persistent Lindblad effects (Tool 2)
-			if "lindblad_pump_active" in plot:
-				plot.lindblad_pump_active = plot_data.get("lindblad_pump_active", false)
-			if "lindblad_drain_active" in plot:
-				plot.lindblad_drain_active = plot_data.get("lindblad_drain_active", false)
-			if "lindblad_pump_rate" in plot:
-				plot.lindblad_pump_rate = plot_data.get("lindblad_pump_rate", plot.lindblad_pump_rate)
-			if "lindblad_drain_rate" in plot:
-				plot.lindblad_drain_rate = plot_data.get("lindblad_drain_rate", plot.lindblad_drain_rate)
+			plot.lindblad_pump_active = plot_data.get("lindblad_pump_active", false)
+			plot.lindblad_drain_active = plot_data.get("lindblad_drain_active", false)
+			plot.lindblad_pump_rate = plot_data.get("lindblad_pump_rate", 0.5)
+			plot.lindblad_drain_rate = plot_data.get("lindblad_drain_rate", 0.5)
 
 			# Restore entanglement relationships
 			plot.entangled_plots.clear()
@@ -1028,11 +1120,6 @@ func apply_state_to_game(state: GameState):
 				var other_plot = grid.get_plot(entangled_pos)
 				if other_plot:
 					plot.entangled_plots[other_plot.plot_id] = 1.0
-
-			# IMPORTANT: Quantum state details (theta, phi, radius, energy, berry_phase)
-			# are NOT restored - they regenerate from the biome when the plot is replanted.
-			# This keeps the save format simple and maintains deterministic behavior through
-			# the infrastructure model (entanglement gates persist, qubits regenerate).
 
 	# Summarize out-of-bounds plots (if any)
 	if oob_count > 0:
@@ -1048,12 +1135,22 @@ func apply_state_to_game(state: GameState):
 			farm.grid.plot_biome_assignments = state.plot_biome_assignments.duplicate()
 
 	# Restore quantum states to all biomes
+	var has_register_infra = false
 	if state.biome_states:
 		_restore_all_biome_states(farm, state.biome_states)
+		# Check if any biome had register_infrastructure
+		for bs in state.biome_states.values():
+			if bs.has("register_infrastructure"):
+				has_register_infra = true
+				break
 	elif state.biome_state:
 		# LEGACY: Old saves only have single biome_state - restore to BioticFlux
 		if farm.biotic_flux_biome:
 			_restore_single_biome_state(farm.biotic_flux_biome, state.biome_state, "BioticFlux")
+
+	# Backward compat: migrate per-plot infra to register_infrastructure for old saves
+	if not has_register_infra:
+		_migrate_plot_infra_to_register(farm, state)
 
 	# Phase 6: Reconnect plots to their biome projections
 	# After biomes recreate projections, plots need to know about them

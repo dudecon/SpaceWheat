@@ -3,7 +3,7 @@
 
 extends Control
 
-const BathQuantumViz = preload("res://Core/Visualization/BathQuantumVisualizationController.gd")
+const QuantumForceGraph = preload("res://Core/Visualization/QuantumForceGraph.gd")
 const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
 const BiomeBackgroundClass = preload("res://Core/Visualization/BiomeBackground.gd")
 const PerformanceHUDClass = preload("res://UI/Overlays/PerformanceHUD.gd")
@@ -11,7 +11,7 @@ const PerformanceHUDClass = preload("res://UI/Overlays/PerformanceHUD.gd")
 
 var shell = null  # PlayerShell (from scene)
 var farm: Node = null
-var quantum_viz: BathQuantumViz = null
+var quantum_viz: QuantumForceGraph = null
 var biome_background: Control = null  # BiomeBackground for full-screen biome art
 var performance_hud: Control = null  # Performance profiling overlay
 
@@ -81,14 +81,14 @@ func _ready():
 		_verbose.warn("ui", "❌", "PlayerShell.tscn not found!")
 		return
 
-	# Create quantum visualization
-	_verbose.debug("ui", "🛁", "Creating bath-first quantum visualization...")
-	quantum_viz = BathQuantumViz.new()
+	# Create quantum visualization (direct QuantumForceGraph - no middleware)
+	_verbose.debug("ui", "🛁", "Creating quantum force graph visualization...")
+	quantum_viz = QuantumForceGraph.new()
 
 	# Add directly to scene tree - no CanvasLayer needed
-	# Set z_index low so it renders behind UI and overlays
+	# Set z_index so bubbles render in front of plots but behind overlays
 	add_child(quantum_viz)
-	quantum_viz.z_index = -100  # Behind everything (plots are -10, overlays are 1000+)
+	quantum_viz.z_index = 0  # In front of plots (-10), behind overlays (1000+)
 
 	# Create performance HUD overlay
 	_verbose.debug("ui", "🔬", "Creating performance profiling HUD...")
@@ -102,9 +102,8 @@ func _ready():
 	# ═══════════════════════════════════════════════════════════════════════
 
 	# CRITICAL: Connect visualization signals BEFORE boot emits game_ready
-	# Otherwise EXPLORE will emit plot_planted before viz is connected to listen
+	# Direct connection - farm → QuantumForceGraph (no controller middleman)
 	if quantum_viz:
-		# ALWAYS connect - connect_to_farm handles missing biomes gracefully
 		quantum_viz.connect_to_farm(farm)
 	else:
 		push_error("FarmView: quantum_viz is NULL - cannot connect to farm!")
@@ -120,20 +119,27 @@ func _ready():
 	# POST-BOOT: Additional signal connections and final setup
 	# ═══════════════════════════════════════════════════════════════════════
 
-	# Reconnect to PlotGridDisplay now that it's created during boot_ui
-	if quantum_viz and quantum_viz.has_method("_connect_to_plot_grid_display"):
-		quantum_viz._connect_to_plot_grid_display()
-		_verbose.info("ui", "✅", "PlotGridDisplay reconnected to visualization")
+	# Connect PlotGridDisplay → visualization (PlotGridDisplay created during boot_ui)
+	if quantum_viz and shell:
+		var plot_grid_display = shell.get_node_or_null("QuantumInstrument/PlotGridDisplay")
+		if plot_grid_display and plot_grid_display.has_signal("plot_selection_changed"):
+			plot_grid_display.plot_selection_changed.connect(quantum_viz._on_plot_selection_changed)
+			_verbose.info("ui", "✅", "PlotGridDisplay connected to visualization")
+			# Sync initial selection state
+			if plot_grid_display.has_method("get_selected_plots"):
+				var selected = plot_grid_display.get_selected_plots()
+				for pos in selected:
+					quantum_viz.selected_plot_positions[pos] = true
 
-	# Connect touch gesture signals from QuantumForceGraph
-	if quantum_viz and quantum_viz.graph:
-		var swipe_result = quantum_viz.graph.node_swiped_to.connect(_on_quantum_nodes_swiped)
+	# Connect touch gesture signals from QuantumForceGraph (direct access - no .graph)
+	if quantum_viz:
+		var swipe_result = quantum_viz.node_swiped_to.connect(_on_quantum_nodes_swiped)
 		if swipe_result != OK:
 			_verbose.warn("ui", "⚠️", "Failed to connect node_swiped_to signal")
 		else:
 			_verbose.info("ui", "✅", "Touch: Swipe-to-entangle connected")
 
-		var click_result = quantum_viz.graph.node_clicked.connect(_on_quantum_node_clicked)
+		var click_result = quantum_viz.node_clicked.connect(_on_quantum_node_clicked)
 		if click_result != OK:
 			_verbose.warn("ui", "⚠️", "Failed to connect node_clicked signal")
 		else:
@@ -177,12 +183,12 @@ func _on_quantum_node_clicked(grid_pos: Vector2i, button_index: int) -> void:
 	"""
 	_verbose.debug("ui", "🎯", "BUBBLE TAP HANDLER CALLED! Grid pos: %s, button: %d" % [grid_pos, button_index])
 
-	if not farm or not farm.plot_pool:
-		_verbose.warn("ui", "⚠️", "No farm or plot_pool available")
+	if not farm or not farm.terminal_pool:
+		_verbose.warn("ui", "⚠️", "No farm or terminal_pool available")
 		return
 
 	# v2: Look up terminal by grid position
-	var terminal = farm.plot_pool.get_terminal_at_grid_pos(grid_pos)
+	var terminal = farm.terminal_pool.get_terminal_at_grid_pos(grid_pos)
 	if not terminal:
 		_verbose.warn("ui", "⚠️", "No terminal bound at %s" % grid_pos)
 		return
@@ -208,7 +214,7 @@ func _on_quantum_node_clicked(grid_pos: Vector2i, button_index: int) -> void:
 	else:
 		# POP: Convert recorded probability to credits with purity and neighbor bonuses
 		_verbose.debug("ui", "→", "POPPING terminal at %s" % grid_pos)
-		var result = ProbeActions.action_pop(terminal, farm.plot_pool, farm.economy, farm)
+		var result = ProbeActions.action_pop(terminal, farm.terminal_pool, farm.economy, farm)
 		if result.success:
 			var credits = result.credits
 			var purity = result.get("purity", 1.0)

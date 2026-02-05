@@ -17,7 +17,7 @@ const ProbeActions = preload("res://Core/Actions/ProbeActions.gd")
 ## EXPLORE OPERATION - Batch bind terminals to registers
 ## ============================================================================
 
-static func explore(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
+static func explore(farm, terminal_pool, positions: Array[Vector2i]) -> Dictionary:
 	"""Execute EXPLORE action: discover registers at selected positions.
 
 	Binds unbound terminals to registers for each position that has a biome.
@@ -25,7 +25,7 @@ static func explore(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
 
 	Args:
 		farm: Farm instance with grid
-		plot_pool: PlotPool instance
+		terminal_pool: TerminalPool instance
 		positions: Array of grid positions to explore
 
 	Returns:
@@ -35,7 +35,7 @@ static func explore(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
 		- last_emoji: String (for display)
 		- results: Array of individual explore results
 	"""
-	if not farm or not plot_pool:
+	if not farm or not terminal_pool:
 		return {
 			"success": false,
 			"error": "farm_not_ready",
@@ -62,7 +62,7 @@ static func explore(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
 			continue
 
 		# Execute EXPLORE via ProbeActions
-		var result = ProbeActions.action_explore(plot_pool, biome)
+		var result = ProbeActions.action_explore(terminal_pool, biome)
 
 		if result.success:
 			var terminal = result.terminal
@@ -93,14 +93,14 @@ static func explore(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
 ## MEASURE OPERATION - Batch collapse terminals
 ## ============================================================================
 
-static func measure(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
+static func measure(farm, terminal_pool, positions: Array[Vector2i]) -> Dictionary:
 	"""Execute MEASURE action: collapse terminals at selected positions.
 
 	V2.2 Architecture: Processes ALL active terminals at selected positions.
 
 	Args:
 		farm: Farm instance with grid
-		plot_pool: PlotPool instance
+		terminal_pool: TerminalPool instance
 		positions: Array of grid positions to measure
 
 	Returns:
@@ -111,7 +111,7 @@ static func measure(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
 		- outcomes: Array[String]
 		- results: Array of individual measure results
 	"""
-	if not farm or not plot_pool:
+	if not farm or not terminal_pool:
 		return {
 			"success": false,
 			"error": "farm_not_ready",
@@ -131,7 +131,7 @@ static func measure(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
 	var results: Array = []
 
 	for pos in positions:
-		var terminal = plot_pool.get_terminal_at_grid_pos(pos)
+		var terminal = terminal_pool.get_terminal_at_grid_pos(pos)
 		if not terminal or not terminal.can_measure():
 			continue
 
@@ -173,14 +173,14 @@ static func measure(farm, plot_pool, positions: Array[Vector2i]) -> Dictionary:
 ## POP OPERATION - Batch harvest terminals
 ## ============================================================================
 
-static func pop(farm, plot_pool, economy, positions: Array[Vector2i]) -> Dictionary:
+static func pop(farm, terminal_pool, economy, positions: Array[Vector2i]) -> Dictionary:
 	"""Execute POP action: harvest terminals at selected positions.
 
 	V2.2 Architecture: Processes ALL measured terminals at selected positions.
 
 	Args:
 		farm: Farm instance with grid
-		plot_pool: PlotPool instance
+		terminal_pool: TerminalPool instance
 		economy: FarmEconomy instance
 		positions: Array of grid positions to pop
 
@@ -192,7 +192,7 @@ static func pop(farm, plot_pool, economy, positions: Array[Vector2i]) -> Diction
 		- resources: Array[String]
 		- results: Array of individual pop results
 	"""
-	if not farm or not plot_pool:
+	if not farm or not terminal_pool:
 		return {
 			"success": false,
 			"error": "farm_not_ready",
@@ -212,7 +212,7 @@ static func pop(farm, plot_pool, economy, positions: Array[Vector2i]) -> Diction
 	var results: Array = []
 
 	for pos in positions:
-		var terminal = plot_pool.get_terminal_at_grid_pos(pos)
+		var terminal = terminal_pool.get_terminal_at_grid_pos(pos)
 		if not terminal or not terminal.can_pop():
 			continue
 
@@ -221,7 +221,7 @@ static func pop(farm, plot_pool, economy, positions: Array[Vector2i]) -> Diction
 		var terminal_id = terminal.terminal_id
 
 		# Execute POP via ProbeActions
-		var result = ProbeActions.action_pop(terminal, plot_pool, economy, farm)
+		var result = ProbeActions.action_pop(terminal, terminal_pool, economy, farm)
 
 		if result.success:
 			popped_count += 1
@@ -255,9 +255,9 @@ static func pop(farm, plot_pool, economy, positions: Array[Vector2i]) -> Diction
 ## PREVIEW OPERATIONS - For UI display
 ## ============================================================================
 
-static func get_explore_preview(plot_pool, biome) -> Dictionary:
+static func get_explore_preview(terminal_pool, biome) -> Dictionary:
 	"""Get preview info for EXPLORE action."""
-	return ProbeActions.get_explore_preview(plot_pool, biome)
+	return ProbeActions.get_explore_preview(terminal_pool, biome)
 
 
 static func get_measure_preview(terminal, biome) -> Dictionary:

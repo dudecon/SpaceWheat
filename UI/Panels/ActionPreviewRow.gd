@@ -372,7 +372,7 @@ func _update_probe_preview() -> void:
 	Shows what registers are available for EXPLORE, what terminals can be
 	measured, etc. Makes the quantum state visible before action.
 	"""
-	if not farm or not farm.plot_pool:
+	if not farm or not farm.terminal_pool:
 		return
 
 	# Get current biome from selection
@@ -386,7 +386,7 @@ func _update_probe_preview() -> void:
 		return
 
 	# Get EXPLORE preview
-	var explore_preview = ProbeActions.get_explore_preview(farm.plot_pool, biome)
+	var explore_preview = ProbeActions.get_explore_preview(farm.terminal_pool, biome)
 	if explore_preview.can_explore and not explore_preview.top_probabilities.is_empty():
 		# Show top probability in button text
 		var top = explore_preview.top_probabilities[0]
@@ -397,7 +397,7 @@ func _update_probe_preview() -> void:
 	# Get MEASURE preview - find active terminal
 	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else ""
 	var active_terminals = []
-	for terminal in farm.plot_pool.get_active_terminals():
+	for terminal in farm.terminal_pool.get_active_terminals():
 		if terminal.bound_biome_name == biome_name:
 			active_terminals.append(terminal)
 
@@ -408,7 +408,7 @@ func _update_probe_preview() -> void:
 
 	# Get POP preview - find measured terminal
 	var measured_terminals = []
-	for terminal in farm.plot_pool.get_measured_terminals():
+	for terminal in farm.terminal_pool.get_measured_terminals():
 		if terminal.bound_biome_name == biome_name:
 			measured_terminals.append(terminal)
 
@@ -738,8 +738,8 @@ func _resolve_selected_north_emoji() -> String:
 	if pos.x < 0:
 		return ""
 
-	if farm.plot_pool:
-		var terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+	if farm.terminal_pool:
+		var terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 		if terminal and terminal.is_bound and terminal.has_method("get_emoji_pair"):
 			var pair = terminal.get_emoji_pair()
 			var north = pair.get("north", "")

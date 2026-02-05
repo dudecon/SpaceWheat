@@ -43,8 +43,6 @@ class PlotUIData:
 
 	# Visual properties
 	var is_entangled: bool = false
-	var energy_level: float = 0.0
-	var coherence: float = 1.0
 	var has_been_measured: bool = false
 
 
@@ -95,23 +93,14 @@ func update_plot(position: Vector2i, plot) -> void:
 	"""
 	var ui_data = PlotUIData.new()
 	ui_data.position = position
-	ui_data.is_planted = plot.is_planted
+	ui_data.is_planted = plot.is_active()
 	ui_data.plot_type = _get_plot_type_string(plot.plot_type)
 
-	# Transform quantum state (Model B: from parent biome's quantum_computer)
-	if plot.is_planted and plot.parent_biome and plot.bath_subplot_id >= 0:
-		var emojis = plot.get_plot_emojis()
-		ui_data.north_emoji = emojis["north"]
-		ui_data.south_emoji = emojis["south"]
-		# Get purity as proxy for energy level (Bloch coherence measure)
-		ui_data.energy_level = plot.get_purity()  # Tr(ρ²)
-	else:
-		# Unplanted: use default emojis
-		var emojis = plot.get_plot_emojis()
-		ui_data.north_emoji = emojis["north"]
-		ui_data.south_emoji = emojis["south"]
+	var emojis = plot.get_plot_emojis()
+	ui_data.north_emoji = emojis.get("north", "")
+	ui_data.south_emoji = emojis.get("south", "")
 
-	ui_data.has_been_measured = plot.has_been_measured
+	ui_data.has_been_measured = plot.get_is_measured()
 
 	plot_states[position] = ui_data
 	# PHASE 5: Removed plot_updated.emit() - real-time updates now go directly to PlotGridDisplay

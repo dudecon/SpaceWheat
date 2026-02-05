@@ -597,12 +597,12 @@ func inject_farm(farm_ref: Node) -> void:
 			if _verbose:
 				_verbose.debug("ui", "📡", "Connected to farm.terminal_bound")
 
-	# Connect to plot_pool terminal unbinds for cleanup (clear_all/harvest_all/reap)
-	if farm.plot_pool and farm.plot_pool.has_signal("terminal_unbound_at"):
-		if not farm.plot_pool.terminal_unbound_at.is_connected(_on_terminal_unbound_at):
-			farm.plot_pool.terminal_unbound_at.connect(_on_terminal_unbound_at)
+	# Connect to terminal_pool terminal unbinds for cleanup (clear_all/harvest_all/reap)
+	if farm.terminal_pool and farm.terminal_pool.has_signal("terminal_unbound_at"):
+		if not farm.terminal_pool.terminal_unbound_at.is_connected(_on_terminal_unbound_at):
+			farm.terminal_pool.terminal_unbound_at.connect(_on_terminal_unbound_at)
 			if _verbose:
-				_verbose.debug("ui", "📡", "Connected to plot_pool.terminal_unbound_at")
+				_verbose.debug("ui", "📡", "Connected to terminal_pool.terminal_unbound_at")
 
 	# Connect to biome_loaded for dynamic biome injection
 	if farm.has_signal("biome_loaded"):
@@ -740,8 +740,8 @@ func update_tile_from_farm(pos: Vector2i) -> void:
 	var terminal = null
 
 	# Check for terminal-bound state (from EXPLORE action)
-	if farm.plot_pool:
-		terminal = farm.plot_pool.get_terminal_at_grid_pos(pos)
+	if farm.terminal_pool:
+		terminal = farm.terminal_pool.get_terminal_at_grid_pos(pos)
 
 	if not plot and not terminal:
 		# Truly empty plot - no plot object and no terminal
@@ -784,8 +784,6 @@ func _transform_plot_to_ui_data(pos: Vector2i, plot, terminal = null) -> Diction
 		"south_emoji": "",
 		"north_probability": 0.0,
 		"south_probability": 0.0,
-		"energy_level": 0.0,
-		"coherence": 0.0,
 		"has_been_measured": (plot and plot.has_been_measured) or (terminal and terminal.is_measured),
 		"entangled_plots": entangled_list,
 		"lindblad_pump_active": plot and plot.lindblad_pump_active,
@@ -853,12 +851,6 @@ func _transform_plot_to_ui_data(pos: Vector2i, plot, terminal = null) -> Diction
 
 		ui_data["north_probability"] = north_prob
 		ui_data["south_probability"] = south_prob
-
-		# Energy is now purity (Tr(ρ²)) from plot's quantum state
-		ui_data["energy_level"] = plot.get_purity() if plot.has_method("get_purity") else 0.5
-
-		# Get coherence from parent biome if available
-		ui_data["coherence"] = 0.0
 
 	return ui_data
 
@@ -939,7 +931,7 @@ func _on_terminal_bound(pos: Vector2i, _terminal_id: String, _emoji_pair: Dictio
 
 func _on_terminal_unbound_at(pos: Vector2i, _terminal_id: String) -> void:
 	"""Handle terminal unbind (clear/reap/harvest) - update tile to clear terminal visuals."""
-	_verbose.debug("ui", "🧹", "PlotPool.terminal_unbound_at received at PlotGridDisplay: %s" % pos)
+	_verbose.debug("ui", "🧹", "TerminalPool.terminal_unbound_at received at PlotGridDisplay: %s" % pos)
 	update_tile_from_farm(pos)
 
 

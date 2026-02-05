@@ -110,8 +110,8 @@ func harvest_all() -> Dictionary:
 	var total_harvested = 0
 	var harvest_count = 0
 
-	if farm_grid.plot_pool:
-		for terminal in farm_grid.plot_pool.get_measured_terminals():
+	if farm_grid.terminal_pool:
+		for terminal in farm_grid.terminal_pool.get_measured_terminals():
 			if terminal.grid_position == Vector2i(-1, -1):
 				continue
 			var pos = terminal.grid_position

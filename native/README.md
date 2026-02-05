@@ -14,7 +14,10 @@ native/
 ├── lib/
 │   └── libgodot-cpp...a    Pre-compiled godot-cpp (81MB)
 ├── bin/
-│   └── libquantummatrix.so Built extension (1.7MB)
+│   ├── linux/              Linux binaries (.so)
+│   ├── windows/            Windows binaries (.dll)
+│   ├── macos/              macOS frameworks
+│   └── web/                WASM binaries
 └── Makefile                Simple build (no scons)
 ```
 

@@ -50,6 +50,7 @@ var category_levels = {
 	"cache": LogLevel.INFO,       # Operator cache hits/misses
 	"test": LogLevel.TRACE,       # Tests want everything
 	"perf": LogLevel.WARN,        # Only show slow frames
+	"perf_hud": LogLevel.WARN,    # Performance HUD detailed logs (off by default)
 	"network": LogLevel.DEBUG,
 	"viz": LogLevel.WARN,         # Visualization debugging
 	"trace": LogLevel.WARN,       # Extremely low-level performance traces
@@ -69,6 +70,7 @@ var category_enabled = {
 	"cache": true,
 	"test": false,
 	"perf": true,
+	"perf_hud": false,  # Disabled by default, enabled for stress testing
 	"network": true,
 	"viz": true,
 	"trace": true,

@@ -1,0 +1,12 @@
+code	description
+S.QIIQC	QII quantum computer probe
+S.QIIGATE	QII gate/entanglement probe
+S.QIIVOCAB	QII vocab inject/remove test
+G3.Q	explore (probe)
+G3.E	measure (probe)
+G3.R	reap (probe)
+G1.E	hadamard
+G4.Q	+vocab inject
+G4.R	-vocab remove
+G3G.Q	gate build (bell/cluster)
+QC.MI	mutual information read

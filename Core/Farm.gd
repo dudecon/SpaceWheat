@@ -19,7 +19,7 @@ const FarmGrid = preload("res://Core/GameMechanics/FarmGrid.gd")
 const FarmPlot = preload("res://Core/GameMechanics/FarmPlot.gd")
 const FarmEconomy = preload("res://Core/GameMechanics/FarmEconomy.gd")
 const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
-const PlotPoolClass = preload("res://Core/GameMechanics/PlotPool.gd")
+const TerminalPoolClass = preload("res://Core/GameMechanics/TerminalPool.gd")
 const BiomeEvolutionBatcherClass = preload("res://Core/Environment/BiomeEvolutionBatcher.gd")
 # GRACEFUL BIOME LOADING: Use load() instead of preload() so script errors
 # in individual biomes don't break the entire Farm. Failed biomes are skipped.
@@ -44,7 +44,7 @@ var vocabulary_evolution: VocabularyEvolution  # Vocabulary evolution system
 var known_pairs: Array = []  # Player vocabulary pairs (canonical, farm-owned)
 var ui_state: FarmUIState  # UI State abstraction layer
 var grid_config: GridConfig = null  # Single source of truth for grid layout
-var plot_pool: PlotPoolClass = null  # v2 Architecture: Terminal pool for EXPLORE/MEASURE/POP
+var terminal_pool: TerminalPoolClass = null  # v2 Architecture: Terminal pool for EXPLORE/MEASURE/POP
 var biome_evolution_batcher: BiomeEvolutionBatcherClass = null  # Batched quantum evolution
 
 # Icon system now managed by faction-based IconRegistry (deprecated variables removed)
@@ -145,7 +145,7 @@ signal grid_resized(new_config)  # Emitted when grid dimensions change
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TERMINAL LIFECYCLE SIGNALS (EXPLORE/MEASURE/POP actions)
-# These trigger bubble visualization in BathQuantumVisualizationController
+# These trigger bubble visualization in QuantumForceGraph
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ## Emitted when EXPLORE binds a terminal to a quantum register
@@ -159,6 +159,9 @@ signal terminal_released(grid_position: Vector2i, terminal_id: String, credits_e
 
 ## Emitted when a biome is loaded dynamically (for visualization updates)
 signal biome_loaded(biome_name: String, biome_ref)
+
+## Emitted BEFORE a biome is removed (for cascading cleanup)
+signal biome_removed(biome_name: String)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STRUCTURE LIFECYCLE SIGNALS (BUILD mode actions)
@@ -216,16 +219,7 @@ func emit_action_signal(action: String, result: Dictionary, grid_pos: Vector2i =
 				# Set grid_position on terminal if not already set
 				if "grid_position" in terminal and grid_pos != Vector2i(-1, -1):
 					terminal.grid_position = grid_pos
-				# DEBUG: Log exploration to help diagnose bubble rendering issues
-				print("\n🚨🚨🚨 FARM EMITTING terminal_bound SIGNAL 🚨🚨🚨")
-				print("  grid_pos: %s" % grid_pos)
-				print("  terminal_id: %s" % terminal.terminal_id)
-				print("  biome: %s" % result.get("biome_name", "?"))
-				print("  emoji_pair: %s" % result.get("emoji_pair", {}))
-				
 				terminal_bound.emit(grid_pos, terminal.terminal_id, result.get("emoji_pair", {}))
-				
-				print("✅ terminal_bound signal emitted!\n")
 
 		"measure":
 			var terminal = result.get("terminal")
@@ -266,14 +260,14 @@ func _ready():
 
 	# v2 Architecture: Create terminal pool for EXPLORE/MEASURE/POP actions
 	var total_plots = grid_config.grid_width * grid_config.grid_height
-	plot_pool = PlotPoolClass.new(total_plots)
+	terminal_pool = TerminalPoolClass.new(total_plots)
 	if grid:
-		grid.set_plot_pool(plot_pool)
+		grid.set_terminal_pool(terminal_pool)
 
 	# Create biome evolution batcher BEFORE loading biomes
 	# This allows BootManager.load_biome() to register each biome as it loads
 	biome_evolution_batcher = BiomeEvolutionBatcherClass.new()
-	biome_evolution_batcher.initialize([], plot_pool)  # Initialize with empty array, biomes register individually
+	biome_evolution_batcher.initialize([], terminal_pool)  # Initialize with empty array, biomes register individually
 
 	# Create environmental simulations (six biomes for multi-biome support)
 	# UNIFIED LOADING: All biomes go through BootManager.load_biome() for consistency
@@ -711,8 +705,8 @@ func _accumulate_lindblad_harvest(plot, emoji: String, drained_probability: floa
 
 func _get_lindblad_pair_for_plot(plot, pos: Vector2i) -> Dictionary:
 	"""Resolve emoji pair for a plot using terminal binding when available."""
-	if plot_pool:
-		var terminal = plot_pool.get_terminal_at_grid_pos(pos)
+	if terminal_pool:
+		var terminal = terminal_pool.get_terminal_at_grid_pos(pos)
 		if terminal and terminal.is_bound:
 			return terminal.get_emoji_pair()
 
@@ -1012,7 +1006,7 @@ func _rebuild_biome_row_maps(biome_list: Array[String]) -> void:
 
 
 func refresh_grid_for_biomes() -> bool:
-	"""Rebuild grid_config and resize grid/plot_pool if dimensions changed.
+	"""Rebuild grid_config and resize grid/terminal_pool if dimensions changed.
 
 	Always produces a valid grid configuration:
 	- If biomes loaded: grid sized to match biome layout
@@ -1045,8 +1039,8 @@ func refresh_grid_for_biomes() -> bool:
 			grid.get_plot(plot_cfg.position)
 
 		# Resize terminal pool to match new grid size
-		if plot_pool:
-			plot_pool.resize(grid_config.grid_width * grid_config.grid_height)
+		if terminal_pool:
+			terminal_pool.resize(grid_config.grid_width * grid_config.grid_height)
 
 	# Re-assign plot-to-biome mappings (safe even if unchanged)
 	if grid and grid.has_method("assign_plot_to_biome"):
@@ -1362,8 +1356,8 @@ func measure_all() -> int:
 	Returns: number of plots measured
 	"""
 	var measured_count = 0
-	if plot_pool:
-		for terminal in plot_pool.get_active_terminals():
+	if terminal_pool:
+		for terminal in terminal_pool.get_active_terminals():
 			if terminal.grid_position != Vector2i(-1, -1):
 				if measure_plot(terminal.grid_position) != "":
 					measured_count += 1
@@ -1378,8 +1372,8 @@ func harvest_all() -> int:
 	Returns: number of plots harvested
 	"""
 	var harvested_count = 0
-	if plot_pool:
-		for terminal in plot_pool.get_measured_terminals():
+	if terminal_pool:
+		for terminal in terminal_pool.get_measured_terminals():
 			if terminal.grid_position != Vector2i(-1, -1):
 				var result = harvest_plot(terminal.grid_position)
 				if result.get("success", false):
@@ -1479,7 +1473,7 @@ func batch_harvest(positions: Array[Vector2i]) -> Dictionary:
 	# Custom operation that measures first, then harvests
 	var harvest_op = func(pos: Vector2i) -> bool:
 		var plot = grid.get_plot(pos)
-		if plot and plot.is_planted and not plot.has_been_measured:
+		if plot and plot.is_active() and not plot.get_is_measured():
 			measure_plot(pos)
 		var harvest_result = harvest_plot(pos)
 		if harvest_result.get("success", false):

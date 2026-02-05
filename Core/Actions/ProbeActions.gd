@@ -24,9 +24,9 @@ const EconomyConstants = preload("res://Core/GameMechanics/EconomyConstants.gd")
 ## EXPLORE ACTION - Bind terminal to register with probability weighting
 ## ============================================================================
 
-static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
+static func action_explore(terminal_pool, biome, economy = null) -> Dictionary:
 	# 0. Null checks for required parameters
-	if not plot_pool:
+	if not terminal_pool:
 		return {
 			"success": false,
 			"error": "no_pool",
@@ -40,7 +40,7 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 		}
 
 	# 1. Get unbound terminal
-	var terminal = plot_pool.get_unbound_terminal()
+	var terminal = terminal_pool.get_unbound_terminal()
 	if not terminal:
 		return {
 			"success": false,
@@ -50,7 +50,7 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 		}
 
 	# 2. Check for unbound registers (availability gate)
-	var available_registers = biome.get_available_registers_v2(plot_pool) if biome.has_method("get_available_registers_v2") else []
+	var available_registers = biome.get_available_registers_v2(terminal_pool) if biome.has_method("get_available_registers_v2") else []
 	if available_registers.is_empty():
 		return {
 			"success": false,
@@ -70,8 +70,8 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 			"message": "Need %s to explore." % missing
 		}
 
-	# 3. Get unbound registers with probabilities (queries PlotPool for binding state)
-	var probabilities = biome.get_register_probabilities(plot_pool)
+	# 3. Get unbound registers with probabilities (queries TerminalPool for binding state)
+	var probabilities = biome.get_register_probabilities(terminal_pool)
 	if probabilities.is_empty():
 		return {
 			"success": false,
@@ -111,7 +111,7 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 	var biome_name = biome.get_biome_type() if biome.has_method("get_biome_type") else biome.name
 
 	# 6. Bind terminal to register with biome NAME (Terminal is now the single source of truth)
-	var bound = plot_pool.bind_terminal(terminal, selected_register, biome_name, emoji_pair)
+	var bound = terminal_pool.bind_terminal(terminal, selected_register, biome_name, emoji_pair)
 	if not bound:
 		return {
 			"success": false,
@@ -121,12 +121,12 @@ static func action_explore(plot_pool, biome, economy = null) -> Dictionary:
 		}
 
 	# NOTE: No need to call mark_register_bound() - Terminal.is_bound is the source of truth
-	# PlotPool.is_register_bound() queries Terminal directly
+	# TerminalPool.is_register_bound() queries Terminal directly
 
 	# Commit cost after successful bind
 	var explore_cost = explore_cost_gate.get("cost", {})
 	if not EconomyConstants.commit_cost(explore_cost, economy, "explore"):
-		plot_pool.unbind_terminal(terminal)
+		terminal_pool.unbind_terminal(terminal)
 		return {
 			"success": false,
 			"error": "cost_commit_failed",
@@ -339,8 +339,8 @@ static func _collapse_density_matrix(register_id: int, is_north: bool, biome) ->
 ## POP ACTION - Convert recorded probability to credits
 ## ============================================================================
 
-static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
-	var harvest_result = _prepare_pop_result(terminal, plot_pool, economy, farm)
+static func action_pop(terminal, terminal_pool, economy = null, farm = null) -> Dictionary:
+	var harvest_result = _prepare_pop_result(terminal, terminal_pool, economy, farm)
 	if not harvest_result.get("success", false):
 		return harvest_result
 
@@ -350,15 +350,15 @@ static func action_pop(terminal, plot_pool, economy = null, farm = null) -> Dict
 		biome_name = terminal.measured_biome_name if terminal.measured_biome_name != "" else terminal.bound_biome_name
 	var register_id = harvest_result.get("register_id", -1)
 
-	plot_pool.unbind_terminal(terminal)
+	terminal_pool.unbind_terminal(terminal)
 	_log("info", "farm", "📤", "Register %d released in %s" % [register_id, biome_name if biome_name else "biome"])
 
 	return harvest_result
 
 
-static func action_reap(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
+static func action_reap(terminal, terminal_pool, economy = null, farm = null) -> Dictionary:
 	# Preflight: ensure terminal can be harvested before charging
-	var preflight = _prepare_pop_result(terminal, plot_pool, null, farm)
+	var preflight = _prepare_pop_result(terminal, terminal_pool, null, farm)
 	if not preflight.get("success", false):
 		return preflight
 
@@ -371,7 +371,7 @@ static func action_reap(terminal, plot_pool, economy = null, farm = null) -> Dic
 			"message": "Need 👥 labor to reap harvest."
 		}
 
-	var harvest_result = _prepare_pop_result(terminal, plot_pool, economy, farm)
+	var harvest_result = _prepare_pop_result(terminal, terminal_pool, economy, farm)
 	if not harvest_result.get("success", false):
 		return harvest_result
 
@@ -389,13 +389,13 @@ static func action_reap(terminal, plot_pool, economy = null, farm = null) -> Dic
 		biome_name = terminal.measured_biome_name if terminal.measured_biome_name != "" else terminal.bound_biome_name
 
 	# Unbind terminal after reaping (returns it to pool)
-	plot_pool.unbind_terminal(terminal)
+	terminal_pool.unbind_terminal(terminal)
 	_log("info", "farm", "📤", "Terminal reaped in %s" % [biome_name if biome_name else "biome"])
 
 	return harvest_result
 
 
-static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null) -> Dictionary:
+static func _prepare_pop_result(terminal, terminal_pool, economy = null, farm = null) -> Dictionary:
 	if not terminal:
 		return {
 			"success": false,
@@ -403,7 +403,7 @@ static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null
 			"message": "No terminal to harvest. Use MEASURE first.",
 			"blocked": true
 		}
-	if not plot_pool:
+	if not terminal_pool:
 		return {
 			"success": false,
 			"error": "no_pool",
@@ -490,9 +490,9 @@ static func _prepare_pop_result(terminal, plot_pool, economy = null, farm = null
 ## HARVEST ALL ACTION - End of Turn (3R)
 ## ============================================================================
 
-static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dictionary:
-	# 0. Null check for plot_pool
-	if not plot_pool:
+static func action_harvest_all(terminal_pool, economy = null, biome = null) -> Dictionary:
+	# 0. Null check for terminal_pool
+	if not terminal_pool:
 		return {
 			"success": false,
 			"error": "no_pool",
@@ -533,8 +533,8 @@ static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dicti
 	# Collect all measured terminals first (to avoid modifying while iterating)
 	# Note: After MEASURE, terminals are no longer bound (register released)
 	# but they still have their measurement data (is_measured=true)
-	if plot_pool.has_method("get_all_terminals"):
-		for terminal in plot_pool.get_all_terminals():
+	if terminal_pool.has_method("get_all_terminals"):
+		for terminal in terminal_pool.get_all_terminals():
 			if terminal and terminal.is_measured:
 				terminals_to_harvest.append(terminal)
 
@@ -580,7 +580,7 @@ static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dicti
 		var grid_pos = terminal.grid_position
 
 		# Unbind terminal after harvesting
-		plot_pool.unbind_terminal(terminal)
+		terminal_pool.unbind_terminal(terminal)
 
 		harvest_results.append({
 			"terminal_id": terminal.terminal_id,
@@ -638,8 +638,8 @@ static func action_harvest_all(plot_pool, economy = null, biome = null) -> Dicti
 	}
 
 
-static func action_clear_all(plot_pool) -> Dictionary:
-	if not plot_pool:
+static func action_clear_all(terminal_pool) -> Dictionary:
+	if not terminal_pool:
 		return {
 			"success": false,
 			"error": "no_pool",
@@ -650,14 +650,14 @@ static func action_clear_all(plot_pool) -> Dictionary:
 	var terminals_to_clear: Array = []
 
 	# Collect all bound terminals
-	if plot_pool.has_method("get_all_terminals"):
-		for terminal in plot_pool.get_all_terminals():
+	if terminal_pool.has_method("get_all_terminals"):
+		for terminal in terminal_pool.get_all_terminals():
 			if terminal and terminal.is_bound:
 				terminals_to_clear.append(terminal)
 
 	# Unbind each terminal (no harvesting)
 	for terminal in terminals_to_clear:
-		plot_pool.unbind_terminal(terminal)
+		terminal_pool.unbind_terminal(terminal)
 		cleared_count += 1
 	
 	_log("info", "farm", "🧹", "Cleared %d terminals (no harvest)" % cleared_count)
@@ -696,8 +696,8 @@ static func _save_density_matrices(biome) -> Dictionary:
 ## UTILITY FUNCTIONS
 ## ============================================================================
 
-static func get_explore_preview(plot_pool, biome) -> Dictionary:
-	var available_terminals = plot_pool.get_unbound_count()
+static func get_explore_preview(terminal_pool, biome) -> Dictionary:
+	var available_terminals = terminal_pool.get_unbound_count()
 	var probabilities = biome.get_register_probabilities() if biome else {}
 
 	# Get top 3 register probabilities for display

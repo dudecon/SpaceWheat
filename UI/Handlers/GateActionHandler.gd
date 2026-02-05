@@ -491,8 +491,8 @@ static func _apply_single_qubit_gate(farm, position: Vector2i, gate_name: String
 	var register_id: int = -1
 
 	# V2 MODEL: Try terminal-based approach first
-	if farm.plot_pool:
-		var terminal = farm.plot_pool.get_terminal_at_grid_pos(position)
+	if farm.terminal_pool:
+		var terminal = farm.terminal_pool.get_terminal_at_grid_pos(position)
 		if terminal and terminal.is_bound:
 			# Resolve biome from terminal's biome name
 			var biome_name = terminal.bound_biome_name
@@ -574,9 +574,9 @@ static func _apply_two_qubit_gate(farm, position_a: Vector2i, position_b: Vector
 	var reg_b: int = -1
 
 	# V2 MODEL: Try terminal-based approach first
-	if farm.plot_pool:
-		var terminal_a = farm.plot_pool.get_terminal_at_grid_pos(position_a)
-		var terminal_b = farm.plot_pool.get_terminal_at_grid_pos(position_b)
+	if farm.terminal_pool:
+		var terminal_a = farm.terminal_pool.get_terminal_at_grid_pos(position_a)
+		var terminal_b = farm.terminal_pool.get_terminal_at_grid_pos(position_b)
 
 		if terminal_a and terminal_a.is_bound and not terminal_a.is_measured:
 			# Resolve biome from terminal's biome name

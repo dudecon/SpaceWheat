@@ -30,16 +30,20 @@ jobs:
           mkdir -p native/lib
           cp godot-cpp/bin/libgodot-cpp.linux.template_release.x86_64.a native/lib/
 
+      - name: Create platform directory
+        run: mkdir -p native/bin/linux
+
       - name: Build SpaceWheat extension
         run: |
           cd native
           make -j$(nproc)
+          mv bin/*.so bin/linux/
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v3
         with:
           name: linux-extension
-          path: native/bin/*.so
+          path: native/bin/linux/*.so
 
   build-windows:
     runs-on: windows-latest
@@ -64,16 +68,19 @@ jobs:
           cd godot-cpp
           scons platform=windows target=template_release -j4
 
+      - name: Create platform directory
+        run: mkdir -p native/bin/windows
+
       - name: Build SpaceWheat extension
         run: |
           cd native
-          cl.exe /std:c++17 /EHsc /MD /O2 /I include /I include\godot_cpp /I include\gdextension /DWINDOWS_ENABLED /DGDEXTENSION /LD src\*.cpp ..\godot-cpp\bin\libgodot-cpp.windows.template_release.x86_64.lib /Fe:bin\libquantummatrix.windows.template_release.x86_64.dll
+          cl.exe /std:c++17 /EHsc /MD /O2 /I include /I include\godot_cpp /I include\gdextension /DWINDOWS_ENABLED /DGDEXTENSION /LD src\*.cpp ..\godot-cpp\bin\libgodot-cpp.windows.template_release.x86_64.lib /Fe:bin\windows\libquantummatrix.windows.template_release.x86_64.dll
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v3
         with:
           name: windows-extension
-          path: native/bin/*.dll
+          path: native/bin/windows/*.dll
 
   build-macos:
     runs-on: macos-latest
@@ -95,6 +102,9 @@ jobs:
           cd godot-cpp
           scons platform=macos target=template_release arch=universal -j$(sysctl -n hw.logicalcpu)
 
+      - name: Create platform directory
+        run: mkdir -p native/bin/macos
+
       - name: Build SpaceWheat extension
         run: |
           cd native
@@ -103,13 +113,13 @@ jobs:
             -DMACOS_ENABLED -DGDEXTENSION \
             src/*.cpp \
             ../godot-cpp/bin/libgodot-cpp.macos.template_release.universal.a \
-            -o bin/libquantummatrix.macos.template_release.framework
+            -o bin/macos/libquantummatrix.macos.template_release.framework
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v3
         with:
           name: macos-extension
-          path: native/bin/*.framework
+          path: native/bin/macos/*.framework
 
   build-web:
     runs-on: ubuntu-latest
@@ -128,6 +138,9 @@ jobs:
           cd godot-cpp
           scons platform=web target=template_release -j$(nproc)
 
+      - name: Create platform directory
+        run: mkdir -p native/bin/web
+
       - name: Build SpaceWheat extension
         run: |
           cd native
@@ -135,13 +148,13 @@ jobs:
             -I./include -I./include/godot_cpp -I./include/gdextension \
             -DWEB_ENABLED -DGDEXTENSION \
             src/*.cpp \
-            -o bin/libquantummatrix.wasm
+            -o bin/web/libquantummatrix.wasm
 
       - name: Upload Web artifact
         uses: actions/upload-artifact@v3
         with:
           name: web-extension
-          path: native/bin/*.wasm
+          path: native/bin/web/*.wasm
 
   combine-artifacts:
     runs-on: ubuntu-latest
@@ -152,17 +165,17 @@ jobs:
 
       - name: Organize builds
         run: |
-          mkdir -p builds
-          cp linux-extension/* builds/
-          cp windows-extension/* builds/
-          cp macos-extension/* builds/
-          cp web-extension/* builds/
+          mkdir -p builds/linux builds/windows builds/macos builds/web
+          cp linux-extension/* builds/linux/ 2>/dev/null || true
+          cp windows-extension/* builds/windows/ 2>/dev/null || true
+          cp macos-extension/* builds/macos/ 2>/dev/null || true
+          cp web-extension/* builds/web/ 2>/dev/null || true
 
       - name: Upload combined build
         uses: actions/upload-artifact@v3
         with:
           name: all-platforms
-          path: builds/*
+          path: builds/**
 
       - name: Create release (if tag)
         if: startsWith(github.ref, 'refs/tags/')
