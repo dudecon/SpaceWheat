@@ -25,9 +25,23 @@ Tests/
 bin/
 build/
 export/
+exports/
 *.exe
 *.dll
 *.so
+*.dylib
+*.a
+*.o
+*.obj
+*.lib
+*.pdb
+
+# Native build artifacts
+native/bin/
+native/lib/*.a
+native/lib/*.so
+native/src/*.o
+native/src/*.obj
 
 # User-specific
 *.cfg
