@@ -270,6 +270,10 @@ func _update_inner_graph(delta: float, inner: BiomeInnerGraph, mi: PackedFloat64
 		if not bubble:
 			continue
 
+		# Measured bubbles are frozen — no physics, no position updates
+		if bubble.has_method("is_terminal_measured") and bubble.is_terminal_measured():
+			continue
+
 		var node_id = bubble.get_instance_id()
 		var local_pos = inner.local_positions.get(node_id, Vector2.ZERO)
 		var force = Vector2.ZERO
@@ -343,12 +347,15 @@ func _apply_cross_biome_repulsion(delta: float) -> void:
 	Repulsion is global (every bubble pushes every other bubble away).
 	Uses inverse-linear falloff, same as inner repulsion.
 	"""
-	# Collect all bubbles with their biome name for cross-biome check
+	# Collect all non-measured bubbles with their biome name for cross-biome check
 	var all_bubbles: Array = []
 	for biome_name in biome_graphs:
 		var inner = biome_graphs[biome_name]
 		for bubble in inner.bubbles:
 			if bubble:
+				# Measured bubbles are frozen — exclude from cross-biome forces
+				if bubble.has_method("is_terminal_measured") and bubble.is_terminal_measured():
+					continue
 				all_bubbles.append({"bubble": bubble, "biome": biome_name})
 
 	var n = all_bubbles.size()

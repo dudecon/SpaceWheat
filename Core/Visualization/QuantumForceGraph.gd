@@ -570,7 +570,11 @@ func _on_terminal_bound(position: Vector2i, terminal_id: String, emoji_pair: Dic
 
 
 func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: String, probability: float) -> void:
-	"""Handle terminal measured event - freeze bubble position"""
+	"""Handle terminal measured event - freeze bubble completely.
+
+	Measured bubbles become static: no physics, no evolution updates, no visual changes.
+	Just a frozen bubble with a cyan ring showing the collapsed outcome.
+	"""
 	if _verbose:
 		_verbose.debug("viz", "📏", "Terminal %s measured at %s → %s (p=%.2f)" % [terminal_id, position, outcome, probability])
 
@@ -584,6 +588,12 @@ func _on_terminal_measured(position: Vector2i, terminal_id: String, outcome: Str
 		if bubble.terminal:
 			bubble.frozen_anchor = bubble.position
 			bubble.terminal.frozen_position = bubble.position
+
+		# Zero velocity in the nested force optimizer so it stops dead
+		if nested_force_optimizer and bubble.biome_name:
+			var inner = nested_force_optimizer.biome_graphs.get(bubble.biome_name)
+			if inner:
+				inner.local_velocities[bubble.get_instance_id()] = Vector2.ZERO
 
 		queue_redraw()
 
@@ -1070,6 +1080,9 @@ func _apply_batched_force_positions(ctx: Dictionary) -> Dictionary:
 		# Map positions to nodes by register_id (qubit index)
 		# Force positions are indexed by qubit ID, nodes may be in different order
 		for node in biome_nodes:
+			# Measured bubbles are frozen — don't overwrite position from batcher
+			if node.is_terminal_measured():
+				continue
 			# Use register_id directly (all nodes have this set from quantum state)
 			var qubit_idx = node.register_id
 			if qubit_idx >= 0 and qubit_idx < interpolated_positions.size():

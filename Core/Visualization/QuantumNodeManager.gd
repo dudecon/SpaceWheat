@@ -351,6 +351,9 @@ func _update_node_visual_batched(
 	if not node.has_farm_tether and not node.plot and node.biome_name != "":
 		var biome = biomes.get(node.biome_name, null)
 		if biome and biome.viz_cache and node.register_id >= 0:
+			# Measured bubbles: frozen visuals, skip quantum state queries
+			if node.is_terminal_measured():
+				return
 			# Update from quantum state with interpolation for smooth 60fps
 			node.update_from_quantum_state(batcher)
 			# Ensure node is visible
@@ -383,6 +386,10 @@ func _update_node_visual_batched(
 					):
 						return
 			_set_node_fallback(node)
+		return
+
+	# Measured bubbles: frozen visuals, skip quantum state queries
+	if node.is_terminal_measured():
 		return
 
 	# Guard: unplanted plot → invisible
