@@ -232,7 +232,11 @@ func _process(delta: float):
 		# Sync: ensure all bubbles are registered (catches save/load and any missed registrations)
 		_sync_bubbles_to_nested_optimizer()
 		var mi_cache = _build_mi_cache()
-		nested_force_optimizer.update(delta, mi_cache, center_position)
+
+		# Scale force graph delta based on quantum evolution granularity
+		# Slower quantum evolution (larger dt) → slower force graph for visual interest
+		var force_delta = _get_scaled_force_delta(delta)
+		nested_force_optimizer.update(force_delta, mi_cache, center_position)
 	else:
 		# Fallback: flat skating rink forces if nested optimizer not initialized
 		_apply_skating_rink_forces(delta)

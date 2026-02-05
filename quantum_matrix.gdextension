@@ -7,7 +7,7 @@ compatibility_minimum = "4.1"
 
 # Linux (native - built and working)
 linux.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_release.x86_64.so"
-linux.debug.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_debug.x86_64.so"
+linux.debug.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_release.x86_64.so"
 linux.release.x86_64 = "res://native/bin/linux/libquantummatrix.linux.template_release.x86_64.so"
 
 # Windows (optional - omit to use GDScript fallback)

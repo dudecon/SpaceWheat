@@ -20,7 +20,6 @@ bin/linux:
 
 $(TARGET): $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $@ $(LDFLAGS)
-	@cd bin/linux && ln -sf libquantummatrix.linux.template_release.x86_64.so libquantummatrix.linux.template_debug.x86_64.so
 	@echo ""
 	@echo "✓ Build complete: $(TARGET)"
 	@ls -lh bin/linux/*.so
