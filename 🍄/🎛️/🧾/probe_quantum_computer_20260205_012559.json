@@ -1,0 +1,12 @@
+{
+  "name": "probe_quantum_computer",
+  "description": "Run the QII QC probe (explore/measure/hadamard/vocab).",
+  "command": "bash /home/tehcr33d/ws/SpaceWheat/\ud83c\udf44/\ud83c\udfb9\u269b\ufe0f.sh",
+  "returncode": 0,
+  "start": "2026-02-05T01:25:59.075905",
+  "duration_seconds": 4.389,
+  "token_logs": [
+    "\ud83c\udfb9\u269b\ufe0f20260204_172559.tok"
+  ],
+  "output_log": "rig/logs/probe_quantum_computer_20260205_012559.log"
+}

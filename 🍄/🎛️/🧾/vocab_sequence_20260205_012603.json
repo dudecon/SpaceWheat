@@ -1,0 +1,12 @@
+{
+  "name": "vocab_sequence",
+  "description": "Inject vocabulary into Village \u2192 StarterForest, inspect grid.",
+  "command": "bash /home/tehcr33d/ws/SpaceWheat/\ud83c\udf44/\ud83c\udfb9\ud83e\udde0.sh",
+  "returncode": 0,
+  "start": "2026-02-05T01:26:03.470014",
+  "duration_seconds": 10.13,
+  "token_logs": [
+    "\ud83c\udfb9\ud83e\udde020260204_172603.tok"
+  ],
+  "output_log": "rig/logs/vocab_sequence_20260205_012603.log"
+}

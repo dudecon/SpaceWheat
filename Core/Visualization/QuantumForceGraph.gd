@@ -222,12 +222,16 @@ func _process(delta: float):
 	var t4 = Time.get_ticks_usec()
 
 	# Update physics forces - BATCHED from evolution packets (NEW!)
-	_apply_batched_force_positions(ctx)
+	var nodes_with_batched_pos = _apply_batched_force_positions(ctx)
 	var t5 = Time.get_ticks_usec()
 
 	# Apply biome oval positioning forces (moved from BathQuantumVisualizationController)
 	_apply_skating_rink_forces(delta)
 	var t5a = Time.get_ticks_usec()
+
+	# Integrate velocities for nodes that didn't get batched positions
+	_integrate_velocities(delta, nodes_with_batched_pos)
+	var t5b = Time.get_ticks_usec()
 
 	# GATE: Only update particles if we have active bubbles
 	if has_active:
@@ -958,16 +962,19 @@ func _on_node_swiped_to(from_grid_pos: Vector2i, to_grid_pos: Vector2i):
 	node_swiped_to.emit(from_grid_pos, to_grid_pos)
 
 
-func _apply_batched_force_positions(ctx: Dictionary):
+func _apply_batched_force_positions(ctx: Dictionary) -> Dictionary:
 	"""Apply pre-computed force positions from BiomeEvolutionBatcher buffers.
 
 	Replaces synchronous force calculation with buffered position reads + interpolation.
 	Force positions are computed at 10Hz in C++ alongside evolution, then consumed
 	here at 60 FPS with smooth interpolation.
+
+	Returns: Dictionary of node_id → true for nodes that got batched positions
 	"""
+	var nodes_with_batched_pos: Dictionary = {}
 	var biome_batcher = ctx.get("biome_batcher")
 	if not biome_batcher:
-		return
+		return nodes_with_batched_pos
 
 	# Group nodes by biome for batch position lookup
 	var nodes_by_biome: Dictionary = {}
@@ -986,13 +993,16 @@ func _apply_batched_force_positions(ctx: Dictionary):
 		if interpolated_positions.is_empty():
 			continue
 
-		# Map positions to nodes by qubit index (NOT array iteration order!)
+		# Map positions to nodes by register_id (qubit index)
 		# Force positions are indexed by qubit ID, nodes may be in different order
 		for node in biome_nodes:
-			# Get qubit index from plot_id (format: "biome_q0", "biome_q1", etc.)
-			var qubit_idx = _extract_qubit_index(node.plot_id)
+			# Use register_id directly (all nodes have this set from quantum state)
+			var qubit_idx = node.register_id
 			if qubit_idx >= 0 and qubit_idx < interpolated_positions.size():
 				node.position = interpolated_positions[qubit_idx]
+				nodes_with_batched_pos[node.get_instance_id()] = true
+
+	return nodes_with_batched_pos
 
 
 func _extract_qubit_index(plot_id: String) -> int:
@@ -1174,8 +1184,10 @@ func _apply_skating_rink_forces(delta: float) -> void:
 		var ring_distance = 0.85 - purity_normalized * 0.55  # 0.85 (mixed) to 0.30 (pure)
 
 		for bubble in bubbles:
-			# Skip bubbles without plot OR farm_tether
-			if not bubble.plot and not bubble.has_farm_tether:
+			# Skip bubbles that aren't visualizing quantum state
+			# Allow: plot bubbles, terminal bubbles (farm_tether), register bubbles (register_id >= 0)
+			var is_quantum_bubble = bubble.plot or bubble.has_farm_tether or bubble.register_id >= 0
+			if not is_quantum_bubble:
 				continue
 
 			# MEASURED BUBBLES: Freeze in place - no skating rink forces
@@ -1206,3 +1218,31 @@ func _apply_skating_rink_forces(delta: float) -> void:
 				var skating_rink_strength = 150.0
 				var force_magnitude = skating_rink_strength * min(distance / 50.0, 2.0)
 				bubble.velocity += force_dir * force_magnitude * delta
+
+
+func _integrate_velocities(delta: float, nodes_with_batched_pos: Dictionary) -> void:
+	"""Integrate velocities into positions for nodes without batched positions.
+
+	Nodes get positions from either:
+	1. Batched force system (quantum physics simulation) - if available
+	2. Velocity integration (skating rink forces) - fallback
+
+	Args:
+		delta: Time step
+		nodes_with_batched_pos: Dictionary of node_id → true for nodes that got batched positions
+	"""
+	const DRAG = 0.92  # Match QuantumForceSystem damping
+
+	for bubble in quantum_nodes:
+		# Skip measured bubbles (frozen in place)
+		if bubble.is_terminal_measured():
+			bubble.velocity = Vector2.ZERO
+			continue
+
+		# Apply drag to all bubbles
+		bubble.velocity *= DRAG
+
+		# Integrate velocity ONLY if this node didn't get a batched position
+		# Batched positions are authoritative (quantum physics), velocity is fallback (visual layout)
+		if not nodes_with_batched_pos.has(bubble.get_instance_id()):
+			bubble.position += bubble.velocity * delta

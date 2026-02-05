@@ -2,11 +2,11 @@
   {
     "name": "probe_quantum_computer",
     "description": "Run the QII QC probe (explore/measure/hadamard/vocab).",
-    "script": "🍄/🎹⚛️.sh"
+    "script": "🍄/🎛️/probe_quantum_computer.sh"
   },
   {
     "name": "vocab_sequence",
     "description": "Inject vocabulary into Village → StarterForest, inspect grid.",
-    "script": "🍄/🎹🧠.sh"
+    "script": "🍄/🎛️/vocab_sequence.sh"
   }
 ]

@@ -15,10 +15,11 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+import os
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-TOKEN_DIR = PROJECT_ROOT / "🍄" / "logs" / "tokens"
-DEFAULT_PLAN = PROJECT_ROOT / "rig" / "turn_plan.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+TOKEN_DIR = PROJECT_ROOT / "🍄" / "🎛️" / "logs" / "tokens"
+DEFAULT_PLAN = PROJECT_ROOT / "🍄" / "🎛️" / "🧭📜.json"
 
 
 def load_plan(path: Path):
@@ -48,12 +49,14 @@ def docmd(step, log_dir: Path):
 
     cmd = ["bash", str(script_path)]
     start = time.time()
+    env = os.environ.copy()
+    env["PROJECT_ROOT"] = str(PROJECT_ROOT)
     proc = subprocess.run(
         cmd,
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
-        env=dict(**dict(PROJECT_ROOT=PROJECT_ROOT)),
+        env=env,
     )
     duration = time.time() - start
 
@@ -93,15 +96,20 @@ def main():
         "--plan",
         type=Path,
         default=DEFAULT_PLAN,
-        help="JSON file describing each turn (default rig/turn_plan.json)",
+        help="JSON file describing each turn (default 🍄/🎛️/🧭📜.json)",
     )
     parser.add_argument(
         "--log-dir",
         type=Path,
-        default=PROJECT_ROOT / "rig" / "logs",
+        default=PROJECT_ROOT / "🍄" / "🎛️" / "🧾",
         help="Directory to store orchestrator logs",
     )
     parser.add_argument("--dry-run", action="store_true", help="Only print the plan")
+    parser.add_argument(
+        "--no-interactive",
+        action="store_true",
+        help="Run through the plan once without prompts",
+    )
     args = parser.parse_args()
 
     plan = load_plan(args.plan)
@@ -112,16 +120,34 @@ def main():
             print(f"Turn {idx}: {turn.get('name')} -> {turn.get('script')}")
         return
 
-    for idx, turn in enumerate(plan, start=1):
-        print(f"--> Turn {idx}/{len(plan)}: {turn.get('name', 'unnamed')}")
-        summary, rc = docmd(turn, args.log_dir)
-        print(f"    cmd: {summary['command']}")
-        print(f"    duration: {summary['duration_seconds']}s returncode={rc}")
-        if summary["token_logs"]:
-            print(f"    tokens: {summary['token_logs']}")
-        if rc != 0:
-            print(f"    !!!! Turn {turn.get('name')} failed (rc={rc})")
-            sys.exit(rc)
+    print("Rig mode: QA playtesters. Please look for bugs or performance issues.")
+
+    def prompt_continue(message: str, default_yes: bool = True) -> bool:
+        if args.no_interactive:
+            return True
+        suffix = "[Y/n]" if default_yes else "[y/N]"
+        raw = input(f"{message} {suffix} ").strip().lower()
+        if raw == "":
+            return default_yes
+        return raw in ("y", "yes")
+
+    while True:
+        for idx, turn in enumerate(plan, start=1):
+            print(f"--> Turn {idx}/{len(plan)}: {turn.get('name', 'unnamed')}")
+            summary, rc = docmd(turn, args.log_dir)
+            print(f"    cmd: {summary['command']}")
+            print(f"    duration: {summary['duration_seconds']}s returncode={rc}")
+            if summary["token_logs"]:
+                print(f"    tokens: {summary['token_logs']}")
+            if rc != 0:
+                print(f"    !!!! Turn {turn.get('name')} failed (rc={rc})")
+                sys.exit(rc)
+
+            if not prompt_continue("Continue to next turn?"):
+                return
+
+        if not prompt_continue("Run another pass through the turn plan?", default_yes=False):
+            return
 
 
 if __name__ == "__main__":

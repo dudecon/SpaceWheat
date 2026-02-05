@@ -25,13 +25,13 @@ func setup(farm_ref: Node, shell_ref: Node) -> void:
 	if not shell_ref:
 		return
 
-	if shell_ref.has("overlay_manager"):
+	if "overlay_manager" in shell_ref:
 		overlay_manager = shell_ref.overlay_manager
-	if shell_ref.has("quest_manager"):
+	if "quest_manager" in shell_ref:
 		quest_manager = shell_ref.quest_manager
 	if overlay_manager:
 		overlay_manager.farm = farm_ref
-	if shell_ref.has("action_bar_manager"):
+	if "action_bar_manager" in shell_ref:
 		action_bar_manager = shell_ref.action_bar_manager
 
 	if _verbose:
@@ -60,17 +60,28 @@ func _open_overlay(name: String) -> bool:
 
 
 func get_resource_amount(emoji: String) -> float:
-	if farm and farm.has("economy") and farm.economy:
+	if farm and "economy" in farm and farm.economy:
 		if farm.economy.has_method("get_resource"):
 			return farm.economy.get_resource(emoji)
 	return 0
 
 
 func describe_resources() -> Dictionary:
-	if farm and farm.has("economy") and farm.economy:
+	if farm and "economy" in farm and farm.economy:
 		if farm.economy.has_method("get_all_resources"):
 			return farm.economy.get_all_resources()
 	return {}
+
+
+func get_resource_snapshot() -> Dictionary:
+	"""Return a stable snapshot of resources for turn-by-turn rigs."""
+	var resources = describe_resources()
+	var keys: Array = resources.keys()
+	keys.sort()
+	return {
+		"resources": resources,
+		"ordered": keys
+	}
 
 
 func get_active_quests() -> Array:
