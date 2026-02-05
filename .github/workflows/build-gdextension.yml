@@ -3,8 +3,16 @@ name: Build GDExtension for All Platforms
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'native/**'
+      - '.github/workflows/build-gdextension.yml'
+      - 'godot-cpp'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'native/**'
+      - '.github/workflows/build-gdextension.yml'
+      - 'godot-cpp'
   workflow_dispatch:
 
 jobs:
