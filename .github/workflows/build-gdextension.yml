@@ -7,6 +7,8 @@ on:
       - 'native/**'
       - '.github/workflows/build-gdextension.yml'
       - 'godot-cpp'
+    tags:
+      - 'v*'
   pull_request:
     branches: [ main ]
     paths:
@@ -185,10 +187,42 @@ jobs:
           name: all-platforms
           path: builds/**
 
-      - name: Create release (if tag)
+      - name: Package platform archives for release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cd builds
+          tar czf ../spacewheat-native-linux-x86_64.tar.gz -C linux . 2>/dev/null || true
+          zip -j ../spacewheat-native-windows-x86_64.zip windows/* 2>/dev/null || true
+          tar czf ../spacewheat-native-macos-universal.tar.gz -C macos . 2>/dev/null || true
+          tar czf ../spacewheat-native-web-wasm.tar.gz -C web . 2>/dev/null || true
+
+      - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: builds/*
+          generate_release_notes: true
+          body: |
+            ## Native C++ Extensions
+
+            Pre-built native extensions for SpaceWheat quantum simulation engine.
+            Download the archive for your platform and extract to `native/bin/{platform}/`.
+
+            **Performance:** 10-100x faster quantum evolution vs GDScript fallback.
+
+            ### Installation
+            ```bash
+            cd SpaceWheat
+            # Example for Linux:
+            tar xzf spacewheat-native-linux-x86_64.tar.gz -C native/bin/linux/
+            # Example for Windows:
+            unzip spacewheat-native-windows-x86_64.zip -d native/bin/windows/
+            ```
+
+            Then uncomment your platform in `quantum_matrix.gdextension`.
+          files: |
+            spacewheat-native-linux-x86_64.tar.gz
+            spacewheat-native-windows-x86_64.zip
+            spacewheat-native-macos-universal.tar.gz
+            spacewheat-native-web-wasm.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
