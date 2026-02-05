@@ -165,10 +165,14 @@ func update(delta: float, mi_cache: Dictionary, graph_center: Vector2) -> void:
 	_update_meta_level(delta, graph_center)
 
 	# Phase 4: Inner-level forces (bubbles within each biome)
+	# Attraction is siloed by biome (MI correlation), repulsion is same-biome only here
 	for biome_name in biome_graphs:
 		var inner = biome_graphs[biome_name]
 		var mi = mi_cache.get(biome_name, PackedFloat64Array())
 		_update_inner_graph(delta, inner, mi)
+
+	# Phase 5: Cross-biome repulsion (all bubbles repel all other bubbles)
+	_apply_cross_biome_repulsion(delta)
 
 
 func _update_meta_level(delta: float, graph_center: Vector2) -> void:
@@ -304,6 +308,64 @@ func _update_inner_graph(delta: float, inner: BiomeInnerGraph, mi: PackedFloat64
 
 		# Update bubble's world position
 		bubble.position = center + local_pos
+
+
+func _apply_cross_biome_repulsion(delta: float) -> void:
+	"""Apply repulsion between ALL bubbles across different biomes.
+
+	Attraction is siloed by biome (only same-biome MI correlation attracts).
+	Repulsion is global (every bubble pushes every other bubble away).
+
+	Operates on world positions after inner graphs have been updated.
+	"""
+	# Collect all bubbles with their biome name for cross-biome check
+	var all_bubbles: Array = []
+	for biome_name in biome_graphs:
+		var inner = biome_graphs[biome_name]
+		for bubble in inner.bubbles:
+			if bubble:
+				all_bubbles.append({"bubble": bubble, "biome": biome_name})
+
+	var n = all_bubbles.size()
+	if n < 2:
+		return
+
+	# Apply pairwise repulsion between bubbles from DIFFERENT biomes
+	for i in range(n):
+		var a = all_bubbles[i]
+		var bubble_a = a["bubble"]
+
+		for j in range(i + 1, n):
+			var b = all_bubbles[j]
+
+			# Skip same-biome pairs (already handled by inner graph)
+			if a["biome"] == b["biome"]:
+				continue
+
+			var bubble_b = b["bubble"]
+			var delta_pos = bubble_a.position - bubble_b.position
+			var dist = delta_pos.length()
+
+			if dist < 1.0:
+				dist = 1.0
+
+			if dist > BIOME_RADIUS * 4:
+				continue  # Too far to matter
+
+			# Inverse-square repulsion (same strength as inner repulsion)
+			var direction = delta_pos / dist
+			var magnitude = REPULSION_STRENGTH / (dist * dist)
+
+			# Apply to both bubbles (and sync back to local coordinates)
+			var force = direction * magnitude * delta
+			bubble_a.position += force
+			bubble_b.position -= force
+
+			# Sync local positions back for the inner graphs
+			var inner_a = biome_graphs[a["biome"]]
+			var inner_b = biome_graphs[b["biome"]]
+			inner_a.local_positions[bubble_a.get_instance_id()] = bubble_a.position - inner_a.center
+			inner_b.local_positions[bubble_b.get_instance_id()] = bubble_b.position - inner_b.center
 
 
 # REMOVED: Purity radial force - purity should come from C++ bloch packet, not node.energy
