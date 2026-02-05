@@ -18,12 +18,12 @@ const BiomeMetaQuantum = preload("res://Core/Visualization/BiomeMetaQuantum.gd")
 # Force constants (same physics, just partitioned)
 const CORRELATION_SPRING = 0.02    # Reduced from 0.12 to prevent over-clustering
 const MI_LOW_BOOST = 0.05          # Minimum MI floor to keep bubbles loosely clustered
-const REPULSION_STRENGTH = 300.0   # Prevents overlap (reduced from 1500 to match main system)
+const REPULSION_STRENGTH = 600.0   # Prevents overlap (2x boost for stronger separation)
 const MIN_DISTANCE = 15.0
 const DAMPING = 0.85
 
 # Meta-level constants
-const META_REPULSION = 8000.0
+const META_REPULSION = 16000.0
 const META_WEIGHT_ATTRACTION = 200.0  # Pull high-weight biomes to center
 const META_COHERENCE_SPRING = 150.0   # Coherent biomes attract
 const META_MI_SPRING = 100.0          # High MI biomes cluster
@@ -95,9 +95,9 @@ func initialize(biome_array: Array) -> void:
 	meta_positions.clear()
 	meta_velocities.clear()
 
-	# Initialize meta-quantum system
-	meta_quantum = BiomeMetaQuantum.new()
-	meta_quantum.initialize(biome_array)
+	# Meta-quantum system disabled for now (native Eigen matrix dimension bug)
+	# TODO: Fix BiomeMetaQuantum to work with native ComplexMatrix backend
+	meta_quantum = null
 
 	# Initialize with default hexagonal layout
 	var hex_positions = _generate_hex_layout(biome_array.size())

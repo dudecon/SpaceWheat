@@ -102,7 +102,7 @@ func _init_native_backend() -> void:
 # === FORCE CONSTANTS ===
 const H_SPRING = 8.0           # Hamiltonian coupling → attraction strength
 const MI_MULTIPLIER = 2.0      # MI boosts H-spring (MI up to 2 bits → up to 4x boost)
-const REPULSION = 2500.0       # Inverse-square overlap prevention
+const REPULSION = 5000.0       # Inverse-square overlap prevention (2x boost)
 const MIN_DISTANCE = 20.0      # Minimum separation for repulsion calc
 const MOMENTUM_GAIN = 80.0     # dP/dt → velocity kick (ties to quantum dynamics)
 const DRAG = 0.92              # Linear velocity damping per frame

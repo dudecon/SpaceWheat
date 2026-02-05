@@ -22,8 +22,8 @@ extends RefCounted
 const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 
-# Meta-system dimension
-const META_DIM = 6
+# Meta-system dimension (set dynamically from biome count)
+var META_DIM: int = 6
 
 # Evolution parameters
 const META_EVOLUTION_RATE = 0.5  # Slower than inner evolution
@@ -53,11 +53,14 @@ func initialize(biome_array: Array) -> void:
 	biome_names.clear()
 
 	for biome in biomes:
-		var name = biome.get_biome_type() if biome.has_method("get_biome_type") else "Unknown"
-		biome_names.append(name)
+		var bname = biome.get_biome_type() if biome.has_method("get_biome_type") else "Unknown"
+		biome_names.append(bname)
+
+	# Set dimension from actual biome count (not hardcoded 6)
+	META_DIM = maxi(biomes.size(), 2)
 
 	# Initialize meta density matrix to uniform mixed state
-	# ρ̃ = I/6 (equal weight on all biomes)
+	# ρ̃ = I/N (equal weight on all biomes)
 	meta_rho = ComplexMatrix.zeros(META_DIM)
 	for i in range(META_DIM):
 		meta_rho.set_element(i, i, Complex.new(1.0 / META_DIM, 0.0))

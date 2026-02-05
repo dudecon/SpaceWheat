@@ -39,6 +39,7 @@ const NodeManagerScript = preload("res://Core/Visualization/QuantumNodeManager.g
 const QuantumNode = preload("res://Core/Visualization/QuantumNode.gd")
 const BiomeLayoutCalculator = preload("res://Core/Visualization/BiomeLayoutCalculator.gd")
 const GeometryBatcherScript = preload("res://Core/Visualization/GeometryBatcher.gd")
+const NestedForceOptimizerScript = preload("res://Core/Visualization/NestedForceOptimizer.gd")
 
 # Logging
 @onready var _verbose = get_node("/root/VerboseConfig")
@@ -89,6 +90,7 @@ var biome_evolution_batcher = null
 var emoji_atlas_batcher = null  # Pre-built emoji atlas for GPU-accelerated rendering
 var bubble_atlas_batcher = null  # Pre-built bubble atlas for GPU-accelerated rendering
 var geometry_batcher = null  # Unified batcher for edges/effects/regions/infra
+var nested_force_optimizer = null  # Two-level hierarchical force graph (biome clusters + inner bubbles)
 var lookahead_offset: int = 0  # 0 = render current frame; set >0 to preview lookahead
 
 var center_position: Vector2 = Vector2.ZERO
@@ -221,17 +223,19 @@ func _process(delta: float):
 		node_manager.update_animations(quantum_nodes, time_accumulator, delta)
 	var t4 = Time.get_ticks_usec()
 
-	# Update physics forces - BATCHED from evolution packets (NEW!)
+	# Update physics forces - BATCHED from evolution packets
 	var nodes_with_batched_pos = _apply_batched_force_positions(ctx)
 	var t5 = Time.get_ticks_usec()
 
-	# Apply biome oval positioning forces (moved from BathQuantumVisualizationController)
-	_apply_skating_rink_forces(delta)
+	# Update nested force graph (two-level: biome clusters + inner bubble positions)
+	if nested_force_optimizer:
+		var mi_cache = _build_mi_cache()
+		nested_force_optimizer.update(delta, mi_cache, center_position)
+	else:
+		# Fallback: flat skating rink forces if nested optimizer not initialized
+		_apply_skating_rink_forces(delta)
+		_integrate_velocities(delta, nodes_with_batched_pos)
 	var t5a = Time.get_ticks_usec()
-
-	# Integrate velocities for nodes that didn't get batched positions
-	_integrate_velocities(delta, nodes_with_batched_pos)
-	var t5b = Time.get_ticks_usec()
 
 	# GATE: Only update particles if we have active bubbles
 	if has_active:
@@ -417,6 +421,20 @@ func setup(p_biomes: Dictionary, p_farm_grid = null, p_terminal_pool = null, _p_
 	# Update layout
 	update_layout(true)
 
+	# Initialize nested force optimizer (two-level: biome clusters + inner bubbles)
+	nested_force_optimizer = NestedForceOptimizerScript.new()
+	var biome_array = []
+	for biome_name in biomes:
+		biome_array.append(biomes[biome_name])
+	nested_force_optimizer.initialize(biome_array)
+
+	# Seed meta positions from layout calculator (use biome oval centers if available)
+	if layout_calculator:
+		for biome_name in biomes:
+			var oval = layout_calculator.get_biome_oval(biome_name)
+			if not oval.is_empty():
+				nested_force_optimizer.meta_positions[biome_name] = oval.get("center", center_position)
+
 	# Create nodes from quantum registers (first-class architecture)
 	rebuild_nodes()
 
@@ -436,6 +454,9 @@ func rebuild_nodes():
 		if node.grid_position != Vector2i(-1, -1):
 			quantum_nodes_by_grid_pos[node.grid_position] = node
 			all_plot_positions[node.grid_position] = node.classical_anchor
+		# Register with nested force optimizer
+		if nested_force_optimizer and node.biome_name:
+			nested_force_optimizer.register_bubble(node, node.biome_name)
 
 
 # ============================================================================
@@ -544,6 +565,10 @@ func _on_terminal_released(position: Vector2i, terminal_id: String, credits_earn
 	if not bubble.has_farm_tether:
 		return
 
+	# Unregister from nested force optimizer
+	if nested_force_optimizer and bubble.biome_name:
+		nested_force_optimizer.unregister_bubble(bubble, bubble.biome_name)
+
 	# Remove terminal bubble from all registries
 	quantum_nodes_by_grid_pos.erase(position)
 	quantum_nodes.erase(bubble)
@@ -570,6 +595,10 @@ func _on_biome_removed(biome_name: String) -> void:
 	while i >= 0:
 		var node = quantum_nodes[i]
 		if node.biome_name == biome_name:
+			# Unregister from nested force optimizer
+			if nested_force_optimizer:
+				nested_force_optimizer.unregister_bubble(node, biome_name)
+
 			# Remove from all registries
 			if node.plot_id:
 				node_by_plot_id.erase(node.plot_id)
@@ -652,6 +681,10 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 
 	if plot and bubble.plot_id:
 		node_by_plot_id[bubble.plot_id] = bubble
+
+	# Register with nested force optimizer
+	if nested_force_optimizer:
+		nested_force_optimizer.register_bubble(bubble, biome_name)
 
 	# Start spawn animation
 	bubble.start_spawn_animation(time_accumulator)
@@ -1134,6 +1167,18 @@ func _draw_debug_overlay():
 		draw_string(font, node.position + Vector2(-15, -15),
 			"[%d,%d]" % [node.grid_position.x, node.grid_position.y],
 			HORIZONTAL_ALIGNMENT_CENTER, -1, 8, Color(0, 1, 1, 0.7))
+
+
+func _build_mi_cache() -> Dictionary:
+	"""Build mutual information cache per biome for nested force optimizer."""
+	var mi_cache: Dictionary = {}
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if biome and biome.quantum_computer and biome.quantum_computer.has_cached_mi():
+			mi_cache[biome_name] = biome.quantum_computer._cached_mi_values
+		else:
+			mi_cache[biome_name] = PackedFloat64Array()
+	return mi_cache
 
 
 func _apply_skating_rink_forces(delta: float) -> void:
