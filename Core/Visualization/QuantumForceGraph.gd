@@ -1222,6 +1222,40 @@ func _build_mi_cache() -> Dictionary:
 	return mi_cache
 
 
+func _get_scaled_force_delta(delta: float) -> float:
+	"""Scale force graph delta based on quantum evolution granularity.
+
+	Slower quantum evolution (larger dt) → slower force graph movement.
+	This keeps the visual interest level consistent regardless of granularity.
+
+	Reference: At dt=0.02s (default fast biome), use full delta.
+	           At dt=10000s (max granularity), scale down by ~500x for slower movement.
+
+	Args:
+		delta: Raw frame delta from _process()
+
+	Returns:
+		Scaled delta for force graph physics
+	"""
+	const REFERENCE_DT = 0.02  # Baseline evolution dt (default for fast biomes)
+	const MIN_SCALE = 0.002     # Minimum scale factor (at max granularity, still show some movement)
+
+	# Get current evolution dt from first available biome
+	var current_dt = REFERENCE_DT
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if biome and "max_evolution_dt" in biome:
+			current_dt = biome.max_evolution_dt
+			break
+
+	# Scale inversely with evolution dt: larger dt → slower force graph
+	# Use sqrt to soften the scaling (linear would be too extreme at high dt values)
+	var scale = sqrt(REFERENCE_DT / current_dt)
+	scale = max(scale, MIN_SCALE)  # Clamp to minimum
+
+	return delta * scale
+
+
 func _sync_bubbles_to_nested_optimizer() -> void:
 	"""Ensure all quantum_nodes are registered with nested force optimizer.
 
