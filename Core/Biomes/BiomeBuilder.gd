@@ -33,7 +33,7 @@ const LindbladBuilder = preload("res://Core/QuantumSubstrate/LindbladBuilder.gd"
 const BiomeLindblad = preload("res://Core/Biomes/BiomeLindblad.gd")
 const OperatorCache = preload("res://Core/QuantumSubstrate/OperatorCache.gd")
 const CacheKey = preload("res://Core/QuantumSubstrate/CacheKey.gd")
-const DynamicBiome = preload("res://Tests/DynamicBiome.gd")
+const DynamicBiome = preload("res://Core/Environment/DynamicBiome.gd")
 
 ## Singleton instances (lazy-loaded)
 static var _faction_registry: FactionRegistry = null
