@@ -15,20 +15,19 @@ extends RefCounted
 
 const BiomeMetaQuantum = preload("res://Core/Visualization/BiomeMetaQuantum.gd")
 
-# Force constants (same physics, just partitioned)
-const CORRELATION_SPRING = 0.02    # Reduced from 0.12 to prevent over-clustering
-const MI_LOW_BOOST = 0.05          # Minimum MI floor to keep bubbles loosely clustered
-const REPULSION_STRENGTH = 600.0   # Prevents overlap (2x boost for stronger separation)
-const MIN_DISTANCE = 15.0
-const DAMPING = 0.85
+# Force constants - calibrated for screen-space pixels
+# Integration: vel += force * dt, pos += vel * dt → need forces ~100-300 for ~30 px/sec movement
+const REPULSION_STRENGTH = 6000.0   # Inverse-linear: force = R/dist (not R/dist²)
+const CORRELATION_SPRING = 30.0     # MI-based attraction: force = displacement * spring * mi
+const MI_LOW_BOOST = 0.05           # Minimum MI floor for loose clustering
+const MIN_DISTANCE = 20.0
+const DAMPING = 0.92
 
 # Meta-level constants
-const META_REPULSION = 16000.0
-const META_WEIGHT_ATTRACTION = 200.0  # Pull high-weight biomes to center
-const META_COHERENCE_SPRING = 150.0   # Coherent biomes attract
-const META_MI_SPRING = 100.0          # High MI biomes cluster
-const META_DAMPING = 0.92
-const BIOME_RADIUS = 120.0  # Max radius for bubbles within biome
+const META_REPULSION = 8000.0
+const META_CENTERING = 5.0            # Pull biomes toward graph center
+const META_DAMPING = 0.90
+const BIOME_RADIUS = 150.0
 
 # Meta-quantum system
 var meta_quantum: BiomeMetaQuantum = null
@@ -117,7 +116,10 @@ func initialize(biome_array: Array) -> void:
 		meta_positions[name] = hex_positions[i] if i < hex_positions.size() else Vector2.ZERO
 		meta_velocities[name] = Vector2.ZERO
 
-	print("NestedForceOptimizer: Initialized %d biomes with meta-quantum system" % biome_array.size())
+	# Verbose logging moved to VerboseConfig
+	var verbose = _get_verbose()
+	if verbose:
+		verbose.debug("viz", "🌐", "NestedForceOptimizer: Initialized %d biomes" % biome_array.size())
 
 
 func _generate_hex_layout(count: int) -> Array:
@@ -133,21 +135,33 @@ func _generate_hex_layout(count: int) -> Array:
 	return positions
 
 
-func register_bubble(node, biome_name: String) -> void:
-	"""Register a bubble with its biome's inner graph."""
+func register_bubble(node, biome_name: String, graph_center: Vector2 = Vector2.ZERO) -> void:
+	"""Register a bubble with its biome's inner graph.
+
+	Args:
+		node: QuantumNode to register
+		biome_name: Name of the biome this bubble belongs to
+		graph_center: Fallback center if biome doesn't have a position yet
+	"""
 	if not biome_graphs.has(biome_name):
 		biome_graphs[biome_name] = BiomeInnerGraph.new(biome_name)
-		meta_positions[biome_name] = Vector2.ZERO
+		# Use graph_center as fallback instead of (0,0) to avoid corner clustering
+		meta_positions[biome_name] = graph_center if graph_center != Vector2.ZERO else Vector2(400, 300)
 		meta_velocities[biome_name] = Vector2.ZERO
 
 	var inner = biome_graphs[biome_name]
 	inner.add_bubble(node)
 
+	# Update inner graph center from meta_positions
+	inner.center = meta_positions.get(biome_name, graph_center)
+
 	# Initialize local position from bubble's current world position
 	# (relative to biome center, so forces work correctly)
 	if node and "position" in node:
-		var center = inner.center if inner.center != Vector2.ZERO else meta_positions.get(biome_name, Vector2.ZERO)
-		inner.local_positions[node.get_instance_id()] = node.position - center
+		var center = inner.center if inner.center != Vector2.ZERO else graph_center
+		if center != Vector2.ZERO and node.position != Vector2.ZERO:
+			var local_pos = node.position - center
+			inner.local_positions[node.get_instance_id()] = local_pos
 
 
 func unregister_bubble(node, biome_name: String) -> void:
@@ -155,6 +169,9 @@ func unregister_bubble(node, biome_name: String) -> void:
 	if biome_graphs.has(biome_name):
 		biome_graphs[biome_name].remove_bubble(node)
 
+
+var _frame_count: int = 0
+var _prev_sample_pos: Vector2 = Vector2.ZERO
 
 func update(delta: float, mi_cache: Dictionary, graph_center: Vector2) -> void:
 	"""Update both levels of the force graph.
@@ -164,6 +181,8 @@ func update(delta: float, mi_cache: Dictionary, graph_center: Vector2) -> void:
 		mi_cache: {biome_name -> PackedFloat64Array} mutual information per biome
 		graph_center: Center of the overall graph area
 	"""
+	_frame_count += 1
+
 	# Phase 1: Evolve meta-quantum system (updates 6×6 density matrix)
 	if meta_quantum:
 		meta_quantum.evolve(delta)
@@ -187,73 +206,48 @@ func update(delta: float, mi_cache: Dictionary, graph_center: Vector2) -> void:
 
 
 func _update_meta_level(delta: float, graph_center: Vector2) -> void:
-	"""Update biome center positions using meta-quantum forces.
+	"""Update biome center positions.
 
-	Forces derived from 6×6 meta-density-matrix:
-	1. Weight attraction: High ρ̃[i,i] → pull to center
-	2. Coherence spring: High |ρ̃[i,j]| → biomes attract
-	3. MI clustering: High I(i:j) → biomes cluster
-	4. Repulsion: Prevent overlap
+	Forces:
+	1. Centering: Pull all biome centers gently toward graph center
+	2. Repulsion: Biome centers repel each other (inverse-linear)
 	"""
 	var biome_names_list = biome_graphs.keys()
 
 	for biome_name in biome_names_list:
 		var force = Vector2.ZERO
 		var pos = meta_positions[biome_name]
-		var idx_i = biome_indices.get(biome_name, -1)
 
-		# 1. Weight-based attraction to center
-		# Higher meta-population → stronger pull toward graph center
-		if meta_quantum and idx_i >= 0:
-			var weight = meta_quantum.get_biome_weight(idx_i)
-			var to_center = graph_center - pos
-			force += to_center * weight * META_WEIGHT_ATTRACTION * 0.01
+		# 1. Centering force (spring toward graph center)
+		var to_center = graph_center - pos
+		force += to_center * META_CENTERING
 
-		# 2 & 3. Coherence and MI-based forces with other biomes
+		# 2. Repulsion between biome centers (inverse-linear)
 		for other_name in biome_names_list:
 			if other_name == biome_name:
 				continue
 
 			var other_pos = meta_positions[other_name]
-			var delta_pos = other_pos - pos
+			var delta_pos = pos - other_pos
 			var dist = delta_pos.length()
 
 			if dist < 1.0:
-				continue
+				dist = 1.0
 
-			var direction = delta_pos.normalized()
-			var idx_j = biome_indices.get(other_name, -1)
+			if dist < BIOME_RADIUS * 4:
+				# Inverse-linear repulsion between biome centers
+				var direction = delta_pos / dist
+				force += direction * META_REPULSION / dist
 
-			# Repulsion (always)
-			if dist < BIOME_RADIUS * 3:
-				var repulsion = META_REPULSION / max(dist * dist, 100.0)
-				force -= direction * repulsion
-
-			# Coherence attraction (from meta-quantum)
-			if meta_quantum and idx_i >= 0 and idx_j >= 0:
-				var coherence = meta_quantum.get_biome_coherence(idx_i, idx_j)
-				if coherence > 0.01:
-					# Attract proportional to coherence
-					var ideal_dist = BIOME_RADIUS * 2.5 * (1.0 - coherence)
-					var displacement = dist - ideal_dist
-					force += direction * displacement * coherence * META_COHERENCE_SPRING * 0.01
-
-				# MI clustering (from meta-quantum)
-				var mi = meta_quantum.get_biome_mutual_info(idx_i, idx_j)
-				if mi > 0.01:
-					# High MI → cluster together
-					var ideal_dist_mi = BIOME_RADIUS * 2.0 / (1.0 + mi)
-					var displacement_mi = dist - ideal_dist_mi
-					force += direction * displacement_mi * mi * META_MI_SPRING * 0.01
-
-		# Fallback: gentle centering if no meta-quantum
-		if not meta_quantum:
-			var to_center = graph_center - pos
-			force += to_center * 0.01
-
-		# Apply force
+		# Apply force (Euler integration)
 		meta_velocities[biome_name] += force * delta
 		meta_velocities[biome_name] *= META_DAMPING
+
+		# Safety: clamp meta velocity
+		var meta_speed = meta_velocities[biome_name].length()
+		if meta_speed > 300.0:
+			meta_velocities[biome_name] = meta_velocities[biome_name] * (300.0 / meta_speed)
+
 		meta_positions[biome_name] += meta_velocities[biome_name] * delta
 
 		# Update inner graph center
@@ -304,14 +298,23 @@ func _update_inner_graph(delta: float, inner: BiomeInnerGraph, mi: PackedFloat64
 			force += _repulsion_force(local_pos, other_pos)
 
 		# 4. Containment (keep within biome radius)
+		# Quadratic spring — force grows with square of overshoot
 		var dist_from_center = local_pos.length()
-		if dist_from_center > BIOME_RADIUS:
-			force += -local_pos.normalized() * (dist_from_center - BIOME_RADIUS) * 0.5
+		if dist_from_center > BIOME_RADIUS * 0.7:
+			var overshoot = dist_from_center - BIOME_RADIUS * 0.7
+			var containment_strength = 20.0 + overshoot * 2.0
+			force += -local_pos.normalized() * overshoot * containment_strength
 
-		# Apply forces
+		# Apply forces (Euler integration)
 		var vel = inner.local_velocities.get(node_id, Vector2.ZERO)
 		vel += force * delta
 		vel *= DAMPING
+
+		# Safety: clamp velocity to prevent NaN explosion
+		var speed = vel.length()
+		if speed > 500.0:
+			vel = vel * (500.0 / speed)
+
 		local_pos += vel * delta
 
 		inner.local_velocities[node_id] = vel
@@ -320,14 +323,22 @@ func _update_inner_graph(delta: float, inner: BiomeInnerGraph, mi: PackedFloat64
 		# Update bubble's world position
 		bubble.position = center + local_pos
 
+		# DIAG: Trace first bubble per biome for first 10 frames + every 120
+		if i == 0 and (_frame_count <= 10 or _frame_count % 120 == 0):
+			var pos_change = vel * delta
+			print("[FORCE_DIAG] frame=%d biome=%s | local_pos=(%.1f,%.1f) dist=%.1f | force=%.1f vel=%.2f pos_change=%.3f | center=%s world=%s delta=%.4f" % [
+				_frame_count, inner.biome_name,
+				local_pos.x, local_pos.y, dist_from_center,
+				force.length(), speed, pos_change.length(),
+				center, bubble.position, delta])
+
 
 func _apply_cross_biome_repulsion(delta: float) -> void:
 	"""Apply repulsion between ALL bubbles across different biomes.
 
 	Attraction is siloed by biome (only same-biome MI correlation attracts).
 	Repulsion is global (every bubble pushes every other bubble away).
-
-	Operates on world positions after inner graphs have been updated.
+	Uses inverse-linear falloff, same as inner repulsion.
 	"""
 	# Collect all bubbles with their biome name for cross-biome check
 	var all_bubbles: Array = []
@@ -363,50 +374,56 @@ func _apply_cross_biome_repulsion(delta: float) -> void:
 			if dist > BIOME_RADIUS * 4:
 				continue  # Too far to matter
 
-			# Inverse-square repulsion (same strength as inner repulsion)
+			# Inverse-linear repulsion (consistent with inner graph)
 			var direction = delta_pos / dist
-			var magnitude = REPULSION_STRENGTH / (dist * dist)
+			var magnitude = REPULSION_STRENGTH / dist
 
-			# Apply to both bubbles (and sync back to local coordinates)
-			var force = direction * magnitude * delta
-			bubble_a.position += force
-			bubble_b.position -= force
+			# Apply as velocity impulse (not position — avoids bypassing integration)
+			var impulse = direction * minf(magnitude, 2000.0) * delta
 
-			# Sync local positions back for the inner graphs
+			# Update local velocities so the inner graph stays consistent
 			var inner_a = biome_graphs[a["biome"]]
 			var inner_b = biome_graphs[b["biome"]]
-			inner_a.local_positions[bubble_a.get_instance_id()] = bubble_a.position - inner_a.center
-			inner_b.local_positions[bubble_b.get_instance_id()] = bubble_b.position - inner_b.center
+			var id_a = bubble_a.get_instance_id()
+			var id_b = bubble_b.get_instance_id()
+			inner_a.local_velocities[id_a] = inner_a.local_velocities.get(id_a, Vector2.ZERO) + impulse
+			inner_b.local_velocities[id_b] = inner_b.local_velocities.get(id_b, Vector2.ZERO) - impulse
 
 
 # REMOVED: Purity radial force - purity should come from C++ bloch packet, not node.energy
 
 
 func _correlation_force(pos: Vector2, other_pos: Vector2, mi: float) -> Vector2:
-	"""High MI → attract, low MI → loose clustering."""
-	# Boost low MI to keep bubbles loosely clustered (prevents explosion)
-	var mi_boosted = max(mi, MI_LOW_BOOST)
+	"""MI-based spring: high MI → attract to close distance, low MI → loose."""
+	var mi_eff = max(mi, MI_LOW_BOOST)
 
 	var delta_pos = other_pos - pos
 	var dist = delta_pos.length()
 	if dist < 1.0:
 		return Vector2.ZERO
 
-	var target_dist = 80.0 / (1.0 + 3.0 * mi_boosted)
+	# Target distance shrinks with MI (high MI = close together)
+	var target_dist = 80.0 / (1.0 + 5.0 * mi_eff)
 	var displacement = dist - target_dist
 
-	return delta_pos.normalized() * displacement * CORRELATION_SPRING * mi_boosted
+	return delta_pos.normalized() * displacement * CORRELATION_SPRING * mi_eff
 
 
 func _repulsion_force(pos: Vector2, other_pos: Vector2) -> Vector2:
-	"""Prevent bubble overlap."""
+	"""Inverse-linear repulsion (appropriate for 2D pixel-space visualization).
+
+	Inverse-square (1/r²) gives <1.0 force at typical pixel distances (30-100px),
+	producing ~0.15 px/sec movement with Euler integration. Inverse-linear (1/r)
+	gives forces in the 60-200 range, producing ~30 px/sec visible movement.
+	"""
 	var delta_pos = pos - other_pos
 	var dist = delta_pos.length()
 
 	if dist < MIN_DISTANCE:
 		dist = MIN_DISTANCE
 
-	return delta_pos.normalized() * REPULSION_STRENGTH / (dist * dist)
+	# Inverse-linear: force ∝ 1/r (not 1/r²)
+	return delta_pos.normalized() * REPULSION_STRENGTH / dist
 
 
 func _get_mi_value(i: int, j: int, num_qubits: int, mi: PackedFloat64Array) -> float:
@@ -440,6 +457,16 @@ func get_bubble_world_position(node, biome_name: String) -> Vector2:
 	var inner = biome_graphs[biome_name]
 	var local_pos = inner.local_positions.get(node.get_instance_id(), Vector2.ZERO)
 	return inner.center + local_pos
+
+
+func _get_verbose():
+	"""Get VerboseConfig autoload."""
+	var tree = Engine.get_main_loop()
+	if tree and tree.has_method("get_root"):
+		var root = tree.get_root()
+		if root:
+			return root.get_node_or_null("/root/VerboseConfig")
+	return null
 
 
 # ============================================================================

@@ -229,6 +229,8 @@ func _process(delta: float):
 
 	# Update nested force graph (two-level: biome clusters + inner bubble positions)
 	if nested_force_optimizer:
+		# Sync: ensure all bubbles are registered (catches save/load and any missed registrations)
+		_sync_bubbles_to_nested_optimizer()
 		var mi_cache = _build_mi_cache()
 		nested_force_optimizer.update(delta, mi_cache, center_position)
 	else:
@@ -456,7 +458,33 @@ func rebuild_nodes():
 			all_plot_positions[node.grid_position] = node.classical_anchor
 		# Register with nested force optimizer
 		if nested_force_optimizer and node.biome_name:
-			nested_force_optimizer.register_bubble(node, node.biome_name)
+			nested_force_optimizer.register_bubble(node, node.biome_name, center_position)
+
+
+func create_all_register_bubbles():
+	"""Create bubbles for ALL quantum registers in all biomes.
+
+	Used by visual tests to populate the force graph without terminal bindings.
+	Replaces the single test bubble with one bubble per qubit per biome.
+	"""
+	# Clear existing nodes
+	quantum_nodes.clear()
+	node_by_plot_id.clear()
+	quantum_nodes_by_grid_pos.clear()
+	all_plot_positions.clear()
+
+	# Create bubbles for all registers
+	var new_nodes = node_manager.create_all_register_bubbles(biomes, layout_calculator)
+
+	for node in new_nodes:
+		quantum_nodes.append(node)
+		if node.plot_id:
+			node_by_plot_id[node.plot_id] = node
+		# Register with nested force optimizer
+		if nested_force_optimizer and node.biome_name:
+			nested_force_optimizer.register_bubble(node, node.biome_name, center_position)
+
+	queue_redraw()
 
 
 # ============================================================================
@@ -472,11 +500,15 @@ var selected_plot_positions: Dictionary = {}  # Vector2i -> true
 
 func connect_to_farm(farm: Node) -> void:
 	"""Connect directly to farm signals (replaces BathQuantumVisualizationController)"""
+	if _verbose:
+		_verbose.debug("viz", "🔗", "QuantumForceGraph connecting to farm signals")
 	farm_ref = farm
 
 	# Connect to terminal lifecycle signals
 	if farm.has_signal("terminal_bound"):
 		farm.terminal_bound.connect(_on_terminal_bound)
+		if _verbose:
+			_verbose.debug("viz", "✓", "Connected to farm.terminal_bound signal")
 	if farm.has_signal("terminal_measured"):
 		farm.terminal_measured.connect(_on_terminal_measured)
 	if farm.has_signal("terminal_released"):
@@ -684,7 +716,12 @@ func _create_bubble_for_terminal(biome_name: String, grid_pos: Vector2i, north_e
 
 	# Register with nested force optimizer
 	if nested_force_optimizer:
-		nested_force_optimizer.register_bubble(bubble, biome_name)
+		nested_force_optimizer.register_bubble(bubble, biome_name, center_position)
+		if _verbose:
+			_verbose.debug("viz", "🎈", "Terminal bubble registered: %s in %s" % [grid_pos, biome_name])
+	else:
+		if _verbose:
+			_verbose.warn("viz", "⚠️", "Cannot register bubble - nested_force_optimizer is null")
 
 	# Start spawn animation
 	bubble.start_spawn_animation(time_accumulator)
@@ -1179,6 +1216,47 @@ func _build_mi_cache() -> Dictionary:
 		else:
 			mi_cache[biome_name] = PackedFloat64Array()
 	return mi_cache
+
+
+func _sync_bubbles_to_nested_optimizer() -> void:
+	"""Ensure all quantum_nodes are registered with nested force optimizer.
+
+	This catches bubbles that were created via:
+	- Save/load (QuantumNodeManager.create_quantum_nodes before save loaded)
+	- Dynamic biome additions
+	- Any other path that bypasses terminal_bound signal
+	"""
+	if not nested_force_optimizer:
+		return
+
+	var registered_count = 0
+	for node in quantum_nodes:
+		if not node:
+			continue
+
+		# Get biome name from node
+		var biome_name = node.biome_name if node.biome_name else ""
+
+		# If no biome_name on node, skip (can't register without biome assignment)
+		if biome_name.is_empty():
+			continue
+
+		# Check if already registered in any biome's inner graph
+		var already_registered = false
+		for bname in nested_force_optimizer.biome_graphs:
+			var inner = nested_force_optimizer.biome_graphs[bname]
+			if node in inner.bubbles:
+				already_registered = true
+				break
+
+		if not already_registered:
+			# register_bubble() creates the inner graph if needed
+			nested_force_optimizer.register_bubble(node, biome_name, center_position)
+			registered_count += 1
+
+	# Log sync results if bubbles were registered
+	if registered_count > 0 and _verbose:
+		_verbose.debug("viz", "🔄", "Synced %d bubbles to nested optimizer" % registered_count)
 
 
 func _apply_skating_rink_forces(delta: float) -> void:

@@ -42,7 +42,9 @@ func create_quantum_nodes(ctx: Dictionary, _skip_quantum_register_bubbles: bool 
 			if test_node:
 				test_node.plot_id = "boot_test"
 				nodes.append(test_node)
-				print("  [QuantumNodeManager] Boot test bubble created (%s:r0)" % biome_name)
+				var verbose = _get_verbose()
+				if verbose:
+					verbose.debug("viz", "🧪", "Boot test bubble created: %s:r0" % biome_name)
 			break  # Only one test bubble
 
 	# TERMINAL BUBBLES: Create bubbles for terminals already bound (from save/load)
@@ -54,7 +56,9 @@ func create_quantum_nodes(ctx: Dictionary, _skip_quantum_register_bubbles: bool 
 				nodes.append(node)
 				bound_count += 1
 		if bound_count > 0:
-			print("  [QuantumNodeManager] Restored %d terminal bubbles from save" % bound_count)
+			var verbose = _get_verbose()
+			if verbose:
+				verbose.debug("viz", "💾", "Restored %d terminal bubbles from save" % bound_count)
 
 	return nodes
 
@@ -580,6 +584,16 @@ func is_node_in_active_biome(node, active_biome: String) -> bool:
 	return node.biome_name == active_biome
 
 
+func _get_verbose():
+	"""Get VerboseConfig autoload."""
+	var tree = Engine.get_main_loop()
+	if tree and tree.has_method("get_root"):
+		var root = tree.get_root()
+		if root:
+			return root.get_node_or_null("/root/VerboseConfig")
+	return null
+
+
 func rebuild_from_biomes(biomes: Dictionary, ctx: Dictionary) -> Array:
 	"""Rebuild all quantum nodes from biomes.
 
@@ -594,3 +608,41 @@ func rebuild_from_biomes(biomes: Dictionary, ctx: Dictionary) -> Array:
 	"""
 	ctx["biomes"] = biomes
 	return create_quantum_nodes(ctx)
+
+
+func create_all_register_bubbles(biomes: Dictionary, layout_calculator) -> Array:
+	"""Create bubbles for ALL quantum registers in all biomes.
+
+	Used by visual tests to populate the force graph without terminal bindings.
+	Creates one bubble per qubit per biome.
+
+	Args:
+		biomes: Dictionary of biome_name → BiomeBase
+		layout_calculator: For positioning bubbles
+
+	Returns:
+		Array of created QuantumNode instances
+	"""
+	var nodes: Array = []
+
+	for biome_name in biomes:
+		var biome = biomes[biome_name]
+		if not biome or not biome.viz_cache or not biome.viz_cache.has_metadata():
+			continue
+
+		var num_qubits = biome.viz_cache.get_num_qubits()
+		for register_id in range(num_qubits):
+			var node = _create_node_for_register(biome_name, register_id, biomes, layout_calculator)
+			if node:
+				nodes.append(node)
+
+		if num_qubits > 0:
+			var verbose = _get_verbose()
+			if verbose:
+				verbose.debug("viz", "🎈", "Created %d bubbles for %s" % [num_qubits, biome_name])
+
+	if nodes.size() > 0:
+		var verbose = _get_verbose()
+		if verbose:
+			verbose.info("viz", "✓", "Created %d register bubbles total" % nodes.size())
+	return nodes

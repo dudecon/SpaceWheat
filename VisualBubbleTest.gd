@@ -217,13 +217,32 @@ func _create_visualization():
 		var offset = screen_center - default_center
 		biome_oval["center"] = old_center + offset
 
+	# Create ALL register bubbles (not just 1 test bubble)
+	# This populates the force graph with bubbles for every qubit in every biome
+	force_graph.create_all_register_bubbles()
+
 	# Recalculate node positions
+	print("\n[VIZ] Recalculating node positions for %d nodes" % force_graph.quantum_nodes.size())
 	for node in force_graph.quantum_nodes:
 		var new_pos = force_graph.layout_calculator.get_parametric_position(
 			node.biome_name, node.parametric_t, node.parametric_ring
 		)
 		node.position = new_pos
 		node.classical_anchor = new_pos
+	print("  Positions updated")
+
+	# Re-sync bubbles to nested optimizer with correct positions
+	# (positions were updated after initial registration)
+	print("  Nested optimizer exists: %s" % (force_graph.nested_force_optimizer != null))
+	if force_graph.nested_force_optimizer:
+		print("  [VIZ] Re-registering bubbles with correct positions...")
+		for node in force_graph.quantum_nodes:
+			if node and node.biome_name:
+				# Unregister first
+				force_graph.nested_force_optimizer.unregister_bubble(node, node.biome_name)
+				# Re-register with new position
+				force_graph.nested_force_optimizer.register_bubble(node, node.biome_name, force_graph.center_position)
+		print("  Re-registered %d bubbles" % force_graph.quantum_nodes.size())
 
 	# Create stats overlay
 	stats_overlay = SimStatsOverlay.new()
