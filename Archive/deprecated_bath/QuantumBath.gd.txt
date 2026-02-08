@@ -5,6 +5,7 @@ extends RefCounted
 
 ## Import QuantumRigorConfig for mode system
 const QuantumRigorConfig = preload("res://Core/GameState/QuantumRigorConfig.gd")
+const Complex = preload("res://Core/QuantumSubstrate/Complex.gd")
 const ComplexMatrix = preload("res://Core/QuantumSubstrate/ComplexMatrix.gd")
 const DensityMatrix = preload("res://Core/QuantumSubstrate/DensityMatrix.gd")
 ##
@@ -42,11 +43,11 @@ var _evolver  # QuantumEvolver (no type hint - class_name removed)
 
 ## Legacy: amplitude array (computed from density matrix for pure states)
 ## WARNING: For mixed states, this returns sqrt of diagonal elements
-var amplitudes: Array[Complex]:
+var amplitudes: Array:
 	get:
 		if not _density_matrix:
 			return []
-		var result: Array[Complex] = []
+		var result: Array = []
 		for i in range(_density_matrix.dimension()):
 			var prob = _density_matrix.get_probability_by_index(i)
 			result.append(Complex.new(sqrt(max(0.0, prob)), 0.0))
@@ -94,7 +95,7 @@ var bath_time: float = 0.0
 ## Cached Icons
 ## ========================================
 
-var active_icons: Array[Icon] = []
+var active_icons: Array = []
 var operators_dirty: bool = true
 
 ## ========================================
@@ -192,7 +193,10 @@ func reset_sink_flux() -> void:
 ## Dynamically inject emoji into running bath
 ## MANIFEST COMPLIANT: Uses block-embedding to preserve existing probabilities
 ## (Manifest Section 3.5: "expanding N must not redistribute existing probability")
-func inject_emoji(emoji: String, icon: Icon, initial_amplitude: Complex = Complex.zero()) -> bool:
+func inject_emoji(emoji: String, icon, initial_amplitude = null) -> bool:
+	# icon: Icon type, initial_amplitude: Complex or null (defaults to zero)
+	if initial_amplitude == null:
+		initial_amplitude = Complex.zero()
 	if _density_matrix.emoji_to_index.has(emoji):
 		return true
 
@@ -254,7 +258,7 @@ func inject_emoji(emoji: String, icon: Icon, initial_amplitude: Complex = Comple
 ## ========================================
 
 ## Get amplitude for an emoji (backwards compatible)
-func get_amplitude(emoji: String) -> Complex:
+func get_amplitude(emoji: String) :
 	var idx = _density_matrix.emoji_to_index.get(emoji, -1)
 	if idx < 0:
 		return Complex.zero()
@@ -286,7 +290,7 @@ func get_entropy() -> float:
 	return _density_matrix.get_entropy()
 
 ## Get coherence between two emojis
-func get_coherence(emoji_a: String, emoji_b: String) -> Complex:
+func get_coherence(emoji_a: String, emoji_b: String) :
 	return _density_matrix.get_coherence(emoji_a, emoji_b)
 
 ## Get expected energy from Hamiltonian
@@ -912,7 +916,7 @@ func _pauli_y():
 	var Y = ComplexMatrix.new(2)
 	Y.set_element(0, 0, Complex.zero())
 	Y.set_element(0, 1, Complex.new(0.0, -1.0))
-	Y.set_element(1, 0, Complex.new(0.0, 1.0))
+	Y.set_element(1, 0, Complex.i())
 	Y.set_element(1, 1, Complex.zero())
 	return Y
 
