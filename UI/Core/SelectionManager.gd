@@ -175,7 +175,7 @@ func is_valid_position(pos: Vector2i) -> bool:
 		return grid_config.is_position_valid(pos)
 	# Fallback for backward compatibility
 	return pos.x >= 0 and pos.x < grid_width and \
-	       pos.y >= 0 and pos.y < grid_height
+		   pos.y >= 0 and pos.y < grid_height
 
 
 ## ============================================================================

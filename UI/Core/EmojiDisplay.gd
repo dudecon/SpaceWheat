@@ -25,7 +25,7 @@ class_name EmojiDisplay
 		emoji = value
 		_update_display()
 
-@export var font_size: int = 36:
+@export var font_size: int = 16:
 	set(value):
 		font_size = value
 		_update_display()
